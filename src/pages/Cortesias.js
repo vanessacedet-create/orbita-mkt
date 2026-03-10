@@ -792,19 +792,46 @@ function ParceirosTab({ parceiros, setParceiros }) {
 }
 
 // ── LIVROS TAB ─────────────────────────────────────────────
-function LivrosTab({ livros, setLivros }) {
+function LivrosTab() {
   const [modal, setModal]     = useState(false)
   const [editing, setEditing] = useState(null)
-  const [search, setSearch]   = useState('')
   const [saving, setSaving]   = useState(false)
   const [toast, showToast]    = useToast()
   const EMPTY = { titulo:'', isbn:'', sku:'', autor:'', editora:'' }
   const [form, setForm] = useState(EMPTY)
 
+  // Paginação e busca server-side
+  const [livros, setLivros]   = useState([])
+  const [total, setTotal]     = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch]   = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [page, setPage]       = useState(0)
+  const [pageSize, setPageSize] = useState(50)
+
+  async function fetchLivros(p = page, ps = pageSize, s = search) {
+    setLoading(true)
+    try {
+      const { data, count } = await getLivros({ page: p, pageSize: ps, search: s })
+      setLivros(data || [])
+      setTotal(count || 0)
+    } catch { showToast('Erro ao carregar livros', 'error') }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { fetchLivros(page, pageSize, search) }, [page, pageSize, search])
+
+  // Busca com debounce
+  useEffect(() => {
+    const t = setTimeout(() => { setSearch(searchInput); setPage(0) }, 400)
+    return () => clearTimeout(t)
+  }, [searchInput])
+
+  const totalPages = Math.ceil(total / pageSize)
+
   function openNew()   { setEditing(null); setForm(EMPTY); setModal(true) }
   function openEdit(l) { setEditing(l); setForm({ titulo:l.titulo, isbn:l.isbn||'', sku:l.sku||'', autor:l.autor||'', editora:l.editora||'' }); setModal(true) }
   function close()     { setModal(false); setEditing(null) }
-  async function reload() { setLivros(await getLivros()) }
 
   async function save() {
     if (!form.titulo.trim()) return
@@ -812,22 +839,20 @@ function LivrosTab({ livros, setLivros }) {
     try {
       if (editing) { await updateLivro(editing.id,form); showToast('Atualizado!') }
       else { await createLivro(form); showToast('Cadastrado!') }
-      await reload()
+      await fetchLivros()
       close()
     } catch { showToast('Erro ao salvar','error') } finally { setSaving(false) }
   }
 
   async function remove(id) {
     if (!window.confirm('Excluir?')) return
-    try { await deleteLivro(id); setLivros(prev=>prev.filter(l=>l.id!==id)); showToast('Excluído!') }
+    try { await deleteLivro(id); await fetchLivros(); showToast('Excluído!') }
     catch { showToast('Erro','error') }
   }
 
-  const filtered = livros.filter(l=>
-    normalizar(l.titulo).includes(normalizar(search))||
-    (l.autor||'').toLowerCase().includes(search.toLowerCase())||
-    (l.isbn||'').includes(search)||(l.sku||'').includes(search)
-  )
+  async function handleImport() { setPage(0); await fetchLivros(0, pageSize, search) }
+
+  const filtered = livros
 
   return (
     <>
@@ -909,7 +934,7 @@ export default function Cortesias() {
       </div>
       {tab==='envios'    && <EnviosTab    parceiros={parceiros} livros={livros} envios={envios} setEnvios={setEnvios}/>}
       {tab==='parceiros' && <ParceirosTab parceiros={parceiros} setParceiros={setParceiros}/>}
-      {tab==='livros'    && <LivrosTab    livros={livros} setLivros={setLivros}/>}
+      {tab==='livros'    && <LivrosTab/>}
     </div>
   )
 }
