@@ -68,10 +68,18 @@ export async function deleteParceiro(id) {
 }
 
 // ── LIVROS ─────────────────────────────────────────────────
-export async function getLivros() {
-  const { data, error } = await supabase.from('livros').select('*').order('titulo').limit(10000)
+export async function getLivros({ page = 0, pageSize = 50, search = '' } = {}) {
+  let query = supabase.from('livros').select('*', { count: 'exact' }).order('titulo')
+
+  if (search) {
+    query = query.or(`titulo.ilike.%${search}%,autor.ilike.%${search}%,isbn.ilike.%${search}%,sku.ilike.%${search}%`)
+  }
+
+  query = query.range(page * pageSize, (page + 1) * pageSize - 1)
+
+  const { data, error, count } = await query
   if (error) throw error
-  return data
+  return { data, count }
 }
 export async function createLivro(l) {
   const { data, error } = await supabase.from('livros').insert([l]).select().single()
