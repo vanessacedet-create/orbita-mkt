@@ -69,7 +69,7 @@ export async function deleteParceiro(id) {
 
 // ── LIVROS ─────────────────────────────────────────────────
 export async function getLivros() {
-  const { data, error } = await supabase.from('livros').select('*').order('titulo')
+  const { data, error } = await supabase.from('livros').select('*').order('titulo').limit(10000)
   if (error) throw error
   return data
 }
