@@ -965,6 +965,7 @@ function DivulgacoesTab({ envios, setEnvios }) {
   const [search, setSearch]   = useState('')
   const [modal, setModal]     = useState(null) // { envio }
   const [datas, setDatas]     = useState({})   // { envioLivroId: 'yyyy-mm-dd' }
+  const [checked, setChecked] = useState({})   // { envioLivroId: bool }
   const [saving, setSaving]   = useState(false)
   const [toast, showToast]    = useToast()
 
@@ -980,11 +981,17 @@ function DivulgacoesTab({ envios, setEnvios }) {
   })
 
   function abrirModal(envio) {
-    // Inicializa datas com hoje para os livros não divulgados
     const hoje = new Date().toISOString().slice(0,10)
-    const init = {}
-    ;(envio.envio_livros||[]).forEach(el => { if (!el.divulgado) init[el.id] = hoje })
-    setDatas(init)
+    const initDatas = {}
+    const initCheck = {}
+    ;(envio.envio_livros||[]).forEach(el => {
+      if (!el.divulgado) {
+        initDatas[el.id] = hoje
+        initCheck[el.id] = false // desmarcado por padrão
+      }
+    })
+    setDatas(initDatas)
+    setChecked(initCheck)
     setModal({ envio })
   }
 
@@ -994,19 +1001,19 @@ function DivulgacoesTab({ envios, setEnvios }) {
     try {
       const livrosNaoDiv = (modal.envio.envio_livros||[]).filter(el => !el.divulgado)
       for (const el of livrosNaoDiv) {
-        if (datas[el.id]) {
+        if (checked[el.id] && datas[el.id]) {
           await updateEnvioLivroDivulgacao(el.id, { divulgado: true, data_divulgacao: datas[el.id] })
         }
       }
-      // Verifica se todos os livros do envio foram divulgados
-      const todosDiv = (modal.envio.envio_livros||[]).every(el => el.divulgado || datas[el.id])
+      // Se todos foram divulgados (os que já estavam + os que acabamos de marcar), muda status
+      const todosDiv = (modal.envio.envio_livros||[]).every(el => el.divulgado || checked[el.id])
       if (todosDiv) {
         await updateEnvioStatus(modal.envio.id, 'divulgado')
       }
-      // Recarrega envios
       const novosEnvios = await getEnvios()
       setEnvios(novosEnvios)
-      showToast('Divulgação registrada!')
+      const qtd = Object.values(checked).filter(Boolean).length
+      showToast(qtd > 0 ? `${qtd} divulgação${qtd>1?'s':''} registrada${qtd>1?'s':''}!` : 'Nenhuma alteração.')
       setModal(null)
     } catch (e) { console.error(e); showToast('Erro ao salvar', 'error') }
     finally { setSaving(false) }
@@ -1088,31 +1095,59 @@ function DivulgacoesTab({ envios, setEnvios }) {
             </p>
 
             <div style={{display:'flex',flexDirection:'column',gap:10,marginBottom:20}}>
-              {(modal.envio.envio_livros||[]).filter(el=>el.livros).map(el => (
-                <div key={el.id} style={{
-                  background:'var(--surface-2)', border:'1px solid var(--border)',
-                  borderRadius:8, padding:'12px 14px',
-                  opacity: el.divulgado ? 0.5 : 1,
-                }}>
-                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom: el.divulgado ? 0 : 10}}>
-                    <div style={{width:8,height:8,borderRadius:'50%',background:el.divulgado?'var(--green)':'var(--amber)',flexShrink:0}}/>
-                    <span style={{fontSize:13,fontWeight:600,color:'var(--text)',flex:1}}>{el.livros.titulo}</span>
-                    {el.divulgado && <span className="badge badge-green" style={{fontSize:11}}>Já divulgado</span>}
-                  </div>
-                  {!el.divulgado && (
-                    <div style={{display:'flex',alignItems:'center',gap:10}}>
-                      <label style={{fontSize:12,color:'var(--text-muted)',whiteSpace:'nowrap'}}>Data de divulgação:</label>
-                      <input
-                        className="form-input"
-                        type="date"
-                        value={datas[el.id]||''}
-                        onChange={e=>setDatas(d=>({...d,[el.id]:e.target.value}))}
-                        style={{flex:1,padding:'6px 10px',fontSize:13}}
-                      />
+              {(modal.envio.envio_livros||[]).filter(el=>el.livros).map(el => {
+                const jaDivulgado = el.divulgado
+                const marcado = checked[el.id] || false
+                return (
+                  <div key={el.id} style={{
+                    background: jaDivulgado ? 'var(--surface-2)' : marcado ? 'var(--accent-glow)' : 'var(--surface-2)',
+                    border: `1px solid ${marcado && !jaDivulgado ? 'rgba(224,96,48,0.3)' : 'var(--border)'}`,
+                    borderRadius:8, padding:'12px 14px',
+                    opacity: jaDivulgado ? 0.55 : 1,
+                    transition:'all 0.15s',
+                  }}>
+                    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom: (!jaDivulgado && marcado) ? 10 : 0}}>
+                      {/* Checkbox */}
+                      {!jaDivulgado && (
+                        <div
+                          onClick={()=>setChecked(c=>({...c,[el.id]:!c[el.id]}))}
+                          style={{
+                            width:18,height:18,borderRadius:5,flexShrink:0,cursor:'pointer',
+                            border:`2px solid ${marcado?'var(--accent)':'var(--border)'}`,
+                            background:marcado?'var(--accent)':'transparent',
+                            display:'flex',alignItems:'center',justifyContent:'center',
+                            transition:'all 0.15s',
+                          }}
+                        >
+                          {marcado && <span style={{color:'#fff',fontSize:11,fontWeight:700,lineHeight:1}}>✓</span>}
+                        </div>
+                      )}
+                      <div style={{width:8,height:8,borderRadius:'50%',flexShrink:0,background:jaDivulgado?'var(--green)':'var(--amber)'}}/>
+                      <span style={{
+                        fontSize:13,fontWeight:600,flex:1,
+                        color: jaDivulgado?'var(--text-muted)':marcado?'var(--accent)':'var(--text)',
+                        textDecoration:jaDivulgado?'line-through':'none',
+                      }}>{el.livros.titulo}</span>
+                      {jaDivulgado
+                        ? <span className="badge badge-green" style={{fontSize:11}}>Já divulgado</span>
+                        : !marcado && <span style={{fontSize:11,color:'var(--text-muted)'}}>clique para marcar</span>
+                      }
                     </div>
-                  )}
-                </div>
-              ))}
+                    {!jaDivulgado && marcado && (
+                      <div style={{display:'flex',alignItems:'center',gap:10,paddingLeft:28}}>
+                        <label style={{fontSize:12,color:'var(--text-muted)',whiteSpace:'nowrap'}}>Data de divulgação:</label>
+                        <input
+                          className="form-input"
+                          type="date"
+                          value={datas[el.id]||''}
+                          onChange={e=>setDatas(d=>({...d,[el.id]:e.target.value}))}
+                          style={{flex:1,padding:'6px 10px',fontSize:13}}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
 
             <div className="form-actions">
@@ -1120,7 +1155,7 @@ function DivulgacoesTab({ envios, setEnvios }) {
               <button
                 className="btn btn-primary"
                 onClick={salvarDivulgacoes}
-                disabled={saving || Object.values(datas).every(v=>!v)}
+                disabled={saving || Object.values(checked).every(v=>!v)}
               >
                 {saving ? 'Salvando...' : '✓ Salvar divulgações'}
               </button>
