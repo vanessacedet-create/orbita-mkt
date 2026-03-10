@@ -6,7 +6,7 @@ import {
 } from '../lib/supabase'
 import {
   Plus, Pencil, Trash2, X, BookOpen, Users, Send,
-  Upload, FileSpreadsheet, CheckCircle, AlertCircle, Search
+  Upload, FileSpreadsheet, CheckCircle, AlertCircle, Search, BarChart2
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -25,9 +25,10 @@ const STATUS_OPTIONS = [
 ]
 
 const TABS = [
-  { id: 'envios',    label: 'Envios',    icon: Send },
-  { id: 'parceiros', label: 'Parceiros', icon: Users },
-  { id: 'livros',    label: 'Livros',    icon: BookOpen },
+  { id: 'envios',      label: 'Envios',      icon: Send },
+  { id: 'parceiros',   label: 'Parceiros',   icon: Users },
+  { id: 'livros',      label: 'Livros',      icon: BookOpen },
+  { id: 'relatorios',  label: 'Relatórios',  icon: BarChart2 },
 ]
 
 function useToast() {
@@ -53,6 +54,8 @@ function normalizar(str) {
 function BuscaDuplicatas({ parceiros, livros, envios, onClose }) {
   const [parceiroId, setParceiroId] = useState('')
   const [livroId, setLivroId]       = useState('')
+  const [parceiroSearch, setParceiroSearch] = useState('')
+  const [parceiroOpen, setParceiroOpen]     = useState(false)
   const [livroSearch, setLivroSearch] = useState('')
   const [resultado, setResultado]   = useState(null)
 
@@ -412,20 +415,18 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
     if (envios.length >= 0) setLoading(false)
   }, [envios])
 
-  function openNew()   { setEditing(null); setForm(EMPTY); setModal(true) }
+  function openNew()   { setEditing(null); setForm(EMPTY); setParceiroSearch(''); setParceiroOpen(false); setLivroSearch(''); setModal(true) }
   function openEdit(e) {
     setEditing(e)
     const livro_ids = (e.envio_livros || []).map(el => el.livros?.id).filter(Boolean)
-    setForm({
-      parceiro_id: e.parceiro_id,
-      livro_ids,
-      status: e.status,
-      data_envio: e.data_envio || '',
-      observacoes: e.observacoes || ''
-    })
+    setForm({ parceiro_id: e.parceiro_id, livro_ids, status: e.status, data_envio: e.data_envio || '', observacoes: e.observacoes || '' })
+    const p = parceiros.find(x => x.id === e.parceiro_id)
+    setParceiroSearch(p?.nome || '')
+    setParceiroOpen(false)
+    setLivroSearch('')
     setModal(true)
   }
-  function close() { setModal(false); setEditing(null) }
+  function close() { setModal(false); setEditing(null); setParceiroOpen(false) }
 
   function toggleLivro(livroId) {
     setForm(f => ({
@@ -469,6 +470,8 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
     } catch { showToast('Erro', 'error') }
   }
 
+  const [parceiroSearch, setParceiroSearch] = useState('')
+  const [parceiroOpen, setParceiroOpen]     = useState(false)
   const [livroSearch, setLivroSearch] = useState('')
   const livrosFiltrados = livros.filter(l =>
     normalizar(l.titulo).includes(normalizar(livroSearch)) ||
@@ -558,12 +561,33 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
               <button className="btn btn-ghost btn-icon" onClick={close}><X size={16}/></button>
             </div>
             <div className="form-grid">
-              <div className="form-group">
+              <div className="form-group" style={{position:'relative'}}>
                 <label className="form-label">Parceiro *</label>
-                <select className="form-select" value={form.parceiro_id} onChange={e=>setForm(f=>({...f,parceiro_id:e.target.value}))}>
-                  <option value="">Selecionar parceiro...</option>
-                  {parceiros.map(p=><option key={p.id} value={p.id}>{p.nome}</option>)}
-                </select>
+                <input
+                  className="form-input"
+                  placeholder="Digite para buscar o parceiro..."
+                  value={parceiroSearch}
+                  onChange={e=>{ setParceiroSearch(e.target.value); setForm(f=>({...f,parceiro_id:''})); setParceiroOpen(true) }}
+                  onFocus={()=>setParceiroOpen(true)}
+                  autoComplete="off"
+                />
+                {parceiroOpen && parceiroSearch && (
+                  <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:100,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,maxHeight:200,overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,0.3)'}}>
+                    {parceiros.filter(p=>p.nome.toLowerCase().includes(parceiroSearch.toLowerCase())).length === 0
+                      ? <div style={{padding:'10px 14px',fontSize:13,color:'var(--text-muted)'}}>Nenhum parceiro encontrado.</div>
+                      : parceiros.filter(p=>p.nome.toLowerCase().includes(parceiroSearch.toLowerCase())).map(p=>(
+                        <div key={p.id} onClick={()=>{ setForm(f=>({...f,parceiro_id:p.id})); setParceiroSearch(p.nome); setParceiroOpen(false) }}
+                          style={{padding:'10px 14px',cursor:'pointer',fontSize:13,borderBottom:'1px solid var(--border)',color:'var(--text)'}}
+                          onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'}
+                          onMouseLeave={e=>e.currentTarget.style.background='transparent'}
+                        >
+                          {p.nome}
+                          {p.tipo_parceria && <span style={{fontSize:11,color:'var(--text-muted)',marginLeft:8}}>{p.tipo_parceria}</span>}
+                        </div>
+                      ))
+                    }
+                  </div>
+                )}
               </div>
 
               {/* Livros selecionados — lista de pedido */}
@@ -935,6 +959,166 @@ function LivrosTab() {
   )
 }
 
+// ── RELATÓRIOS TAB ────────────────────────────────────────
+function RelatoriosTab({ parceiros, envios }) {
+  const [parceiroId, setParceiroId]   = useState('')
+  const [parceiroSearch, setParceiroSearch] = useState('')
+  const [parceiroOpen, setParceiroOpen]     = useState(false)
+  const [dataInicio, setDataInicio]   = useState('')
+  const [dataFim, setDataFim]         = useState('')
+  const [resultado, setResultado]     = useState(null)
+
+  function gerarRelatorio() {
+    if (!parceiroId) return
+    const parceiro = parceiros.find(p => p.id === parceiroId)
+
+    let enviosFiltrados = envios.filter(e => e.parceiro_id === parceiroId)
+
+    if (dataInicio) {
+      enviosFiltrados = enviosFiltrados.filter(e => e.data_envio && e.data_envio >= dataInicio)
+    }
+    if (dataFim) {
+      enviosFiltrados = enviosFiltrados.filter(e => e.data_envio && e.data_envio <= dataFim)
+    }
+
+    const totalLivros = enviosFiltrados.reduce((acc, e) => acc + (e.envio_livros||[]).length, 0)
+    const porStatus = {}
+    STATUS_OPTIONS.forEach(s => {
+      porStatus[s.value] = enviosFiltrados.filter(e => e.status === s.value).reduce((acc, e) => acc + (e.envio_livros||[]).length, 0)
+    })
+
+    setResultado({ parceiro, envios: enviosFiltrados, totalLivros, porStatus })
+  }
+
+  const STATUS_OPTIONS_LOCAL = [
+    { value: 'enviado',   label: 'Enviado',   cls: 'badge-amber' },
+    { value: 'divulgado', label: 'Divulgado', cls: 'badge-green' },
+    { value: 'cancelado', label: 'Cancelado', cls: 'badge-red'   },
+  ]
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Relatórios</h1>
+          <p className="page-subtitle">Consulte cortesias por parceiro e período</p>
+        </div>
+      </div>
+
+      <div className="table-card" style={{padding:'20px 24px', marginBottom:24}}>
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:16, alignItems:'end'}}>
+          <div className="form-group" style={{position:'relative', margin:0}}>
+            <label className="form-label">Parceiro</label>
+            <input
+              className="form-input"
+              placeholder="Digite para buscar..."
+              value={parceiroSearch}
+              onChange={e=>{ setParceiroSearch(e.target.value); setParceiroId(''); setParceiroOpen(true); setResultado(null) }}
+              onFocus={()=>setParceiroOpen(true)}
+              autoComplete="off"
+            />
+            {parceiroOpen && parceiroSearch && (
+              <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:100,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,maxHeight:200,overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,0.3)'}}>
+                {parceiros.filter(p=>p.nome.toLowerCase().includes(parceiroSearch.toLowerCase())).length === 0
+                  ? <div style={{padding:'10px 14px',fontSize:13,color:'var(--text-muted)'}}>Nenhum parceiro encontrado.</div>
+                  : parceiros.filter(p=>p.nome.toLowerCase().includes(parceiroSearch.toLowerCase())).map(p=>(
+                    <div key={p.id}
+                      onClick={()=>{ setParceiroId(p.id); setParceiroSearch(p.nome); setParceiroOpen(false); setResultado(null) }}
+                      style={{padding:'10px 14px',cursor:'pointer',fontSize:13,borderBottom:'1px solid var(--border)',color:'var(--text)'}}
+                      onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'}
+                      onMouseLeave={e=>e.currentTarget.style.background='transparent'}
+                    >
+                      {p.nome}
+                      {p.tipo_parceria && <span style={{fontSize:11,color:'var(--text-muted)',marginLeft:8}}>{p.tipo_parceria}</span>}
+                    </div>
+                  ))
+                }
+              </div>
+            )}
+          </div>
+
+          <div style={{display:'flex', gap:10}}>
+            <div className="form-group" style={{margin:0, flex:1}}>
+              <label className="form-label">Data início</label>
+              <input className="form-input" type="date" value={dataInicio} onChange={e=>{ setDataInicio(e.target.value); setResultado(null) }}/>
+            </div>
+            <div className="form-group" style={{margin:0, flex:1}}>
+              <label className="form-label">Data fim</label>
+              <input className="form-input" type="date" value={dataFim} onChange={e=>{ setDataFim(e.target.value); setResultado(null) }}/>
+            </div>
+          </div>
+
+          <button className="btn btn-primary" onClick={gerarRelatorio} disabled={!parceiroId} style={{justifyContent:'center'}}>
+            <Search size={15}/> Gerar relatório
+          </button>
+        </div>
+      </div>
+
+      {resultado && (
+        <>
+          {/* Cards de resumo */}
+          <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:20}}>
+            <div className="table-card" style={{padding:'16px 20px', textAlign:'center'}}>
+              <p style={{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',color:'var(--text-muted)',marginBottom:6}}>Total de envios</p>
+              <p style={{fontSize:32,fontWeight:800,color:'var(--accent)'}}>{resultado.envios.length}</p>
+            </div>
+            <div className="table-card" style={{padding:'16px 20px', textAlign:'center'}}>
+              <p style={{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',color:'var(--text-muted)',marginBottom:6}}>Total de livros</p>
+              <p style={{fontSize:32,fontWeight:800,color:'var(--text)'}}>{resultado.totalLivros}</p>
+            </div>
+            <div className="table-card" style={{padding:'16px 20px', textAlign:'center'}}>
+              <p style={{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',color:'var(--green)',marginBottom:6}}>Divulgados</p>
+              <p style={{fontSize:32,fontWeight:800,color:'var(--green)'}}>{resultado.porStatus.divulgado}</p>
+            </div>
+            <div className="table-card" style={{padding:'16px 20px', textAlign:'center'}}>
+              <p style={{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',color:'var(--amber)',marginBottom:6}}>Aguardando</p>
+              <p style={{fontSize:32,fontWeight:800,color:'var(--amber)'}}>{resultado.porStatus.enviado}</p>
+            </div>
+          </div>
+
+          {/* Tabela detalhada */}
+          <div className="table-card">
+            <div className="table-toolbar">
+              <span className="table-title">
+                Cortesias de <strong>{resultado.parceiro.nome}</strong>
+                {dataInicio && dataFim && <span style={{fontWeight:400,color:'var(--text-muted)'}}> · {format(new Date(dataInicio+'T12:00:00'),'dd/MM/yyyy',{locale:ptBR})} até {format(new Date(dataFim+'T12:00:00'),'dd/MM/yyyy',{locale:ptBR})}</span>}
+                {dataInicio && !dataFim && <span style={{fontWeight:400,color:'var(--text-muted)'}}> · a partir de {format(new Date(dataInicio+'T12:00:00'),'dd/MM/yyyy',{locale:ptBR})}</span>}
+                {!dataInicio && dataFim && <span style={{fontWeight:400,color:'var(--text-muted)'}}> · até {format(new Date(dataFim+'T12:00:00'),'dd/MM/yyyy',{locale:ptBR})}</span>}
+              </span>
+            </div>
+            {resultado.envios.length === 0
+              ? <div className="empty-state"><p>Nenhum envio encontrado para este período.</p></div>
+              : <table>
+                  <thead><tr><th>Data</th><th>Livros</th><th>Qtd</th><th>Status</th></tr></thead>
+                  <tbody>
+                    {resultado.envios.map(e => {
+                      const s = STATUS_OPTIONS_LOCAL.find(x=>x.value===e.status)||STATUS_OPTIONS_LOCAL[0]
+                      const livros = (e.envio_livros||[]).map(el=>el.livros?.titulo).filter(Boolean)
+                      return (
+                        <tr key={e.id}>
+                          <td className="td-muted" style={{whiteSpace:'nowrap'}}>
+                            {e.data_envio ? format(new Date(e.data_envio+'T12:00:00'),'dd MMM yyyy',{locale:ptBR}) : '—'}
+                          </td>
+                          <td>
+                            <div style={{display:'flex',flexDirection:'column',gap:3}}>
+                              {livros.map((t,i)=><span key={i} style={{fontSize:12.5}}>{t}</span>)}
+                            </div>
+                          </td>
+                          <td style={{textAlign:'center',fontWeight:700,color:'var(--accent)'}}>{livros.length}</td>
+                          <td><span className={`badge ${s.cls}`}>{s.label}</span></td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+            }
+          </div>
+        </>
+      )}
+    </>
+  )
+}
+
 // ── MAIN ───────────────────────────────────────────────────
 export default function Cortesias() {
   const [tab, setTab]             = useState('envios')
@@ -957,9 +1141,10 @@ export default function Cortesias() {
           </button>
         ))}
       </div>
-      {tab==='envios'    && <EnviosTab    parceiros={parceiros} livros={livros} envios={envios} setEnvios={setEnvios}/>}
-      {tab==='parceiros' && <ParceirosTab parceiros={parceiros} setParceiros={setParceiros}/>}
-      {tab==='livros'    && <LivrosTab/>}
+      {tab==='envios'      && <EnviosTab    parceiros={parceiros} livros={livros} envios={envios} setEnvios={setEnvios}/>}
+      {tab==='parceiros'   && <ParceirosTab parceiros={parceiros} setParceiros={setParceiros}/>}
+      {tab==='livros'      && <LivrosTab/>}
+      {tab==='relatorios'  && <RelatoriosTab parceiros={parceiros} envios={envios}/>}
     </div>
   )
 }
