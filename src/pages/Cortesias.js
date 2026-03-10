@@ -793,35 +793,35 @@ function ParceirosTab({ parceiros, setParceiros }) {
 
 // ── LIVROS TAB ─────────────────────────────────────────────
 function LivrosTab() {
-  const [modal, setModal]     = useState(false)
-  const [editing, setEditing] = useState(null)
-  const [saving, setSaving]   = useState(false)
-  const [toast, showToast]    = useToast()
+  const [modal, setModal]       = useState(false)
+  const [editing, setEditing]   = useState(null)
+  const [saving, setSaving]     = useState(false)
+  const [toast, showToast]      = useToast()
+  const [livros, setLivros]     = useState([])
+  const [total, setTotal]       = useState(0)
+  const [loading, setLoading]   = useState(true)
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch]     = useState('')
+  const [page, setPage]         = useState(0)
+  const [pageSize, setPageSize] = useState(50)
   const EMPTY = { titulo:'', isbn:'', sku:'', autor:'', editora:'' }
   const [form, setForm] = useState(EMPTY)
 
-  // Paginação e busca server-side
-  const [livros, setLivros]   = useState([])
-  const [total, setTotal]     = useState(0)
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch]   = useState('')
-  const [searchInput, setSearchInput] = useState('')
-  const [page, setPage]       = useState(0)
-  const [pageSize, setPageSize] = useState(50)
-
-  async function fetchLivros(p = page, ps = pageSize, s = search) {
+  async function fetchLivros(p, ps, s) {
+    const pg = p !== undefined ? p : page
+    const sz = ps !== undefined ? ps : pageSize
+    const sq = s !== undefined ? s : search
     setLoading(true)
     try {
-      const { data, count } = await getLivros({ page: p, pageSize: ps, search: s })
+      const { data, count } = await getLivros({ page: pg, pageSize: sz, search: sq })
       setLivros(data || [])
       setTotal(count || 0)
-    } catch { showToast('Erro ao carregar livros', 'error') }
+    } catch (e) { console.error(e); showToast('Erro ao carregar livros', 'error') }
     finally { setLoading(false) }
   }
 
   useEffect(() => { fetchLivros(page, pageSize, search) }, [page, pageSize, search])
 
-  // Busca com debounce
   useEffect(() => {
     const t = setTimeout(() => { setSearch(searchInput); setPage(0) }, 400)
     return () => clearTimeout(t)
@@ -837,7 +837,7 @@ function LivrosTab() {
     if (!form.titulo.trim()) return
     setSaving(true)
     try {
-      if (editing) { await updateLivro(editing.id,form); showToast('Atualizado!') }
+      if (editing) { await updateLivro(editing.id, form); showToast('Atualizado!') }
       else { await createLivro(form); showToast('Cadastrado!') }
       await fetchLivros()
       close()
@@ -850,42 +850,67 @@ function LivrosTab() {
     catch { showToast('Erro','error') }
   }
 
-  async function handleImport() { setPage(0); await fetchLivros(0, pageSize, search) }
-
-  const filtered = livros
-
   return (
     <>
       <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginBottom:20}}>
-        <UploadPlanilha tipo="livros" onImport={reload}/>
+        <UploadPlanilha tipo="livros" onImport={() => { setPage(0); fetchLivros(0, pageSize, search) }}/>
         <button className="btn btn-primary" onClick={openNew}><Plus size={16}/> Novo Livro</button>
       </div>
       <div className="table-card">
         <div className="table-toolbar">
-          <span className="table-title">Livros ({livros.length})</span>
-          <input className="search-input" placeholder="Buscar título, autor, ISBN ou SKU..." value={search} onChange={e=>setSearch(e.target.value)}/>
+          <div style={{display:'flex',alignItems:'center',gap:12}}>
+            <span className="table-title">
+              {search ? `${total} resultado${total!==1?'s':''} para "${search}"` : `Livros (${total})`}
+            </span>
+            {totalPages > 1 && <span style={{fontSize:12,color:'var(--text-muted)'}}>Pág. {page+1}/{totalPages}</span>}
+          </div>
+          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+            <select className="form-select" style={{width:'auto',fontSize:12,padding:'4px 8px'}} value={pageSize} onChange={e=>{ setPageSize(Number(e.target.value)); setPage(0) }}>
+              {[50,100,200,500].map(n=><option key={n} value={n}>{n} por página</option>)}
+            </select>
+            <input className="search-input" placeholder="Buscar título, autor, ISBN ou SKU..." value={searchInput} onChange={e=>setSearchInput(e.target.value)}/>
+          </div>
         </div>
-        {filtered.length===0?<div className="empty-state"><p>Nenhum livro encontrado.</p></div>:(
-          <table>
-            <thead><tr><th>Título</th><th>Autor</th><th>Editora</th><th>ISBN</th><th>SKU</th><th></th></tr></thead>
-            <tbody>
-              {filtered.map(l=>(
-                <tr key={l.id}>
-                  <td className="td-strong">{l.titulo}</td>
-                  <td className="td-muted">{l.autor||'—'}</td>
-                  <td className="td-muted">{l.editora||'—'}</td>
-                  <td className="td-muted">{l.isbn||'—'}</td>
-                  <td className="td-muted">{l.sku||'—'}</td>
-                  <td><div className="actions-cell">
-                    <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>openEdit(l)}><Pencil size={14}/></button>
-                    <button className="btn btn-danger btn-icon btn-sm" onClick={()=>remove(l.id)}><Trash2 size={14}/></button>
-                  </div></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+        {loading
+          ? <div className="loading" style={{minHeight:'auto',padding:40}}><div className="spinner"/></div>
+          : livros.length === 0
+            ? <div className="empty-state"><p>Nenhum livro encontrado.</p></div>
+            : <table>
+                <thead><tr><th>Título</th><th>Autor</th><th>Editora</th><th>ISBN</th><th>SKU</th><th></th></tr></thead>
+                <tbody>
+                  {livros.map(l=>(
+                    <tr key={l.id}>
+                      <td className="td-strong">{l.titulo}</td>
+                      <td className="td-muted">{l.autor||'—'}</td>
+                      <td className="td-muted">{l.editora||'—'}</td>
+                      <td className="td-muted">{l.isbn||'—'}</td>
+                      <td className="td-muted">{l.sku||'—'}</td>
+                      <td><div className="actions-cell">
+                        <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>openEdit(l)}><Pencil size={14}/></button>
+                        <button className="btn btn-danger btn-icon btn-sm" onClick={()=>remove(l.id)}><Trash2 size={14}/></button>
+                      </div></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+        }
+
+        {totalPages > 1 && (
+          <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:6,padding:'14px 20px',borderTop:'1px solid var(--border)'}}>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setPage(0)} disabled={page===0}>«</button>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setPage(p=>p-1)} disabled={page===0}>‹ Anterior</button>
+            {Array.from({length:Math.min(5,totalPages)},(_,i)=>{
+              let p = page < 3 ? i : page > totalPages-4 ? totalPages-5+i : page-2+i
+              if (p < 0 || p >= totalPages) return null
+              return <button key={p} className={`btn btn-sm ${p===page?'btn-primary':'btn-ghost'}`} onClick={()=>setPage(p)}>{p+1}</button>
+            })}
+            <button className="btn btn-ghost btn-sm" onClick={()=>setPage(p=>p+1)} disabled={page>=totalPages-1}>Próxima ›</button>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setPage(totalPages-1)} disabled={page>=totalPages-1}>»</button>
+          </div>
         )}
       </div>
+
       {modal&&(
         <div className="modal-backdrop" onClick={ev=>ev.target===ev.currentTarget&&close()}>
           <div className="modal">
@@ -919,7 +944,7 @@ export default function Cortesias() {
 
   useEffect(() => {
     getParceiros().then(setParceiros).catch(console.error)
-    getLivros().then(setLivros).catch(console.error)
+    getLivros({ page:0, pageSize:5000 }).then(r => setLivros(r.data || [])).catch(console.error)
     getEnvios().then(setEnvios).catch(console.error)
   }, [])
 
