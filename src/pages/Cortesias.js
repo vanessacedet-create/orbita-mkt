@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import {
   getParceiros, createParceiro, updateParceiro, deleteParceiro,
   getLivros, createLivro, updateLivro, deleteLivro,
-  getEnvios, createEnvio, updateEnvio, deleteEnvio
+  getEnvios, createEnvio, updateEnvio, updateEnvioStatus, deleteEnvio
 } from '../lib/supabase'
 import {
   Plus, Pencil, Trash2, X, BookOpen, Users, Send,
@@ -65,7 +65,8 @@ function BuscaDuplicatas({ parceiros, livros, envios, onClose }) {
   function buscar() {
     if (!parceiroId || !livroId) return
     const jaEnviado = envios.find(e =>
-      e.parceiro_id === parceiroId && e.livro_id === livroId
+      e.parceiro_id === parceiroId &&
+      (e.envio_livros || []).some(el => el.livros?.id === livroId)
     )
     if (jaEnviado) {
       const s = STATUS_OPTIONS.find(x => x.value === jaEnviado.status)
@@ -414,9 +415,10 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
   function openNew()   { setEditing(null); setForm(EMPTY); setModal(true) }
   function openEdit(e) {
     setEditing(e)
+    const livro_ids = (e.envio_livros || []).map(el => el.livros?.id).filter(Boolean)
     setForm({
       parceiro_id: e.parceiro_id,
-      livro_ids: [e.livro_id],
+      livro_ids,
       status: e.status,
       data_envio: e.data_envio || '',
       observacoes: e.observacoes || ''
@@ -437,21 +439,16 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
   async function save() {
     if (!form.parceiro_id || form.livro_ids.length === 0) return
     setSaving(true)
-    // Remove livro_ids do objeto antes de enviar ao Supabase
-    const { livro_ids, ...dadosBase } = form
     try {
       if (editing) {
-        const u = await updateEnvio(editing.id, { ...dadosBase, livro_id: livro_ids[0] })
+        const u = await updateEnvio(editing.id, form)
         setEnvios(prev => prev.map(e => e.id === u.id ? u : e))
         showToast('Envio atualizado!')
       } else {
-        const novos = []
-        for (const livro_id of livro_ids) {
-          const n = await createEnvio({ ...dadosBase, livro_id })
-          novos.push(n)
-        }
-        setEnvios(prev => [...novos, ...prev])
-        showToast(`${novos.length} envio${novos.length > 1 ? 's' : ''} registrado${novos.length > 1 ? 's' : ''}!`)
+        const novo = await createEnvio(form)
+        setEnvios(prev => [novo, ...prev])
+        const qtd = form.livro_ids.length
+        showToast(`Envio registrado com ${qtd} livro${qtd > 1 ? 's' : ''}!`)
       }
       close()
     } catch (e) { console.error(e); showToast('Erro ao salvar', 'error') }
@@ -466,7 +463,7 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
 
   async function quickConfirm(envio) {
     try {
-      const u = await updateEnvio(envio.id, { ...envio, status: 'divulgado' })
+      const u = await updateEnvioStatus(envio.id, 'divulgado')
       setEnvios(prev => prev.map(e => e.id === u.id ? u : e))
       showToast('Divulgação confirmada!')
     } catch { showToast('Erro', 'error') }
@@ -525,7 +522,18 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
                 return (
                   <tr key={e.id}>
                     <td className="td-strong">{e.parceiros?.nome||'—'}</td>
-                    <td>{e.livros?.titulo||'—'}</td>
+                    <td>
+                      {(e.envio_livros||[]).length === 0 ? <span className="td-muted">—</span> :
+                      (e.envio_livros||[]).length === 1 ?
+                        <span>{e.envio_livros[0].livros?.titulo}</span> :
+                        <div>
+                          <span>{e.envio_livros[0].livros?.titulo}</span>
+                          <span style={{marginLeft:6, fontSize:11, background:'var(--surface-3)', color:'var(--text-muted)', borderRadius:10, padding:'1px 7px'}}>
+                            +{(e.envio_livros||[]).length - 1} livro{(e.envio_livros||[]).length > 2 ? 's' : ''}
+                          </span>
+                        </div>
+                      }
+                    </td>
                     <td className="td-muted">{e.data_envio?format(new Date(e.data_envio+'T12:00:00'),'dd MMM yyyy',{locale:ptBR}):'—'}</td>
                     <td><span className={`badge ${s.cls}`}>{s.label}</span></td>
                     <td>{e.status==='enviado'&&<button className="btn btn-sm btn-ghost" style={{color:'var(--green)',fontSize:12}} onClick={()=>quickConfirm(e)}>✓ Confirmar</button>}</td>
