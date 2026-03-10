@@ -132,7 +132,7 @@ export async function createEnvio({ parceiro_id, status, data_envio, observacoes
   // 3. Retorna o envio com livros
   const { data: completo, error: fetchError } = await supabase
     .from('envios')
-    .select(`*, parceiros(id, nome, tipo_parceria), envio_livros(id, livros(id, titulo, autor, isbn, sku))`)
+    .select(`*, parceiros(id, nome, tipo_parceria), envio_livros(id, divulgado, data_divulgacao, livros(id, titulo, autor, isbn, sku))`)
     .eq('id', envio.id)
     .single()
   if (fetchError) throw fetchError
@@ -160,7 +160,7 @@ export async function updateEnvio(id, { parceiro_id, status, data_envio, observa
   // 3. Retorna o envio atualizado
   const { data, error } = await supabase
     .from('envios')
-    .select(`*, parceiros(id, nome, tipo_parceria), envio_livros(id, livros(id, titulo, autor, isbn, sku))`)
+    .select(`*, parceiros(id, nome, tipo_parceria), envio_livros(id, divulgado, data_divulgacao, livros(id, titulo, autor, isbn, sku))`)
     .eq('id', id)
     .single()
   if (error) throw error
@@ -172,7 +172,7 @@ export async function updateEnvioStatus(id, status) {
   if (error) throw error
   const { data, error: fetchError } = await supabase
     .from('envios')
-    .select(`*, parceiros(id, nome, tipo_parceria), envio_livros(id, livros(id, titulo, autor, isbn, sku))`)
+    .select(`*, parceiros(id, nome, tipo_parceria), envio_livros(id, divulgado, data_divulgacao, livros(id, titulo, autor, isbn, sku))`)
     .eq('id', id)
     .single()
   if (fetchError) throw fetchError
@@ -199,4 +199,13 @@ export async function getStats() {
     confirmados: enviosData.filter(e => e.status === 'divulgado').length,
     pendentes: enviosData.filter(e => e.status === 'enviado').length,
   }
+}
+
+// ── DIVULGAÇÃO POR LIVRO ───────────────────────────────────
+export async function updateEnvioLivroDivulgacao(envioLivroId, { divulgado, data_divulgacao }) {
+  const { error } = await supabase
+    .from('envio_livros')
+    .update({ divulgado, data_divulgacao: data_divulgacao || null })
+    .eq('id', envioLivroId)
+  if (error) throw error
 }
