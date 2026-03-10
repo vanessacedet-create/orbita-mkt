@@ -722,8 +722,9 @@ function ParceirosTab({ parceiros, setParceiros }) {
     if (!form.nome.trim()) return
     setSaving(true)
     try {
-      if (editing) { const u=await updateParceiro(editing.id,form); setParceiros(prev=>prev.map(p=>p.id===u.id?u:p)); showToast('Atualizado!') }
-      else { const n=await createParceiro(form); setParceiros(prev=>[...prev,n].sort((a,b)=>a.nome.localeCompare(b.nome))); showToast('Cadastrado!') }
+      if (editing) { await updateParceiro(editing.id,form); showToast('Atualizado!') }
+      else { await createParceiro(form); showToast('Cadastrado!') }
+      await reload()
       close()
     } catch { showToast('Erro ao salvar','error') } finally { setSaving(false) }
   }
@@ -809,8 +810,9 @@ function LivrosTab({ livros, setLivros }) {
     if (!form.titulo.trim()) return
     setSaving(true)
     try {
-      if (editing) { const u=await updateLivro(editing.id,form); setLivros(prev=>prev.map(l=>l.id===u.id?u:l)); showToast('Atualizado!') }
-      else { const n=await createLivro(form); setLivros(prev=>[...prev,n].sort((a,b)=>a.titulo.localeCompare(b.titulo))); showToast('Cadastrado!') }
+      if (editing) { await updateLivro(editing.id,form); showToast('Atualizado!') }
+      else { await createLivro(form); showToast('Cadastrado!') }
+      await reload()
       close()
     } catch { showToast('Erro ao salvar','error') } finally { setSaving(false) }
   }
