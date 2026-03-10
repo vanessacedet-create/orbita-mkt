@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import {
   getParceiros, createParceiro, updateParceiro, deleteParceiro,
   getLivros, createLivro, updateLivro, deleteLivro,
-  getEnvios, createEnvio, updateEnvio, updateEnvioStatus, deleteEnvio
+  getEnvios, createEnvio, updateEnvio, updateEnvioStatus, deleteEnvio, updateEnvioLivroDivulgacao
 } from '../lib/supabase'
 import {
   Plus, Pencil, Trash2, X, BookOpen, Users, Send,
@@ -962,15 +962,15 @@ function LivrosTab() {
 
 // ── DIVULGAÇÕES TAB ───────────────────────────────────────
 function DivulgacoesTab({ envios, setEnvios }) {
-  const [search, setSearch]         = useState('')
-  const [modal, setModal]           = useState(null) // { envio, livro }
-  const [dataDiv, setDataDiv]       = useState(new Date().toISOString().slice(0,10))
-  const [saving, setSaving]         = useState(false)
-  const [toast, showToast]          = useToast()
+  const [search, setSearch]   = useState('')
+  const [modal, setModal]     = useState(null) // { envio }
+  const [datas, setDatas]     = useState({})   // { envioLivroId: 'yyyy-mm-dd' }
+  const [saving, setSaving]   = useState(false)
+  const [toast, showToast]    = useToast()
 
-  // Só envios com status "enviado" e que tenham livros
+  // Envios que têm pelo menos 1 livro ainda não divulgado
   const pendentes = envios.filter(e =>
-    e.status === 'enviado' && (e.envio_livros||[]).length > 0
+    (e.envio_livros||[]).some(el => !el.divulgado)
   )
 
   const filtrados = pendentes.filter(e => {
@@ -979,15 +979,36 @@ function DivulgacoesTab({ envios, setEnvios }) {
       (e.envio_livros||[]).some(el => (el.livros?.titulo||'').toLowerCase().includes(q))
   })
 
-  async function confirmarDivulgacao() {
+  function abrirModal(envio) {
+    // Inicializa datas com hoje para os livros não divulgados
+    const hoje = new Date().toISOString().slice(0,10)
+    const init = {}
+    ;(envio.envio_livros||[]).forEach(el => { if (!el.divulgado) init[el.id] = hoje })
+    setDatas(init)
+    setModal({ envio })
+  }
+
+  async function salvarDivulgacoes() {
     if (!modal) return
     setSaving(true)
     try {
-      const u = await updateEnvioStatus(modal.envio.id, 'divulgado')
-      setEnvios(prev => prev.map(e => e.id === u.id ? u : e))
+      const livrosNaoDiv = (modal.envio.envio_livros||[]).filter(el => !el.divulgado)
+      for (const el of livrosNaoDiv) {
+        if (datas[el.id]) {
+          await updateEnvioLivroDivulgacao(el.id, { divulgado: true, data_divulgacao: datas[el.id] })
+        }
+      }
+      // Verifica se todos os livros do envio foram divulgados
+      const todosDiv = (modal.envio.envio_livros||[]).every(el => el.divulgado || datas[el.id])
+      if (todosDiv) {
+        await updateEnvioStatus(modal.envio.id, 'divulgado')
+      }
+      // Recarrega envios
+      const novosEnvios = await getEnvios()
+      setEnvios(novosEnvios)
       showToast('Divulgação registrada!')
       setModal(null)
-    } catch { showToast('Erro ao salvar', 'error') }
+    } catch (e) { console.error(e); showToast('Erro ao salvar', 'error') }
     finally { setSaving(false) }
   }
 
@@ -996,7 +1017,7 @@ function DivulgacoesTab({ envios, setEnvios }) {
       <div className="page-header">
         <div>
           <h1 className="page-title">Registro de Divulgação</h1>
-          <p className="page-subtitle">{pendentes.length} envio{pendentes.length!==1?'s':''} aguardando confirmação de divulgação</p>
+          <p className="page-subtitle">{pendentes.length} envio{pendentes.length!==1?'s':''} com livros aguardando divulgação</p>
         </div>
       </div>
 
@@ -1007,32 +1028,43 @@ function DivulgacoesTab({ envios, setEnvios }) {
         </div>
 
         {filtrados.length === 0
-          ? <div className="empty-state"><p>{search ? 'Nenhum resultado.' : 'Todos os envios já foram divulgados!'}</p></div>
+          ? <div className="empty-state"><p>{search ? 'Nenhum resultado.' : 'Todos os livros já foram divulgados!'}</p></div>
           : <table>
               <thead><tr><th>Parceiro</th><th>Livros do envio</th><th>Data envio</th><th>Ação</th></tr></thead>
               <tbody>
                 {filtrados.map(e => {
                   const livros = (e.envio_livros||[]).filter(el=>el.livros)
+                  const pendentesCount = livros.filter(el=>!el.divulgado).length
                   return (
                     <tr key={e.id}>
                       <td className="td-strong">{e.parceiros?.nome||'—'}</td>
                       <td>
-                        <div style={{display:'flex',flexDirection:'column',gap:3}}>
+                        <div style={{display:'flex',flexDirection:'column',gap:4}}>
                           {livros.map((el,i) => (
-                            <span key={i} style={{fontSize:12.5}}>{el.livros.titulo}</span>
+                            <div key={i} style={{display:'flex',alignItems:'center',gap:7,fontSize:12.5}}>
+                              <div style={{width:8,height:8,borderRadius:'50%',flexShrink:0,background:el.divulgado?'var(--green)':'var(--amber)'}}/>
+                              <span style={{color:el.divulgado?'var(--text-muted)':'var(--text)',textDecoration:el.divulgado?'line-through':'none'}}>
+                                {el.livros.titulo}
+                              </span>
+                              {el.divulgado && el.data_divulgacao && (
+                                <span style={{fontSize:11,color:'var(--text-muted)'}}>
+                                  ({format(new Date(el.data_divulgacao+'T12:00:00'),'dd/MM/yy',{locale:ptBR})})
+                                </span>
+                              )}
+                            </div>
                           ))}
                         </div>
                       </td>
-                      <td className="td-muted">
+                      <td className="td-muted" style={{whiteSpace:'nowrap'}}>
                         {e.data_envio ? format(new Date(e.data_envio+'T12:00:00'),'dd MMM yyyy',{locale:ptBR}) : '—'}
                       </td>
                       <td>
                         <button
                           className="btn btn-sm btn-ghost"
-                          style={{color:'var(--green)',fontWeight:600}}
-                          onClick={()=>{ setDataDiv(new Date().toISOString().slice(0,10)); setModal({envio:e}) }}
+                          style={{color:'var(--green)',fontWeight:600,whiteSpace:'nowrap'}}
+                          onClick={()=>abrirModal(e)}
                         >
-                          ✓ Confirmar divulgação
+                          ✓ Registrar ({pendentesCount} livro{pendentesCount!==1?'s':''})
                         </button>
                       </td>
                     </tr>
@@ -1045,33 +1077,52 @@ function DivulgacoesTab({ envios, setEnvios }) {
 
       {modal && (
         <div className="modal-backdrop" onClick={ev=>ev.target===ev.currentTarget&&setModal(null)}>
-          <div className="modal" style={{maxWidth:460}}>
+          <div className="modal" style={{maxWidth:500}}>
             <div className="modal-header">
-              <h2 className="modal-title">Confirmar Divulgação</h2>
+              <h2 className="modal-title">Registrar Divulgação</h2>
               <button className="btn btn-ghost btn-icon" onClick={()=>setModal(null)}><X size={16}/></button>
             </div>
 
-            <div style={{marginBottom:20}}>
-              <p style={{fontSize:13,color:'var(--text-muted)',marginBottom:12}}>Confirmar que o parceiro abaixo divulgou as cortesias recebidas:</p>
-              <div style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,padding:'12px 16px'}}>
-                <div style={{fontWeight:700,fontSize:14,color:'var(--text)',marginBottom:8}}>{modal.envio.parceiros?.nome}</div>
-                {(modal.envio.envio_livros||[]).filter(el=>el.livros).map((el,i)=>(
-                  <div key={i} style={{fontSize:12.5,color:'var(--text-soft)',display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
-                    <BookOpen size={12} color="var(--accent)"/> {el.livros.titulo}
-                  </div>
-                ))}
-              </div>
-            </div>
+            <p style={{fontSize:13,color:'var(--text-muted)',marginBottom:16}}>
+              Parceiro: <strong style={{color:'var(--text)'}}>{modal.envio.parceiros?.nome}</strong>
+            </p>
 
-            <div className="form-group">
-              <label className="form-label">Data da divulgação</label>
-              <input className="form-input" type="date" value={dataDiv} onChange={e=>setDataDiv(e.target.value)}/>
+            <div style={{display:'flex',flexDirection:'column',gap:10,marginBottom:20}}>
+              {(modal.envio.envio_livros||[]).filter(el=>el.livros).map(el => (
+                <div key={el.id} style={{
+                  background:'var(--surface-2)', border:'1px solid var(--border)',
+                  borderRadius:8, padding:'12px 14px',
+                  opacity: el.divulgado ? 0.5 : 1,
+                }}>
+                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom: el.divulgado ? 0 : 10}}>
+                    <div style={{width:8,height:8,borderRadius:'50%',background:el.divulgado?'var(--green)':'var(--amber)',flexShrink:0}}/>
+                    <span style={{fontSize:13,fontWeight:600,color:'var(--text)',flex:1}}>{el.livros.titulo}</span>
+                    {el.divulgado && <span className="badge badge-green" style={{fontSize:11}}>Já divulgado</span>}
+                  </div>
+                  {!el.divulgado && (
+                    <div style={{display:'flex',alignItems:'center',gap:10}}>
+                      <label style={{fontSize:12,color:'var(--text-muted)',whiteSpace:'nowrap'}}>Data de divulgação:</label>
+                      <input
+                        className="form-input"
+                        type="date"
+                        value={datas[el.id]||''}
+                        onChange={e=>setDatas(d=>({...d,[el.id]:e.target.value}))}
+                        style={{flex:1,padding:'6px 10px',fontSize:13}}
+                      />
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
 
             <div className="form-actions">
               <button className="btn btn-ghost" onClick={()=>setModal(null)}>Cancelar</button>
-              <button className="btn btn-primary" onClick={confirmarDivulgacao} disabled={saving}>
-                {saving ? 'Salvando...' : '✓ Confirmar divulgação'}
+              <button
+                className="btn btn-primary"
+                onClick={salvarDivulgacoes}
+                disabled={saving || Object.values(datas).every(v=>!v)}
+              >
+                {saving ? 'Salvando...' : '✓ Salvar divulgações'}
               </button>
             </div>
           </div>
