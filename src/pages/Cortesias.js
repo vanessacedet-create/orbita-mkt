@@ -4,7 +4,10 @@ import {
   getLivros, createLivro, updateLivro, deleteLivro,
   getEnvios, createEnvio, updateEnvio, deleteEnvio
 } from '../lib/supabase'
-import { Plus, Pencil, Trash2, X, BookOpen, Users, Send, Upload, FileSpreadsheet, CheckCircle, AlertCircle } from 'lucide-react'
+import {
+  Plus, Pencil, Trash2, X, BookOpen, Users, Send,
+  Upload, FileSpreadsheet, CheckCircle, AlertCircle, Search
+} from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import * as XLSX from 'xlsx'
@@ -36,6 +39,121 @@ function useToast() {
   return [toast, show]
 }
 
+// Remove acentos e normaliza string para comparação
+function normalizar(str) {
+  return (str || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .replace(/\s+/g, '_')
+}
+
+// ── MODAL DE BUSCA DE DUPLICATAS ───────────────────────────
+function BuscaDuplicatas({ parceiros, livros, envios, onClose }) {
+  const [parceiroId, setParceiroId] = useState('')
+  const [livroId, setLivroId]       = useState('')
+  const [resultado, setResultado]   = useState(null)
+
+  function buscar() {
+    if (!parceiroId || !livroId) return
+    const jaEnviado = envios.find(e =>
+      e.parceiro_id === parceiroId && e.livro_id === livroId
+    )
+    if (jaEnviado) {
+      const s = STATUS_OPTIONS.find(x => x.value === jaEnviado.status)
+      setResultado({
+        encontrado: true,
+        status: s,
+        data: jaEnviado.data_envio,
+        obs: jaEnviado.observacoes,
+      })
+    } else {
+      setResultado({ encontrado: false })
+    }
+  }
+
+  const parceiro = parceiros.find(p => p.id === parceiroId)
+  const livro    = livros.find(l => l.id === livroId)
+
+  return (
+    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 500 }}>
+        <div className="modal-header">
+          <h2 className="modal-title">Verificar Envio Anterior</h2>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
+        </div>
+
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">Parceiro</label>
+            <select className="form-select" value={parceiroId} onChange={e => { setParceiroId(e.target.value); setResultado(null) }}>
+              <option value="">Selecionar parceiro...</option>
+              {parceiros.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Livro</label>
+            <select className="form-select" value={livroId} onChange={e => { setLivroId(e.target.value); setResultado(null) }}>
+              <option value="">Selecionar livro...</option>
+              {livros.map(l => <option key={l.id} value={l.id}>{l.titulo}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 16, marginBottom: resultado ? 16 : 0 }}>
+          <button
+            className="btn btn-primary"
+            style={{ width: '100%', justifyContent: 'center' }}
+            onClick={buscar}
+            disabled={!parceiroId || !livroId}
+          >
+            <Search size={15}/> Verificar
+          </button>
+        </div>
+
+        {resultado && (
+          <div style={{
+            borderRadius: 10,
+            padding: '16px 18px',
+            background: resultado.encontrado ? 'var(--amber-light)' : 'var(--green-light)',
+            border: `1px solid ${resultado.encontrado ? 'rgba(245,166,35,0.25)' : 'rgba(62,207,142,0.25)'}`,
+          }}>
+            {resultado.encontrado ? (
+              <>
+                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+                  <AlertCircle size={18} color="var(--amber)"/>
+                  <span style={{ fontWeight:700, color:'var(--amber)', fontSize:14 }}>
+                    Este livro já foi enviado para este parceiro!
+                  </span>
+                </div>
+                <div style={{ fontSize:13, color:'var(--text-soft)', lineHeight:1.7 }}>
+                  <div><strong>Parceiro:</strong> {parceiro?.nome}</div>
+                  <div><strong>Livro:</strong> {livro?.titulo}</div>
+                  <div><strong>Status:</strong> <span className={`badge ${resultado.status?.cls}`}>{resultado.status?.label}</span></div>
+                  {resultado.data && <div><strong>Data:</strong> {format(new Date(resultado.data + 'T12:00:00'), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</div>}
+                  {resultado.obs && <div><strong>Obs:</strong> {resultado.obs}</div>}
+                </div>
+              </>
+            ) : (
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <CheckCircle size={18} color="var(--green)"/>
+                <span style={{ fontWeight:700, color:'var(--green)', fontSize:14 }}>
+                  Este livro ainda não foi enviado para este parceiro.
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="form-actions" style={{ marginTop: 16 }}>
+          <button className="btn btn-ghost" onClick={onClose}>Fechar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── UPLOAD PLANILHA ────────────────────────────────────────
 function UploadPlanilha({ onImport, tipo }) {
   const [open, setOpen]           = useState(false)
@@ -54,6 +172,23 @@ function UploadPlanilha({ onImport, tipo }) {
     titulo: 'Título', isbn: 'ISBN', sku: 'SKU', autor: 'Autor', editora: 'Editora'
   }
 
+  // Mapeia variações de nomes de colunas (com/sem acento, maiúsculas)
+  const aliases = {
+    titulo: ['titulo', 'título', 'title', 'nome do livro'],
+    isbn:   ['isbn', 'ean', 'isbn/ean'],
+    sku:    ['sku', 'cod', 'codigo', 'código'],
+    autor:  ['autor', 'author', 'autora'],
+    editora:['editora', 'publisher', 'editoras'],
+    nome:         ['nome', 'name', 'parceiro'],
+    tipo_parceria:['tipo_parceria', 'tipo de parceria', 'tipo', 'parceria'],
+  }
+
+  function resolverColuna(headers, campo) {
+    const alts = aliases[campo] || [campo]
+    return headers.find(h => alts.includes(normalizar(h).replace(/_/g, ' ').trim()) ||
+                              alts.includes(normalizar(h)))
+  }
+
   function handleFile(e) {
     const file = e.target.files[0]
     if (!file) return
@@ -68,10 +203,14 @@ function UploadPlanilha({ onImport, tipo }) {
 
         if (rows.length === 0) { setErros(['A planilha está vazia.']); return }
 
+        const headers = Object.keys(rows[0])
+
+        // Normaliza mapeando aliases
         const normalized = rows.map(row => {
           const obj = {}
-          Object.keys(row).forEach(k => {
-            obj[k.toLowerCase().trim().replace(/\s+/g, '_')] = String(row[k]).trim()
+          colunas.forEach(campo => {
+            const headerReal = resolverColuna(headers, campo)
+            obj[campo] = headerReal ? String(row[headerReal]).trim() : ''
           })
           return obj
         })
@@ -101,7 +240,7 @@ function UploadPlanilha({ onImport, tipo }) {
     for (const row of rows) {
       try {
         if (tipo === 'parceiros') {
-          await createParceiro({ nome: row.nome || '', tipo_parceria: row.tipo_parceria || row.tipo || '' })
+          await createParceiro({ nome: row.nome || '', tipo_parceria: row.tipo_parceria || '' })
         } else {
           await createLivro({ titulo: row.titulo || '', isbn: row.isbn || '', sku: row.sku || '', autor: row.autor || '', editora: row.editora || '' })
         }
@@ -122,7 +261,7 @@ function UploadPlanilha({ onImport, tipo }) {
   return (
     <>
       <button className="btn btn-ghost" onClick={() => setOpen(true)}>
-        <Upload size={15} /> Importar planilha
+        <Upload size={15}/> Importar planilha
       </button>
 
       {open && (
@@ -130,22 +269,21 @@ function UploadPlanilha({ onImport, tipo }) {
           <div className="modal" style={{ maxWidth: 560 }}>
             <div className="modal-header">
               <h2 className="modal-title">Importar {tipo === 'parceiros' ? 'Parceiros' : 'Livros'}</h2>
-              <button className="btn btn-ghost btn-icon" onClick={reset}><X size={16} /></button>
+              <button className="btn btn-ghost btn-icon" onClick={reset}><X size={16}/></button>
             </div>
 
             <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'12px 16px', marginBottom:16 }}>
               <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
-                <FileSpreadsheet size={15} color="var(--text-muted)" />
+                <FileSpreadsheet size={15} color="var(--text-muted)"/>
                 <span style={{ fontSize:12, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>
-                  Colunas esperadas na planilha
+                  Colunas esperadas
                 </span>
               </div>
               <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                 {colunas.map(c => <span key={c} className="badge badge-indigo" style={{fontSize:11}}>{nomeColuna[c]}</span>)}
               </div>
               <p style={{ fontSize:11.5, color:'var(--text-muted)', marginTop:8 }}>
-                A primeira linha deve ser o cabeçalho.
-                {tipo === 'parceiros' ? ' "Nome" é obrigatório.' : ' "Título" é obrigatório.'}
+                Acentos e maiúsculas são aceitos. {tipo === 'livros' ? '"EAN" também é aceito no lugar de "ISBN".' : ''}
               </p>
             </div>
 
@@ -157,19 +295,20 @@ function UploadPlanilha({ onImport, tipo }) {
                   onDragOver={e => e.preventDefault()}
                   onDrop={e => { e.preventDefault(); handleFile({ target: { files: e.dataTransfer.files } }) }}
                 >
-                  <Upload size={24} color="var(--text-muted)" style={{ marginBottom:8 }} />
+                  <Upload size={24} color="var(--text-muted)" style={{ marginBottom:8 }}/>
                   <p style={{ fontSize:13.5, color:'var(--text-soft)' }}>Clique para selecionar ou arraste o arquivo</p>
                   <p style={{ fontSize:12, color:'var(--text-muted)', marginTop:4 }}>Apenas .xlsx</p>
                 </div>
-                <input ref={inputRef} type="file" accept=".xlsx" style={{ display:'none' }} onChange={handleFile} />
+                <input ref={inputRef} type="file" accept=".xlsx" style={{ display:'none' }} onChange={handleFile}/>
 
                 {erros.length > 0 && (
                   <div style={{ background:'var(--red-light)', border:'1px solid rgba(245,101,101,0.2)', borderRadius:8, padding:'10px 14px', marginBottom:12 }}>
-                    {erros.map((e,i) => (
+                    {erros.slice(0, 5).map((e,i) => (
                       <div key={i} style={{ display:'flex', gap:7, alignItems:'flex-start', fontSize:12.5, color:'var(--red)' }}>
-                        <AlertCircle size={14} style={{ marginTop:2, flexShrink:0 }} /> {e}
+                        <AlertCircle size={14} style={{ marginTop:2, flexShrink:0 }}/> {e}
                       </div>
                     ))}
+                    {erros.length > 5 && <p style={{ fontSize:12, color:'var(--red)', marginTop:4 }}>...e mais {erros.length - 5} erros.</p>}
                   </div>
                 )}
 
@@ -191,7 +330,7 @@ function UploadPlanilha({ onImport, tipo }) {
 
             {resultado && (
               <div style={{ textAlign:'center', padding:'20px 0' }}>
-                <CheckCircle size={40} color="var(--green)" style={{ marginBottom:12 }} />
+                <CheckCircle size={40} color="var(--green)" style={{ marginBottom:12 }}/>
                 <p style={{ fontSize:16, fontWeight:700, color:'var(--text)', marginBottom:6 }}>Importação concluída!</p>
                 <p style={{ fontSize:13.5, color:'var(--green)' }}>{resultado.sucesso} {tipo==='parceiros'?'parceiro(s)':'livro(s)'} importado(s)</p>
                 {resultado.falhas > 0 && <p style={{ fontSize:13, color:'var(--red)', marginTop:4 }}>{resultado.falhas} linha(s) com erro</p>}
@@ -214,48 +353,103 @@ function UploadPlanilha({ onImport, tipo }) {
 }
 
 // ── ENVIOS TAB ─────────────────────────────────────────────
-function EnviosTab({ parceiros, livros }) {
-  const [envios, setEnvios]   = useState([])
-  const [loading, setLoading] = useState(true)
-  const [modal, setModal]     = useState(false)
-  const [editing, setEditing] = useState(null)
-  const [filter, setFilter]   = useState('todos')
-  const [search, setSearch]   = useState('')
-  const [saving, setSaving]   = useState(false)
-  const [toast, showToast]    = useToast()
-  const EMPTY = { parceiro_id:'', livro_id:'', status:'enviado', data_envio:new Date().toISOString().slice(0,10), observacoes:'' }
+function EnviosTab({ parceiros, livros, envios, setEnvios }) {
+  const [loading, setLoading]       = useState(true)
+  const [modal, setModal]           = useState(false)
+  const [buscaModal, setBuscaModal] = useState(false)
+  const [editing, setEditing]       = useState(null)
+  const [filter, setFilter]         = useState('todos')
+  const [search, setSearch]         = useState('')
+  const [saving, setSaving]         = useState(false)
+  const [toast, showToast]          = useToast()
+
+  // Multi-livro: form com array de livro_ids
+  const EMPTY = {
+    parceiro_id: '',
+    livro_ids: [],
+    status: 'enviado',
+    data_envio: new Date().toISOString().slice(0,10),
+    observacoes: ''
+  }
   const [form, setForm] = useState(EMPTY)
 
-  useEffect(() => { getEnvios().then(setEnvios).catch(console.error).finally(()=>setLoading(false)) }, [])
+  useEffect(() => {
+    if (envios.length >= 0) setLoading(false)
+  }, [envios])
 
   function openNew()   { setEditing(null); setForm(EMPTY); setModal(true) }
-  function openEdit(e) { setEditing(e); setForm({ parceiro_id:e.parceiro_id, livro_id:e.livro_id, status:e.status, data_envio:e.data_envio||'', observacoes:e.observacoes||'' }); setModal(true) }
-  function close()     { setModal(false); setEditing(null) }
+  function openEdit(e) {
+    setEditing(e)
+    setForm({
+      parceiro_id: e.parceiro_id,
+      livro_ids: [e.livro_id],
+      status: e.status,
+      data_envio: e.data_envio || '',
+      observacoes: e.observacoes || ''
+    })
+    setModal(true)
+  }
+  function close() { setModal(false); setEditing(null) }
+
+  function toggleLivro(livroId) {
+    setForm(f => ({
+      ...f,
+      livro_ids: f.livro_ids.includes(livroId)
+        ? f.livro_ids.filter(id => id !== livroId)
+        : [...f.livro_ids, livroId]
+    }))
+  }
 
   async function save() {
-    if (!form.parceiro_id || !form.livro_id) return
+    if (!form.parceiro_id || form.livro_ids.length === 0) return
     setSaving(true)
     try {
-      if (editing) { const u=await updateEnvio(editing.id,form); setEnvios(prev=>prev.map(e=>e.id===u.id?u:e)); showToast('Atualizado!') }
-      else { const n=await createEnvio(form); setEnvios(prev=>[n,...prev]); showToast('Registrado!') }
+      if (editing) {
+        // Edição: atualiza apenas o primeiro livro
+        const u = await updateEnvio(editing.id, { ...form, livro_id: form.livro_ids[0] })
+        setEnvios(prev => prev.map(e => e.id === u.id ? u : e))
+        showToast('Envio atualizado!')
+      } else {
+        // Criação: cria um envio por livro
+        const novos = []
+        for (const livro_id of form.livro_ids) {
+          const n = await createEnvio({ ...form, livro_id })
+          novos.push(n)
+        }
+        setEnvios(prev => [...novos, ...prev])
+        showToast(`${novos.length} envio${novos.length > 1 ? 's' : ''} registrado${novos.length > 1 ? 's' : ''}!`)
+      }
       close()
-    } catch { showToast('Erro ao salvar','error') } finally { setSaving(false) }
+    } catch { showToast('Erro ao salvar', 'error') }
+    finally { setSaving(false) }
   }
 
   async function remove(id) {
-    if (!window.confirm('Excluir?')) return
-    try { await deleteEnvio(id); setEnvios(prev=>prev.filter(e=>e.id!==id)); showToast('Excluído!') }
-    catch { showToast('Erro','error') }
+    if (!window.confirm('Excluir este envio?')) return
+    try { await deleteEnvio(id); setEnvios(prev => prev.filter(e => e.id !== id)); showToast('Excluído!') }
+    catch { showToast('Erro', 'error') }
   }
 
   async function quickConfirm(envio) {
-    try { const u=await updateEnvio(envio.id,{...envio,status:'divulgado'}); setEnvios(prev=>prev.map(e=>e.id===u.id?u:e)); showToast('Divulgação confirmada!') }
-    catch { showToast('Erro','error') }
+    try {
+      const u = await updateEnvio(envio.id, { ...envio, status: 'divulgado' })
+      setEnvios(prev => prev.map(e => e.id === u.id ? u : e))
+      showToast('Divulgação confirmada!')
+    } catch { showToast('Erro', 'error') }
   }
 
+  const [livroSearch, setLivroSearch] = useState('')
+  const livrosFiltrados = livros.filter(l =>
+    normalizar(l.titulo).includes(normalizar(livroSearch)) ||
+    (l.autor || '').toLowerCase().includes(livroSearch.toLowerCase())
+  )
+
   const filtered = envios
-    .filter(e=>filter==='todos'||e.status===filter)
-    .filter(e=>{ const q=search.toLowerCase(); return (e.parceiros?.nome||'').toLowerCase().includes(q)||(e.livros?.titulo||'').toLowerCase().includes(q) })
+    .filter(e => filter === 'todos' || e.status === filter)
+    .filter(e => {
+      const q = search.toLowerCase()
+      return (e.parceiros?.nome||'').toLowerCase().includes(q) || (e.livros?.titulo||'').toLowerCase().includes(q)
+    })
 
   return (
     <>
@@ -264,35 +458,45 @@ function EnviosTab({ parceiros, livros }) {
           <h1 className="page-title">Cortesias</h1>
           <p className="page-subtitle">{envios.length} envio{envios.length!==1?'s':''} registrado{envios.length!==1?'s':''}</p>
         </div>
-        <button className="btn btn-primary" onClick={openNew}><Plus size={16}/> Registrar Envio</button>
+        <div style={{ display:'flex', gap:10 }}>
+          <button className="btn btn-ghost" onClick={() => setBuscaModal(true)}>
+            <Search size={15}/> Verificar duplicata
+          </button>
+          <button className="btn btn-primary" onClick={openNew}><Plus size={16}/> Registrar Envio</button>
+        </div>
       </div>
+
       <div className="table-card">
         <div className="table-toolbar">
-          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-            {['todos','enviado','divulgado','cancelado'].map(f=>(
+          <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+            {['todos','enviado','divulgado','cancelado'].map(f => (
               <button key={f} className={`btn btn-sm ${filter===f?'btn-primary':'btn-ghost'}`} onClick={()=>setFilter(f)}>
                 {f==='todos'?'Todos':STATUS_OPTIONS.find(s=>s.value===f)?.label}
               </button>
             ))}
           </div>
-          <input className="search-input" placeholder="Buscar..." value={search} onChange={e=>setSearch(e.target.value)}/>
+          <input className="search-input" placeholder="Buscar parceiro ou livro..." value={search} onChange={e=>setSearch(e.target.value)}/>
         </div>
-        {loading?<div className="loading" style={{minHeight:'auto',padding:40}}><div className="spinner"/></div>
-        :filtered.length===0?<div className="empty-state"><p>Nenhum envio encontrado.</p></div>
-        :(
+
+        {loading ? <div className="loading" style={{minHeight:'auto',padding:40}}><div className="spinner"/></div>
+        : filtered.length === 0 ? <div className="empty-state"><p>Nenhum envio encontrado.</p></div>
+        : (
           <table>
             <thead><tr><th>Parceiro</th><th>Livro</th><th>Data</th><th>Status</th><th>Ação</th><th></th></tr></thead>
             <tbody>
-              {filtered.map(e=>{
-                const s=STATUS_OPTIONS.find(x=>x.value===e.status)||STATUS_OPTIONS[0]
-                return(
+              {filtered.map(e => {
+                const s = STATUS_OPTIONS.find(x=>x.value===e.status)||STATUS_OPTIONS[0]
+                return (
                   <tr key={e.id}>
                     <td className="td-strong">{e.parceiros?.nome||'—'}</td>
                     <td>{e.livros?.titulo||'—'}</td>
                     <td className="td-muted">{e.data_envio?format(new Date(e.data_envio+'T12:00:00'),'dd MMM yyyy',{locale:ptBR}):'—'}</td>
                     <td><span className={`badge ${s.cls}`}>{s.label}</span></td>
-                    <td>{e.status==='enviado'&&<button className="btn btn-sm btn-ghost" style={{color:'var(--green)',fontSize:12}} onClick={()=>quickConfirm(e)}>✓ Confirmar divulgação</button>}</td>
-                    <td><div className="actions-cell"><button className="btn btn-ghost btn-icon btn-sm" onClick={()=>openEdit(e)}><Pencil size={14}/></button><button className="btn btn-danger btn-icon btn-sm" onClick={()=>remove(e.id)}><Trash2 size={14}/></button></div></td>
+                    <td>{e.status==='enviado'&&<button className="btn btn-sm btn-ghost" style={{color:'var(--green)',fontSize:12}} onClick={()=>quickConfirm(e)}>✓ Confirmar</button>}</td>
+                    <td><div className="actions-cell">
+                      <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>openEdit(e)}><Pencil size={14}/></button>
+                      <button className="btn btn-danger btn-icon btn-sm" onClick={()=>remove(e.id)}><Trash2 size={14}/></button>
+                    </div></td>
                   </tr>
                 )
               })}
@@ -300,24 +504,118 @@ function EnviosTab({ parceiros, livros }) {
           </table>
         )}
       </div>
-      {modal&&(
+
+      {/* Modal Registrar Envio */}
+      {modal && (
         <div className="modal-backdrop" onClick={ev=>ev.target===ev.currentTarget&&close()}>
-          <div className="modal">
-            <div className="modal-header"><h2 className="modal-title">{editing?'Editar Envio':'Registrar Envio'}</h2><button className="btn btn-ghost btn-icon" onClick={close}><X size={16}/></button></div>
-            <div className="form-grid">
-              <div className="form-group"><label className="form-label">Parceiro *</label><select className="form-select" value={form.parceiro_id} onChange={e=>setForm(f=>({...f,parceiro_id:e.target.value}))}><option value="">Selecionar...</option>{parceiros.map(p=><option key={p.id} value={p.id}>{p.nome}</option>)}</select></div>
-              <div className="form-group"><label className="form-label">Livro *</label><select className="form-select" value={form.livro_id} onChange={e=>setForm(f=>({...f,livro_id:e.target.value}))}><option value="">Selecionar...</option>{livros.map(l=><option key={l.id} value={l.id}>{l.titulo}</option>)}</select></div>
-              <div className="form-row">
-                <div className="form-group"><label className="form-label">Data do Envio</label><input className="form-input" type="date" value={form.data_envio} onChange={e=>setForm(f=>({...f,data_envio:e.target.value}))}/></div>
-                <div className="form-group"><label className="form-label">Status</label><select className="form-select" value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>{STATUS_OPTIONS.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}</select></div>
-              </div>
-              <div className="form-group"><label className="form-label">Observações</label><textarea className="form-textarea" value={form.observacoes} onChange={e=>setForm(f=>({...f,observacoes:e.target.value}))} placeholder="Notas..."/></div>
+          <div className="modal" style={{ maxWidth: 520 }}>
+            <div className="modal-header">
+              <h2 className="modal-title">{editing?'Editar Envio':'Registrar Envio'}</h2>
+              <button className="btn btn-ghost btn-icon" onClick={close}><X size={16}/></button>
             </div>
-            <div className="form-actions"><button className="btn btn-ghost" onClick={close}>Cancelar</button><button className="btn btn-primary" onClick={save} disabled={saving||!form.parceiro_id||!form.livro_id}>{saving?'Salvando...':editing?'Salvar':'Registrar'}</button></div>
+            <div className="form-grid">
+              <div className="form-group">
+                <label className="form-label">Parceiro *</label>
+                <select className="form-select" value={form.parceiro_id} onChange={e=>setForm(f=>({...f,parceiro_id:e.target.value}))}>
+                  <option value="">Selecionar parceiro...</option>
+                  {parceiros.map(p=><option key={p.id} value={p.id}>{p.nome}</option>)}
+                </select>
+              </div>
+
+              {/* Seleção múltipla de livros */}
+              <div className="form-group">
+                <label className="form-label">
+                  Livros * {form.livro_ids.length > 0 && <span style={{color:'var(--accent)',fontWeight:700}}>({form.livro_ids.length} selecionado{form.livro_ids.length>1?'s':''})</span>}
+                </label>
+                <input
+                  className="form-input"
+                  placeholder="Filtrar livros..."
+                  value={livroSearch}
+                  onChange={e => setLivroSearch(e.target.value)}
+                  style={{ marginBottom: 6 }}
+                />
+                <div style={{
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  maxHeight: 200,
+                  overflowY: 'auto',
+                  background: 'var(--surface-2)',
+                }}>
+                  {livrosFiltrados.length === 0 ? (
+                    <div style={{ padding:'12px 14px', fontSize:13, color:'var(--text-muted)' }}>Nenhum livro encontrado.</div>
+                  ) : livrosFiltrados.map(l => {
+                    const selecionado = form.livro_ids.includes(l.id)
+                    return (
+                      <div
+                        key={l.id}
+                        onClick={() => toggleLivro(l.id)}
+                        style={{
+                          padding: '10px 14px',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid var(--border)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          background: selecionado ? 'var(--accent-glow)' : 'transparent',
+                          transition: 'background 0.1s',
+                        }}
+                      >
+                        <div style={{
+                          width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                          border: `2px solid ${selecionado ? 'var(--accent)' : 'var(--border)'}`,
+                          background: selecionado ? 'var(--accent)' : 'transparent',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          {selecionado && <span style={{color:'#fff',fontSize:10,fontWeight:700}}>✓</span>}
+                        </div>
+                        <div>
+                          <div style={{ fontSize:13, color: selecionado?'var(--accent)':'var(--text)', fontWeight: selecionado?600:400 }}>{l.titulo}</div>
+                          {l.autor && <div style={{ fontSize:11.5, color:'var(--text-muted)' }}>{l.autor}</div>}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Data do Envio</label>
+                  <input className="form-input" type="date" value={form.data_envio} onChange={e=>setForm(f=>({...f,data_envio:e.target.value}))}/>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Status</label>
+                  <select className="form-select" value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>
+                    {STATUS_OPTIONS.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Observações</label>
+                <textarea className="form-textarea" value={form.observacoes} onChange={e=>setForm(f=>({...f,observacoes:e.target.value}))} placeholder="Notas sobre este envio..."/>
+              </div>
+            </div>
+            <div className="form-actions">
+              <button className="btn btn-ghost" onClick={close}>Cancelar</button>
+              <button className="btn btn-primary" onClick={save} disabled={saving||!form.parceiro_id||form.livro_ids.length===0}>
+                {saving ? 'Salvando...' : editing ? 'Salvar' : `Registrar ${form.livro_ids.length > 1 ? `${form.livro_ids.length} envios` : 'envio'}`}
+              </button>
+            </div>
           </div>
         </div>
       )}
-      {toast&&<div className={`toast ${toast.type}`}>{toast.msg}</div>}
+
+      {/* Modal Busca Duplicatas */}
+      {buscaModal && (
+        <BuscaDuplicatas
+          parceiros={parceiros}
+          livros={livros}
+          envios={envios}
+          onClose={() => setBuscaModal(false)}
+        />
+      )}
+
+      {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
     </>
   )
 }
@@ -353,7 +651,10 @@ function ParceirosTab({ parceiros, setParceiros }) {
     catch { showToast('Erro','error') }
   }
 
-  const filtered = parceiros.filter(p=>p.nome.toLowerCase().includes(search.toLowerCase())||(p.tipo_parceria||'').toLowerCase().includes(search.toLowerCase()))
+  const filtered = parceiros.filter(p =>
+    p.nome.toLowerCase().includes(search.toLowerCase()) ||
+    (p.tipo_parceria||'').toLowerCase().includes(search.toLowerCase())
+  )
 
   return (
     <>
@@ -374,7 +675,10 @@ function ParceirosTab({ parceiros, setParceiros }) {
                 <tr key={p.id}>
                   <td className="td-strong">{p.nome}</td>
                   <td>{p.tipo_parceria?<span className="badge badge-indigo">{p.tipo_parceria}</span>:<span className="td-muted">—</span>}</td>
-                  <td><div className="actions-cell"><button className="btn btn-ghost btn-icon btn-sm" onClick={()=>openEdit(p)}><Pencil size={14}/></button><button className="btn btn-danger btn-icon btn-sm" onClick={()=>remove(p.id)}><Trash2 size={14}/></button></div></td>
+                  <td><div className="actions-cell">
+                    <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>openEdit(p)}><Pencil size={14}/></button>
+                    <button className="btn btn-danger btn-icon btn-sm" onClick={()=>remove(p.id)}><Trash2 size={14}/></button>
+                  </div></td>
                 </tr>
               ))}
             </tbody>
@@ -387,7 +691,12 @@ function ParceirosTab({ parceiros, setParceiros }) {
             <div className="modal-header"><h2 className="modal-title">{editing?'Editar Parceiro':'Novo Parceiro'}</h2><button className="btn btn-ghost btn-icon" onClick={close}><X size={16}/></button></div>
             <div className="form-grid">
               <div className="form-group"><label className="form-label">Nome *</label><input className="form-input" value={form.nome} onChange={e=>setForm(f=>({...f,nome:e.target.value}))} placeholder="Nome do parceiro"/></div>
-              <div className="form-group"><label className="form-label">Tipo de Parceria</label><select className="form-select" value={form.tipo_parceria} onChange={e=>setForm(f=>({...f,tipo_parceria:e.target.value}))}><option value="">Selecionar...</option>{TIPOS_PARCERIA.map(t=><option key={t} value={t}>{t}</option>)}</select></div>
+              <div className="form-group"><label className="form-label">Tipo de Parceria</label>
+                <select className="form-select" value={form.tipo_parceria} onChange={e=>setForm(f=>({...f,tipo_parceria:e.target.value}))}>
+                  <option value="">Selecionar...</option>
+                  {TIPOS_PARCERIA.map(t=><option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
             </div>
             <div className="form-actions"><button className="btn btn-ghost" onClick={close}>Cancelar</button><button className="btn btn-primary" onClick={save} disabled={saving||!form.nome.trim()}>{saving?'Salvando...':editing?'Salvar':'Cadastrar'}</button></div>
           </div>
@@ -430,10 +739,9 @@ function LivrosTab({ livros, setLivros }) {
   }
 
   const filtered = livros.filter(l=>
-    l.titulo.toLowerCase().includes(search.toLowerCase())||
+    normalizar(l.titulo).includes(normalizar(search))||
     (l.autor||'').toLowerCase().includes(search.toLowerCase())||
-    (l.isbn||'').toLowerCase().includes(search.toLowerCase())||
-    (l.sku||'').toLowerCase().includes(search.toLowerCase())
+    (l.isbn||'').includes(search)||(l.sku||'').includes(search)
   )
 
   return (
@@ -458,7 +766,10 @@ function LivrosTab({ livros, setLivros }) {
                   <td className="td-muted">{l.editora||'—'}</td>
                   <td className="td-muted">{l.isbn||'—'}</td>
                   <td className="td-muted">{l.sku||'—'}</td>
-                  <td><div className="actions-cell"><button className="btn btn-ghost btn-icon btn-sm" onClick={()=>openEdit(l)}><Pencil size={14}/></button><button className="btn btn-danger btn-icon btn-sm" onClick={()=>remove(l.id)}><Trash2 size={14}/></button></div></td>
+                  <td><div className="actions-cell">
+                    <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>openEdit(l)}><Pencil size={14}/></button>
+                    <button className="btn btn-danger btn-icon btn-sm" onClick={()=>remove(l.id)}><Trash2 size={14}/></button>
+                  </div></td>
                 </tr>
               ))}
             </tbody>
@@ -494,10 +805,12 @@ export default function Cortesias() {
   const [tab, setTab]             = useState('envios')
   const [parceiros, setParceiros] = useState([])
   const [livros, setLivros]       = useState([])
+  const [envios, setEnvios]       = useState([])
 
   useEffect(() => {
     getParceiros().then(setParceiros).catch(console.error)
     getLivros().then(setLivros).catch(console.error)
+    getEnvios().then(setEnvios).catch(console.error)
   }, [])
 
   return (
@@ -509,7 +822,7 @@ export default function Cortesias() {
           </button>
         ))}
       </div>
-      {tab==='envios'    && <EnviosTab    parceiros={parceiros} livros={livros}/>}
+      {tab==='envios'    && <EnviosTab    parceiros={parceiros} livros={livros} envios={envios} setEnvios={setEnvios}/>}
       {tab==='parceiros' && <ParceirosTab parceiros={parceiros} setParceiros={setParceiros}/>}
       {tab==='livros'    && <LivrosTab    livros={livros} setLivros={setLivros}/>}
     </div>
