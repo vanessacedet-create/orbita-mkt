@@ -53,7 +53,14 @@ function normalizar(str) {
 function BuscaDuplicatas({ parceiros, livros, envios, onClose }) {
   const [parceiroId, setParceiroId] = useState('')
   const [livroId, setLivroId]       = useState('')
+  const [livroSearch, setLivroSearch] = useState('')
   const [resultado, setResultado]   = useState(null)
+
+  const livrosFiltrados = livros.filter(l =>
+    normalizar(l.titulo).includes(normalizar(livroSearch)) ||
+    (l.isbn || '').replace(/-/g, '').includes(livroSearch.replace(/-/g, '')) ||
+    (l.sku || '').toLowerCase().includes(livroSearch.toLowerCase())
+  )
 
   function buscar() {
     if (!parceiroId || !livroId) return
@@ -94,10 +101,37 @@ function BuscaDuplicatas({ parceiros, livros, envios, onClose }) {
           </div>
           <div className="form-group">
             <label className="form-label">Livro</label>
-            <select className="form-select" value={livroId} onChange={e => { setLivroId(e.target.value); setResultado(null) }}>
-              <option value="">Selecionar livro...</option>
-              {livros.map(l => <option key={l.id} value={l.id}>{l.titulo}</option>)}
-            </select>
+            <input
+              className="form-input"
+              placeholder="Buscar por título, ISBN ou SKU..."
+              value={livroSearch}
+              onChange={e => { setLivroSearch(e.target.value); setLivroId(''); setResultado(null) }}
+              style={{ marginBottom: 6 }}
+            />
+            <div style={{ border:'1px solid var(--border)', borderRadius:8, maxHeight:160, overflowY:'auto', background:'var(--surface-2)' }}>
+              {livroSearch === '' ? (
+                <div style={{ padding:'10px 14px', fontSize:13, color:'var(--text-muted)' }}>Digite para buscar um livro...</div>
+              ) : livrosFiltrados.length === 0 ? (
+                <div style={{ padding:'10px 14px', fontSize:13, color:'var(--text-muted)' }}>Nenhum livro encontrado.</div>
+              ) : livrosFiltrados.map(l => (
+                <div
+                  key={l.id}
+                  onClick={() => { setLivroId(l.id); setLivroSearch(l.titulo); setResultado(null) }}
+                  style={{
+                    padding:'10px 14px', cursor:'pointer',
+                    borderBottom:'1px solid var(--border)',
+                    background: livroId === l.id ? 'var(--accent-glow)' : 'transparent',
+                  }}
+                >
+                  <div style={{ fontSize:13, color: livroId===l.id ? 'var(--accent)':'var(--text)', fontWeight: livroId===l.id?600:400 }}>{l.titulo}</div>
+                  <div style={{ fontSize:11.5, color:'var(--text-muted)', marginTop:2 }}>
+                    {l.isbn && <span>ISBN: {l.isbn}</span>}
+                    {l.isbn && l.sku && <span> · </span>}
+                    {l.sku && <span>SKU: {l.sku}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -441,7 +475,9 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
   const [livroSearch, setLivroSearch] = useState('')
   const livrosFiltrados = livros.filter(l =>
     normalizar(l.titulo).includes(normalizar(livroSearch)) ||
-    (l.autor || '').toLowerCase().includes(livroSearch.toLowerCase())
+    (l.autor || '').toLowerCase().includes(livroSearch.toLowerCase()) ||
+    (l.isbn || '').replace(/-/g, '').includes(livroSearch.replace(/-/g, '')) ||
+    (l.sku || '').toLowerCase().includes(livroSearch.toLowerCase())
   )
 
   const filtered = envios
@@ -529,7 +565,7 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
                 </label>
                 <input
                   className="form-input"
-                  placeholder="Filtrar livros..."
+                  placeholder="Buscar por título, ISBN ou SKU..."
                   value={livroSearch}
                   onChange={e => setLivroSearch(e.target.value)}
                   style={{ marginBottom: 6 }}
