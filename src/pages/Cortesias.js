@@ -437,24 +437,24 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
   async function save() {
     if (!form.parceiro_id || form.livro_ids.length === 0) return
     setSaving(true)
+    // Remove livro_ids do objeto antes de enviar ao Supabase
+    const { livro_ids, ...dadosBase } = form
     try {
       if (editing) {
-        // Edição: atualiza apenas o primeiro livro
-        const u = await updateEnvio(editing.id, { ...form, livro_id: form.livro_ids[0] })
+        const u = await updateEnvio(editing.id, { ...dadosBase, livro_id: livro_ids[0] })
         setEnvios(prev => prev.map(e => e.id === u.id ? u : e))
         showToast('Envio atualizado!')
       } else {
-        // Criação: cria um envio por livro
         const novos = []
-        for (const livro_id of form.livro_ids) {
-          const n = await createEnvio({ ...form, livro_id })
+        for (const livro_id of livro_ids) {
+          const n = await createEnvio({ ...dadosBase, livro_id })
           novos.push(n)
         }
         setEnvios(prev => [...novos, ...prev])
         showToast(`${novos.length} envio${novos.length > 1 ? 's' : ''} registrado${novos.length > 1 ? 's' : ''}!`)
       }
       close()
-    } catch { showToast('Erro ao salvar', 'error') }
+    } catch (e) { console.error(e); showToast('Erro ao salvar', 'error') }
     finally { setSaving(false) }
   }
 
@@ -558,11 +558,57 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
                 </select>
               </div>
 
-              {/* Seleção múltipla de livros */}
+              {/* Livros selecionados — lista de pedido */}
+              {form.livro_ids.length > 0 && (
+                <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:10, overflow:'hidden' }}>
+                  <div style={{ padding:'8px 14px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                    <span style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color:'var(--text-muted)' }}>
+                      Livros selecionados
+                    </span>
+                    <span style={{ fontSize:11, fontWeight:700, color:'var(--accent)' }}>
+                      {form.livro_ids.length} item{form.livro_ids.length>1?'s':''}
+                    </span>
+                  </div>
+                  {form.livro_ids.map((id, idx) => {
+                    const l = livros.find(x => x.id === id)
+                    if (!l) return null
+                    return (
+                      <div key={id} style={{
+                        display:'flex', alignItems:'center', gap:12,
+                        padding:'10px 14px',
+                        borderBottom: idx < form.livro_ids.length-1 ? '1px solid var(--border)' : 'none',
+                        background:'transparent',
+                      }}>
+                        <div style={{
+                          width:28, height:28, borderRadius:6, flexShrink:0,
+                          background:'var(--accent-glow)', border:'1px solid rgba(224,96,48,0.2)',
+                          display:'flex', alignItems:'center', justifyContent:'center',
+                          fontSize:11, fontWeight:700, color:'var(--accent)',
+                        }}>{idx+1}</div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:13, fontWeight:600, color:'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{l.titulo}</div>
+                          <div style={{ fontSize:11.5, color:'var(--text-muted)', marginTop:1 }}>
+                            {l.autor && <span>{l.autor}</span>}
+                            {l.autor && l.isbn && <span> · </span>}
+                            {l.isbn && <span>ISBN: {l.isbn}</span>}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => toggleLivro(id)}
+                          style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', padding:4, borderRadius:4, display:'flex', alignItems:'center' }}
+                          title="Remover"
+                        >
+                          <X size={14}/>
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Busca de livros */}
               <div className="form-group">
-                <label className="form-label">
-                  Livros * {form.livro_ids.length > 0 && <span style={{color:'var(--accent)',fontWeight:700}}>({form.livro_ids.length} selecionado{form.livro_ids.length>1?'s':''})</span>}
-                </label>
+                <label className="form-label">Adicionar livro *</label>
                 <input
                   className="form-input"
                   placeholder="Buscar por título, ISBN ou SKU..."
@@ -570,48 +616,41 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
                   onChange={e => setLivroSearch(e.target.value)}
                   style={{ marginBottom: 6 }}
                 />
-                <div style={{
-                  border: '1px solid var(--border)',
-                  borderRadius: 8,
-                  maxHeight: 200,
-                  overflowY: 'auto',
-                  background: 'var(--surface-2)',
-                }}>
-                  {livrosFiltrados.length === 0 ? (
-                    <div style={{ padding:'12px 14px', fontSize:13, color:'var(--text-muted)' }}>Nenhum livro encontrado.</div>
-                  ) : livrosFiltrados.map(l => {
-                    const selecionado = form.livro_ids.includes(l.id)
-                    return (
-                      <div
-                        key={l.id}
-                        onClick={() => toggleLivro(l.id)}
-                        style={{
-                          padding: '10px 14px',
-                          cursor: 'pointer',
-                          borderBottom: '1px solid var(--border)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 10,
-                          background: selecionado ? 'var(--accent-glow)' : 'transparent',
-                          transition: 'background 0.1s',
-                        }}
-                      >
-                        <div style={{
-                          width: 16, height: 16, borderRadius: 4, flexShrink: 0,
-                          border: `2px solid ${selecionado ? 'var(--accent)' : 'var(--border)'}`,
-                          background: selecionado ? 'var(--accent)' : 'transparent',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                          {selecionado && <span style={{color:'#fff',fontSize:10,fontWeight:700}}>✓</span>}
+                {livroSearch && (
+                  <div style={{ border:'1px solid var(--border)', borderRadius:8, maxHeight:200, overflowY:'auto', background:'var(--surface-2)' }}>
+                    {livrosFiltrados.length === 0 ? (
+                      <div style={{ padding:'12px 14px', fontSize:13, color:'var(--text-muted)' }}>Nenhum livro encontrado.</div>
+                    ) : livrosFiltrados.map(l => {
+                      const selecionado = form.livro_ids.includes(l.id)
+                      return (
+                        <div
+                          key={l.id}
+                          onClick={() => { if (!selecionado) { toggleLivro(l.id); setLivroSearch('') } }}
+                          style={{
+                            padding:'10px 14px', cursor: selecionado ? 'default' : 'pointer',
+                            borderBottom:'1px solid var(--border)',
+                            display:'flex', alignItems:'center', gap:10,
+                            background: selecionado ? 'var(--surface-3)' : 'transparent',
+                            opacity: selecionado ? 0.5 : 1,
+                          }}
+                        >
+                          <div style={{ flex:1 }}>
+                            <div style={{ fontSize:13, color:'var(--text)', fontWeight:500 }}>{l.titulo}</div>
+                            <div style={{ fontSize:11.5, color:'var(--text-muted)', marginTop:1 }}>
+                              {l.autor && <span>{l.autor}</span>}
+                              {l.autor && l.isbn && <span> · </span>}
+                              {l.isbn && <span>ISBN: {l.isbn}</span>}
+                            </div>
+                          </div>
+                          {selecionado
+                            ? <span style={{ fontSize:11, color:'var(--text-muted)' }}>já adicionado</span>
+                            : <Plus size={14} color="var(--accent)"/>
+                          }
                         </div>
-                        <div>
-                          <div style={{ fontSize:13, color: selecionado?'var(--accent)':'var(--text)', fontWeight: selecionado?600:400 }}>{l.titulo}</div>
-                          {l.autor && <div style={{ fontSize:11.5, color:'var(--text-muted)' }}>{l.autor}</div>}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
 
               <div className="form-row">
