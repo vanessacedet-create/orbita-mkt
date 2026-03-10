@@ -11,12 +11,10 @@ export async function signIn(email, password) {
   if (error) throw error
   return data
 }
-
 export async function signOut() {
   const { error } = await supabase.auth.signOut()
   if (error) throw error
 }
-
 export async function getSession() {
   const { data } = await supabase.auth.getSession()
   return data.session
@@ -24,42 +22,25 @@ export async function getSession() {
 
 // ── PERFIL DO USUÁRIO ──────────────────────────────────────
 export async function getUsuarioPerfil(userId) {
-  const { data, error } = await supabase
-    .from('usuarios')
-    .select('*')
-    .eq('id', userId)
-    .single()
+  const { data, error } = await supabase.from('usuarios').select('*').eq('id', userId).single()
   if (error) throw error
   return data
 }
 
 // ── USUÁRIOS (admin) ───────────────────────────────────────
 export async function getUsuarios() {
-  const { data, error } = await supabase
-    .from('usuarios')
-    .select('*')
-    .order('nome')
+  const { data, error } = await supabase.from('usuarios').select('*').order('nome')
   if (error) throw error
   return data
 }
-
 export async function updateUsuario(id, updates) {
-  const { data, error } = await supabase
-    .from('usuarios')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single()
+  const { data, error } = await supabase.from('usuarios').update(updates).eq('id', id).select().single()
   if (error) throw error
   return data
 }
-
 export async function createUsuarioAdmin({ email, password, nome, perfil }) {
-  // Cria o auth user via signUp
   const { data: authData, error: authError } = await supabase.auth.signUp({
-    email,
-    password,
-    options: { data: { nome, perfil } }
+    email, password, options: { data: { nome, perfil } }
   })
   if (authError) throw authError
   return authData
@@ -107,25 +88,89 @@ export async function deleteLivro(id) {
   if (error) throw error
 }
 
-// ── ENVIOS ─────────────────────────────────────────────────
+// ── ENVIOS (com múltiplos livros via envio_livros) ─────────
 export async function getEnvios() {
   const { data, error } = await supabase
     .from('envios')
-    .select(`*, parceiros(id,nome,canal), livros(id,titulo,autor)`)
+    .select(`
+      *,
+      parceiros(id, nome, tipo_parceria),
+      envio_livros(
+        id,
+        livros(id, titulo, autor, isbn, sku)
+      )
+    `)
     .order('created_at', { ascending: false })
   if (error) throw error
   return data
 }
-export async function createEnvio(e) {
-  const { data, error } = await supabase.from('envios').insert([e]).select(`*, parceiros(nome), livros(titulo)`).single()
+
+export async function createEnvio({ parceiro_id, status, data_envio, observacoes, livro_ids }) {
+  // 1. Cria o envio principal
+  const { data: envio, error: envioError } = await supabase
+    .from('envios')
+    .insert([{ parceiro_id, status, data_envio, observacoes }])
+    .select(`*, parceiros(id, nome, tipo_parceria)`)
+    .single()
+  if (envioError) throw envioError
+
+  // 2. Vincula os livros
+  if (livro_ids && livro_ids.length > 0) {
+    const linhas = livro_ids.map(livro_id => ({ envio_id: envio.id, livro_id }))
+    const { error: livrosError } = await supabase.from('envio_livros').insert(linhas)
+    if (livrosError) throw livrosError
+  }
+
+  // 3. Retorna o envio com livros
+  const { data: completo, error: fetchError } = await supabase
+    .from('envios')
+    .select(`*, parceiros(id, nome, tipo_parceria), envio_livros(id, livros(id, titulo, autor, isbn, sku))`)
+    .eq('id', envio.id)
+    .single()
+  if (fetchError) throw fetchError
+  return completo
+}
+
+export async function updateEnvio(id, { parceiro_id, status, data_envio, observacoes, livro_ids }) {
+  // 1. Atualiza dados do envio
+  const { error: envioError } = await supabase
+    .from('envios')
+    .update({ parceiro_id, status, data_envio, observacoes })
+    .eq('id', id)
+  if (envioError) throw envioError
+
+  // 2. Substitui os livros se foram passados
+  if (livro_ids) {
+    await supabase.from('envio_livros').delete().eq('envio_id', id)
+    if (livro_ids.length > 0) {
+      const linhas = livro_ids.map(livro_id => ({ envio_id: id, livro_id }))
+      const { error } = await supabase.from('envio_livros').insert(linhas)
+      if (error) throw error
+    }
+  }
+
+  // 3. Retorna o envio atualizado
+  const { data, error } = await supabase
+    .from('envios')
+    .select(`*, parceiros(id, nome, tipo_parceria), envio_livros(id, livros(id, titulo, autor, isbn, sku))`)
+    .eq('id', id)
+    .single()
   if (error) throw error
   return data
 }
-export async function updateEnvio(id, updates) {
-  const { data, error } = await supabase.from('envios').update(updates).eq('id', id).select(`*, parceiros(nome), livros(titulo)`).single()
+
+export async function updateEnvioStatus(id, status) {
+  const { error } = await supabase.from('envios').update({ status }).eq('id', id)
   if (error) throw error
+  const { data, error: fetchError } = await supabase
+    .from('envios')
+    .select(`*, parceiros(id, nome, tipo_parceria), envio_livros(id, livros(id, titulo, autor, isbn, sku))`)
+    .eq('id', id)
+    .single()
+  if (fetchError) throw fetchError
   return data
 }
+
 export async function deleteEnvio(id) {
   const { error } = await supabase.from('envios').delete().eq('id', id)
   if (error) throw error
