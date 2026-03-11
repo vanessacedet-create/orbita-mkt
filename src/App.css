@@ -521,3 +521,20 @@ tr:hover td { background: var(--surface-2); }
   font-size: 16px; font-weight: 700;
   margin-bottom: 14px; color: var(--text-soft);
 }
+
+/* ── TABS ─────────────────────────────────── */
+.tab-btn {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+  font-family: inherit;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
