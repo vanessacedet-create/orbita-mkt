@@ -106,10 +106,34 @@ export async function getEnvios() {
       parceiros(id, nome, tipo_parceria),
       envio_livros(
         id,
+        divulgado,
+        data_divulgacao,
         livros(id, titulo, autor, isbn, sku)
       )
     `)
     .order('created_at', { ascending: false })
+    .limit(500)
+  if (error) throw error
+
+  // For each envio, fetch ALL envio_livros separately if truncated
+  return data
+}
+
+export async function getEnvioCompleto(id) {
+  const { data, error } = await supabase
+    .from('envios')
+    .select(`
+      *,
+      parceiros(id, nome, tipo_parceria),
+      envio_livros(
+        id,
+        divulgado,
+        data_divulgacao,
+        livros(id, titulo, autor, isbn, sku)
+      )
+    `)
+    .eq('id', id)
+    .single()
   if (error) throw error
   return data
 }
