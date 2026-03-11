@@ -99,24 +99,33 @@ export async function deleteLivro(id) {
 
 // ── ENVIOS (com múltiplos livros via envio_livros) ─────────
 export async function getEnvios() {
-  const { data, error } = await supabase
+  // 1. Busca envios + parceiros
+  const { data: envios, error } = await supabase
     .from('envios')
-    .select(`
-      *,
-      parceiros(id, nome, tipo_parceria),
-      envio_livros(
-        id,
-        divulgado,
-        data_divulgacao,
-        livros(id, titulo, autor, isbn, sku)
-      )
-    `)
+    .select('*, parceiros(id, nome, tipo_parceria)')
     .order('created_at', { ascending: false })
     .limit(500)
   if (error) throw error
+  if (!envios || envios.length === 0) return []
 
-  // For each envio, fetch ALL envio_livros separately if truncated
-  return data
+  // 2. Busca TODOS os envio_livros de uma vez (evita o limite de 5 por relação aninhada)
+  const envioIds = envios.map(e => e.id)
+  const { data: todosLivros, error: livrosError } = await supabase
+    .from('envio_livros')
+    .select('id, envio_id, divulgado, data_divulgacao, livros(id, titulo, autor, isbn, sku)')
+    .in('envio_id', envioIds)
+    .limit(5000)
+  if (livrosError) throw livrosError
+
+  // 3. Agrupa os livros por envio_id
+  const livrosPorEnvio = {}
+  for (const el of (todosLivros || [])) {
+    if (!livrosPorEnvio[el.envio_id]) livrosPorEnvio[el.envio_id] = []
+    livrosPorEnvio[el.envio_id].push(el)
+  }
+
+  // 4. Junta tudo
+  return envios.map(e => ({ ...e, envio_livros: livrosPorEnvio[e.id] || [] }))
 }
 
 export async function getEnvioCompleto(id) {
