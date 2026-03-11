@@ -209,3 +209,83 @@ export async function updateEnvioLivroDivulgacao(envioLivroId, { divulgado, data
     .eq('id', envioLivroId)
   if (error) throw error
 }
+
+// ── CAMPANHAS ──────────────────────────────────────────────
+export async function getCampanhas() {
+  const { data, error } = await supabase
+    .from('campanhas')
+    .select(`
+      *,
+      campanha_livros(id, livros(id, titulo, autor, editora)),
+      campanha_parceiros(id, status, parceiros(id, nome, tipo_parceria))
+    `)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data
+}
+
+export async function getCampanha(id) {
+  const { data, error } = await supabase
+    .from('campanhas')
+    .select(`
+      *,
+      campanha_livros(id, livros(id, titulo, autor, isbn, sku, editora)),
+      campanha_parceiros(id, status, data_publicacao_combinada, link_publicacao, curtidas, visualizacoes, livros_vendidos, observacoes, parceiros(id, nome, tipo_parceria))
+    `)
+    .eq('id', id)
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function createCampanha({ nome, tipo, status, data_inicio, data_fim, descricao, livro_ids = [] }) {
+  const { data: campanha, error } = await supabase
+    .from('campanhas')
+    .insert([{ nome, tipo, status, data_inicio, data_fim, descricao }])
+    .select().single()
+  if (error) throw error
+  if (livro_ids.length > 0) {
+    const { error: le } = await supabase.from('campanha_livros').insert(livro_ids.map(livro_id => ({ campanha_id: campanha.id, livro_id })))
+    if (le) throw le
+  }
+  return getCampanha(campanha.id)
+}
+
+export async function updateCampanha(id, { nome, tipo, status, data_inicio, data_fim, descricao, livro_ids }) {
+  const { error } = await supabase.from('campanhas').update({ nome, tipo, status, data_inicio, data_fim, descricao }).eq('id', id)
+  if (error) throw error
+  if (livro_ids !== undefined) {
+    await supabase.from('campanha_livros').delete().eq('campanha_id', id)
+    if (livro_ids.length > 0) {
+      const { error: le } = await supabase.from('campanha_livros').insert(livro_ids.map(livro_id => ({ campanha_id: id, livro_id })))
+      if (le) throw le
+    }
+  }
+  return getCampanha(id)
+}
+
+export async function deleteCampanha(id) {
+  const { error } = await supabase.from('campanhas').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function addParceiroCampanha(campanha_id, parceiro_id) {
+  const { data, error } = await supabase.from('campanha_parceiros')
+    .insert([{ campanha_id, parceiro_id, status: 'convidado' }])
+    .select(`*, parceiros(id, nome, tipo_parceria)`).single()
+  if (error) throw error
+  return data
+}
+
+export async function updateParceiroCampanha(id, updates) {
+  const { data, error } = await supabase.from('campanha_parceiros')
+    .update(updates).eq('id', id)
+    .select(`*, parceiros(id, nome, tipo_parceria)`).single()
+  if (error) throw error
+  return data
+}
+
+export async function removeParceiroCampanha(id) {
+  const { error } = await supabase.from('campanha_parceiros').delete().eq('id', id)
+  if (error) throw error
+}
