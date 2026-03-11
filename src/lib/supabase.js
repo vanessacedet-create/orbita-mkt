@@ -388,3 +388,55 @@ export async function deleteDivulgacaoCampanha(id) {
   const { error } = await supabase.from('campanha_divulgacoes').delete().eq('id', id)
   if (error) throw error
 }
+
+// ── LANÇAMENTOS ────────────────────────────────────────────
+export async function getLancamentoLivros(campanha_id) {
+  const { data, error } = await supabase
+    .from('lancamento_livros')
+    .select('id, livro_id, livros(id, titulo, autor, isbn, sku), lancamento_parceiros(id, status, data_divulgacao, tipo_divulgacao, link, curtidas, comentarios, visualizacoes, observacoes, parceiro_id, parceiros(id, nome, tipo_parceria))')
+    .eq('campanha_id', campanha_id)
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return data || []
+}
+
+export async function addLancamentoLivro(campanha_id, livro_id) {
+  const { data, error } = await supabase
+    .from('lancamento_livros')
+    .insert([{ campanha_id, livro_id }])
+    .select('id, livro_id, livros(id, titulo, autor, isbn, sku)')
+    .single()
+  if (error) throw error
+  return { ...data, lancamento_parceiros: [] }
+}
+
+export async function removeLancamentoLivro(id) {
+  const { error } = await supabase.from('lancamento_livros').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function addLancamentoParceiro(lancamento_livro_id, parceiro_id) {
+  const { data, error } = await supabase
+    .from('lancamento_parceiros')
+    .insert([{ lancamento_livro_id, parceiro_id, status: 'convidado' }])
+    .select('id, status, data_divulgacao, tipo_divulgacao, link, curtidas, comentarios, visualizacoes, observacoes, parceiro_id, parceiros(id, nome, tipo_parceria)')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateLancamentoParceiro(id, updates) {
+  const { data, error } = await supabase
+    .from('lancamento_parceiros')
+    .update(updates)
+    .eq('id', id)
+    .select('id, status, data_divulgacao, tipo_divulgacao, link, curtidas, comentarios, visualizacoes, observacoes, parceiro_id, parceiros(id, nome, tipo_parceria)')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function removeLancamentoParceiro(id) {
+  const { error } = await supabase.from('lancamento_parceiros').delete().eq('id', id)
+  if (error) throw error
+}
