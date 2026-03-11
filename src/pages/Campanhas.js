@@ -20,7 +20,7 @@ const TIPOS_CAMPANHA = ['Lançamento', 'Relançamento', 'Promoção', 'Sazonal',
 const STATUS_CAMPANHA = [
   { value: 'planejamento', label: 'Planejada',     cls: 'badge-indigo', icon: Clock },
   { value: 'em_andamento', label: 'Em andamento',  cls: 'badge-amber',  icon: BarChart2 },
-  { value: 'concluida',    label: 'Encerrada',     cls: 'badge-green',  icon: CheckCircle },
+  { value: 'concluida',    label: 'Concluída',     cls: 'badge-green',  icon: CheckCircle },
   { value: 'cancelada',    label: 'Cancelada',     cls: 'badge-red',    icon: X },
 ]
 
@@ -292,9 +292,10 @@ const TIPOS_DIVULGACAO = [
 // ── MODAL PARCEIRO NA CAMPANHA ─────────────────────────────
 function ModalParceiro({ cp, campanha, onSave, onClose }) {
   const [form, setForm] = useState({
-    status:                    cp.status || 'convidado',
-    data_publicacao_combinada: cp.data_publicacao_combinada || '',
-    observacoes:               cp.observacoes || '',
+    status:      cp.status || 'convidado',
+    data_inicio: cp.data_inicio || '',
+    data_fim:    cp.data_fim    || '',
+    observacoes: cp.observacoes || '',
   })
   const [divulgacoes, setDivulgacoes]   = useState([])
   const [loadingDiv, setLoadingDiv]     = useState(true)
@@ -311,7 +312,12 @@ function ModalParceiro({ cp, campanha, onSave, onClose }) {
   async function salvarStatus() {
     setSaving(true)
     try {
-      await onSave(cp.id, { status: form.status, data_publicacao_combinada: form.data_publicacao_combinada || null, observacoes: form.observacoes })
+      await onSave(cp.id, {
+        status:      form.status,
+        data_inicio: form.data_inicio || null,
+        data_fim:    form.data_fim    || null,
+        observacoes: form.observacoes,
+      })
       showToast('Salvo!')
     } catch(e) { console.error(e); showToast('Erro ao salvar','error') }
     finally { setSaving(false) }
@@ -359,16 +365,20 @@ function ModalParceiro({ cp, campanha, onSave, onClose }) {
 
         {/* Status + data combinada */}
         <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">Status do parceiro</label>
+            <select className="form-select" value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>
+              {STATUS_PARCEIRO.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
+          </div>
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Status do parceiro</label>
-              <select className="form-select" value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>
-                {STATUS_PARCEIRO.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
-              </select>
+              <label className="form-label">Data início (parceiro)</label>
+              <input className="form-input" type="date" value={form.data_inicio} onChange={e=>setForm(f=>({...f,data_inicio:e.target.value}))}/>
             </div>
             <div className="form-group">
-              <label className="form-label">Data combinada com parceiro</label>
-              <input className="form-input" type="date" value={form.data_publicacao_combinada} onChange={e=>setForm(f=>({...f,data_publicacao_combinada:e.target.value}))}/>
+              <label className="form-label">Data fim (parceiro)</label>
+              <input className="form-input" type="date" value={form.data_fim} onChange={e=>setForm(f=>({...f,data_fim:e.target.value}))}/>
             </div>
           </div>
           <div className="form-group">
@@ -694,27 +704,21 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
           {cps.length===0
             ? <div className="empty-state"><p>Nenhum parceiro adicionado ainda.</p></div>
             : <table>
-                <thead><tr><th>Parceiro</th><th>Status</th><th>Publicação</th><th>Métricas</th><th></th></tr></thead>
+                <thead><tr><th>Parceiro</th><th>Status</th><th>Período</th><th>Divulgações</th><th></th></tr></thead>
                 <tbody>
                   {cps.map(cp=>(
                     <tr key={cp.id}>
                       <td className="td-strong">{cp.parceiros?.nome||'—'}</td>
                       <td><StatusBadge value={cp.status} options={STATUS_PARCEIRO}/></td>
                       <td className="td-muted" style={{fontSize:12}}>
-                        {cp.data_publicacao_combinada
-                          ? format(new Date(cp.data_publicacao_combinada+'T12:00:00'),'dd MMM',{locale:ptBR})
+                        {cp.data_inicio
+                          ? format(new Date(cp.data_inicio+'T12:00:00'),'dd/MM',{locale:ptBR})
                           : '—'}
-                        {cp.link_publicacao && (
-                          <a href={cp.link_publicacao} target="_blank" rel="noreferrer" style={{marginLeft:6,color:'var(--accent)'}}>
-                            <Link size={11}/>
-                          </a>
-                        )}
+                        {cp.data_fim
+                          ? <span> → {format(new Date(cp.data_fim+'T12:00:00'),'dd/MM',{locale:ptBR})}</span>
+                          : ''}
                       </td>
-                      <td style={{fontSize:12,color:'var(--text-muted)'}}>
-                        {cp.curtidas||cp.visualizacoes||cp.livros_vendidos ? (
-                          <span>{cp.curtidas??'—'} ❤️ · {cp.visualizacoes??'—'} 👁 · {cp.livros_vendidos??'—'} 📚</span>
-                        ) : '—'}
-                      </td>
+                      <td style={{fontSize:12,color:'var(--text-muted)'}}>—</td>
                       <td>
                         <div className="actions-cell">
                           <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>setModalParceiro(cp)}><Pencil size={13}/></button>
