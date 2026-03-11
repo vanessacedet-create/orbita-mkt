@@ -108,7 +108,7 @@ export default function Dashboard() {
         )}
       </div>
       {detalhe && (
-        <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&setDetalhe(null)}>
+        <div className="modal-backdrop" onClick={()=>{}}>
           <div className="modal" style={{maxWidth:500}}>
             <div className="modal-header">
               <h2 className="modal-title">Detalhe do Envio</h2>
