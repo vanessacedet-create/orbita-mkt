@@ -12,9 +12,10 @@ const STATUS_LABELS = {
 
 export default function Dashboard() {
   const { usuario } = useAuth()
-  const [stats, setStats]     = useState(null)
+  const [stats, setStats]       = useState(null)
   const [recentes, setRecentes] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading]   = useState(true)
+  const [detalhe, setDetalhe]   = useState(null)
 
   useEffect(() => {
     Promise.all([getStats(), getEnvios()])
@@ -83,7 +84,7 @@ export default function Dashboard() {
                 const visiveis = livros.slice(0, 3)
                 const extras = livros.length - 3
                 return (
-                  <tr key={e.id}>
+                  <tr key={e.id} onClick={()=>setDetalhe(e)} style={{cursor:'pointer'}} onMouseEnter={ev=>ev.currentTarget.style.background='var(--surface-2)'} onMouseLeave={ev=>ev.currentTarget.style.background=''}>
                     <td className="td-strong">{e.parceiros?.nome || '—'}</td>
                     <td>
                       {livros.length === 0 ? '—' : (
@@ -106,6 +107,81 @@ export default function Dashboard() {
           </table>
         )}
       </div>
+      {detalhe && (
+        <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&setDetalhe(null)}>
+          <div className="modal" style={{maxWidth:500}}>
+            <div className="modal-header">
+              <h2 className="modal-title">Detalhe do Envio</h2>
+              <button className="btn btn-ghost btn-icon" onClick={()=>setDetalhe(null)}>✕</button>
+            </div>
+
+            {/* Parceiro */}
+            <div style={{marginBottom:20}}>
+              <div style={{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.06em',color:'var(--text-muted)',marginBottom:6}}>Parceiro</div>
+              <div style={{fontSize:16,fontWeight:700,color:'var(--text)'}}>{detalhe.parceiros?.nome || '—'}</div>
+              {detalhe.parceiros?.tipo_parceria && <div style={{fontSize:12,color:'var(--text-muted)',marginTop:2}}>{detalhe.parceiros.tipo_parceria}</div>}
+            </div>
+
+            {/* Status + Data */}
+            <div style={{display:'flex',gap:24,marginBottom:20}}>
+              <div>
+                <div style={{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.06em',color:'var(--text-muted)',marginBottom:6}}>Status</div>
+                <span className={`badge ${(STATUS_LABELS[detalhe.status]||STATUS_LABELS.enviado).cls}`}>
+                  {(STATUS_LABELS[detalhe.status]||STATUS_LABELS.enviado).label}
+                </span>
+              </div>
+              <div>
+                <div style={{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.06em',color:'var(--text-muted)',marginBottom:6}}>Data do envio</div>
+                <div style={{fontSize:14,color:'var(--text)'}}>
+                  {detalhe.data_envio
+                    ? format(new Date(detalhe.data_envio+'T12:00:00'),'dd MMM yyyy',{locale:ptBR})
+                    : format(new Date(detalhe.created_at),'dd MMM yyyy',{locale:ptBR})}
+                </div>
+              </div>
+            </div>
+
+            {/* Livros */}
+            <div style={{marginBottom: detalhe.observacoes ? 20 : 0}}>
+              <div style={{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.06em',color:'var(--text-muted)',marginBottom:10}}>
+                Livros enviados ({(detalhe.envio_livros||[]).length})
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {(detalhe.envio_livros||[]).filter(el=>el.livros).map((el,i) => (
+                  <div key={i} style={{display:'flex',alignItems:'flex-start',gap:12,padding:'10px 14px',background:'var(--surface-2)',borderRadius:8,border:'1px solid var(--border)'}}>
+                    <div style={{width:28,height:28,borderRadius:6,flexShrink:0,background:'var(--accent-glow)',border:'1px solid rgba(224,96,48,0.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:'var(--accent)'}}>
+                      {i+1}
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:600,color:'var(--text)'}}>{el.livros.titulo}</div>
+                      <div style={{fontSize:11.5,color:'var(--text-muted)',marginTop:2,display:'flex',gap:8}}>
+                        {el.livros.autor && <span>{el.livros.autor}</span>}
+                        {el.livros.isbn  && <span>ISBN: {el.livros.isbn}</span>}
+                      </div>
+                      {el.divulgado && (
+                        <div style={{fontSize:11,color:'var(--green)',marginTop:3,fontWeight:600}}>
+                          ✓ Divulgado {el.data_divulgacao ? format(new Date(el.data_divulgacao+'T12:00:00'),'dd/MM/yyyy',{locale:ptBR}) : ''}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Observações */}
+            {detalhe.observacoes && (
+              <div style={{marginTop:16,padding:'10px 14px',background:'var(--surface-2)',borderRadius:8,border:'1px solid var(--border)'}}>
+                <div style={{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.06em',color:'var(--text-muted)',marginBottom:4}}>Observações</div>
+                <div style={{fontSize:13,color:'var(--text)'}}>{detalhe.observacoes}</div>
+              </div>
+            )}
+
+            <div className="form-actions" style={{marginTop:20}}>
+              <button className="btn btn-primary" style={{width:'100%',justifyContent:'center'}} onClick={()=>setDetalhe(null)}>Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
