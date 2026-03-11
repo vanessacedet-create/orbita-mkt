@@ -473,13 +473,29 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
 
   const [parceiroSearch, setParceiroSearch] = useState('')
   const [parceiroOpen, setParceiroOpen]     = useState(false)
-  const [livroSearch, setLivroSearch] = useState('')
-  const livrosFiltrados = livros.filter(l =>
-    normalizar(l.titulo).includes(normalizar(livroSearch)) ||
-    (l.autor || '').toLowerCase().includes(livroSearch.toLowerCase()) ||
-    (l.isbn || '').replace(/-/g, '').includes(livroSearch.replace(/-/g, '')) ||
-    (l.sku || '').toLowerCase().includes(livroSearch.toLowerCase())
-  )
+  const [livroSearch, setLivroSearch]       = useState('')
+  const [livrosFiltrados, setLivrosFiltrados] = useState([])
+  const [livrosLoading, setLivrosLoading]   = useState(false)
+  const [livrosErro, setLivrosErro]         = useState('')
+
+  useEffect(() => {
+    if (!livroSearch.trim()) { setLivrosFiltrados([]); setLivrosErro(''); return }
+    const timer = setTimeout(async () => {
+      setLivrosLoading(true)
+      setLivrosErro('')
+      try {
+        const r = await getLivros({ page: 0, pageSize: 20, search: livroSearch.trim() })
+        setLivrosFiltrados(r.data || [])
+        if ((r.data||[]).length === 0) setLivrosErro('Nenhum livro encontrado com este ISBN/título.')
+      } catch (e) {
+        console.error('Erro busca livros:', e)
+        setLivrosErro('Erro ao buscar livros: ' + (e.message || e))
+        setLivrosFiltrados([])
+      }
+      finally { setLivrosLoading(false) }
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [livroSearch])
 
   const filtered = envios
     .filter(e => filter === 'todos' || e.status === filter)
@@ -651,7 +667,11 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
                 />
                 {livroSearch && (
                   <div style={{ border:'1px solid var(--border)', borderRadius:8, maxHeight:200, overflowY:'auto', background:'var(--surface-2)' }}>
-                    {livrosFiltrados.length === 0 ? (
+                    {livrosLoading ? (
+                      <div style={{ padding:'12px 14px', fontSize:13, color:'var(--text-muted)' }}>Buscando...</div>
+                    ) : livrosErro ? (
+                      <div style={{ padding:'12px 14px', fontSize:13, color:'var(--red)' }}>{livrosErro}</div>
+                    ) : livrosFiltrados.length === 0 ? (
                       <div style={{ padding:'12px 14px', fontSize:13, color:'var(--text-muted)' }}>Nenhum livro encontrado.</div>
                     ) : livrosFiltrados.map(l => {
                       const selecionado = form.livro_ids.includes(l.id)
