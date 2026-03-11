@@ -409,7 +409,8 @@ function ModalParceiro({ cp, campanha, onSave, onClose }) {
                           <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
                             <span className="badge badge-indigo" style={{fontSize:11}}>{tipo?.label||d.tipo}</span>
   
-                            {d.livros?.titulo && <span style={{fontSize:11,color:'var(--accent)'}}>📚 {d.livros.titulo}</span>}
+                            {d.data_divulgacao && <span style={{fontSize:11,color:'var(--text-muted)'}}>{format(new Date(d.data_divulgacao+'T12:00:00'),'dd/MM/yyyy',{locale:ptBR})}</span>}
+                          {d.livros?.titulo && <span style={{fontSize:11,color:'var(--accent)'}}>📚 {d.livros.titulo}</span>}
                           </div>
                           {d.link && <a href={d.link} target="_blank" rel="noreferrer" style={{fontSize:12,color:'var(--accent)',display:'flex',alignItems:'center',gap:4,marginBottom:4}}><Link size={11}/>Ver publicação</a>}
                           {(d.curtidas||d.comentarios||d.visualizacoes) && (
@@ -439,7 +440,6 @@ function ModalParceiro({ cp, campanha, onSave, onClose }) {
       {modalDiv && (
         <ModalDivulgacao
           divulgacao={modalDiv === 'new' ? null : modalDiv}
-          livros={livrosDaCampanha}
           onSave={salvarDivulgacao}
           onClose={()=>setModalDiv(null)}
         />
@@ -449,8 +449,9 @@ function ModalParceiro({ cp, campanha, onSave, onClose }) {
 }
 
 // ── MODAL DIVULGAÇÃO ───────────────────────────────────────
-function ModalDivulgacao({ divulgacao, livros, onSave, onClose }) {
-  const EMPTY = { tipo:'', link:'', curtidas:'', comentarios:'', visualizacoes:'', livro_id:'' }
+function ModalDivulgacao({ divulgacao, onSave, onClose }) {
+  const hoje = new Date().toISOString().slice(0,10)
+  const EMPTY = { tipo:'', link:'', curtidas:'', comentarios:'', visualizacoes:'', livro_id:'', livro_titulo:'', data_divulgacao: hoje }
   const [form, setForm] = useState(divulgacao ? {
     id: divulgacao.id,
     tipo: divulgacao.tipo||'',
@@ -459,11 +460,40 @@ function ModalDivulgacao({ divulgacao, livros, onSave, onClose }) {
     comentarios: divulgacao.comentarios??'',
     visualizacoes: divulgacao.visualizacoes??'',
     livro_id: divulgacao.livro_id||'',
+    livro_titulo: divulgacao.livros?.titulo||'',
+    data_divulgacao: divulgacao.data_divulgacao||hoje,
   } : EMPTY)
+  const [livroSearch, setLivroSearch] = useState(divulgacao?.livros?.titulo||'')
+  const [livroResults, setLivroResults] = useState([])
+  const [livroOpen, setLivroOpen]       = useState(false)
   const [saving, setSaving] = useState(false)
 
   const tipoSel = TIPOS_DIVULGACAO.find(t => t.value === form.tipo)
   const temLink = tipoSel?.temLink || false
+
+  useEffect(() => {
+    if (!livroSearch || livroSearch.length < 2) { setLivroResults([]); return }
+    const t = setTimeout(async () => {
+      try {
+        const { data } = await getLivros({ page:1, pageSize:8, search: livroSearch })
+        setLivroResults(data || [])
+        setLivroOpen(true)
+      } catch {}
+    }, 300)
+    return () => clearTimeout(t)
+  }, [livroSearch])
+
+  function selecionarLivro(l) {
+    setForm(f => ({ ...f, livro_id: l.id, livro_titulo: l.titulo }))
+    setLivroSearch(l.titulo)
+    setLivroOpen(false)
+  }
+
+  function limparLivro() {
+    setForm(f => ({ ...f, livro_id: '', livro_titulo: '' }))
+    setLivroSearch('')
+    setLivroResults([])
+  }
 
   async function save() {
     if (!form.tipo) return
@@ -471,11 +501,12 @@ function ModalDivulgacao({ divulgacao, livros, onSave, onClose }) {
     try {
       const payload = {
         tipo: form.tipo,
-        livro_id:     form.livro_id || null,
-        link:         temLink ? (form.link||null) : null,
-        curtidas:     temLink && form.curtidas     !== '' ? Number(form.curtidas)     : null,
-        comentarios:  temLink && form.comentarios  !== '' ? Number(form.comentarios)  : null,
-        visualizacoes:temLink && form.visualizacoes!== '' ? Number(form.visualizacoes): null,
+        livro_id:      form.livro_id || null,
+        data_divulgacao: form.data_divulgacao || null,
+        link:          temLink ? (form.link||null) : null,
+        curtidas:      temLink && form.curtidas     !== '' ? Number(form.curtidas)     : null,
+        comentarios:   temLink && form.comentarios  !== '' ? Number(form.comentarios)  : null,
+        visualizacoes: temLink && form.visualizacoes!== '' ? Number(form.visualizacoes): null,
       }
       if (form.id) payload.id = form.id
       await onSave(payload)
@@ -498,17 +529,44 @@ function ModalDivulgacao({ divulgacao, livros, onSave, onClose }) {
             </select>
           </div>
 
-
-
-          {livros.length > 0 && (
-            <div className="form-group">
-              <label className="form-label">Livro divulgado <span style={{color:'var(--text-muted)',fontWeight:400}}>(opcional)</span></label>
-              <select className="form-select" value={form.livro_id} onChange={e=>setForm(f=>({...f,livro_id:e.target.value}))}>
-                <option value="">Campanha como um todo</option>
-                {livros.map(l=><option key={l.id} value={l.id}>{l.titulo}</option>)}
-              </select>
+          {/* Busca de livro */}
+          <div className="form-group" style={{position:'relative'}}>
+            <label className="form-label">Livro divulgado <span style={{color:'var(--text-muted)',fontWeight:400}}>(opcional)</span></label>
+            <div style={{display:'flex',gap:6}}>
+              <input
+                className="form-input"
+                value={livroSearch}
+                onChange={e=>{ setLivroSearch(e.target.value); if(!e.target.value) limparLivro() }}
+                placeholder="Buscar por título, ISBN ou SKU..."
+                autoComplete="off"
+              />
+              {form.livro_id && (
+                <button className="btn btn-ghost btn-icon" onClick={limparLivro} title="Remover livro"><X size={14}/></button>
+              )}
             </div>
-          )}
+            {livroOpen && livroResults.length > 0 && (
+              <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:200,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,boxShadow:'0 4px 16px rgba(0,0,0,0.3)',maxHeight:200,overflowY:'auto'}}>
+                <div style={{padding:'6px 10px',fontSize:11,color:'var(--text-muted)',borderBottom:'1px solid var(--border)'}}>Campanha como um todo</div>
+                <div style={{padding:'8px 10px',fontSize:13,cursor:'pointer',color:'var(--text-muted)'}} onClick={limparLivro}>— Nenhum livro específico</div>
+                {livroResults.map(l=>(
+                  <div key={l.id} onClick={()=>selecionarLivro(l)} style={{padding:'8px 12px',cursor:'pointer',borderTop:'1px solid var(--border)',fontSize:13,color:'var(--text)'}}
+                    onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'}
+                    onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                    <div style={{fontWeight:600}}>{l.titulo}</div>
+                    <div style={{fontSize:11,color:'var(--text-muted)'}}>{l.autor}{l.isbn?` · ISBN: ${l.isbn}`:''}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {form.livro_id && (
+              <div style={{fontSize:11,color:'var(--accent)',marginTop:4}}>📚 {form.livro_titulo}</div>
+            )}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Data da divulgação</label>
+            <input className="form-input" type="date" value={form.data_divulgacao} onChange={e=>setForm(f=>({...f,data_divulgacao:e.target.value}))}/>
+          </div>
 
           {temLink && (
             <div className="form-group">
