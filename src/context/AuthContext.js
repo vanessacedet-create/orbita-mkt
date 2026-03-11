@@ -8,6 +8,7 @@ const AuthContext = createContext(null)
 export const MODULOS_PERMISSOES = {
   dashboard:  ['administrador', 'gerente', 'analista', 'assistente'],
   cortesias:  ['administrador', 'gerente', 'analista'],
+  campanhas:  ['administrador', 'gerente', 'analista'],
   usuarios:   ['administrador'],
 }
 
