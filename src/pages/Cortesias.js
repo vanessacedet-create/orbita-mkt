@@ -89,7 +89,7 @@ function BuscaDuplicatas({ parceiros, livros, envios, onClose }) {
   const livro    = livros.find(l => l.id === livroId)
 
   return (
-    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="modal-backdrop" onClick={()=>{}}>
       <div className="modal" style={{ maxWidth: 500 }}>
         <div className="modal-header">
           <h2 className="modal-title">Verificar Envio Anterior</h2>
@@ -589,7 +589,7 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
 
       {/* Modal Registrar Envio */}
       {modal && (
-        <div className="modal-backdrop" onClick={ev=>ev.target===ev.currentTarget&&close()}>
+        <div className="modal-backdrop" onClick={()=>{}}>
           <div className="modal" style={{ maxWidth: 520 }}>
             <div className="modal-header">
               <h2 className="modal-title">{editing?'Editar Envio':'Registrar Envio'}</h2>
@@ -835,7 +835,7 @@ function ParceirosTab({ parceiros, setParceiros }) {
         )}
       </div>
       {modal&&(
-        <div className="modal-backdrop" onClick={ev=>ev.target===ev.currentTarget&&close()}>
+        <div className="modal-backdrop" onClick={()=>{}}>
           <div className="modal">
             <div className="modal-header"><h2 className="modal-title">{editing?'Editar Parceiro':'Novo Parceiro'}</h2><button className="btn btn-ghost btn-icon" onClick={close}><X size={16}/></button></div>
             <div className="form-grid">
@@ -977,7 +977,7 @@ function LivrosTab() {
       </div>
 
       {modal&&(
-        <div className="modal-backdrop" onClick={ev=>ev.target===ev.currentTarget&&close()}>
+        <div className="modal-backdrop" onClick={()=>{}}>
           <div className="modal">
             <div className="modal-header"><h2 className="modal-title">{editing?'Editar Livro':'Novo Livro'}</h2><button className="btn btn-ghost btn-icon" onClick={close}><X size={16}/></button></div>
             <div className="form-grid">
@@ -1123,7 +1123,7 @@ function DivulgacoesTab({ envios, setEnvios }) {
       </div>
 
       {modal && (
-        <div className="modal-backdrop" onClick={ev=>ev.target===ev.currentTarget&&setModal(null)}>
+        <div className="modal-backdrop" onClick={()=>{}}>
           <div className="modal" style={{maxWidth:500}}>
             <div className="modal-header">
               <h2 className="modal-title">Registrar Divulgação</h2>
