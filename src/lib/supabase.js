@@ -289,3 +289,30 @@ export async function removeParceiroCampanha(id) {
   const { error } = await supabase.from('campanha_parceiros').delete().eq('id', id)
   if (error) throw error
 }
+
+// ── FOLLOW-UP / CONTATO ────────────────────────────────────
+export async function getFollowUps() {
+  // Busca campanhas em planejamento ou em_andamento com data_inicio definida
+  const { data, error } = await supabase
+    .from('campanhas')
+    .select(`
+      id, nome, tipo, status, data_inicio,
+      campanha_parceiros(id, status, contato_realizado, data_contato, nota_contato, parceiros(id, nome, tipo_parceria))
+    `)
+    .in('status', ['planejamento', 'em_andamento'])
+    .not('data_inicio', 'is', null)
+    .order('data_inicio', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+export async function registrarContato(campanhaParceirolId, { data_contato, nota_contato }) {
+  const { data, error } = await supabase
+    .from('campanha_parceiros')
+    .update({ contato_realizado: true, data_contato, nota_contato })
+    .eq('id', campanhaParceirolId)
+    .select(`*, parceiros(id, nome, tipo_parceria)`)
+    .single()
+  if (error) throw error
+  return data
+}
