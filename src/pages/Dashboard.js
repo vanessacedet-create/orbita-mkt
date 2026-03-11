@@ -79,12 +79,24 @@ export default function Dashboard() {
             <tbody>
               {recentes.map(e => {
                 const s = STATUS_LABELS[e.status] || STATUS_LABELS.enviado
+                const livros = (e.envio_livros || []).map(el => el.livros?.titulo).filter(Boolean)
+                const visiveis = livros.slice(0, 3)
+                const extras = livros.length - 3
                 return (
                   <tr key={e.id}>
                     <td className="td-strong">{e.parceiros?.nome || '—'}</td>
-                    <td>{e.livros?.titulo || '—'}</td>
+                    <td>
+                      {livros.length === 0 ? '—' : (
+                        <div style={{display:'flex',flexDirection:'column',gap:3}}>
+                          {visiveis.map((t,i) => <span key={i} style={{fontSize:12.5}}>{t}</span>)}
+                          {extras > 0 && <span style={{fontSize:11.5,color:'var(--accent)',fontWeight:600}}>+{extras} livro{extras>1?'s':''}</span>}
+                        </div>
+                      )}
+                    </td>
                     <td className="td-muted">
-                      {format(new Date(e.created_at), "dd MMM yyyy", { locale: ptBR })}
+                      {e.data_envio
+                        ? format(new Date(e.data_envio + 'T12:00:00'), "dd MMM yyyy", { locale: ptBR })
+                        : format(new Date(e.created_at), "dd MMM yyyy", { locale: ptBR })}
                     </td>
                     <td><span className={`badge ${s.cls}`}>{s.label}</span></td>
                   </tr>
