@@ -127,7 +127,7 @@ function ModalCampanha({ campanha, livros, parceiros, onSave, onClose }) {
   }
 
   return (
-    <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div className="modal-backdrop" onClick={()=>{}}>
       <div className="modal" style={{maxWidth:560}}>
         <div className="modal-header">
           <h2 className="modal-title">{campanha?'Editar Campanha':'Nova Campanha'}</h2>
@@ -346,7 +346,7 @@ function ModalParceiro({ cp, campanha, onSave, onClose }) {
   const livrosDaCampanha = (campanha?.campanha_livros || []).map(cl => cl.livros).filter(Boolean)
 
   return (
-    <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div className="modal-backdrop" onClick={()=>{}}>
       <div className="modal" style={{maxWidth:560, maxHeight:'90vh', overflowY:'auto'}}>
         <div className="modal-header" style={{position:'sticky',top:0,background:'var(--surface)',zIndex:10}}>
           <h2 className="modal-title">{cp.parceiros?.nome}</h2>
@@ -483,7 +483,7 @@ function ModalDivulgacao({ divulgacao, livros, onSave, onClose }) {
   }
 
   return (
-    <div className="modal-backdrop" style={{zIndex:1100}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div className="modal-backdrop" style={{zIndex:1100}} onClick={()=>{}}>
       <div className="modal" style={{maxWidth:440}}>
         <div className="modal-header">
           <h2 className="modal-title">{divulgacao ? 'Editar divulgação' : 'Nova divulgação'}</h2>
@@ -919,7 +919,7 @@ function FollowUpTab() {
       )}
 
       {modal && (
-        <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&setModal(null)}>
+        <div className="modal-backdrop" onClick={()=>{}}>
           <div className="modal" style={{maxWidth:440}}>
             <div className="modal-header">
               <h2 className="modal-title">Registrar Contato</h2>
