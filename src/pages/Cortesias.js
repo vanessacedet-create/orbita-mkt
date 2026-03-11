@@ -609,7 +609,7 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
 
               {/* Livros selecionados — lista de pedido */}
               {form.livro_ids.length > 0 && (
-                <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:10, overflow:'hidden' }}>
+                <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:10, overflow:'hidden', maxHeight:280, overflowY:'auto' }}>
                   <div style={{ padding:'8px 14px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                     <span style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color:'var(--text-muted)' }}>
                       Livros selecionados
