@@ -34,11 +34,10 @@ const STATUS_PARCEIRO = [
 ]
 
 const ETAPAS = [
-  { id: 'planejamento',  label: 'Planejamento' },
-  { id: 'cortesia',      label: 'Envio de Cortesia' },
-  { id: 'aprovacao',     label: 'Aprovação de conteúdo' },
-  { id: 'monitoramento', label: 'Monitoramento' },
-  { id: 'resultados',    label: 'Análise de resultados' },
+  { id: 'planejamento', label: 'Planejada' },
+  { id: 'em_andamento', label: 'Em andamento' },
+  { id: 'concluida',    label: 'Concluída' },
+  { id: 'cancelada',    label: 'Cancelada' },
 ]
 
 function useToast() {
@@ -611,12 +610,10 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
 
   // Etapa atual baseada nos parceiros
   // 0=Planejamento, 1=Envio Cortesia, 2=Aprovação, 3=Monitoramento, 4=Resultados
-  const etapaAtual = campanha.status === 'concluida' ? 4
-    : campanha.status === 'planejamento' ? 0
-    : publicados > 0 ? 3
-    : cps.some(p => p.status === 'conteudo_aprovado') ? 2
-    : cps.some(p => ['confirmado','conteudo_aprovado','publicado'].includes(p.status)) ? 1
-    : cps.length > 0 ? 1 : 0
+  const etapaAtual = campanha.status === 'cancelada' ? 3
+    : campanha.status === 'concluida' ? 2
+    : campanha.status === 'em_andamento' ? 1
+    : 0
 
   return (
     <>
