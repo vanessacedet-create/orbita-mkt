@@ -35,7 +35,7 @@ const STATUS_PARCEIRO = [
 
 const ETAPAS = [
   { id: 'planejamento',  label: 'Planejamento' },
-  { id: 'materiais',     label: 'Envio de materiais' },
+  { id: 'cortesia',      label: 'Envio de Cortesia' },
   { id: 'aprovacao',     label: 'Aprovação de conteúdo' },
   { id: 'monitoramento', label: 'Monitoramento' },
   { id: 'resultados',    label: 'Análise de resultados' },
@@ -419,9 +419,12 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
   )
 
   // Etapa atual baseada nos parceiros
-  const etapaAtual = campanha.status === 'planejamento' ? 0
+  // 0=Planejamento, 1=Envio Cortesia, 2=Aprovação, 3=Monitoramento, 4=Resultados
+  const etapaAtual = campanha.status === 'concluida' ? 4
+    : campanha.status === 'planejamento' ? 0
     : publicados > 0 ? 3
-    : confirmados > 0 ? 2
+    : cps.some(p => p.status === 'conteudo_aprovado') ? 2
+    : cps.some(p => ['confirmado','conteudo_aprovado','publicado'].includes(p.status)) ? 1
     : cps.length > 0 ? 1 : 0
 
   return (
@@ -576,7 +579,7 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
       </div>
 
       {modalEdicao && (
-        <ModalCampanha campanha={campanha} livros={livros} onSave={handleUpdateCampanha} onClose={()=>setModalEdicao(false)}/>
+        <ModalCampanha campanha={campanha} livros={livros} parceiros={parceiros} onSave={handleUpdateCampanha} onClose={()=>setModalEdicao(false)}/>
       )}
       {modalParceiro && (
         <ModalParceiro cp={modalParceiro} onSave={handleUpdateParceiro} onClose={()=>setModalParceiro(null)}/>
