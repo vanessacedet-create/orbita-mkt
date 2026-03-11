@@ -418,21 +418,31 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
 
   function openNew()   { setEditing(null); setForm(EMPTY); setParceiroSearch(''); setParceiroOpen(false); setLivroSearch(''); setModal(true) }
   async function openEdit(e) {
-    setEditing(e)
-    setParceiroOpen(false)
-    setLivroSearch('')
-    setModal(true)
-    const p = parceiros.find(x => x.id === e.parceiro_id)
-    setParceiroSearch(p?.nome || '')
-    // Busca o envio completo do banco para garantir todos os livros
+    // Busca PRIMEIRO, abre modal só depois — garante todos os livros
+    setSaving(true)
     try {
       const completo = await getEnvioCompleto(e.id)
       const livro_ids = (completo.envio_livros || []).map(el => el.livros?.id).filter(Boolean)
-      setForm({ parceiro_id: completo.parceiro_id, livro_ids, status: completo.status, data_envio: completo.data_envio || '', observacoes: completo.observacoes || '' })
+      const p = parceiros.find(x => x.id === completo.parceiro_id)
       setEditing(completo)
-    } catch {
+      setForm({ parceiro_id: completo.parceiro_id, livro_ids, status: completo.status, data_envio: completo.data_envio || '', observacoes: completo.observacoes || '' })
+      setParceiroSearch(p?.nome || '')
+      setParceiroOpen(false)
+      setLivroSearch('')
+      setModal(true)
+    } catch (err) {
+      console.error(err)
+      // Fallback com dados da memória
       const livro_ids = (e.envio_livros || []).map(el => el.livros?.id).filter(Boolean)
+      const p = parceiros.find(x => x.id === e.parceiro_id)
+      setEditing(e)
       setForm({ parceiro_id: e.parceiro_id, livro_ids, status: e.status, data_envio: e.data_envio || '', observacoes: e.observacoes || '' })
+      setParceiroSearch(p?.nome || '')
+      setParceiroOpen(false)
+      setLivroSearch('')
+      setModal(true)
+    } finally {
+      setSaving(false)
     }
   }
   function close() { setModal(false); setEditing(null); setParceiroOpen(false) }
