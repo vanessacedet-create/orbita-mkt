@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import {
   getParceiros, createParceiro, updateParceiro, deleteParceiro,
   getLivros, createLivro, updateLivro, deleteLivro,
-  getEnvios, createEnvio, updateEnvio, updateEnvioStatus, deleteEnvio, updateEnvioLivroDivulgacao
+  getEnvios, getEnvioCompleto, createEnvio, updateEnvio, updateEnvioStatus, deleteEnvio, updateEnvioLivroDivulgacao
 } from '../lib/supabase'
 import {
   Plus, Pencil, Trash2, X, BookOpen, Users, Send,
@@ -417,15 +417,23 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
   }, [envios])
 
   function openNew()   { setEditing(null); setForm(EMPTY); setParceiroSearch(''); setParceiroOpen(false); setLivroSearch(''); setModal(true) }
-  function openEdit(e) {
+  async function openEdit(e) {
     setEditing(e)
-    const livro_ids = (e.envio_livros || []).map(el => el.livros?.id).filter(Boolean)
-    setForm({ parceiro_id: e.parceiro_id, livro_ids, status: e.status, data_envio: e.data_envio || '', observacoes: e.observacoes || '' })
-    const p = parceiros.find(x => x.id === e.parceiro_id)
-    setParceiroSearch(p?.nome || '')
     setParceiroOpen(false)
     setLivroSearch('')
     setModal(true)
+    const p = parceiros.find(x => x.id === e.parceiro_id)
+    setParceiroSearch(p?.nome || '')
+    // Busca o envio completo do banco para garantir todos os livros
+    try {
+      const completo = await getEnvioCompleto(e.id)
+      const livro_ids = (completo.envio_livros || []).map(el => el.livros?.id).filter(Boolean)
+      setForm({ parceiro_id: completo.parceiro_id, livro_ids, status: completo.status, data_envio: completo.data_envio || '', observacoes: completo.observacoes || '' })
+      setEditing(completo)
+    } catch {
+      const livro_ids = (e.envio_livros || []).map(el => el.livros?.id).filter(Boolean)
+      setForm({ parceiro_id: e.parceiro_id, livro_ids, status: e.status, data_envio: e.data_envio || '', observacoes: e.observacoes || '' })
+    }
   }
   function close() { setModal(false); setEditing(null); setParceiroOpen(false) }
 
