@@ -637,7 +637,9 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
                     </span>
                   </div>
                   {form.livro_ids.map((id, idx) => {
-                    const l = livros.find(x => x.id === id)
+                    // Primeiro tenta no envio carregado, depois no prop livros
+                    const elFromEnvio = (editing?.envio_livros || []).find(el => el.livros?.id === id)
+                    const l = elFromEnvio?.livros || livros.find(x => x.id === id)
                     if (!l) return null
                     return (
                       <div key={id} style={{
