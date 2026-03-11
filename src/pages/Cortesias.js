@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import {
   getParceiros, createParceiro, updateParceiro, deleteParceiro,
   getLivros, createLivro, updateLivro, deleteLivro,
-  getEnvios, getEnvioCompleto, createEnvio, updateEnvio, updateEnvioStatus, deleteEnvio, updateEnvioLivroDivulgacao
+  getEnvios, createEnvio, updateEnvio, updateEnvioStatus, deleteEnvio, updateEnvioLivroDivulgacao
 } from '../lib/supabase'
 import {
   Plus, Pencil, Trash2, X, BookOpen, Users, Send,
@@ -417,33 +417,15 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
   }, [envios])
 
   function openNew()   { setEditing(null); setForm(EMPTY); setParceiroSearch(''); setParceiroOpen(false); setLivroSearch(''); setModal(true) }
-  async function openEdit(e) {
-    // Busca PRIMEIRO, abre modal só depois — garante todos os livros
-    setSaving(true)
-    try {
-      const completo = await getEnvioCompleto(e.id)
-      const livro_ids = (completo.envio_livros || []).map(el => el.livros?.id).filter(Boolean)
-      const p = parceiros.find(x => x.id === completo.parceiro_id)
-      setEditing(completo)
-      setForm({ parceiro_id: completo.parceiro_id, livro_ids, status: completo.status, data_envio: completo.data_envio || '', observacoes: completo.observacoes || '' })
-      setParceiroSearch(p?.nome || '')
-      setParceiroOpen(false)
-      setLivroSearch('')
-      setModal(true)
-    } catch (err) {
-      console.error(err)
-      // Fallback com dados da memória
-      const livro_ids = (e.envio_livros || []).map(el => el.livros?.id).filter(Boolean)
-      const p = parceiros.find(x => x.id === e.parceiro_id)
-      setEditing(e)
-      setForm({ parceiro_id: e.parceiro_id, livro_ids, status: e.status, data_envio: e.data_envio || '', observacoes: e.observacoes || '' })
-      setParceiroSearch(p?.nome || '')
-      setParceiroOpen(false)
-      setLivroSearch('')
-      setModal(true)
-    } finally {
-      setSaving(false)
-    }
+  function openEdit(e) {
+    setEditing(e)
+    const livro_ids = (e.envio_livros || []).map(el => el.livros?.id).filter(Boolean)
+    setForm({ parceiro_id: e.parceiro_id, livro_ids, status: e.status, data_envio: e.data_envio || '', observacoes: e.observacoes || '' })
+    const p = parceiros.find(x => x.id === e.parceiro_id)
+    setParceiroSearch(p?.nome || '')
+    setParceiroOpen(false)
+    setLivroSearch('')
+    setModal(true)
   }
   function close() { setModal(false); setEditing(null); setParceiroOpen(false) }
 
@@ -494,24 +476,17 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
   const [livroSearch, setLivroSearch]       = useState('')
   const [livrosFiltrados, setLivrosFiltrados] = useState([])
   const [livrosLoading, setLivrosLoading]   = useState(false)
-  const [livrosErro, setLivrosErro]         = useState('')
 
   useEffect(() => {
-    if (!livroSearch.trim()) { setLivrosFiltrados([]); setLivrosErro(''); return }
+    if (!livroSearch.trim()) { setLivrosFiltrados([]); return }
     const timer = setTimeout(async () => {
       setLivrosLoading(true)
-      setLivrosErro('')
       try {
-        const r = await getLivros({ page: 0, pageSize: 20, search: livroSearch.trim() })
+        const r = await getLivros({ page: 0, pageSize: 20, search: livroSearch })
         setLivrosFiltrados(r.data || [])
-        if ((r.data||[]).length === 0) setLivrosErro('Nenhum livro encontrado com este ISBN/título.')
-      } catch (e) {
-        console.error('Erro busca livros:', e)
-        setLivrosErro('Erro ao buscar livros: ' + (e.message || e))
-        setLivrosFiltrados([])
-      }
+      } catch { setLivrosFiltrados([]) }
       finally { setLivrosLoading(false) }
-    }, 400)
+    }, 300)
     return () => clearTimeout(timer)
   }, [livroSearch])
 
@@ -627,7 +602,7 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
 
               {/* Livros selecionados — lista de pedido */}
               {form.livro_ids.length > 0 && (
-                <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:10, overflow:'hidden', maxHeight:280, overflowY:'auto' }}>
+                <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:10, overflow:'hidden' }}>
                   <div style={{ padding:'8px 14px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                     <span style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color:'var(--text-muted)' }}>
                       Livros selecionados
@@ -637,9 +612,7 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
                     </span>
                   </div>
                   {form.livro_ids.map((id, idx) => {
-                    // Primeiro tenta no envio carregado, depois no prop livros
-                    const elFromEnvio = (editing?.envio_livros || []).find(el => el.livros?.id === id)
-                    const l = elFromEnvio?.livros || livros.find(x => x.id === id)
+                    const l = livros.find(x => x.id === id)
                     if (!l) return null
                     return (
                       <div key={id} style={{
@@ -689,8 +662,6 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
                   <div style={{ border:'1px solid var(--border)', borderRadius:8, maxHeight:200, overflowY:'auto', background:'var(--surface-2)' }}>
                     {livrosLoading ? (
                       <div style={{ padding:'12px 14px', fontSize:13, color:'var(--text-muted)' }}>Buscando...</div>
-                    ) : livrosErro ? (
-                      <div style={{ padding:'12px 14px', fontSize:13, color:'var(--red)' }}>{livrosErro}</div>
                     ) : livrosFiltrados.length === 0 ? (
                       <div style={{ padding:'12px 14px', fontSize:13, color:'var(--text-muted)' }}>Nenhum livro encontrado.</div>
                     ) : livrosFiltrados.map(l => {
