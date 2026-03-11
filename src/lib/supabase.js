@@ -351,3 +351,40 @@ export async function registrarContato(campanhaParceirolId, { data_contato, nota
   if (error) throw error
   return data
 }
+
+// ── DIVULGAÇÕES DE CAMPANHA ────────────────────────────────
+export async function getDivulgacoesParceiro(campanha_parceiro_id) {
+  const { data, error } = await supabase
+    .from('campanha_divulgacoes')
+    .select('*, livros(id, titulo)')
+    .eq('campanha_parceiro_id', campanha_parceiro_id)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function createDivulgacaoCampanha(payload) {
+  const { data, error } = await supabase
+    .from('campanha_divulgacoes')
+    .insert([payload])
+    .select('*, livros(id, titulo)')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateDivulgacaoCampanha(id, updates) {
+  const { data, error } = await supabase
+    .from('campanha_divulgacoes')
+    .update(updates)
+    .eq('id', id)
+    .select('*, livros(id, titulo)')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteDivulgacaoCampanha(id) {
+  const { error } = await supabase.from('campanha_divulgacoes').delete().eq('id', id)
+  if (error) throw error
+}
