@@ -311,7 +311,7 @@ function ModalParceiro({ cp, campanha, onSave, onClose }) {
   async function salvarStatus() {
     setSaving(true)
     try {
-      await onSave(cp.id, form)
+      await onSave(cp.id, { status: form.status, data_publicacao_combinada: form.data_publicacao_combinada || null, observacoes: form.observacoes })
       showToast('Salvo!')
     } catch(e) { console.error(e); showToast('Erro ao salvar','error') }
     finally { setSaving(false) }
@@ -367,7 +367,7 @@ function ModalParceiro({ cp, campanha, onSave, onClose }) {
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label">Data de publicação combinada</label>
+              <label className="form-label">Data combinada com parceiro</label>
               <input className="form-input" type="date" value={form.data_publicacao_combinada} onChange={e=>setForm(f=>({...f,data_publicacao_combinada:e.target.value}))}/>
             </div>
           </div>
@@ -399,7 +399,7 @@ function ModalParceiro({ cp, campanha, onSave, onClose }) {
                         <div style={{flex:1}}>
                           <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
                             <span className="badge badge-indigo" style={{fontSize:11}}>{tipo?.label||d.tipo}</span>
-                            {d.data_divulgacao && <span style={{fontSize:11,color:'var(--text-muted)'}}>{format(new Date(d.data_divulgacao+'T12:00:00'),'dd MMM yyyy',{locale:ptBR})}</span>}
+  
                             {d.livros?.titulo && <span style={{fontSize:11,color:'var(--accent)'}}>📚 {d.livros.titulo}</span>}
                           </div>
                           {d.link && <a href={d.link} target="_blank" rel="noreferrer" style={{fontSize:12,color:'var(--accent)',display:'flex',alignItems:'center',gap:4,marginBottom:4}}><Link size={11}/>Ver publicação</a>}
@@ -441,7 +441,7 @@ function ModalParceiro({ cp, campanha, onSave, onClose }) {
 
 // ── MODAL DIVULGAÇÃO ───────────────────────────────────────
 function ModalDivulgacao({ divulgacao, livros, onSave, onClose }) {
-  const EMPTY = { tipo:'', link:'', curtidas:'', comentarios:'', visualizacoes:'', data_divulgacao: new Date().toISOString().slice(0,10), livro_id:'' }
+  const EMPTY = { tipo:'', link:'', curtidas:'', comentarios:'', visualizacoes:'', livro_id:'' }
   const [form, setForm] = useState(divulgacao ? {
     id: divulgacao.id,
     tipo: divulgacao.tipo||'',
@@ -449,7 +449,6 @@ function ModalDivulgacao({ divulgacao, livros, onSave, onClose }) {
     curtidas: divulgacao.curtidas??'',
     comentarios: divulgacao.comentarios??'',
     visualizacoes: divulgacao.visualizacoes??'',
-    data_divulgacao: divulgacao.data_divulgacao||new Date().toISOString().slice(0,10),
     livro_id: divulgacao.livro_id||'',
   } : EMPTY)
   const [saving, setSaving] = useState(false)
@@ -461,14 +460,16 @@ function ModalDivulgacao({ divulgacao, livros, onSave, onClose }) {
     if (!form.tipo) return
     setSaving(true)
     try {
-      await onSave({
-        ...form,
+      const payload = {
+        tipo: form.tipo,
         livro_id:     form.livro_id || null,
-        link:         temLink ? form.link : null,
-        curtidas:     form.curtidas     !== '' ? Number(form.curtidas)     : null,
-        comentarios:  form.comentarios  !== '' ? Number(form.comentarios)  : null,
-        visualizacoes:form.visualizacoes!== '' ? Number(form.visualizacoes): null,
-      })
+        link:         temLink ? (form.link||null) : null,
+        curtidas:     temLink && form.curtidas     !== '' ? Number(form.curtidas)     : null,
+        comentarios:  temLink && form.comentarios  !== '' ? Number(form.comentarios)  : null,
+        visualizacoes:temLink && form.visualizacoes!== '' ? Number(form.visualizacoes): null,
+      }
+      if (form.id) payload.id = form.id
+      await onSave(payload)
     } finally { setSaving(false) }
   }
 
@@ -488,10 +489,7 @@ function ModalDivulgacao({ divulgacao, livros, onSave, onClose }) {
             </select>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Data da divulgação</label>
-            <input className="form-input" type="date" value={form.data_divulgacao} onChange={e=>setForm(f=>({...f,data_divulgacao:e.target.value}))}/>
-          </div>
+
 
           {livros.length > 0 && (
             <div className="form-group">
