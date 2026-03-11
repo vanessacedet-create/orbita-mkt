@@ -5,16 +5,18 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Cortesias from './pages/Cortesias'
 import Usuarios from './pages/Usuarios'
+import Campanhas from './pages/Campanhas'
 import './App.css'
 import {
   LayoutDashboard, BookOpen, Users, LogOut,
-  Orbit, ShieldAlert
+  Orbit, ShieldAlert, Megaphone
 } from 'lucide-react'
 
 const MENU = [
-  { path: '/',          label: 'Dashboard',  icon: LayoutDashboard, modulo: 'dashboard' },
-  { path: '/cortesias', label: 'Cortesias',  icon: BookOpen,        modulo: 'cortesias' },
-  { path: '/usuarios',  label: 'Usuários',   icon: Users,           modulo: 'usuarios'  },
+  { path: '/',           label: 'Dashboard',  icon: LayoutDashboard, modulo: 'dashboard' },
+  { path: '/cortesias',  label: 'Cortesias',  icon: BookOpen,        modulo: 'cortesias' },
+  { path: '/campanhas',  label: 'Campanhas',  icon: Megaphone,       modulo: 'campanhas' },
+  { path: '/usuarios',   label: 'Usuários',   icon: Users,           modulo: 'usuarios'  },
 ]
 
 const PERFIL_LABEL = {
@@ -106,6 +108,7 @@ function Shell() {
           <Route path="/" element={<RequireAuth modulo="dashboard"><Dashboard /></RequireAuth>} />
           <Route path="/cortesias" element={<RequireAuth modulo="cortesias"><Cortesias /></RequireAuth>} />
           <Route path="/usuarios" element={<RequireAuth modulo="usuarios"><Usuarios /></RequireAuth>} />
+          <Route path="/campanhas" element={<RequireAuth modulo="campanhas"><Campanhas /></RequireAuth>} />
         </Routes>
       </main>
     </div>
