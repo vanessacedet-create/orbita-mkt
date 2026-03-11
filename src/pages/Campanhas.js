@@ -3,7 +3,8 @@ import {
   getCampanhas, getCampanha, createCampanha, updateCampanha, deleteCampanha,
   getParceiros, getLivros,
   addParceiroCampanha, updateParceiroCampanha, removeParceiroCampanha,
-  getFollowUps, registrarContato
+  getFollowUps, registrarContato,
+  getDivulgacoesParceiro, createDivulgacaoCampanha, updateDivulgacaoCampanha, deleteDivulgacaoCampanha
 } from '../lib/supabase'
 import {
   Plus, Pencil, Trash2, X, ChevronLeft, BookOpen,
@@ -17,11 +18,10 @@ import { ptBR } from 'date-fns/locale'
 const TIPOS_CAMPANHA = ['Lançamento', 'Relançamento', 'Promoção', 'Sazonal', 'Institucional', 'Outro']
 
 const STATUS_CAMPANHA = [
-  { value: 'planejamento',  label: 'Planejamento',  cls: 'badge-indigo', icon: Clock },
-  { value: 'em_andamento',  label: 'Em andamento',  cls: 'badge-amber',  icon: BarChart2 },
-  { value: 'concluida',     label: 'Concluída',     cls: 'badge-green',  icon: CheckCircle },
-  { value: 'pausada',       label: 'Pausada',       cls: 'badge-red',    icon: AlertCircle },
-  { value: 'cancelada',     label: 'Cancelada',     cls: 'badge-red',    icon: X },
+  { value: 'planejamento', label: 'Planejada',     cls: 'badge-indigo', icon: Clock },
+  { value: 'em_andamento', label: 'Em andamento',  cls: 'badge-amber',  icon: BarChart2 },
+  { value: 'concluida',    label: 'Encerrada',     cls: 'badge-green',  icon: CheckCircle },
+  { value: 'cancelada',    label: 'Cancelada',     cls: 'badge-red',    icon: X },
 ]
 
 const STATUS_PARCEIRO = [
@@ -277,76 +277,259 @@ function ModalCampanha({ campanha, livros, parceiros, onSave, onClose }) {
   )
 }
 
-// ── MODAL PARCEIRO NA CAMPANHA ─────────────────────────────
-function ModalParceiro({ cp, onSave, onClose }) {
-  const [form, setForm] = useState({
-    status:                  cp.status || 'convidado',
-    data_publicacao_combinada: cp.data_publicacao_combinada || '',
-    link_publicacao:          cp.link_publicacao || '',
-    curtidas:                 cp.curtidas ?? '',
-    visualizacoes:            cp.visualizacoes ?? '',
-    livros_vendidos:          cp.livros_vendidos ?? '',
-    observacoes:              cp.observacoes || '',
-  })
-  const [saving, setSaving] = useState(false)
+// ── TIPOS DE DIVULGAÇÃO ────────────────────────────────────
+const TIPOS_DIVULGACAO = [
+  { value: 'stories',          label: 'Stories',               temLink: false },
+  { value: 'feed',             label: 'Feed',                  temLink: true  },
+  { value: 'reels',            label: 'Reels',                 temLink: true  },
+  { value: 'tiktok',           label: 'TikTok',                temLink: true  },
+  { value: 'youtube',          label: 'Vídeo no YouTube',      temLink: true  },
+  { value: 'shorts',           label: 'Shorts',                temLink: true  },
+  { value: 'twitter',          label: 'Twitter/X',             temLink: true  },
+  { value: 'grupo_interno',    label: 'Grupo interno',         temLink: false },
+]
 
-  async function save() {
+// ── MODAL PARCEIRO NA CAMPANHA ─────────────────────────────
+function ModalParceiro({ cp, campanha, onSave, onClose }) {
+  const [form, setForm] = useState({
+    status:                    cp.status || 'convidado',
+    data_publicacao_combinada: cp.data_publicacao_combinada || '',
+    observacoes:               cp.observacoes || '',
+  })
+  const [divulgacoes, setDivulgacoes]   = useState([])
+  const [loadingDiv, setLoadingDiv]     = useState(true)
+  const [modalDiv, setModalDiv]         = useState(null) // null | 'new' | divulgacao obj
+  const [saving, setSaving]             = useState(false)
+  const [toast, showToast]              = useToast()
+
+  useEffect(() => {
+    getDivulgacoesParceiro(cp.id)
+      .then(setDivulgacoes)
+      .finally(() => setLoadingDiv(false))
+  }, [cp.id])
+
+  async function salvarStatus() {
     setSaving(true)
     try {
-      await onSave(cp.id, {
-        ...form,
-        curtidas:       form.curtidas       !== '' ? Number(form.curtidas)       : null,
-        visualizacoes:  form.visualizacoes  !== '' ? Number(form.visualizacoes)  : null,
-        livros_vendidos:form.livros_vendidos!== '' ? Number(form.livros_vendidos): null,
-      })
-      onClose()
-    } catch { } finally { setSaving(false) }
+      await onSave(cp.id, form)
+      showToast('Salvo!')
+    } catch(e) { console.error(e); showToast('Erro ao salvar','error') }
+    finally { setSaving(false) }
   }
+
+  async function salvarDivulgacao(dados) {
+    try {
+      if (dados.id) {
+        const upd = await updateDivulgacaoCampanha(dados.id, dados)
+        setDivulgacoes(prev => prev.map(d => d.id === upd.id ? upd : d))
+      } else {
+        const nova = await createDivulgacaoCampanha({ ...dados, campanha_parceiro_id: cp.id })
+        setDivulgacoes(prev => [nova, ...prev])
+      }
+      setModalDiv(null)
+      showToast('Divulgação salva!')
+    } catch(e) { console.error(e); showToast('Erro ao salvar','error') }
+  }
+
+  async function excluirDivulgacao(id) {
+    if (!window.confirm('Excluir esta divulgação?')) return
+    await deleteDivulgacaoCampanha(id)
+    setDivulgacoes(prev => prev.filter(d => d.id !== id))
+    showToast('Excluída!')
+  }
+
+  const livrosDaCampanha = (campanha?.campanha_livros || []).map(cl => cl.livros).filter(Boolean)
 
   return (
     <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="modal" style={{maxWidth:480}}>
-        <div className="modal-header">
+      <div className="modal" style={{maxWidth:560, maxHeight:'90vh', overflowY:'auto'}}>
+        <div className="modal-header" style={{position:'sticky',top:0,background:'var(--surface)',zIndex:10}}>
           <h2 className="modal-title">{cp.parceiros?.nome}</h2>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
         </div>
+
+        {/* Datas da campanha */}
+        {(campanha?.data_inicio || campanha?.data_fim) && (
+          <div style={{display:'flex',gap:16,marginBottom:16,padding:'10px 14px',background:'var(--surface-2)',borderRadius:8,fontSize:12,color:'var(--text-muted)'}}>
+            <Calendar size={13} style={{marginTop:1,flexShrink:0}}/>
+            {campanha.data_inicio && <span>Início: <strong style={{color:'var(--text)'}}>{format(new Date(campanha.data_inicio+'T12:00:00'),'dd MMM yyyy',{locale:ptBR})}</strong></span>}
+            {campanha.data_fim    && <span>Término: <strong style={{color:'var(--text)'}}>{format(new Date(campanha.data_fim+'T12:00:00'),'dd MMM yyyy',{locale:ptBR})}</strong></span>}
+          </div>
+        )}
+
+        {/* Status + data combinada */}
         <div className="form-grid">
-          <div className="form-group">
-            <label className="form-label">Status</label>
-            <select className="form-select" value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>
-              {STATUS_PARCEIRO.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Data de publicação combinada</label>
-            <input className="form-input" type="date" value={form.data_publicacao_combinada} onChange={e=>setForm(f=>({...f,data_publicacao_combinada:e.target.value}))}/>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Link da publicação</label>
-            <input className="form-input" value={form.link_publicacao} onChange={e=>setForm(f=>({...f,link_publicacao:e.target.value}))} placeholder="https://..."/>
-          </div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}}>
+          <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Curtidas</label>
-              <input className="form-input" type="number" value={form.curtidas} onChange={e=>setForm(f=>({...f,curtidas:e.target.value}))} placeholder="0"/>
+              <label className="form-label">Status do parceiro</label>
+              <select className="form-select" value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>
+                {STATUS_PARCEIRO.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
             </div>
             <div className="form-group">
-              <label className="form-label">Visualizações</label>
-              <input className="form-input" type="number" value={form.visualizacoes} onChange={e=>setForm(f=>({...f,visualizacoes:e.target.value}))} placeholder="0"/>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Livros vendidos</label>
-              <input className="form-input" type="number" value={form.livros_vendidos} onChange={e=>setForm(f=>({...f,livros_vendidos:e.target.value}))} placeholder="0"/>
+              <label className="form-label">Data de publicação combinada</label>
+              <input className="form-input" type="date" value={form.data_publicacao_combinada} onChange={e=>setForm(f=>({...f,data_publicacao_combinada:e.target.value}))}/>
             </div>
           </div>
           <div className="form-group">
             <label className="form-label">Observações</label>
-            <textarea className="form-textarea" value={form.observacoes} onChange={e=>setForm(f=>({...f,observacoes:e.target.value}))} placeholder="Notas sobre este parceiro na campanha..."/>
+            <textarea className="form-textarea" rows={2} value={form.observacoes} onChange={e=>setForm(f=>({...f,observacoes:e.target.value}))} placeholder="Notas sobre este parceiro..."/>
           </div>
+          <div style={{display:'flex',justifyContent:'flex-end'}}>
+            <button className="btn btn-primary btn-sm" onClick={salvarStatus} disabled={saving}>{saving?'Salvando...':'Salvar status'}</button>
+          </div>
+        </div>
+
+        {/* Divulgações */}
+        <div style={{borderTop:'1px solid var(--border)',marginTop:16,paddingTop:16}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+            <span style={{fontSize:13,fontWeight:700,color:'var(--text)'}}>Divulgações ({divulgacoes.length})</span>
+            <button className="btn btn-sm btn-primary" onClick={()=>setModalDiv('new')}><Plus size={13}/> Nova divulgação</button>
+          </div>
+
+          {loadingDiv ? <div style={{padding:'12px 0',color:'var(--text-muted)',fontSize:13}}>Carregando...</div>
+          : divulgacoes.length === 0
+            ? <div style={{padding:'12px 14px',background:'var(--surface-2)',borderRadius:8,fontSize:13,color:'var(--text-muted)',textAlign:'center'}}>Nenhuma divulgação registrada ainda.</div>
+            : <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {divulgacoes.map(d => {
+                  const tipo = TIPOS_DIVULGACAO.find(t=>t.value===d.tipo)
+                  return (
+                    <div key={d.id} style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,padding:'10px 14px'}}>
+                      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8}}>
+                        <div style={{flex:1}}>
+                          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+                            <span className="badge badge-indigo" style={{fontSize:11}}>{tipo?.label||d.tipo}</span>
+                            {d.data_divulgacao && <span style={{fontSize:11,color:'var(--text-muted)'}}>{format(new Date(d.data_divulgacao+'T12:00:00'),'dd MMM yyyy',{locale:ptBR})}</span>}
+                            {d.livros?.titulo && <span style={{fontSize:11,color:'var(--accent)'}}>📚 {d.livros.titulo}</span>}
+                          </div>
+                          {d.link && <a href={d.link} target="_blank" rel="noreferrer" style={{fontSize:12,color:'var(--accent)',display:'flex',alignItems:'center',gap:4,marginBottom:4}}><Link size={11}/>Ver publicação</a>}
+                          {(d.curtidas||d.comentarios||d.visualizacoes) && (
+                            <div style={{fontSize:11,color:'var(--text-muted)',display:'flex',gap:10}}>
+                              {d.curtidas      != null && <span>❤️ {d.curtidas.toLocaleString('pt-BR')}</span>}
+                              {d.comentarios   != null && <span>💬 {d.comentarios.toLocaleString('pt-BR')}</span>}
+                              {d.visualizacoes != null && <span>👁 {d.visualizacoes.toLocaleString('pt-BR')}</span>}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{display:'flex',gap:4,flexShrink:0}}>
+                          <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>setModalDiv(d)}><Pencil size={12}/></button>
+                          <button className="btn btn-danger btn-icon btn-sm" onClick={()=>excluirDivulgacao(d.id)}><Trash2 size={12}/></button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+          }
+        </div>
+
+        {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
+      </div>
+
+      {/* Modal de nova/editar divulgação */}
+      {modalDiv && (
+        <ModalDivulgacao
+          divulgacao={modalDiv === 'new' ? null : modalDiv}
+          livros={livrosDaCampanha}
+          onSave={salvarDivulgacao}
+          onClose={()=>setModalDiv(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── MODAL DIVULGAÇÃO ───────────────────────────────────────
+function ModalDivulgacao({ divulgacao, livros, onSave, onClose }) {
+  const EMPTY = { tipo:'', link:'', curtidas:'', comentarios:'', visualizacoes:'', data_divulgacao: new Date().toISOString().slice(0,10), livro_id:'' }
+  const [form, setForm] = useState(divulgacao ? {
+    id: divulgacao.id,
+    tipo: divulgacao.tipo||'',
+    link: divulgacao.link||'',
+    curtidas: divulgacao.curtidas??'',
+    comentarios: divulgacao.comentarios??'',
+    visualizacoes: divulgacao.visualizacoes??'',
+    data_divulgacao: divulgacao.data_divulgacao||new Date().toISOString().slice(0,10),
+    livro_id: divulgacao.livro_id||'',
+  } : EMPTY)
+  const [saving, setSaving] = useState(false)
+
+  const tipoSel = TIPOS_DIVULGACAO.find(t => t.value === form.tipo)
+  const temLink = tipoSel?.temLink || false
+
+  async function save() {
+    if (!form.tipo) return
+    setSaving(true)
+    try {
+      await onSave({
+        ...form,
+        livro_id:     form.livro_id || null,
+        link:         temLink ? form.link : null,
+        curtidas:     form.curtidas     !== '' ? Number(form.curtidas)     : null,
+        comentarios:  form.comentarios  !== '' ? Number(form.comentarios)  : null,
+        visualizacoes:form.visualizacoes!== '' ? Number(form.visualizacoes): null,
+      })
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="modal-backdrop" style={{zIndex:1100}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal" style={{maxWidth:440}}>
+        <div className="modal-header">
+          <h2 className="modal-title">{divulgacao ? 'Editar divulgação' : 'Nova divulgação'}</h2>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
+        </div>
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">Tipo de divulgação *</label>
+            <select className="form-select" value={form.tipo} onChange={e=>setForm(f=>({...f,tipo:e.target.value,link:'',curtidas:'',comentarios:'',visualizacoes:''}))}>
+              <option value="">Selecionar...</option>
+              {TIPOS_DIVULGACAO.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Data da divulgação</label>
+            <input className="form-input" type="date" value={form.data_divulgacao} onChange={e=>setForm(f=>({...f,data_divulgacao:e.target.value}))}/>
+          </div>
+
+          {livros.length > 0 && (
+            <div className="form-group">
+              <label className="form-label">Livro divulgado <span style={{color:'var(--text-muted)',fontWeight:400}}>(opcional)</span></label>
+              <select className="form-select" value={form.livro_id} onChange={e=>setForm(f=>({...f,livro_id:e.target.value}))}>
+                <option value="">Campanha como um todo</option>
+                {livros.map(l=><option key={l.id} value={l.id}>{l.titulo}</option>)}
+              </select>
+            </div>
+          )}
+
+          {temLink && (
+            <div className="form-group">
+              <label className="form-label">Link da publicação</label>
+              <input className="form-input" value={form.link} onChange={e=>setForm(f=>({...f,link:e.target.value}))} placeholder="https://..."/>
+            </div>
+          )}
+
+          {temLink && (
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}}>
+              <div className="form-group">
+                <label className="form-label">Curtidas</label>
+                <input className="form-input" type="number" value={form.curtidas} onChange={e=>setForm(f=>({...f,curtidas:e.target.value}))} placeholder="0"/>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Comentários</label>
+                <input className="form-input" type="number" value={form.comentarios} onChange={e=>setForm(f=>({...f,comentarios:e.target.value}))} placeholder="0"/>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Visualizações</label>
+                <input className="form-input" type="number" value={form.visualizacoes} onChange={e=>setForm(f=>({...f,visualizacoes:e.target.value}))} placeholder="0"/>
+              </div>
+            </div>
+          )}
         </div>
         <div className="form-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={save} disabled={saving}>{saving?'Salvando...':'Salvar'}</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving||!form.tipo}>{saving?'Salvando...':'Salvar'}</button>
         </div>
       </div>
     </div>
@@ -582,7 +765,7 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
         <ModalCampanha campanha={campanha} livros={livros} parceiros={parceiros} onSave={handleUpdateCampanha} onClose={()=>setModalEdicao(false)}/>
       )}
       {modalParceiro && (
-        <ModalParceiro cp={modalParceiro} onSave={handleUpdateParceiro} onClose={()=>setModalParceiro(null)}/>
+        <ModalParceiro cp={modalParceiro} campanha={campanha} onSave={handleUpdateParceiro} onClose={()=>setModalParceiro(null)}/>
       )}
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
     </>
