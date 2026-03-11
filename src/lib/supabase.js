@@ -265,7 +265,7 @@ export async function getCampanha(id) {
     .select(`
       *,
       campanha_livros(id, livros(id, titulo, autor, isbn, sku, editora)),
-      campanha_parceiros(id, status, data_publicacao_combinada, link_publicacao, curtidas, visualizacoes, livros_vendidos, observacoes, parceiros(id, nome, tipo_parceria))
+      campanha_parceiros(id, status, data_inicio, data_fim, data_publicacao_combinada, link_publicacao, curtidas, visualizacoes, observacoes, parceiros(id, nome, tipo_parceria))
     `)
     .eq('id', id)
     .single()
