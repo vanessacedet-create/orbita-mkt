@@ -139,7 +139,7 @@ export default function Usuarios() {
 
       {/* Modal novo usuário */}
       {modal && (
-        <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&setModal(false)}>
+        <div className="modal-backdrop" onClick={()=>{}}>
           <div className="modal">
             <div className="modal-header">
               <h2 className="modal-title">Novo Usuário</h2>
@@ -174,7 +174,7 @@ export default function Usuarios() {
 
       {/* Modal editar perfil */}
       {editModal && editing && (
-        <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&setEditModal(false)}>
+        <div className="modal-backdrop" onClick={()=>{}}>
           <div className="modal">
             <div className="modal-header">
               <h2 className="modal-title">Editar Usuário</h2>
