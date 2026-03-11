@@ -120,22 +120,23 @@ export async function getEnvios() {
 }
 
 export async function getEnvioCompleto(id) {
-  const { data, error } = await supabase
+  // Busca envio principal + parceiro
+  const { data: envio, error: envioError } = await supabase
     .from('envios')
-    .select(`
-      *,
-      parceiros(id, nome, tipo_parceria),
-      envio_livros(
-        id,
-        divulgado,
-        data_divulgacao,
-        livros(id, titulo, autor, isbn, sku)
-      )
-    `)
+    .select('*, parceiros(id, nome, tipo_parceria)')
     .eq('id', id)
     .single()
-  if (error) throw error
-  return data
+  if (envioError) throw envioError
+
+  // Busca envio_livros separadamente para contornar o limite de 5 do Supabase
+  const { data: envioLivros, error: livrosError } = await supabase
+    .from('envio_livros')
+    .select('id, divulgado, data_divulgacao, livros(id, titulo, autor, isbn, sku)')
+    .eq('envio_id', id)
+    .limit(200)
+  if (livrosError) throw livrosError
+
+  return { ...envio, envio_livros: envioLivros || [] }
 }
 
 export async function createEnvio({ parceiro_id, status, data_envio, observacoes, livro_ids }) {
