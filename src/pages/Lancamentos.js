@@ -441,7 +441,7 @@ export default function Lancamentos() {
                       minHeight: 110,
                       padding: '8px 6px',
                       borderRight: (i + 1) % 7 !== 0 ? '1px solid var(--border)' : 'none',
-                      borderBottom: i < dias.length - 7 ? '1px solid var(--border)' : 'none',
+                      borderBottom: i < diasGrid.length - 7 ? '1px solid var(--border)' : 'none',
                       background: ehHoje ? 'var(--accent-glow)' : fimDeSemana && doMes ? 'rgba(255,255,255,0.015)' : 'transparent',
                       opacity: doMes ? 1 : 0.35,
                       cursor: livrosDia.length > 0 ? 'pointer' : 'default',
