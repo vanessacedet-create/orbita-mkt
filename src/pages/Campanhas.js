@@ -1497,9 +1497,17 @@ export default function Campanhas() {
                       </div>
                     )}
 
-                    {/* Progresso */}
-                    {cps.length > 0 && <ProgressoParceiros parceiros={cps}/>}
-                    {cps.length === 0 && <p style={{fontSize:12,color:'var(--text-muted)'}}>Nenhum parceiro ainda</p>}
+                    {/* Progresso — Lançamento usa lancamento_parceiros, outros usam campanha_parceiros */}
+                    {c.tipo === 'Lançamento' ? (() => {
+                      const lps = (c.lancamento_livros||[]).flatMap(ll => ll.lancamento_parceiros||[])
+                      return lps.length > 0
+                        ? <ProgressoParceiros parceiros={lps}/>
+                        : <p style={{fontSize:12,color:'var(--text-muted)'}}>Nenhum parceiro ainda</p>
+                    })() : (
+                      cps.length > 0
+                        ? <ProgressoParceiros parceiros={cps}/>
+                        : <p style={{fontSize:12,color:'var(--text-muted)'}}>Nenhum parceiro ainda</p>
+                    )}
                   </div>
                 )
               })}
