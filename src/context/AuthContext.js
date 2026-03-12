@@ -10,6 +10,7 @@ export const MODULOS_PERMISSOES = {
   cortesias:  ['administrador', 'gerente', 'analista'],
   campanhas:    ['administrador', 'gerente', 'analista'],
   lancamentos:  ['administrador', 'gerente', 'analista', 'assistente'],
+  tarefas:      ['administrador', 'gerente', 'analista', 'assistente'],
   usuarios:     ['administrador'],
 }
 
