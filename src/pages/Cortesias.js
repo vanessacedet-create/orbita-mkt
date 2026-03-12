@@ -202,12 +202,12 @@ function UploadPlanilha({ onImport, tipo }) {
   const [resultado, setResultado] = useState(null)
   const inputRef                  = useRef()
 
-  const colunasParceiros = ['nome', 'tipo_parceria']
+  const colunasParceiros = ['nome', 'tipo_parceria', 'cpf', 'livraria', 'taxa_engajamento', 'editoras_divulga', 'temas']
   const colunasLivros    = ['titulo', 'isbn', 'sku', 'autor', 'editora']
   const colunas          = tipo === 'parceiros' ? colunasParceiros : colunasLivros
 
   const nomeColuna = {
-    nome: 'Nome', tipo_parceria: 'Tipo de Parceria',
+    nome: 'Nome', tipo_parceria: 'Tipo de Parceria', cpf: 'CPF', livraria: 'Livraria', taxa_engajamento: 'Engajamento', editoras_divulga: 'Editoras', temas: 'Temas',
     titulo: 'Título', isbn: 'ISBN', sku: 'SKU', autor: 'Autor', editora: 'Editora'
   }
 
@@ -218,8 +218,13 @@ function UploadPlanilha({ onImport, tipo }) {
     sku:    ['sku', 'cod', 'codigo', 'código'],
     autor:  ['autor', 'author', 'autora'],
     editora:['editora', 'publisher', 'editoras'],
-    nome:         ['nome', 'name', 'parceiro'],
-    tipo_parceria:['tipo_parceria', 'tipo de parceria', 'tipo', 'parceria'],
+    nome:             ['nome', 'name', 'parceiro'],
+    tipo_parceria:    ['tipo_parceria', 'tipo de parceria', 'tipo', 'parceria'],
+    cpf:              ['cpf', 'documento', 'doc'],
+    livraria:         ['livraria', 'loja', 'bookstore'],
+    taxa_engajamento: ['taxa_engajamento', 'taxa de engajamento', 'engajamento', 'taxa'],
+    editoras_divulga: ['editoras_divulga', 'editoras que divulga', 'editoras', 'editora'],
+    temas:            ['temas', 'tema', 'assuntos', 'assunto'],
   }
 
   function resolverColuna(headers, campo) {
@@ -274,21 +279,45 @@ function UploadPlanilha({ onImport, tipo }) {
     const rows = inputRef.current._allRows
     if (!rows || rows.length === 0) return
     setImporting(true)
-    let sucesso = 0, falhas = 0
+    let sucesso = 0, falhas = 0, atualizados = 0
+
+    // Para parceiros: busca todos existentes para comparar por nome
+    let parceirosExistentes = []
+    if (tipo === 'parceiros') {
+      try { parceirosExistentes = await getParceiros() } catch {}
+    }
 
     for (const row of rows) {
       try {
         if (tipo === 'parceiros') {
-          await createParceiro({ nome: row.nome || '', tipo_parceria: row.tipo_parceria || '' })
+          const payload = {
+            nome:             row.nome || '',
+            tipo_parceria:    row.tipo_parceria || '',
+            cpf:              row.cpf || '',
+            livraria:         row.livraria || '',
+            taxa_engajamento: row.taxa_engajamento || '',
+            editoras_divulga: row.editoras_divulga || '',
+            temas:            row.temas || '',
+          }
+          // Verifica se já existe pelo nome (normalizado)
+          const normalizado = (s) => s.toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g,'')
+          const existente = parceirosExistentes.find(p => normalizado(p.nome) === normalizado(row.nome || ''))
+          if (existente) {
+            await updateParceiro(existente.id, payload)
+            atualizados++
+          } else {
+            await createParceiro(payload)
+            sucesso++
+          }
         } else {
           await createLivro({ titulo: row.titulo || '', isbn: row.isbn || '', sku: row.sku || '', autor: row.autor || '', editora: row.editora || '' })
+          sucesso++
         }
-        sucesso++
       } catch { falhas++ }
     }
 
     setImporting(false)
-    setResultado({ sucesso, falhas })
+    setResultado({ sucesso, falhas, atualizados })
     onImport()
   }
 
