@@ -483,7 +483,7 @@ function ModalDivulgacao({ divulgacao, onSave, onClose }) {
     if (!livroSearch || livroSearch.length < 2) { setLivroResults([]); return }
     const t = setTimeout(async () => {
       try {
-        const { data } = await getLivros({ page:1, pageSize:8, search: livroSearch })
+        const { data } = await getLivros({ page:0, pageSize:1000, search: livroSearch })
         setLivroResults(data || [])
         setLivroOpen(true)
       } catch {}
@@ -718,7 +718,7 @@ function DetalheLancamento({ campanhaId, lancamentoLivros, setLancamentoLivros, 
     if (!livroSearch || livroSearch.length < 2) { setLivroResults([]); return }
     const t = setTimeout(async () => {
       try {
-        const { data } = await getLivros({ page:1, pageSize:8, search: livroSearch })
+        const { data } = await getLivros({ page:0, pageSize:1000, search: livroSearch })
         setLivroResults(data || [])
         setLivroOpen(true)
       } catch {}
