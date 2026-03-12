@@ -610,31 +610,45 @@ function ModalDivulgacao({ divulgacao, onSave, onClose }) {
 }
 
 // ── MODAL PARCEIRO DO LANÇAMENTO ──────────────────────────
-function ModalLancamentoParceiro({ lp, onSave, onClose }) {
-  const [form, setForm] = useState({
-    status:          lp.status || 'convidado',
-    data_divulgacao: lp.data_divulgacao || '',
-    tipo_divulgacao: lp.tipo_divulgacao || '',
-    link:            lp.link || '',
-    curtidas:        lp.curtidas ?? '',
-    comentarios:     lp.comentarios ?? '',
-    visualizacoes:   lp.visualizacoes ?? '',
-    observacoes:     lp.observacoes || '',
+// Cada divulgação é um registro separado em lancamento_parceiros
+// lp        = registro "principal" (status + obs ficam aqui)
+// irmãos    = outros registros com mesmo ll_id + parceiro_id
+function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, onSave, onClose }) {
+  const EMPTY_DIV = () => ({ _tmpId: Math.random(), id: null, tipo_divulgacao:'', data_divulgacao:'', link:'', curtidas:'', comentarios:'', visualizacoes:'' })
+
+  // Monta lista: lp + irmãos
+  const toDiv = r => ({
+    _tmpId: r.id,
+    id: r.id,
+    tipo_divulgacao: r.tipo_divulgacao || '',
+    data_divulgacao: r.data_divulgacao || '',
+    link: r.link || '',
+    curtidas: r.curtidas ?? '',
+    comentarios: r.comentarios ?? '',
+    visualizacoes: r.visualizacoes ?? '',
   })
-  const [saving, setSaving] = useState(false)
-  const tipoSel = TIPOS_DIVULGACAO.find(t => t.value === form.tipo_divulgacao)
-  const temLink = tipoSel?.temLink || false
+
+  const [status, setStatus]         = useState(lp.status || 'convidado')
+  const [observacoes, setObservacoes] = useState(lp.observacoes || '')
+  const [divs, setDivs]             = useState([toDiv(lp), ...irmaos.map(toDiv)])
+  const [saving, setSaving]          = useState(false)
+
+  function upd(tmpId, field, val) {
+    setDivs(prev => prev.map(d => d._tmpId===tmpId ? {...d, [field]:val} : d))
+  }
+  function addDiv() { setDivs(prev => [...prev, EMPTY_DIV()]) }
+  function removeDiv(tmpId) { setDivs(prev => prev.filter(d => d._tmpId !== tmpId)) }
 
   async function save() {
     setSaving(true)
     try {
-      await onSave(lp.id, {
-        ...form,
-        data_divulgacao: form.data_divulgacao || null,
-        link:            temLink ? (form.link||null) : null,
-        curtidas:        temLink && form.curtidas     !== '' ? Number(form.curtidas)     : null,
-        comentarios:     temLink && form.comentarios  !== '' ? Number(form.comentarios)  : null,
-        visualizacoes:   temLink && form.visualizacoes!== '' ? Number(form.visualizacoes): null,
+      await onSave({
+        lpId: lp.id,
+        ll_id,
+        parceiro_id: lp.parceiro_id,
+        status,
+        observacoes,
+        divs,
       })
       onClose()
     } catch(e) { console.error(e) } finally { setSaving(false) }
@@ -642,61 +656,110 @@ function ModalLancamentoParceiro({ lp, onSave, onClose }) {
 
   return (
     <div className="modal-backdrop" style={{zIndex:1100}} onClick={()=>{}}>
-      <div className="modal" style={{maxWidth:480}}>
-        <div className="modal-header">
+      <div className="modal" style={{maxWidth:560, maxHeight:'90vh', overflowY:'auto'}}>
+        <div className="modal-header" style={{position:'sticky',top:0,background:'var(--surface)',zIndex:10,borderBottom:'1px solid var(--border)'}}>
           <h2 className="modal-title">{lp.parceiros?.nome}</h2>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
         </div>
-        <div className="form-grid">
+
+        {/* Status e observações */}
+        <div className="form-grid" style={{padding:'16px 0 0'}}>
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Status</label>
-              <select className="form-select" value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>
+              <select className="form-select" value={status} onChange={e=>setStatus(e.target.value)}>
                 {STATUS_PARCEIRO.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </div>
-            <div className="form-group">
-              <label className="form-label">Data de divulgação</label>
-              <input className="form-input" type="date" value={form.data_divulgacao} onChange={e=>setForm(f=>({...f,data_divulgacao:e.target.value}))}/>
-            </div>
           </div>
-          <div className="form-group">
-            <label className="form-label">Tipo de divulgação</label>
-            <select className="form-select" value={form.tipo_divulgacao} onChange={e=>setForm(f=>({...f,tipo_divulgacao:e.target.value,link:'',curtidas:'',comentarios:'',visualizacoes:''}))}>
-              <option value="">Selecionar...</option>
-              {TIPOS_DIVULGACAO.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-          </div>
-          {temLink && (
-            <div className="form-group">
-              <label className="form-label">Link da publicação</label>
-              <input className="form-input" value={form.link} onChange={e=>setForm(f=>({...f,link:e.target.value}))} placeholder="https://..."/>
-            </div>
-          )}
-          {temLink && (
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}}>
-              <div className="form-group">
-                <label className="form-label">Curtidas</label>
-                <input className="form-input" type="number" value={form.curtidas} onChange={e=>setForm(f=>({...f,curtidas:e.target.value}))} placeholder="0"/>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Comentários</label>
-                <input className="form-input" type="number" value={form.comentarios} onChange={e=>setForm(f=>({...f,comentarios:e.target.value}))} placeholder="0"/>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Visualizações</label>
-                <input className="form-input" type="number" value={form.visualizacoes} onChange={e=>setForm(f=>({...f,visualizacoes:e.target.value}))} placeholder="0"/>
-              </div>
-            </div>
-          )}
           <div className="form-group">
             <label className="form-label">Observações</label>
-            <textarea className="form-textarea" rows={2} value={form.observacoes} onChange={e=>setForm(f=>({...f,observacoes:e.target.value}))} placeholder="Notas sobre este parceiro..."/>
+            <textarea className="form-textarea" rows={2} value={observacoes}
+              onChange={e=>setObservacoes(e.target.value)} placeholder="Notas sobre este parceiro..."/>
           </div>
         </div>
+
+        {/* Divulgações */}
+        <div style={{borderTop:'1px solid var(--border)', marginTop:16, paddingTop:16}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+            <span style={{fontSize:13,fontWeight:700,color:'var(--text)'}}>
+              Divulgações ({divs.length})
+            </span>
+            <button className="btn btn-ghost btn-sm" onClick={addDiv} style={{fontSize:12,display:'flex',alignItems:'center',gap:4}}>
+              <Plus size={13}/> Adicionar divulgação
+            </button>
+          </div>
+
+          {divs.map((div, i) => {
+            const tipoSel = TIPOS_DIVULGACAO.find(t=>t.value===div.tipo_divulgacao)
+            const temLink = tipoSel?.temLink || false
+            return (
+              <div key={div._tmpId} style={{
+                background:'var(--surface-2)', border:'1px solid var(--border)',
+                borderRadius:8, padding:'12px 14px', marginBottom:10
+              }}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                  <span style={{fontSize:11,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                    Divulgação {i+1}
+                  </span>
+                  {divs.length > 1 && (
+                    <button onClick={()=>removeDiv(div._tmpId)}
+                      style={{background:'none',border:'none',cursor:'pointer',color:'var(--red)',display:'flex',padding:4}}>
+                      <Trash2 size={13}/>
+                    </button>
+                  )}
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Tipo</label>
+                    <select className="form-select" value={div.tipo_divulgacao}
+                      onChange={e=>upd(div._tmpId,'tipo_divulgacao',e.target.value)}>
+                      <option value="">Selecionar...</option>
+                      {TIPOS_DIVULGACAO.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Data</label>
+                    <input className="form-input" type="date" value={div.data_divulgacao}
+                      onChange={e=>upd(div._tmpId,'data_divulgacao',e.target.value)}/>
+                  </div>
+                </div>
+                {temLink && (
+                  <>
+                    <div className="form-group" style={{marginBottom:10}}>
+                      <label className="form-label">Link</label>
+                      <input className="form-input" value={div.link}
+                        onChange={e=>upd(div._tmpId,'link',e.target.value)} placeholder="https://..."/>
+                    </div>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}}>
+                      <div className="form-group">
+                        <label className="form-label">Curtidas</label>
+                        <input className="form-input" type="number" value={div.curtidas}
+                          onChange={e=>upd(div._tmpId,'curtidas',e.target.value)} placeholder="0"/>
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Comentários</label>
+                        <input className="form-input" type="number" value={div.comentarios}
+                          onChange={e=>upd(div._tmpId,'comentarios',e.target.value)} placeholder="0"/>
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Visualizações</label>
+                        <input className="form-input" type="number" value={div.visualizacoes}
+                          onChange={e=>upd(div._tmpId,'visualizacoes',e.target.value)} placeholder="0"/>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
         <div className="form-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={save} disabled={saving}>{saving?'Salvando...':'Salvar'}</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving}>
+            {saving ? 'Salvando...' : 'Salvar'}
+          </button>
         </div>
       </div>
     </div>
@@ -765,27 +828,89 @@ function DetalheLancamento({ campanhaId, lancamentoLivros, setLancamentoLivros, 
     } catch(e) { console.error(e); showToast('Erro ao adicionar','error') }
   }
 
-  async function handleUpdateParceiro(lp_id, updates) {
-    const upd = await updateLancamentoParceiro(lp_id, updates)
-    setLancamentoLivros(prev => prev.map(ll => ({
-      ...ll,
-      lancamento_parceiros: (ll.lancamento_parceiros||[]).map(lp => lp.id === lp_id ? upd : lp)
-    })))
+  async function handleUpdateParceiro({ lpId, ll_id, parceiro_id, status, observacoes, divs }) {
+    // 1. Atualiza registro principal (lpId) com status, obs e primeira divulgação
+    const primeira = divs[0] || {}
+    const ts0 = TIPOS_DIVULGACAO.find(t=>t.value===primeira.tipo_divulgacao)
+    const tl0 = ts0?.temLink||false
+    await updateLancamentoParceiro(lpId, {
+      status,
+      observacoes,
+      tipo_divulgacao: primeira.tipo_divulgacao||null,
+      data_divulgacao: primeira.data_divulgacao||null,
+      link: tl0?(primeira.link||null):null,
+      curtidas: tl0&&primeira.curtidas!==''?Number(primeira.curtidas):null,
+      comentarios: tl0&&primeira.comentarios!==''?Number(primeira.comentarios):null,
+      visualizacoes: tl0&&primeira.visualizacoes!==''?Number(primeira.visualizacoes):null,
+    })
+
+    // 2. Pega os irmãos atuais (mesmos ll_id+parceiro_id, exceto lp principal)
+    const ll = lancamentoLivros.find(x=>x.id===ll_id)
+    const irmaosAtuais = (ll?.lancamento_parceiros||[]).filter(lp => lp.id!==lpId && lp.parceiro_id===parceiro_id)
+
+    // 3. Divulgações extras (índice 1 em diante)
+    const extras = divs.slice(1)
+
+    // 4. Remove irmãos que sobraram além das extras
+    for (const irmao of irmaosAtuais.slice(extras.length)) {
+      await removeLancamentoParceiro(irmao.id)
+    }
+
+    // 5. Atualiza ou cria irmãos
+    const irmaosAtualizados = []
+    for (let i=0; i<extras.length; i++) {
+      const d = extras[i]
+      const ts = TIPOS_DIVULGACAO.find(t=>t.value===d.tipo_divulgacao)
+      const tl = ts?.temLink||false
+      const payload = {
+        tipo_divulgacao: d.tipo_divulgacao||null,
+        data_divulgacao: d.data_divulgacao||null,
+        link: tl?(d.link||null):null,
+        curtidas: tl&&d.curtidas!==''?Number(d.curtidas):null,
+        comentarios: tl&&d.comentarios!==''?Number(d.comentarios):null,
+        visualizacoes: tl&&d.visualizacoes!==''?Number(d.visualizacoes):null,
+      }
+      if (irmaosAtuais[i]) {
+        const upd = await updateLancamentoParceiro(irmaosAtuais[i].id, payload)
+        irmaosAtualizados.push(upd)
+      } else {
+        const novo = await addLancamentoParceiro(ll_id, parceiro_id)
+        const upd = await updateLancamentoParceiro(novo.id, payload)
+        irmaosAtualizados.push(upd)
+      }
+    }
+
+    // 6. Recarrega lista do livro do estado local
+    const updatedMain = await updateLancamentoParceiro(lpId, {}) // re-fetch via update sem mudança
+    setLancamentoLivros(prev => prev.map(x => {
+      if (x.id !== ll_id) return x
+      const outros = (x.lancamento_parceiros||[]).filter(lp => lp.id!==lpId && lp.parceiro_id!==parceiro_id)
+      return { ...x, lancamento_parceiros: [...outros, updatedMain, ...irmaosAtualizados] }
+    }))
     showToast('Atualizado!')
   }
 
-  async function handleRemoveParceiro(ll_id, lp_id) {
-    if (!window.confirm('Remover este parceiro do livro?')) return
-    await removeLancamentoParceiro(lp_id)
-    setLancamentoLivros(prev => prev.map(ll => ll.id === ll_id
-      ? { ...ll, lancamento_parceiros: (ll.lancamento_parceiros||[]).filter(lp => lp.id !== lp_id) }
-      : ll
+  async function handleRemoveParceiro(ll_id, parceiro_id) {
+    if (!window.confirm('Remover este parceiro e todas as suas divulgações deste livro?')) return
+    const ll = lancamentoLivros.find(x=>x.id===ll_id)
+    const todos = (ll?.lancamento_parceiros||[]).filter(lp => lp.parceiro_id===parceiro_id)
+    for (const lp of todos) await removeLancamentoParceiro(lp.id)
+    setLancamentoLivros(prev => prev.map(x => x.id===ll_id
+      ? { ...x, lancamento_parceiros: (x.lancamento_parceiros||[]).filter(lp => lp.parceiro_id!==parceiro_id) }
+      : x
     ))
     showToast('Removido!')
   }
 
-  const totalParceiros = lancamentoLivros.reduce((a,ll) => a + (ll.lancamento_parceiros||[]).length, 0)
-  const totalPublicados = lancamentoLivros.reduce((a,ll) => a + (ll.lancamento_parceiros||[]).filter(lp=>lp.status==='publicado').length, 0)
+  // Para contagem, agrupa por parceiro único
+  const totalParceiros = lancamentoLivros.reduce((a,ll) => {
+    const unicos = new Set((ll.lancamento_parceiros||[]).map(lp=>lp.parceiro_id))
+    return a + unicos.size
+  }, 0)
+  const totalPublicados = lancamentoLivros.reduce((a,ll) => {
+    const publicadoIds = new Set((ll.lancamento_parceiros||[]).filter(lp=>lp.status==='publicado').map(lp=>lp.parceiro_id))
+    return a + publicadoIds.size
+  }, 0)
 
   return (
     <div>
@@ -881,42 +1006,77 @@ function DetalheLancamento({ campanhaId, lancamentoLivros, setLancamentoLivros, 
                         )}
                       </div>
 
-                      {/* Tabela de parceiros */}
-                      {lps.length === 0
-                        ? <p style={{fontSize:13,color:'var(--text-muted)',paddingLeft:4}}>Nenhum parceiro vinculado ainda.</p>
-                        : <table>
+                      {/* Tabela de parceiros — agrupada por parceiro */}
+                      {(() => {
+                        // Agrupa: um grupo por parceiro_id. O primeiro registro é o "principal" (mais antigo)
+                        const grupos = []
+                        const seen = {}
+                        for (const lp of lps) {
+                          if (!seen[lp.parceiro_id]) {
+                            seen[lp.parceiro_id] = true
+                            const irmaos = lps.filter(x => x.parceiro_id===lp.parceiro_id && x.id!==lp.id)
+                            grupos.push({ principal: lp, irmaos })
+                          }
+                        }
+                        if (grupos.length === 0) return <p style={{fontSize:13,color:'var(--text-muted)',paddingLeft:4}}>Nenhum parceiro vinculado ainda.</p>
+                        return (
+                          <table>
                             <thead>
                               <tr>
                                 <th>Parceiro</th>
                                 <th>Status</th>
-                                <th>Data divulgação</th>
                                 <th>Tipo</th>
+                                <th>Data</th>
                                 <th>Métricas</th>
                                 <th></th>
                               </tr>
                             </thead>
                             <tbody>
-                              {lps.map(lp => {
-                                const tipo = TIPOS_DIVULGACAO.find(t=>t.value===lp.tipo_divulgacao)
+                              {grupos.map(({ principal, irmaos }) => {
+                                const todos = [principal, ...irmaos]
+                                const tipo0 = TIPOS_DIVULGACAO.find(t=>t.value===principal.tipo_divulgacao)
                                 return (
-                                  <tr key={lp.id}>
-                                    <td className="td-strong">{lp.parceiros?.nome||'—'}</td>
-                                    <td><StatusBadge value={lp.status} options={STATUS_PARCEIRO}/></td>
-                                    <td className="td-muted" style={{fontSize:12}}>
-                                      {lp.data_divulgacao ? format(new Date(lp.data_divulgacao+'T12:00:00'),'dd/MM/yyyy',{locale:ptBR}) : '—'}
+                                  <tr key={principal.id}>
+                                    <td className="td-strong" style={{verticalAlign:'top',paddingTop:10}}>
+                                      {principal.parceiros?.nome||'—'}
                                     </td>
-                                    <td style={{fontSize:12}}>
-                                      {tipo ? <span className="badge badge-indigo" style={{fontSize:10}}>{tipo.label}</span> : '—'}
+                                    <td style={{verticalAlign:'top',paddingTop:10}}>
+                                      <StatusBadge value={principal.status} options={STATUS_PARCEIRO}/>
                                     </td>
-                                    <td style={{fontSize:12,color:'var(--text-muted)'}}>
-                                      {lp.curtidas||lp.comentarios||lp.visualizacoes
-                                        ? <span>{lp.curtidas??'—'}❤️ {lp.comentarios??'—'}💬 {lp.visualizacoes??'—'}👁</span>
-                                        : '—'}
+                                    <td style={{verticalAlign:'top',paddingTop:8}}>
+                                      {todos.map((lp,i) => {
+                                        const t = TIPOS_DIVULGACAO.find(x=>x.value===lp.tipo_divulgacao)
+                                        return t
+                                          ? <div key={lp.id} style={{marginBottom:4}}><span className="badge badge-indigo" style={{fontSize:10}}>{t.label}</span></div>
+                                          : <div key={lp.id} style={{marginBottom:4,fontSize:12,color:'var(--text-muted)'}}>—</div>
+                                      })}
                                     </td>
-                                    <td>
+                                    <td className="td-muted" style={{fontSize:12,verticalAlign:'top',paddingTop:10}}>
+                                      {todos.map((lp,i) => (
+                                        <div key={lp.id} style={{marginBottom:4}}>
+                                          {lp.data_divulgacao ? format(new Date(lp.data_divulgacao+'T12:00:00'),'dd/MM/yy',{locale:ptBR}) : '—'}
+                                        </div>
+                                      ))}
+                                    </td>
+                                    <td style={{fontSize:12,color:'var(--text-muted)',verticalAlign:'top',paddingTop:10}}>
+                                      {todos.map((lp,i) => (
+                                        <div key={lp.id} style={{marginBottom:4}}>
+                                          {lp.curtidas||lp.comentarios||lp.visualizacoes
+                                            ? <span>{lp.curtidas??'—'}❤️ {lp.comentarios??'—'}💬 {lp.visualizacoes??'—'}👁</span>
+                                            : '—'}
+                                        </div>
+                                      ))}
+                                    </td>
+                                    <td style={{verticalAlign:'top',paddingTop:8}}>
                                       <div className="actions-cell">
-                                        <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>setModalParceiro({...lp, ll_id: ll.id})}><Pencil size={12}/></button>
-                                        <button className="btn btn-danger btn-icon btn-sm" onClick={()=>handleRemoveParceiro(ll.id, lp.id)}><Trash2 size={12}/></button>
+                                        <button className="btn btn-ghost btn-icon btn-sm"
+                                          onClick={()=>setModalParceiro({ lp: principal, irmaos, ll_id: ll.id })}>
+                                          <Pencil size={12}/>
+                                        </button>
+                                        <button className="btn btn-danger btn-icon btn-sm"
+                                          onClick={()=>handleRemoveParceiro(ll.id, principal.parceiro_id)}>
+                                          <Trash2 size={12}/>
+                                        </button>
                                       </div>
                                     </td>
                                   </tr>
@@ -924,7 +1084,8 @@ function DetalheLancamento({ campanhaId, lancamentoLivros, setLancamentoLivros, 
                               })}
                             </tbody>
                           </table>
-                      }
+                        )
+                      })()}
                     </div>
                   )}
                 </div>
@@ -935,7 +1096,9 @@ function DetalheLancamento({ campanhaId, lancamentoLivros, setLancamentoLivros, 
 
       {modalParceiro && (
         <ModalLancamentoParceiro
-          lp={modalParceiro}
+          lp={modalParceiro.lp}
+          irmaos={modalParceiro.irmaos}
+          ll_id={modalParceiro.ll_id}
           onSave={handleUpdateParceiro}
           onClose={()=>setModalParceiro(null)}
         />
