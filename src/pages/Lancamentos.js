@@ -242,6 +242,12 @@ function ModalImportar({ onImport, onClose }) {
             <div style={{ fontSize:13, color:'var(--text-muted)' }}>
               {resultado.criados} criado{resultado.criados!==1?'s':''} · {resultado.atualizados} atualizado{resultado.atualizados!==1?'s':''}
             </div>
+            {resultado.erros.length > 0 && (
+              <div style={{ marginTop:12, textAlign:'left', background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)', borderRadius:8, padding:'10px 14px', fontSize:12, color:'var(--red)', maxHeight:160, overflowY:'auto' }}>
+                <strong style={{ display:'block', marginBottom:4 }}>Erros ({resultado.erros.length}):</strong>
+                {resultado.erros.map((e,i)=><div key={i} style={{marginBottom:2}}>• {e}</div>)}
+              </div>
+            )}
             {resultado.erros.length>0&&<button className="btn btn-primary" style={{ marginTop:16 }} onClick={()=>{onImport();onClose()}}>Fechar</button>}
           </div>
         )}
