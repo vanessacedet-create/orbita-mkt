@@ -1,8 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { getLivrosLancamento, importarLancamentos } from '../lib/supabase'
 import { ChevronLeft, ChevronRight, Upload, X, BookOpen, Calendar } from 'lucide-react'
-import { format, startOfMonth, endOfMonth, eachDayOfInterval,
-         startOfWeek, endOfWeek, isSameMonth, isSameDay, isToday } from 'date-fns'
+import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import * as XLSX from 'xlsx'
 
@@ -14,7 +13,10 @@ function useToast() {
 
 // ── MODAL DETALHES DO DIA ──────────────────────────────────
 function ModalDia({ data, livros, onClose }) {
-  const label = format(data, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+  // data is "yyyy-MM-dd" string — parse safely without timezone shift
+  const [y, m, d] = data.split('-').map(Number)
+  const dateObj = new Date(y, m - 1, d)
+  const label = format(dateObj, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })
   return (
     <div className="modal-backdrop" onClick={()=>{}}>
       <div className="modal" style={{ maxWidth: 480 }}>
@@ -301,10 +303,55 @@ export default function Lancamentos() {
     setMesAtual(m => new Date(m.getFullYear(), m.getMonth() + delta, 1))
   }
 
-  // Gera dias do calendário (semana começa no domingo)
-  const inicioCal = startOfWeek(startOfMonth(mesAtual), { weekStartsOn: 0 })
-  const fimCal    = endOfWeek(endOfMonth(mesAtual), { weekStartsOn: 0 })
-  const dias      = eachDayOfInterval({ start: inicioCal, end: fimCal })
+  // Gera calendário 100% à prova de fuso horário
+  // Trabalha apenas com strings "yyyy-MM-dd" e aritmética de datas local
+  const ano = mesAtual.getFullYear()
+  const mes = mesAtual.getMonth() // 0-indexed
+
+  // Calcula dia da semana de qualquer data SEM criar Date objects (algoritmo de Tomohiko Sakamoto)
+  function diaSemana(a, m, d) {
+    // Retorna 0=Dom, 1=Seg ... 6=Sáb
+    const t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4]
+    if (m < 3) a -= 1
+    return (a + Math.floor(a/4) - Math.floor(a/100) + Math.floor(a/400) + t[m-1] + d) % 7
+  }
+
+  function diasNoMes(a, m) { // m: 1-indexed
+    return new Date(a, m, 0).getDate()
+  }
+
+  function strData(a, m, d) {
+    return `${a}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+  }
+
+  // Monta array de objetos { key: "yyyy-MM-dd", dia, mes, ano, doMes }
+  const totalDias    = diasNoMes(ano, mes + 1)
+  const inicioCol    = diaSemana(ano, mes + 1, 1) // 0=Dom
+  const diasGrid = []
+
+  // Dias do mês anterior
+  const anoAnterior  = mes === 0 ? ano - 1 : ano
+  const mesAnterior  = mes === 0 ? 12 : mes
+  const totalAnterior = diasNoMes(anoAnterior, mesAnterior)
+  for (let i = inicioCol - 1; i >= 0; i--) {
+    const d = totalAnterior - i
+    diasGrid.push({ key: strData(anoAnterior, mesAnterior, d), dia: d, doMes: false })
+  }
+
+  // Dias do mês atual
+  for (let d = 1; d <= totalDias; d++) {
+    diasGrid.push({ key: strData(ano, mes + 1, d), dia: d, doMes: true })
+  }
+
+  // Completa até múltiplo de 7
+  const resto = diasGrid.length % 7
+  if (resto !== 0) {
+    const proxAno = mes === 11 ? ano + 1 : ano
+    const proxMes = mes === 11 ? 1 : mes + 2
+    for (let d = 1; d <= 7 - resto; d++) {
+      diasGrid.push({ key: strData(proxAno, proxMes, d), dia: d, doMes: false })
+    }
+  }
 
   // Agrupa livros por data — usa a data string diretamente sem conversão de fuso
   const livrosPorDia = {}
@@ -379,20 +426,17 @@ export default function Lancamentos() {
 
             {/* Grade de dias */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
-              {dias.map((dia, i) => {
-                // Usa ano/mês/dia local para evitar deslocamento de fuso horário
-                const y = dia.getFullYear()
-                const m = String(dia.getMonth()+1).padStart(2,'0')
-                const d = String(dia.getDate()).padStart(2,'0')
-                const key = `${y}-${m}-${d}`
+              {diasGrid.map(({ key, dia, doMes }, i) => {
                 const livrosDia = livrosPorDia[key] || []
-                const doMes  = isSameMonth(dia, mesAtual)
-                const ehHoje = isToday(dia)
-                const fimDeSemana = dia.getDay() === 0 || dia.getDay() === 6
+                const hoje = new Date()
+                const hojeKey = strData(hoje.getFullYear(), hoje.getMonth()+1, hoje.getDate())
+                const ehHoje = key === hojeKey
+                const coluna = i % 7 // 0=Dom, 6=Sab
+                const fimDeSemana = coluna === 0 || coluna === 6
                 return (
                   <div
                     key={i}
-                    onClick={() => livrosDia.length > 0 && setModalDia({ data: dia, livros: livrosDia })}
+                    onClick={() => livrosDia.length > 0 && setModalDia({ data: key, livros: livrosDia })}
                     style={{
                       minHeight: 110,
                       padding: '8px 6px',
@@ -413,7 +457,7 @@ export default function Lancamentos() {
                       color: ehHoje ? '#fff' : fimDeSemana ? 'var(--accent)' : 'var(--text-muted)',
                       background: ehHoje ? 'var(--accent)' : 'transparent',
                       marginBottom: 4
-                    }}>{format(dia, 'd')}</div>
+                    }}>{dia}</div>
 
                     {/* Livros do dia */}
                     {livrosDia.map(l => (
