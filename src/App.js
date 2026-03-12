@@ -7,10 +7,11 @@ import Cortesias from './pages/Cortesias'
 import Usuarios from './pages/Usuarios'
 import Campanhas from './pages/Campanhas'
 import Lancamentos from './pages/Lancamentos'
+import Tarefas from './pages/Tarefas'
 import './App.css'
 import {
   LayoutDashboard, BookOpen, Users, LogOut,
-  Orbit, ShieldAlert, Megaphone, CalendarDays
+  Orbit, ShieldAlert, Megaphone, CalendarDays, CheckSquare
 } from 'lucide-react'
 
 const MENU = [
@@ -18,6 +19,7 @@ const MENU = [
   { path: '/cortesias',  label: 'Cortesias',  icon: BookOpen,        modulo: 'cortesias' },
   { path: '/campanhas',  label: 'Campanhas',  icon: Megaphone,       modulo: 'campanhas' },
   { path: '/lancamentos', label: 'Lançamentos', icon: CalendarDays,   modulo: 'lancamentos' },
+  { path: '/tarefas',     label: 'Tarefas',     icon: CheckSquare,    modulo: 'tarefas'     },
   { path: '/usuarios',   label: 'Usuários',   icon: Users,           modulo: 'usuarios'  },
 ]
 
@@ -112,6 +114,7 @@ function Shell() {
           <Route path="/usuarios" element={<RequireAuth modulo="usuarios"><Usuarios /></RequireAuth>} />
           <Route path="/campanhas" element={<RequireAuth modulo="campanhas"><Campanhas /></RequireAuth>} />
           <Route path="/lancamentos" element={<RequireAuth modulo="lancamentos"><Lancamentos /></RequireAuth>} />
+          <Route path="/tarefas" element={<RequireAuth modulo="tarefas"><Tarefas /></RequireAuth>} />
         </Routes>
       </main>
     </div>
