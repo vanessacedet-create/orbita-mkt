@@ -30,9 +30,9 @@ const STATUS_PARCEIRO = [
   { value: 'convidado',         label: 'Convidado',          cls: 'badge-indigo' },
   { value: 'confirmado',        label: 'Confirmado',         cls: 'badge-amber'  },
   { value: 'recusou',           label: 'Recusou',            cls: 'badge-red'    },
-  { value: 'conteudo_aprovado', label: 'Conteúdo aprovado',  cls: 'badge-amber'  },
   { value: 'publicado',         label: 'Publicado',          cls: 'badge-green'  },
   { value: 'nao_publicou',      label: 'Não publicou',       cls: 'badge-red'    },
+  { value: 'sem_retorno',       label: 'Sem retorno',        cls: 'badge-gray'   },
 ]
 
 const ETAPAS = [
@@ -62,7 +62,7 @@ function StatusBadge({ value, options }) {
 function ProgressoParceiros({ parceiros }) {
   const total      = parceiros.length
   const publicados = parceiros.filter(p => p.status === 'publicado').length
-  const confirmados = parceiros.filter(p => ['confirmado','conteudo_aprovado','publicado'].includes(p.status)).length
+  const confirmados = parceiros.filter(p => ['confirmado','publicado'].includes(p.status)).length
   const recusaram  = parceiros.filter(p => p.status === 'recusou' || p.status === 'nao_publicou').length
   const pct        = total > 0 ? Math.round((publicados / total) * 100) : 0
 
@@ -1005,7 +1005,7 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
   const sc = STATUS_CAMPANHA.find(s=>s.value===campanha.status)||STATUS_CAMPANHA[0]
   const cps = campanha.campanha_parceiros || []
   const publicados  = cps.filter(p=>p.status==='publicado').length
-  const confirmados = cps.filter(p=>['confirmado','conteudo_aprovado','publicado'].includes(p.status)).length
+  const confirmados = cps.filter(p=>['confirmado','publicado'].includes(p.status)).length
   const totalCurtidas    = cps.reduce((a,p)=>a+(p.curtidas||0),0)
   const totalVisualizacoes = cps.reduce((a,p)=>a+(p.visualizacoes||0),0)
   const totalVendidos    = cps.reduce((a,p)=>a+(p.livros_vendidos||0),0)
