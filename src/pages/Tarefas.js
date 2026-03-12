@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import {
   getTarefas, createTarefa, updateTarefa, deleteTarefa,
   addChecklistItem, updateChecklistItem, deleteChecklistItem,
-  addComentario, getParceiros
+  addComentario, getUsuarios
 } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import {
@@ -330,10 +330,8 @@ export default function Tarefas() {
   async function carregar() {
     setLoading(true)
     try {
-      const [t, u] = await Promise.all([getTarefas(), getParceiros()])
+      const [t, us] = await Promise.all([getTarefas(), getUsuarios()])
       setTarefas(t)
-      // Busca usuarios do supabase
-      const { data: us } = await import('../lib/supabase').then(m => m.supabase.from('usuarios').select('id, nome').order('nome'))
       setUsuarios(us || [])
     } catch(e) { console.error(e) }
     finally { setLoading(false) }
