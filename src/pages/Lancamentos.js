@@ -62,19 +62,26 @@ function ModalImportar({ onImport, onClose }) {
 
   function parseDate(val) {
     if (!val) return null
-    // Excel serial date
+    // JS Date object (SheetJS with cellDates:true)
+    if (val instanceof Date) {
+      const y = val.getFullYear()
+      const m = String(val.getMonth()+1).padStart(2,'0')
+      const d = String(val.getDate()).padStart(2,'0')
+      return `${y}-${m}-${d}`
+    }
+    // Excel serial number
     if (typeof val === 'number') {
       const d = new Date(Math.round((val - 25569) * 86400 * 1000))
       return d.toISOString().slice(0, 10)
     }
-    // String date dd/mm/yyyy or yyyy-mm-dd
     const s = String(val).trim()
+    // dd/mm/yyyy
     if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {
       const [d, m, y] = s.split('/')
       return `${y}-${m}-${d}`
     }
+    // yyyy-mm-dd
     if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
-    // Try generic parse
     const dt = new Date(s)
     if (!isNaN(dt)) return dt.toISOString().slice(0, 10)
     return null
@@ -87,28 +94,34 @@ function ModalImportar({ onImport, onClose }) {
     setResultado(null)
     const reader = new FileReader()
     reader.onload = (e) => {
-      const wb = XLSX.read(e.target.result, { type: 'binary' })
+      // cellDates:true faz SheetJS retornar Date objects em vez de serial numbers
+      const wb = XLSX.read(e.target.result, { type: 'binary', cellDates: true })
       const ws = wb.Sheets[wb.SheetNames[0]]
       const rows = XLSX.utils.sheet_to_json(ws, { defval: '' })
       const errosArr = []
       const parsed = rows.map((row, i) => {
-        // Flexible column name matching
+        // Busca coluna ignorando acento, maiúsculas e espaços
+        const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim()
         const get = (...keys) => {
           for (const k of keys) {
-            const found = Object.keys(row).find(rk => rk.toLowerCase().trim() === k.toLowerCase())
-            if (found && row[found] !== '') return String(row[found]).trim()
+            const found = Object.keys(row).find(rk => norm(rk) === norm(k))
+            if (found !== undefined && row[found] !== '') return row[found]
           }
           return ''
         }
-        const titulo = get('título', 'titulo', 'title', 'nome')
-        const data_lancamento = parseDate(get('data de lançamento', 'data lançamento', 'data_lancamento', 'data', 'lançamento', 'lancamento'))
+        const tituloRaw = get('titulo', 'título', 'title', 'nome')
+        const titulo = tituloRaw ? String(tituloRaw).trim() : ''
+        const dataRaw = get('data de lancamento', 'data de lançamento', 'data lancamento', 'data lançamento', 'data_lancamento', 'data', 'lancamento', 'lançamento')
+        const data_lancamento = parseDate(dataRaw)
+        const isbnRaw = get('isbn')
+        const skuRaw  = get('sku', 'codigo', 'código')
         if (!titulo) errosArr.push(`Linha ${i + 2}: título ausente`)
         return {
           titulo,
-          autor:           get('autor', 'author', 'autores'),
-          editora:         get('editora', 'publisher', 'editoras'),
-          isbn:            get('isbn'),
-          sku:             get('sku', 'código', 'codigo'),
+          autor:           String(get('autor', 'author', 'autores')||'').trim() || null,
+          editora:         String(get('editora', 'publisher')||'').trim() || null,
+          isbn:            isbnRaw ? String(isbnRaw).trim() : null,
+          sku:             skuRaw  ? String(skuRaw).trim()  : null,
           data_lancamento,
         }
       }).filter(r => r.titulo)
