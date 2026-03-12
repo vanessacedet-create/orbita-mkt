@@ -816,7 +816,7 @@ function ParceirosTab({ parceiros, setParceiros }) {
     cpf:               p.cpf||'',
     livraria:          p.livraria||'',
     taxa_engajamento:  p.taxa_engajamento||'',
-    editoras_divulga:  p.editoras_divulga ? p.editoras_divulga.split('|').filter(Boolean) : [],
+    editoras_divulga:  p.editoras_divulga ? p.editoras_divulga.split(',').map(e=>e.trim()).filter(Boolean) : [],
     temas:             p.temas||'',
   }); setModal(true) }
   function close()     { setModal(false); setEditing(null) }
@@ -830,7 +830,7 @@ function ParceirosTab({ parceiros, setParceiros }) {
     if (!form.nome.trim()) return
     setSaving(true)
     try {
-      const payload = { ...form, editoras_divulga: form.editoras_divulga.join('|') }
+      const payload = { ...form, editoras_divulga: form.editoras_divulga.join(',') }
       if (editing) { await updateParceiro(editing.id, payload); showToast('Atualizado!') }
       else { await createParceiro(payload); showToast('Cadastrado!') }
       await reload()
