@@ -252,7 +252,8 @@ export async function getCampanhas() {
     .select(`
       *,
       campanha_livros(id, livros(id, titulo, autor, editora)),
-      campanha_parceiros(id, status, parceiros(id, nome, tipo_parceria))
+      campanha_parceiros(id, status, parceiros(id, nome, tipo_parceria)),
+      lancamento_livros(id, lancamento_parceiros(id, status))
     `)
     .order('created_at', { ascending: false })
   if (error) throw error
