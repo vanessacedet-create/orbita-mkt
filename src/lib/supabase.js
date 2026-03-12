@@ -484,14 +484,16 @@ export async function importarLancamentos(livros) {
         existing = data
       }
       if (existing) {
-        await supabase.from('livros').update(row).eq('id', existing.id)
+        const { error: updErr } = await supabase.from('livros').update(row).eq('id', existing.id)
+        if (updErr) throw updErr
         results.atualizados++
       } else {
-        await supabase.from('livros').insert([row])
+        const { error: insErr } = await supabase.from('livros').insert([row])
+        if (insErr) throw insErr
         results.criados++
       }
     } catch(e) {
-      results.erros.push(row.titulo || 'desconhecido')
+      results.erros.push(`${row.titulo || 'desconhecido'}: ${e?.message || e}`)
     }
   }
   return results
