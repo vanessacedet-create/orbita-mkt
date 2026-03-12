@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import {
-  getParceiros, createParceiro, updateParceiro, deleteParceiro,
+  getParceiros, createParceiro, updateParceiro, deleteParceiro, getEditoras,
   getLivros, createLivro, updateLivro, deleteLivro,
   getEnvios, getEnvioCompleto, createEnvio, updateEnvio, updateEnvioStatus, deleteEnvio, updateEnvioLivroDivulgacao
 } from '../lib/supabase'
@@ -775,20 +775,35 @@ function ParceirosTab({ parceiros, setParceiros }) {
   const [search, setSearch]   = useState('')
   const [saving, setSaving]   = useState(false)
   const [toast, showToast]    = useToast()
-  const EMPTY = { nome:'', tipo_parceria:'' }
+  const EMPTY = { nome:'', tipo_parceria:'', cpf:'', livraria:'', taxa_engajamento:'', editoras_divulga:[], temas:'' }
+  const [editoras, setEditoras] = useState([])
+  const [editoraSearch, setEditoraSearch] = useState('')
   const [form, setForm] = useState(EMPTY)
 
   function openNew()   { setEditing(null); setForm(EMPTY); setModal(true) }
-  function openEdit(p) { setEditing(p); setForm({ nome:p.nome, tipo_parceria:p.tipo_parceria||'' }); setModal(true) }
+  function openEdit(p) { setEditing(p); setForm({
+    nome:              p.nome,
+    tipo_parceria:     p.tipo_parceria||'',
+    cpf:               p.cpf||'',
+    livraria:          p.livraria||'',
+    taxa_engajamento:  p.taxa_engajamento||'',
+    editoras_divulga:  p.editoras_divulga ? p.editoras_divulga.split('|').filter(Boolean) : [],
+    temas:             p.temas||'',
+  }); setModal(true) }
   function close()     { setModal(false); setEditing(null) }
   async function reload() { setParceiros(await getParceiros()) }
+
+  useEffect(() => {
+    getEditoras().then(setEditoras).catch(console.error)
+  }, [])
 
   async function save() {
     if (!form.nome.trim()) return
     setSaving(true)
     try {
-      if (editing) { await updateParceiro(editing.id,form); showToast('Atualizado!') }
-      else { await createParceiro(form); showToast('Cadastrado!') }
+      const payload = { ...form, editoras_divulga: form.editoras_divulga.join('|') }
+      if (editing) { await updateParceiro(editing.id, payload); showToast('Atualizado!') }
+      else { await createParceiro(payload); showToast('Cadastrado!') }
       await reload()
       close()
     } catch { showToast('Erro ao salvar','error') } finally { setSaving(false) }
@@ -802,7 +817,9 @@ function ParceirosTab({ parceiros, setParceiros }) {
 
   const filtered = parceiros.filter(p =>
     p.nome.toLowerCase().includes(search.toLowerCase()) ||
-    (p.tipo_parceria||'').toLowerCase().includes(search.toLowerCase())
+    (p.tipo_parceria||'').toLowerCase().includes(search.toLowerCase()) ||
+    (p.livraria||'').toLowerCase().includes(search.toLowerCase()) ||
+    (p.temas||'').toLowerCase().includes(search.toLowerCase())
   )
 
   return (
@@ -818,12 +835,18 @@ function ParceirosTab({ parceiros, setParceiros }) {
         </div>
         {filtered.length===0?<div className="empty-state"><p>Nenhum parceiro encontrado.</p></div>:(
           <table>
-            <thead><tr><th>Nome</th><th>Tipo de Parceria</th><th></th></tr></thead>
+            <thead><tr><th>Nome</th><th>Tipo de Parceria</th><th>Livraria</th><th>Engajamento</th><th>Temas</th><th></th></tr></thead>
             <tbody>
               {filtered.map(p=>(
                 <tr key={p.id}>
-                  <td className="td-strong">{p.nome}</td>
+                  <td>
+                    <div className="td-strong">{p.nome}</div>
+                    {p.cpf&&<div style={{fontSize:11,color:'var(--text-muted)'}}>CPF: {p.cpf}</div>}
+                  </td>
                   <td>{p.tipo_parceria?<span className="badge badge-indigo">{p.tipo_parceria}</span>:<span className="td-muted">—</span>}</td>
+                  <td style={{fontSize:12}}>{p.livraria||<span className="td-muted">—</span>}</td>
+                  <td style={{fontSize:12}}>{p.taxa_engajamento?<span style={{color:'var(--green)',fontWeight:700}}>{p.taxa_engajamento}</span>:<span className="td-muted">—</span>}</td>
+                  <td style={{fontSize:12,maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.temas||<span className="td-muted">—</span>}</td>
                   <td><div className="actions-cell">
                     <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>openEdit(p)}><Pencil size={14}/></button>
                     <button className="btn btn-danger btn-icon btn-sm" onClick={()=>remove(p.id)}><Trash2 size={14}/></button>
@@ -839,13 +862,52 @@ function ParceirosTab({ parceiros, setParceiros }) {
           <div className="modal">
             <div className="modal-header"><h2 className="modal-title">{editing?'Editar Parceiro':'Novo Parceiro'}</h2><button className="btn btn-ghost btn-icon" onClick={close}><X size={16}/></button></div>
             <div className="form-grid">
-              <div className="form-group"><label className="form-label">Nome *</label><input className="form-input" value={form.nome} onChange={e=>setForm(f=>({...f,nome:e.target.value}))} placeholder="Nome do parceiro"/></div>
-              <div className="form-group"><label className="form-label">Tipo de Parceria</label>
-                <select className="form-select" value={form.tipo_parceria} onChange={e=>setForm(f=>({...f,tipo_parceria:e.target.value}))}>
-                  <option value="">Selecionar...</option>
-                  {TIPOS_PARCERIA.map(t=><option key={t} value={t}>{t}</option>)}
-                </select>
+              <div className="form-row">
+                <div className="form-group"><label className="form-label">Nome do Parceiro *</label><input className="form-input" value={form.nome} onChange={e=>setForm(f=>({...f,nome:e.target.value}))} placeholder="Nome completo"/></div>
+                <div className="form-group"><label className="form-label">CPF</label><input className="form-input" value={form.cpf} onChange={e=>setForm(f=>({...f,cpf:e.target.value}))} placeholder="000.000.000-00"/></div>
               </div>
+              <div className="form-row">
+                <div className="form-group"><label className="form-label">Tipo de Parceria</label>
+                  <select className="form-select" value={form.tipo_parceria} onChange={e=>setForm(f=>({...f,tipo_parceria:e.target.value}))}>
+                    <option value="">Selecionar...</option>
+                    {TIPOS_PARCERIA.map(t=><option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div className="form-group"><label className="form-label">Livraria</label><input className="form-input" value={form.livraria} onChange={e=>setForm(f=>({...f,livraria:e.target.value}))} placeholder="Nome da livraria (se aplicável)"/></div>
+              </div>
+              <div className="form-group"><label className="form-label">Taxa de Engajamento Interno</label><input className="form-input" value={form.taxa_engajamento} onChange={e=>setForm(f=>({...f,taxa_engajamento:e.target.value}))} placeholder="Ex: 5%, alto, médio..."/></div>
+              <div className="form-group">
+                <label className="form-label">Editoras que o Parceiro Divulga</label>
+                {/* Tags selecionadas */}
+                {form.editoras_divulga.length > 0 && (
+                  <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:8}}>
+                    {form.editoras_divulga.map(e=>(
+                      <span key={e} style={{display:'inline-flex',alignItems:'center',gap:4,background:'var(--accent-glow)',border:'1px solid var(--accent)',borderRadius:20,padding:'3px 10px',fontSize:12,color:'var(--accent)',fontWeight:600}}>
+                        {e}
+                        <button onClick={()=>setForm(f=>({...f,editoras_divulga:f.editoras_divulga.filter(x=>x!==e)}))} style={{background:'none',border:'none',cursor:'pointer',color:'var(--accent)',padding:0,display:'flex',lineHeight:1}}><X size={11}/></button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {/* Busca */}
+                <input className="form-input" value={editoraSearch} onChange={e=>setEditoraSearch(e.target.value)} placeholder="Buscar editora..."/>
+                {editoraSearch.trim() && (
+                  <div style={{border:'1px solid var(--border)',borderRadius:8,marginTop:4,maxHeight:160,overflowY:'auto',background:'var(--surface-2)'}}>
+                    {editoras.filter(e=>e.toLowerCase().includes(editoraSearch.toLowerCase())&&!form.editoras_divulga.includes(e)).length===0
+                      ? <div style={{padding:'10px 14px',fontSize:12,color:'var(--text-muted)'}}>Nenhuma editora encontrada</div>
+                      : editoras.filter(e=>e.toLowerCase().includes(editoraSearch.toLowerCase())&&!form.editoras_divulga.includes(e)).map(e=>(
+                        <div key={e} onClick={()=>{setForm(f=>({...f,editoras_divulga:[...f.editoras_divulga,e]}));setEditoraSearch('')}}
+                          style={{padding:'8px 14px',fontSize:13,cursor:'pointer',borderBottom:'1px solid var(--border)'}}
+                          onMouseEnter={ev=>ev.currentTarget.style.background='var(--surface-3)'}
+                          onMouseLeave={ev=>ev.currentTarget.style.background='transparent'}>
+                          {e}
+                        </div>
+                      ))
+                    }
+                  </div>
+                )}
+              </div>
+              <div className="form-group"><label className="form-label">Temas que o Parceiro Aborda</label><textarea className="form-textarea" rows={2} value={form.temas} onChange={e=>setForm(f=>({...f,temas:e.target.value}))} placeholder="Ex: filosofia, teologia, literatura clássica..."/></div>
             </div>
             <div className="form-actions"><button className="btn btn-ghost" onClick={close}>Cancelar</button><button className="btn btn-primary" onClick={save} disabled={saving||!form.nome.trim()}>{saving?'Salvando...':editing?'Salvar':'Cadastrar'}</button></div>
           </div>
