@@ -331,18 +331,21 @@ export default function Lancamentos() {
       {loading
         ? <div className="loading"><div className="spinner"/></div>
         : (
-          <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:12, overflow:'hidden' }}>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', borderBottom:'1px solid var(--border)' }}>
+          <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:12, overflow:'hidden', width:'100%', tableLayout:'fixed' }}>
+            {/* Cabeçalho — 7 colunas exatamente iguais */}
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(7, minmax(0, 1fr))', borderBottom:'1px solid var(--border)' }}>
               {DIAS_SEMANA.map((d,i)=>(
                 <div key={d} style={{
                   padding:'10px 0', textAlign:'center', fontSize:11, fontWeight:700,
                   color: i===0||i===6 ? 'var(--accent)' : 'var(--text-muted)',
-                  textTransform:'uppercase', letterSpacing:'0.05em'
+                  textTransform:'uppercase', letterSpacing:'0.05em',
+                  overflow:'hidden'
                 }}>{d}</div>
               ))}
             </div>
 
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)' }}>
+            {/* Grade — minmax(0,1fr) impede que célula com conteúdo longo expanda */}
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(7, minmax(0, 1fr))' }}>
               {grid.map(({ key, dia, doMes }, i) => {
                 const livrosDia = porDia[key] || []
                 const ehHoje    = key === hj
@@ -354,7 +357,11 @@ export default function Lancamentos() {
                   <div key={`${key}-${i}`}
                     onClick={()=> livrosDia.length>0 && setModalDia({ dataKey:key, livros:livrosDia })}
                     style={{
-                      minHeight:100, padding:'6px 5px',
+                      minHeight:120,
+                      width:'100%',
+                      overflow:'hidden',
+                      boxSizing:'border-box',
+                      padding:'6px 5px',
                       borderRight: col<6 ? '1px solid var(--border)' : 'none',
                       borderBottom: !ultima ? '1px solid var(--border)' : 'none',
                       background: ehHoje ? 'var(--accent-glow)' : fds&&doMes ? 'rgba(255,255,255,0.012)' : 'transparent',
@@ -370,7 +377,7 @@ export default function Lancamentos() {
                       fontWeight: ehHoje?800:500,
                       color: ehHoje?'#fff':fds?'var(--accent)':'var(--text-muted)',
                       background: ehHoje?'var(--accent)':'transparent',
-                      marginBottom:3
+                      marginBottom:3, flexShrink:0
                     }}>{dia}</div>
 
                     {livrosDia.map(l=>(
@@ -378,9 +385,10 @@ export default function Lancamentos() {
                         marginBottom:2, padding:'2px 5px', borderRadius:3,
                         background:`${corEditora(l.editora)}18`,
                         borderLeft:`3px solid ${corEditora(l.editora)}`,
+                        overflow:'hidden', width:'100%', boxSizing:'border-box'
                       }}>
-                        <div style={{ fontSize:10, fontWeight:700, color:'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', lineHeight:1.3 }}>{l.titulo}</div>
-                        {l.editora&&<div style={{ fontSize:9, color:corEditora(l.editora), fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{l.editora}</div>}
+                        <div style={{ fontSize:10, fontWeight:700, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', lineHeight:1.3, display:'block', width:'100%' }}>{l.titulo}</div>
+                        {l.editora&&<div style={{ fontSize:9, color:corEditora(l.editora), fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', display:'block', width:'100%' }}>{l.editora}</div>}
                       </div>
                     ))}
                   </div>
