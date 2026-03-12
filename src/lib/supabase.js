@@ -495,3 +495,77 @@ export async function importarLancamentos(livros) {
   }
   return results
 }
+
+// ── TAREFAS ────────────────────────────────────────────────
+export async function getTarefas() {
+  const { data, error } = await supabase
+    .from('tarefas')
+    .select(`*, responsavel:responsavel_id(id, nome), criador:created_by(id, nome),
+      tarefa_checklist(id, texto, concluido, ordem),
+      tarefa_comentarios(id, texto, created_at, usuario:usuario_id(id, nome))`)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function createTarefa(payload) {
+  const { data, error } = await supabase
+    .from('tarefas')
+    .insert([payload])
+    .select(`*, responsavel:responsavel_id(id, nome), criador:created_by(id, nome),
+      tarefa_checklist(id, texto, concluido, ordem),
+      tarefa_comentarios(id, texto, created_at, usuario:usuario_id(id, nome))`)
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateTarefa(id, updates) {
+  const { data, error } = await supabase
+    .from('tarefas')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select(`*, responsavel:responsavel_id(id, nome), criador:created_by(id, nome),
+      tarefa_checklist(id, texto, concluido, ordem),
+      tarefa_comentarios(id, texto, created_at, usuario:usuario_id(id, nome))`)
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteTarefa(id) {
+  const { error } = await supabase.from('tarefas').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function addChecklistItem(tarefa_id, texto) {
+  const { data, error } = await supabase
+    .from('tarefa_checklist')
+    .insert([{ tarefa_id, texto, concluido: false }])
+    .select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateChecklistItem(id, updates) {
+  const { data, error } = await supabase
+    .from('tarefa_checklist')
+    .update(updates).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteChecklistItem(id) {
+  const { error } = await supabase.from('tarefa_checklist').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function addComentario(tarefa_id, usuario_id, texto) {
+  const { data, error } = await supabase
+    .from('tarefa_comentarios')
+    .insert([{ tarefa_id, usuario_id, texto }])
+    .select(`id, texto, created_at, usuario:usuario_id(id, nome)`)
+    .single()
+  if (error) throw error
+  return data
+}
