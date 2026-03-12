@@ -440,3 +440,58 @@ export async function removeLancamentoParceiro(id) {
   const { error } = await supabase.from('lancamento_parceiros').delete().eq('id', id)
   if (error) throw error
 }
+
+// ── LANÇAMENTOS (calendário) ───────────────────────────────
+export async function getLivrosLancamento({ ano, mes } = {}) {
+  let q = supabase
+    .from('livros')
+    .select('id, titulo, autor, editora, isbn, sku, data_lancamento')
+    .not('data_lancamento', 'is', null)
+    .order('data_lancamento', { ascending: true })
+  if (ano && mes) {
+    const ini = `${ano}-${String(mes).padStart(2,'0')}-01`
+    const fim = `${ano}-${String(mes).padStart(2,'0')}-31`
+    q = q.gte('data_lancamento', ini).lte('data_lancamento', fim)
+  }
+  const { data, error } = await q
+  if (error) throw error
+  return data || []
+}
+
+export async function importarLancamentos(livros) {
+  // Upsert por ISBN (atualiza se existir, cria se não existir)
+  const rows = livros.map(l => ({
+    titulo:          l.titulo,
+    autor:           l.autor || null,
+    editora:         l.editora || null,
+    isbn:            l.isbn || null,
+    sku:             l.sku || null,
+    data_lancamento: l.data_lancamento || null,
+  }))
+  // Separate: update existing by isbn/sku, insert new ones
+  const results = { atualizados: 0, criados: 0, erros: [] }
+  for (const row of rows) {
+    try {
+      // Try to find existing by isbn or sku
+      let existing = null
+      if (row.isbn) {
+        const { data } = await supabase.from('livros').select('id').eq('isbn', row.isbn).maybeSingle()
+        existing = data
+      }
+      if (!existing && row.sku) {
+        const { data } = await supabase.from('livros').select('id').eq('sku', row.sku).maybeSingle()
+        existing = data
+      }
+      if (existing) {
+        await supabase.from('livros').update(row).eq('id', existing.id)
+        results.atualizados++
+      } else {
+        await supabase.from('livros').insert([row])
+        results.criados++
+      }
+    } catch(e) {
+      results.erros.push(row.titulo || 'desconhecido')
+    }
+  }
+  return results
+}
