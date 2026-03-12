@@ -306,11 +306,11 @@ export default function Lancamentos() {
   const fimCal    = endOfWeek(endOfMonth(mesAtual), { weekStartsOn: 0 })
   const dias      = eachDayOfInterval({ start: inicioCal, end: fimCal })
 
-  // Agrupa livros por data
+  // Agrupa livros por data — usa a data string diretamente sem conversão de fuso
   const livrosPorDia = {}
   for (const l of livros) {
     if (!l.data_lancamento) continue
-    const key = l.data_lancamento
+    const key = l.data_lancamento // ex: "2026-03-13"
     if (!livrosPorDia[key]) livrosPorDia[key] = []
     livrosPorDia[key].push(l)
   }
@@ -380,13 +380,15 @@ export default function Lancamentos() {
             {/* Grade de dias */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
               {dias.map((dia, i) => {
-                const key    = format(dia, 'yyyy-MM-dd')
+                // Usa ano/mês/dia local para evitar deslocamento de fuso horário
+                const y = dia.getFullYear()
+                const m = String(dia.getMonth()+1).padStart(2,'0')
+                const d = String(dia.getDate()).padStart(2,'0')
+                const key = `${y}-${m}-${d}`
                 const livrosDia = livrosPorDia[key] || []
                 const doMes  = isSameMonth(dia, mesAtual)
                 const ehHoje = isToday(dia)
                 const fimDeSemana = dia.getDay() === 0 || dia.getDay() === 6
-                const MAX_VISIBLE = 3
-
                 return (
                   <div
                     key={i}
@@ -414,7 +416,7 @@ export default function Lancamentos() {
                     }}>{format(dia, 'd')}</div>
 
                     {/* Livros do dia */}
-                    {livrosDia.slice(0, MAX_VISIBLE).map(l => (
+                    {livrosDia.map(l => (
                       <div key={l.id} style={{
                         marginBottom: 3, padding: '2px 6px', borderRadius: 4,
                         background: `${getEditoraColor(l.editora)}18`,
@@ -434,11 +436,7 @@ export default function Lancamentos() {
                         )}
                       </div>
                     ))}
-                    {livrosDia.length > MAX_VISIBLE && (
-                      <div style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 700, paddingLeft: 4 }}>
-                        +{livrosDia.length - MAX_VISIBLE} mais
-                      </div>
-                    )}
+
                   </div>
                 )
               })}
