@@ -6,7 +6,7 @@ import {
 } from '../lib/supabase'
 import {
   Plus, Pencil, Trash2, X, BookOpen, Users, Send,
-  Upload, FileSpreadsheet, CheckCircle, AlertCircle, Search, BarChart2, Megaphone
+  Upload, FileSpreadsheet, CheckCircle, AlertCircle, Search, BarChart2, Megaphone, Download
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -855,6 +855,21 @@ function ParceirosTab({ parceiros, setParceiros }) {
     <>
       <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginBottom:20}}>
         <UploadPlanilha tipo="parceiros" onImport={reload}/>
+        <button className="btn btn-ghost" onClick={()=>{
+          const rows = parceiros.map(p => ({
+            'Nome':              p.nome,
+            'Tipo de Parceria':  p.tipo_parceria||'',
+            'CPF':               p.cpf||'',
+            'Livraria':          p.livraria||'',
+            'Taxa de Engajamento': p.taxa_engajamento||'',
+            'Editoras que Divulga': p.editoras_divulga||'',
+            'Temas':             p.temas||'',
+          }))
+          const ws = XLSX.utils.json_to_sheet(rows)
+          const wb = XLSX.utils.book_new()
+          XLSX.utils.book_append_sheet(wb, ws, 'Parceiros')
+          XLSX.writeFile(wb, 'parceiros.xlsx')
+        }}><Download size={15}/> Exportar</button>
         <button className="btn btn-primary" onClick={openNew}><Plus size={16}/> Novo Parceiro</button>
       </div>
       <div className="table-card">
@@ -1010,6 +1025,22 @@ function LivrosTab() {
     <>
       <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginBottom:20}}>
         <UploadPlanilha tipo="livros" onImport={() => { setPage(0); fetchLivros(0, pageSize, search) }}/>
+        <button className="btn btn-ghost" onClick={async ()=>{
+          try {
+            const { data: todos } = await getLivros({ page: 0, pageSize: 99999 })
+            const rows = (todos||[]).map(l => ({
+              'Título':   l.titulo,
+              'ISBN':     l.isbn||'',
+              'SKU':      l.sku||'',
+              'Autor':    l.autor||'',
+              'Editora':  l.editora||'',
+            }))
+            const ws = XLSX.utils.json_to_sheet(rows)
+            const wb = XLSX.utils.book_new()
+            XLSX.utils.book_append_sheet(wb, ws, 'Livros')
+            XLSX.writeFile(wb, 'livros.xlsx')
+          } catch { alert('Erro ao exportar') }
+        }}><Download size={15}/> Exportar</button>
         <button className="btn btn-primary" onClick={openNew}><Plus size={16}/> Novo Livro</button>
       </div>
       <div className="table-card">
