@@ -569,3 +569,16 @@ export async function addComentario(tarefa_id, usuario_id, texto) {
   if (error) throw error
   return data
 }
+
+// ── EDITORAS ───────────────────────────────────────────────
+export async function getEditoras() {
+  const { data, error } = await supabase
+    .from('livros')
+    .select('editora')
+    .not('editora', 'is', null)
+    .neq('editora', '')
+    .order('editora')
+  if (error) throw error
+  // Return unique editoras
+  return [...new Set((data || []).map(l => l.editora).filter(Boolean))].sort()
+}
