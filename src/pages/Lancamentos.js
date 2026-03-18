@@ -308,6 +308,15 @@ export default function Lancamentos() {
     if (!porDia[l.data_lancamento]) porDia[l.data_lancamento] = []
     porDia[l.data_lancamento].push(l)
   }
+  // Ordena cada dia: agrupa por editora (alfabético), dentro de cada editora alfabético por título
+  for (const dia of Object.keys(porDia)) {
+    porDia[dia].sort((a, b) => {
+      const ea = (a.editora||'').toLowerCase()
+      const eb = (b.editora||'').toLowerCase()
+      if (ea !== eb) return ea.localeCompare(eb, 'pt-BR')
+      return (a.titulo||'').toLowerCase().localeCompare((b.titulo||'').toLowerCase(), 'pt-BR')
+    })
+  }
 
   const editoras = [...new Set(livros.map(l=>l.editora).filter(Boolean))].sort()
 
