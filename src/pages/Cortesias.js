@@ -974,7 +974,7 @@ function LivrosTab() {
   const [search, setSearch]     = useState('')
   const [page, setPage]         = useState(0)
   const [pageSize, setPageSize] = useState(50)
-  const EMPTY = { titulo:'', isbn:'', sku:'', autor:'', editora:'' }
+  const EMPTY = { titulo:'', isbn:'', sku:'', autor:'', editora:'', data_lancamento:'' }
   const [form, setForm] = useState(EMPTY)
 
   async function fetchLivros(p, ps, s) {
@@ -1000,15 +1000,23 @@ function LivrosTab() {
   const totalPages = Math.ceil(total / pageSize)
 
   function openNew()   { setEditing(null); setForm(EMPTY); setModal(true) }
-  function openEdit(l) { setEditing(l); setForm({ titulo:l.titulo, isbn:l.isbn||'', sku:l.sku||'', autor:l.autor||'', editora:l.editora||'' }); setModal(true) }
+  function openEdit(l) { setEditing(l); setForm({ titulo:l.titulo, isbn:l.isbn||'', sku:l.sku||'', autor:l.autor||'', editora:l.editora||'', data_lancamento:l.data_lancamento||'' }); setModal(true) }
   function close()     { setModal(false); setEditing(null) }
 
   async function save() {
     if (!form.titulo.trim()) return
     setSaving(true)
     try {
-      if (editing) { await updateLivro(editing.id, form); showToast('Atualizado!') }
-      else { await createLivro(form); showToast('Cadastrado!') }
+      const payload = {
+        titulo: form.titulo.trim(),
+        isbn: form.isbn.trim()||null,
+        sku: form.sku.trim()||null,
+        autor: form.autor.trim()||null,
+        editora: form.editora.trim()||null,
+        data_lancamento: form.data_lancamento||null,
+      }
+      if (editing) { await updateLivro(editing.id, payload); showToast('Atualizado!') }
+      else { await createLivro(payload); showToast('Cadastrado!') }
       await fetchLivros()
       close()
     } catch { showToast('Erro ao salvar','error') } finally { setSaving(false) }
@@ -1110,6 +1118,10 @@ function LivrosTab() {
               <div className="form-row">
                 <div className="form-group"><label className="form-label">ISBN</label><input className="form-input" value={form.isbn} onChange={e=>setForm(f=>({...f,isbn:e.target.value}))} placeholder="978-..."/></div>
                 <div className="form-group"><label className="form-label">SKU</label><input className="form-input" value={form.sku} onChange={e=>setForm(f=>({...f,sku:e.target.value}))} placeholder="SKU do produto"/></div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Data de Lançamento</label>
+                <input className="form-input" type="date" value={form.data_lancamento} onChange={e=>setForm(f=>({...f,data_lancamento:e.target.value}))}/>
               </div>
             </div>
             <div className="form-actions"><button className="btn btn-ghost" onClick={close}>Cancelar</button><button className="btn btn-primary" onClick={save} disabled={saving||!form.titulo.trim()}>{saving?'Salvando...':editing?'Salvar':'Cadastrar'}</button></div>
@@ -1517,4 +1529,4 @@ export default function Cortesias() {
       {tab==='relatorios'  && <RelatoriosTab   parceiros={parceiros} envios={envios}/>}
     </div>
   )
-      }
+}
