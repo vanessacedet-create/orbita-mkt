@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import {
   getCampanhas, getCampanha, createCampanha, updateCampanha, deleteCampanha,
   getParceiros, getLivros,
@@ -6,13 +6,15 @@ import {
   getFollowUps, registrarContato,
   getDivulgacoesParceiro, createDivulgacaoCampanha, updateDivulgacaoCampanha, deleteDivulgacaoCampanha,
   getLancamentoLivros, addLancamentoLivro, removeLancamentoLivro,
-  addLancamentoParceiro, updateLancamentoParceiro, removeLancamentoParceiro
+  addLancamentoParceiro, updateLancamentoParceiro, removeLancamentoParceiro,
+  addLivroCampanha, removeLivroCampanha
 } from '../lib/supabase'
 import {
-  Plus, Pencil, Trash2, X, ChevronLeft, BookOpen,
+  Plus, Pencil, Trash2, X, ChevronLeft, BookOpen, Upload,
   Users, Link, BarChart2, Calendar, CheckCircle, Clock, AlertCircle, Phone, Bell
 } from 'lucide-react'
 import { differenceInDays } from 'date-fns'
+import * as XLSX from 'xlsx'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
@@ -1125,12 +1127,151 @@ function DetalheLancamento({ campanhaId, lancamentoLivros, setLancamentoLivros, 
   )
 }
 
+
+// ── MODAL IMPORTAR LIVROS POR ISBN ────────────────────────
+function ModalImportarLivros({ campanhaId, livrosExistentes, onImport, onClose }) {
+  const [preview, setPreview]   = useState([])  // [{isbn, titulo, id, encontrado}]
+  const [loading, setLoading]   = useState(false)
+  const [saving, setSaving]     = useState(false)
+  const [resultado, setResultado] = useState(null)
+  const inputRef = useRef()
+
+  async function handleFile(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    setPreview([]); setResultado(null)
+    setLoading(true)
+    try {
+      const data = await file.arrayBuffer()
+      const wb = XLSX.read(data, { type: 'array' })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' })
+
+      // Encontra coluna ISBN (aceita variações)
+      const headers = rows.length ? Object.keys(rows[0]) : []
+      const isbnCol = headers.find(h => /isbn|ean/i.test(h)) || headers[0]
+
+      const isbns = [...new Set(
+        rows.map(r => String(r[isbnCol]||'').replace(/\D/g,'')).filter(s => s.length >= 10)
+      )]
+
+      // Busca cada ISBN no banco
+      const resultados = await Promise.all(isbns.map(async isbn => {
+        try {
+          const { data: livros } = await getLivros({ page:0, pageSize:5, search: isbn })
+          const encontrado = livros?.find(l => (l.isbn||'').replace(/\D/g,'') === isbn || (l.sku||'') === isbn)
+          return { isbn, titulo: encontrado?.titulo || null, id: encontrado?.id || null, encontrado: !!encontrado }
+        } catch { return { isbn, titulo: null, id: null, encontrado: false } }
+      }))
+      setPreview(resultados)
+    } catch(e) { console.error(e) } finally { setLoading(false) }
+  }
+
+  async function salvar() {
+    const para_adicionar = preview.filter(p => p.encontrado && !livrosExistentes.find(cl => cl.livros?.id === p.id))
+    if (!para_adicionar.length) return
+    setSaving(true)
+    try {
+      const novos = []
+      for (const p of para_adicionar) {
+        const cl = await addLivroCampanha(campanhaId, p.id)
+        novos.push(cl)
+      }
+      setResultado({ adicionados: novos.length, naoEncontrados: preview.filter(p => !p.encontrado).length })
+      onImport(novos)
+    } catch(e) { console.error(e) } finally { setSaving(false) }
+  }
+
+  const jaNaCampanha = (id) => livrosExistentes.some(cl => cl.livros?.id === id)
+  const paraAdicionar = preview.filter(p => p.encontrado && !jaNaCampanha(p.id))
+
+  return (
+    <div className="modal-backdrop" style={{zIndex:1100}} onClick={()=>{}}>
+      <div className="modal" style={{maxWidth:520}}>
+        <div className="modal-header">
+          <h2 className="modal-title">Importar livros por ISBN</h2>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
+        </div>
+
+        {!resultado ? (
+          <>
+            <div style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,padding:'12px 14px',marginBottom:16,fontSize:12,color:'var(--text-muted)'}}>
+              Envie uma planilha <strong style={{color:'var(--text)'}}>.xlsx</strong> com uma coluna <strong style={{color:'var(--text)'}}>ISBN</strong> (ou EAN). O sistema busca cada livro no cadastro e vincula à campanha.
+            </div>
+
+            <div style={{border:'2px dashed var(--border)',borderRadius:10,padding:'24px 20px',textAlign:'center',cursor:'pointer',marginBottom:16}}
+              onClick={()=>inputRef.current?.click()}>
+              <Upload size={22} color="var(--text-muted)" style={{marginBottom:8}}/>
+              <p style={{fontSize:13,color:'var(--text-soft)'}}>Clique para selecionar a planilha</p>
+              <p style={{fontSize:11,color:'var(--text-muted)',marginTop:4}}>.xlsx · coluna ISBN obrigatória</p>
+            </div>
+            <input ref={inputRef} type="file" accept=".xlsx" style={{display:'none'}} onChange={handleFile}/>
+
+            {loading && <div style={{textAlign:'center',padding:'12px 0',fontSize:13,color:'var(--text-muted)'}}>Buscando livros no cadastro...</div>}
+
+            {preview.length > 0 && !loading && (
+              <div style={{marginBottom:16}}>
+                <div style={{fontSize:12,fontWeight:700,color:'var(--text-muted)',marginBottom:8,textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                  Resultado — {preview.length} ISBN{preview.length!==1?'s':''}
+                </div>
+                <div style={{border:'1px solid var(--border)',borderRadius:8,overflow:'hidden',maxHeight:220,overflowY:'auto'}}>
+                  {preview.map((p,i) => (
+                    <div key={i} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',borderBottom:'1px solid var(--border)',fontSize:12}}>
+                      <div style={{width:16,height:16,borderRadius:'50%',flexShrink:0,
+                        background: jaNaCampanha(p.id) ? 'var(--amber)' : p.encontrado ? 'var(--green)' : 'var(--red)',
+                        display:'flex',alignItems:'center',justifyContent:'center'}}>
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontWeight:600,color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                          {p.encontrado ? p.titulo : `ISBN ${p.isbn}`}
+                        </div>
+                        <div style={{fontSize:10,color:'var(--text-muted)'}}>
+                          {jaNaCampanha(p.id) ? '⚠ Já na campanha' : p.encontrado ? `✓ ISBN ${p.isbn}` : '✗ Não encontrado no cadastro'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {preview.filter(p=>!p.encontrado).length > 0 && (
+                  <p style={{fontSize:11,color:'var(--text-muted)',marginTop:8}}>
+                    ISBNs não encontrados precisam ser cadastrados em <strong>Cortesias → Livros</strong> primeiro.
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div className="form-actions">
+              <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+              {paraAdicionar.length > 0 && (
+                <button className="btn btn-primary" onClick={salvar} disabled={saving}>
+                  {saving ? 'Adicionando...' : `Adicionar ${paraAdicionar.length} livro${paraAdicionar.length!==1?'s':''}`}
+                </button>
+              )}
+            </div>
+          </>
+        ) : (
+          <div style={{textAlign:'center',padding:'24px 0'}}>
+            <div style={{fontSize:36,marginBottom:12}}>✅</div>
+            <div style={{fontSize:15,fontWeight:700,color:'var(--text)',marginBottom:8}}>Livros adicionados!</div>
+            <div style={{fontSize:13,color:'var(--text-muted)'}}>
+              {resultado.adicionados} livro{resultado.adicionados!==1?'s':''} vinculado{resultado.adicionados!==1?'s':''} à campanha
+              {resultado.naoEncontrados > 0 && ` · ${resultado.naoEncontrados} ISBN${resultado.naoEncontrados!==1?'s':''} não encontrado${resultado.naoEncontrados!==1?'s':''}`}
+            </div>
+            <button className="btn btn-primary" style={{marginTop:16}} onClick={onClose}>Fechar</button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── DETALHE DA CAMPANHA ─────────────────────────────────────
 function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
   const [campanha, setCampanha]           = useState(null)
   const [loading, setLoading]             = useState(true)
   const [modalParceiro, setModalParceiro] = useState(null)
-  const [modalEdicao, setModalEdicao]     = useState(false)
+  const [modalEdicao, setModalEdicao]         = useState(false)
+  const [modalImportarLivros, setModalImportarLivros] = useState(false)
   const [addParceiroSearch, setAddParceiroSearch] = useState('')
   const [addParceiroOpen, setAddParceiroOpen]     = useState(false)
   const [lancamentoLivros, setLancamentoLivros]   = useState([])
@@ -1148,6 +1289,15 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
   useEffect(() => {
     reload().finally(() => setLoading(false))
   }, [campanhaId])
+
+  async function handleImportarLivros(novos) {
+    // novos = array of campanha_livros records returned by addLivroCampanha
+    setCampanha(prev => ({
+      ...prev,
+      campanha_livros: [...(prev.campanha_livros||[]), ...novos]
+    }))
+    setModalImportarLivros(false)
+  }
 
   async function handleUpdateCampanha(form) {
     await updateCampanha(campanhaId, form)
@@ -1322,7 +1472,12 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
             {/* Livros + resumo */}
             <div style={{display:'flex',flexDirection:'column',gap:16}}>
               <div className="table-card" style={{padding:'16px 20px'}}>
-                <div style={{fontSize:12,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',color:'var(--text-muted)',marginBottom:12}}>Livros da campanha</div>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+                  <div style={{fontSize:12,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',color:'var(--text-muted)'}}>Livros da campanha</div>
+                  <button className="btn btn-ghost btn-sm" style={{fontSize:11,display:'flex',alignItems:'center',gap:4}} onClick={()=>setModalImportarLivros(true)}>
+                    <Upload size={12}/> Importar ISBN
+                  </button>
+                </div>
                 {(campanha.campanha_livros||[]).length===0
                   ? <p style={{fontSize:13,color:'var(--text-muted)'}}>Campanha genérica (sem livros vinculados)</p>
                   : (campanha.campanha_livros||[]).map(cl=>(
@@ -1346,6 +1501,14 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
 
       {modalEdicao && (
         <ModalCampanha campanha={campanha} livros={livros} parceiros={parceiros} onSave={handleUpdateCampanha} onClose={()=>setModalEdicao(false)}/>
+      )}
+      {modalImportarLivros && (
+        <ModalImportarLivros
+          campanhaId={campanha.id}
+          livrosExistentes={campanha.campanha_livros||[]}
+          onImport={handleImportarLivros}
+          onClose={()=>setModalImportarLivros(false)}
+        />
       )}
       {modalParceiro && (
         <ModalParceiro cp={modalParceiro} campanha={campanha} onSave={handleUpdateParceiro} onClose={()=>setModalParceiro(null)}/>
