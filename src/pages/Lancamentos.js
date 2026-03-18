@@ -123,13 +123,20 @@ function ModalImportar({ onImport, onClose }) {
 
   function parseDate(val) {
     if (!val) return null
+    // Objeto Date JS (cellDates:true retorna isso às vezes)
     if (val instanceof Date) return toKey(val.getFullYear(), val.getMonth()+1, val.getDate())
+    // Número serial do Excel
     if (typeof val === 'number') {
       const d = new Date(Math.round((val - 25569) * 86400 * 1000))
       return toKey(d.getUTCFullYear(), d.getUTCMonth()+1, d.getUTCDate())
     }
     const s = String(val).trim()
+    // ISO com horário: "2026-02-01T00:00:00.000Z" ou "2026-02-01T03:00:00"
+    const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})T/)
+    if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`
+    // dd/mm/yyyy
     if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) { const [d,m,a]=s.split('/'); return `${a}-${pad(+m)}-${pad(+d)}` }
+    // yyyy-mm-dd
     if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
     return null
   }
@@ -159,8 +166,8 @@ function ModalImportar({ onImport, onClose }) {
           titulo,
           autor:    String(get(row,'autor','author')||'').trim()||null,
           editora:  String(get(row,'editora','publisher')||'').trim()||null,
-          isbn:     get(row,'isbn') ? String(get(row,'isbn')).trim() : null,
-          sku:      get(row,'sku','codigo','código') ? String(get(row,'sku','codigo','código')).trim() : null,
+          isbn:     get(row,'isbn') ? String(get(row,'isbn')).replace(/\.0$/, '').trim() : null,
+          sku:      get(row,'sku','codigo','código') ? String(get(row,'sku','codigo','código')).replace(/\.0$/, '').trim() : null,
           data_lancamento,
         }
       }).filter(r => r.titulo)
