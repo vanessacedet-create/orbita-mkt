@@ -494,12 +494,22 @@ export async function importarLancamentos(livros) {
     try {
       // Try to find existing by isbn or sku
       let existing = null
-      if (row.isbn) {
-        const { data } = await supabase.from('livros').select('id').eq('isbn', row.isbn).maybeSingle()
+      // Força string para garantir match independente do tipo vindo do Excel
+      const isbnStr = row.isbn ? String(row.isbn).replace(/\.0$/, '').trim() : null
+      const skuStr  = row.sku  ? String(row.sku).replace(/\.0$/, '').trim()  : null
+      // 1. Busca por ISBN
+      if (isbnStr) {
+        const { data } = await supabase.from('livros').select('id').eq('isbn', isbnStr).maybeSingle()
         existing = data
       }
-      if (!existing && row.sku) {
-        const { data } = await supabase.from('livros').select('id').eq('sku', row.sku).maybeSingle()
+      // 2. Busca por SKU
+      if (!existing && skuStr) {
+        const { data } = await supabase.from('livros').select('id').eq('sku', skuStr).maybeSingle()
+        existing = data
+      }
+      // 3. Busca por título exato (pega duplicatas criadas sem ISBN)
+      if (!existing && row.titulo) {
+        const { data } = await supabase.from('livros').select('id').ilike('titulo', row.titulo.trim()).maybeSingle()
         existing = data
       }
       if (existing) {
