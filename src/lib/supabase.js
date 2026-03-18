@@ -469,7 +469,9 @@ export async function getLivrosLancamento({ ano, mes } = {}) {
     .order('data_lancamento', { ascending: true })
   if (ano && mes) {
     const ini = `${ano}-${String(mes).padStart(2,'0')}-01`
-    const fim = `${ano}-${String(mes).padStart(2,'0')}-31`
+    // Calcula o último dia real do mês (evita fevereiro-31 que quebra o Postgres)
+    const ultimoDia = new Date(ano, mes, 0).getDate()
+    const fim = `${ano}-${String(mes).padStart(2,'0')}-${String(ultimoDia).padStart(2,'0')}`
     q = q.gte('data_lancamento', ini).lte('data_lancamento', fim)
   }
   const { data, error } = await q
