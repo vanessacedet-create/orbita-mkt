@@ -483,8 +483,9 @@ export async function importarLancamentos(livros) {
     titulo:          l.titulo,
     autor:           l.autor || null,
     editora:         l.editora || null,
-    isbn:            l.isbn || null,
-    sku:             l.sku || null,
+    // Garante string limpa (ISBN pode vir como número do Excel)
+    isbn:            l.isbn ? String(l.isbn).replace(/\.0$/, '').trim() : null,
+    sku:             l.sku  ? String(l.sku).replace(/\.0$/, '').trim()  : null,
     data_lancamento: l.data_lancamento || null,
   }))
   // Separate: update existing by isbn/sku, insert new ones
