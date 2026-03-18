@@ -155,25 +155,31 @@ function ModalImportar({ onImport, onClose }) {
     setArquivo(file); setErros([]); setResultado(null)
     const reader = new FileReader()
     reader.onload = (e) => {
-      const wb = XLSX.read(e.target.result, { type:'binary', cellDates:true })
-      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval:'' })
+      // Usa array buffer para leitura mais confiável de datas
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type:'array', cellDates:false })
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval:'', raw:true })
       const errosArr = []
       const parsed = rows.map((row, i) => {
         const titulo = String(get(row,'titulo','título','title','nome')||'').trim()
-        const data_lancamento = parseDate(get(row,'data de lancamento','data de lançamento','data lancamento','data lançamento','data_lancamento','data','lancamento','lançamento'))
+        const dataRaw = get(row,'data de lancamento','data de lançamento','data lancamento','data lançamento','data_lancamento','data','lancamento','lançamento')
+        const data_lancamento = parseDate(dataRaw)
         if (!titulo) errosArr.push(`Linha ${i+2}: título ausente`)
+        if (titulo && !data_lancamento) errosArr.push(`Linha ${i+2}: data não reconhecida (${dataRaw})`)
+        // ISBN como número puro do Excel (ex: 9786583924674)
+        const isbnRaw = get(row,'isbn')
+        const skuRaw  = get(row,'sku','codigo','código')
         return {
           titulo,
-          autor:    String(get(row,'autor','author')||'').trim()||null,
-          editora:  String(get(row,'editora','publisher')||'').trim()||null,
-          isbn:     get(row,'isbn') ? String(get(row,'isbn')).replace(/\.0$/, '').trim() : null,
-          sku:      get(row,'sku','codigo','código') ? String(get(row,'sku','codigo','código')).replace(/\.0$/, '').trim() : null,
+          autor:           String(get(row,'autor','author')||'').trim()||null,
+          editora:         String(get(row,'editora','publisher')||'').trim()||null,
+          isbn:            isbnRaw ? String(isbnRaw).replace(/\.0$/, '').trim() : null,
+          sku:             skuRaw  ? String(skuRaw).replace(/\.0$/, '').trim()  : null,
           data_lancamento,
         }
       }).filter(r => r.titulo)
       setErros(errosArr); setPreview(parsed)
     }
-    reader.readAsBinaryString(file)
+    reader.readAsArrayBuffer(file)
   }
 
   async function salvar() {
@@ -211,7 +217,7 @@ function ModalImportar({ onImport, onClose }) {
                 <span key={c} style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:4, padding:'2px 8px' }}>{c}</span>
               ))}
             </div>
-            <div style={{ marginTop:6 }}>Data aceita: <strong>dd/mm/aaaa</strong> ou <strong>aaaa-mm-dd</strong></div>
+            <div style={{ marginTop:6 }}>Data aceita: <strong>dd/mm/aaaa</strong>, <strong>aaaa-mm-dd</strong> ou formato de data do Excel</div>
           </div>
           {erros.length > 0 && (
             <div style={{ background:'rgba(239,68,68,0.08)', border:'1px solid rgba(239,68,68,0.2)', borderRadius:8, padding:'10px 14px', fontSize:12, color:'var(--red)', marginBottom:12 }}>
@@ -236,8 +242,12 @@ function ModalImportar({ onImport, onClose }) {
           )}
           <div className="form-actions">
             <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-            <button className="btn btn-primary" onClick={salvar} disabled={saving||!preview.length}>
-              {saving ? 'Importando...' : `Importar ${preview.length} livro${preview.length!==1?'s':''}`}
+            <button className="btn btn-primary" onClick={salvar} disabled={saving||!preview.filter(l=>l.data_lancamento).length}>
+              {saving ? 'Importando...' : (() => {
+                const comData = preview.filter(l=>l.data_lancamento).length
+                const semData = preview.filter(l=>!l.data_lancamento).length
+                return `Importar ${comData} livro${comData!==1?'s':''}${semData>0?' ('+semData+' sem data serão ignorados)':''}`
+              })()}
             </button>
           </div>
         </>) : (
