@@ -94,20 +94,32 @@ function ModalCampanha({ campanha, livros, parceiros, onSave, onClose }) {
     parceiro_ids: (campanha.campanha_parceiros||[]).map(cp => cp.parceiros?.id).filter(Boolean)
   } : EMPTY)
   const [livroSearch, setLivroSearch]       = useState('')
+  const [livroResults, setLivroResults]     = useState([])
+  const [livroOpen, setLivroOpen]           = useState(false)
   const [parceiroSearch, setParceiroSearch] = useState('')
   const [parceiroOpen, setParceiroOpen]     = useState(false)
   const [saving, setSaving]     = useState(false)
   const [toast, showToast]      = useToast()
 
-  const livrosFiltrados = livros.data?.filter(l =>
-    normalizar(l.titulo).includes(normalizar(livroSearch)) ||
-    (l.isbn||'').includes(livroSearch)
-  ) || []
+  // Busca dinâmica de livros
+  useEffect(() => {
+    if (!livroSearch || livroSearch.length < 2) { setLivroResults([]); setLivroOpen(false); return }
+    const t = setTimeout(async () => {
+      try {
+        const { data } = await getLivros({ page:0, pageSize:50, search: livroSearch })
+        setLivroResults(data || [])
+        setLivroOpen(true)
+      } catch {}
+    }, 300)
+    return () => clearTimeout(t)
+  }, [livroSearch])
 
   function toggleLivro(id) {
+    const livroObj = livroResults.find(x=>x.id===id)
     setForm(f => ({
       ...f,
-      livro_ids: f.livro_ids.includes(id) ? f.livro_ids.filter(x=>x!==id) : [...f.livro_ids, id]
+      livro_ids: f.livro_ids.includes(id) ? f.livro_ids.filter(x=>x!==id) : [...f.livro_ids, id],
+      _livroCache: { ...(f._livroCache||{}), ...(livroObj ? {[id]: livroObj} : {}) }
     }))
   }
 
@@ -179,7 +191,9 @@ function ModalCampanha({ campanha, livros, parceiros, onSave, onClose }) {
             {form.livro_ids.length > 0 && (
               <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:8}}>
                 {form.livro_ids.map(id => {
-                  const l = livros.data?.find(x=>x.id===id)
+                  const l = (campanha?.campanha_livros||[]).map(cl=>cl.livros).find(x=>x?.id===id)
+                    || livroResults.find(x=>x.id===id)
+                    || form._livroCache?.[id]
                   return l ? (
                     <div key={id} style={{display:'flex',alignItems:'center',gap:6,background:'var(--accent-glow)',border:'1px solid rgba(224,96,48,0.2)',borderRadius:20,padding:'3px 10px 3px 10px',fontSize:12}}>
                       <span style={{color:'var(--accent)'}}>{l.titulo}</span>
@@ -189,27 +203,31 @@ function ModalCampanha({ campanha, livros, parceiros, onSave, onClose }) {
                 })}
               </div>
             )}
-            <input className="form-input" placeholder="Buscar livro por título ou ISBN..." value={livroSearch} onChange={e=>setLivroSearch(e.target.value)} style={{marginBottom:6}}/>
-            {livroSearch && (
-              <div style={{border:'1px solid var(--border)',borderRadius:8,maxHeight:160,overflowY:'auto',background:'var(--surface-2)'}}>
-                {livrosFiltrados.length===0
-                  ? <div style={{padding:'10px 14px',fontSize:13,color:'var(--text-muted)'}}>Nenhum livro encontrado.</div>
-                  : livrosFiltrados.map(l => {
+            <div style={{position:'relative'}}>
+              <input className="form-input" placeholder="Buscar livro por título, autor ou ISBN..." value={livroSearch}
+                onChange={e=>setLivroSearch(e.target.value)}
+                onFocus={()=>livroResults.length>0&&setLivroOpen(true)}
+                style={{marginBottom:6}} autoComplete="off"/>
+              {livroOpen && livroResults.length > 0 && (
+                <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:200,border:'1px solid var(--border)',borderRadius:8,maxHeight:200,overflowY:'auto',background:'var(--surface)',boxShadow:'0 8px 24px rgba(0,0,0,0.3)'}}>
+                  {livroResults.map(l => {
                     const sel = form.livro_ids.includes(l.id)
                     return (
-                      <div key={l.id} onClick={()=>{if(!sel){toggleLivro(l.id);setLivroSearch('')}}}
-                        style={{padding:'9px 14px',cursor:sel?'default':'pointer',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:10,opacity:sel?.5:1}}>
+                      <div key={l.id} onClick={()=>{if(!sel){toggleLivro(l.id);setLivroSearch('');setLivroOpen(false)}}}
+                        style={{padding:'9px 14px',cursor:sel?'default':'pointer',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:10,opacity:sel?.5:1}}
+                        onMouseEnter={e=>{if(!sel)e.currentTarget.style.background='var(--surface-2)'}}
+                        onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                         <div style={{flex:1}}>
                           <div style={{fontSize:13,color:'var(--text)'}}>{l.titulo}</div>
-                          {l.autor && <div style={{fontSize:11.5,color:'var(--text-muted)'}}>{l.autor}</div>}
+                          {l.autor && <div style={{fontSize:11.5,color:'var(--text-muted)'}}>{l.autor}{l.isbn?` · ${l.isbn}`:''}</div>}
                         </div>
                         {sel ? <span style={{fontSize:11,color:'var(--text-muted)'}}>adicionado</span> : <Plus size={13} color="var(--accent)"/>}
                       </div>
                     )
-                  })
-                }
-              </div>
-            )}
+                  })}
+                </div>
+              )}
+            </div>
             <p style={{fontSize:11.5,color:'var(--text-muted)',marginTop:4}}>Deixe em branco para campanha genérica (sem livro específico).</p>
           </div>}
 
