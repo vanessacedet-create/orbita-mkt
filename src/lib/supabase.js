@@ -494,11 +494,13 @@ export async function importarLancamentos(livros) {
   const results = { atualizados: 0, criados: 0, erros: [] }
   for (const row of rows) {
     try {
-      // Try to find existing by isbn or sku
-      let existing = null
-      // Força string para garantir match independente do tipo vindo do Excel
       const isbnStr = row.isbn ? String(row.isbn).replace(/\.0$/, '').trim() : null
       const skuStr  = row.sku  ? String(row.sku).replace(/\.0$/, '').trim()  : null
+      // Salva sempre com string limpa
+      row.isbn = isbnStr
+      row.sku  = skuStr
+
+      let existing = null
       // 1. Busca por ISBN
       if (isbnStr) {
         const { data } = await supabase.from('livros').select('id').eq('isbn', isbnStr).maybeSingle()
@@ -509,9 +511,19 @@ export async function importarLancamentos(livros) {
         const { data } = await supabase.from('livros').select('id').eq('sku', skuStr).maybeSingle()
         existing = data
       }
-      // 3. Busca por título exato (pega duplicatas criadas sem ISBN)
+      // 3. Busca por título + data (evita duplicatas sem ISBN)
+      if (!existing && row.titulo && row.data_lancamento) {
+        const { data } = await supabase.from('livros').select('id')
+          .ilike('titulo', row.titulo.trim())
+          .eq('data_lancamento', row.data_lancamento)
+          .maybeSingle()
+        existing = data
+      }
+      // 4. Busca só por título (pega cadastros antigos sem data)
       if (!existing && row.titulo) {
-        const { data } = await supabase.from('livros').select('id').ilike('titulo', row.titulo.trim()).maybeSingle()
+        const { data } = await supabase.from('livros').select('id')
+          .ilike('titulo', row.titulo.trim())
+          .maybeSingle()
         existing = data
       }
       if (existing) {
