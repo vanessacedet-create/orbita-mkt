@@ -26,7 +26,6 @@ const STATUS_OPTIONS = [
 
 const TABS = [
   { id: 'envios',       label: 'Envios',       icon: Send },
-  { id: 'parceiros',    label: 'Parceiros',    icon: Users },
   { id: 'livros',       label: 'Livros',       icon: BookOpen },
   { id: 'divulgacoes',  label: 'Divulgações',  icon: Megaphone },
   { id: 'relatorios',   label: 'Relatórios',   icon: BarChart2 },
@@ -1513,7 +1512,6 @@ export default function Cortesias() {
         ))}
       </div>
       {tab==='envios'      && <EnviosTab       parceiros={parceiros} livros={livros} envios={envios} setEnvios={setEnvios}/>}
-      {tab==='parceiros'   && <ParceirosTab    parceiros={parceiros} setParceiros={setParceiros}/>}
       {tab==='livros'      && <LivrosTab/>}
       {tab==='divulgacoes' && <DivulgacoesTab  envios={envios} setEnvios={setEnvios}/>}
       {tab==='relatorios'  && <RelatoriosTab   parceiros={parceiros} envios={envios}/>}
