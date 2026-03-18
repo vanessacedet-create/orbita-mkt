@@ -1517,4 +1517,4 @@ export default function Cortesias() {
       {tab==='relatorios'  && <RelatoriosTab   parceiros={parceiros} envios={envios}/>}
     </div>
   )
-}
+      }
