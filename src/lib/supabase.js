@@ -634,13 +634,13 @@ export async function getMonitoramento({ ano, mes } = {}) {
   const ultimoDia = new Date(ano, mes, 0).getDate()
   const fim = `${ano}-${String(mes).padStart(2,'0')}-${String(ultimoDia).padStart(2,'0')}`
 
-  // Busca campanha_parceiros com janela de datas no mês
   const { data, error } = await supabase
     .from('campanha_parceiros')
     .select(`
       id, status, data_inicio, data_fim, data_publicacao_combinada, link_publicacao,
       parceiros(id, nome),
-      campanhas(id, nome, tipo, status)
+      campanhas(id, nome, tipo, status),
+      campanha_divulgacoes(id, tipo, link, curtidas, comentarios, visualizacoes, data_divulgacao, livro_id, livros(id, titulo))
     `)
     .or(
       `and(data_inicio.lte.${fim},data_fim.gte.${ini}),` +
