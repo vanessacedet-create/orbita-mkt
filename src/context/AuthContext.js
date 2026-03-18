@@ -7,6 +7,7 @@ const AuthContext = createContext(null)
 // Adicione novos módulos aqui conforme o sistema cresce
 export const MODULOS_PERMISSOES = {
   dashboard:  ['administrador', 'gerente', 'analista', 'assistente'],
+  parceiros:  ['administrador', 'gerente', 'analista'],
   cortesias:  ['administrador', 'gerente', 'analista'],
   campanhas:    ['administrador', 'gerente', 'analista'],
   lancamentos:  ['administrador', 'gerente', 'analista', 'assistente'],
