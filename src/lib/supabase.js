@@ -326,6 +326,24 @@ export async function removeParceiroCampanha(id) {
   if (error) throw error
 }
 
+export async function addLivroCampanha(campanha_id, livro_id) {
+  const { data: existing } = await supabase
+    .from('campanha_livros').select('id').eq('campanha_id', campanha_id).eq('livro_id', livro_id).maybeSingle()
+  if (existing) return existing
+  const { data, error } = await supabase
+    .from('campanha_livros')
+    .insert([{ campanha_id, livro_id }])
+    .select('id, livros(id, titulo, autor, isbn, sku, editora)')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function removeLivroCampanha(id) {
+  const { error } = await supabase.from('campanha_livros').delete().eq('id', id)
+  if (error) throw error
+}
+
 // ── FOLLOW-UP / CONTATO ────────────────────────────────────
 export async function getFollowUps() {
   // Busca campanhas em planejamento ou em_andamento com data_inicio definida
