@@ -9,10 +9,11 @@ import Campanhas from './pages/Campanhas'
 import Lancamentos from './pages/Lancamentos'
 import Tarefas from './pages/Tarefas'
 import Parceiros from './pages/Parceiros'
+import Monitoramento from './pages/Monitoramento'
 import './App.css'
 import {
   LayoutDashboard, BookOpen, Users, LogOut,
-  Orbit, ShieldAlert, Megaphone, CalendarDays, CheckSquare, UserRound
+  Orbit, ShieldAlert, Megaphone, CalendarDays, CheckSquare, UserRound, Eye
 } from 'lucide-react'
 
 const MENU = [
@@ -20,6 +21,7 @@ const MENU = [
   { path: '/parceiros',  label: 'Parceiros',  icon: UserRound,       modulo: 'parceiros' },
   { path: '/cortesias',  label: 'Cortesias',  icon: BookOpen,        modulo: 'cortesias' },
   { path: '/campanhas',  label: 'Campanhas',  icon: Megaphone,       modulo: 'campanhas' },
+  { path: '/monitoramento', label: 'Monitoramento', icon: Eye,           modulo: 'monitoramento' },
   { path: '/lancamentos', label: 'Lançamentos', icon: CalendarDays,   modulo: 'lancamentos' },
   { path: '/tarefas',     label: 'Tarefas',     icon: CheckSquare,    modulo: 'tarefas'     },
   { path: '/usuarios',   label: 'Usuários',   icon: Users,           modulo: 'usuarios'  },
@@ -116,6 +118,7 @@ function Shell() {
           <Route path="/parceiros" element={<RequireAuth modulo="parceiros"><Parceiros /></RequireAuth>} />
           <Route path="/usuarios" element={<RequireAuth modulo="usuarios"><Usuarios /></RequireAuth>} />
           <Route path="/campanhas" element={<RequireAuth modulo="campanhas"><Campanhas /></RequireAuth>} />
+          <Route path="/monitoramento" element={<RequireAuth modulo="monitoramento"><Monitoramento /></RequireAuth>} />
           <Route path="/lancamentos" element={<RequireAuth modulo="lancamentos"><Lancamentos /></RequireAuth>} />
           <Route path="/tarefas" element={<RequireAuth modulo="tarefas"><Tarefas /></RequireAuth>} />
         </Routes>
