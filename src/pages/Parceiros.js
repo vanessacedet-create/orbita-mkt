@@ -291,7 +291,16 @@ export default function Parceiros() {
   const EMPTY = { nome:'', tipo_parceria:'', cpf:'', livraria:'', canal_comunicacao:'', taxa_engajamento:'', editoras_divulga:[], temas:'' }
   const [form, setForm] = useState(EMPTY)
 
-  async function reload() { setParceiros(await getParceirosComPontuacao()) }
+  async function reload() {
+    try {
+      const data = await getParceirosComPontuacao()
+      setParceiros(data)
+    } catch(e) {
+      console.error('getParceirosComPontuacao falhou, usando fallback:', e)
+      const data = await getParceiros()
+      setParceiros(data)
+    }
+  }
 
   useEffect(() => {
     reload()
