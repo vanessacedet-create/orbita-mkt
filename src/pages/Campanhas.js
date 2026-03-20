@@ -2165,8 +2165,18 @@ export default function Campanhas() {
         ? <div className="loading"><div className="spinner"/></div>
         : filtradas.length === 0
           ? <div className="empty-state" style={{marginTop:40}}><p>Nenhuma campanha encontrada.</p></div>
-          : <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(340px,1fr))',gap:16}}>
-              {filtradas.map(c => {
+          : (() => {
+              // Agrupa por tipo na ordem: Promoção → Lançamento → Geral → sem tipo
+              const ORDEM_TIPOS = ['Promoção', 'Lançamento', 'Geral']
+              const grupos = ORDEM_TIPOS.map(tipo => ({
+                tipo,
+                items: filtradas.filter(c => c.tipo === tipo)
+              })).filter(g => g.items.length > 0)
+              // Campanhas sem tipo ou tipo não listado
+              const semTipo = filtradas.filter(c => !ORDEM_TIPOS.includes(c.tipo))
+              if (semTipo.length > 0) grupos.push({ tipo: 'Outros', items: semTipo })
+
+              function renderCard(c) {
                 const sc = STATUS_CAMPANHA.find(s=>s.value===c.status)||STATUS_CAMPANHA[0]
                 const cps = c.campanha_parceiros||[]
                 const hoje = new Date().toISOString().slice(0,10)
@@ -2195,13 +2205,11 @@ export default function Campanhas() {
                         <div style={{fontWeight:700,fontSize:15,color:'var(--text)',marginBottom:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.nome}</div>
                         <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
                           <span className={`badge ${sc.cls}`}>{sc.label}</span>
-                          {c.tipo && <span className="badge badge-indigo">{c.tipo}</span>}
                           {urgente && <span className="badge badge-red">⚠ Vencida</span>}
                         </div>
                       </div>
                       <button className="btn btn-danger btn-icon btn-sm" style={{marginLeft:8,flexShrink:0}} onClick={e=>{e.stopPropagation();handleDelete(c.id)}}><Trash2 size={13}/></button>
                     </div>
-
                     {/* Livros */}
                     {(c.campanha_livros||[]).length > 0 && (
                       <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:10}}>
@@ -2213,7 +2221,6 @@ export default function Campanhas() {
                         {(c.campanha_livros||[]).length > 2 && <div style={{fontSize:11,color:'var(--text-muted)'}}>+{(c.campanha_livros||[]).length-2} livros</div>}
                       </div>
                     )}
-
                     {/* Datas */}
                     {(c.data_inicio||c.data_fim) && (
                       <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:10,display:'flex',gap:10}}>
@@ -2221,8 +2228,7 @@ export default function Campanhas() {
                         {c.data_fim&&<span>→ {format(new Date(c.data_fim+'T12:00:00'),'dd MMM yyyy',{locale:ptBR})}</span>}
                       </div>
                     )}
-
-                    {/* Progresso — Lançamento usa lancamento_parceiros, outros usam campanha_parceiros */}
+                    {/* Progresso */}
                     {(c.tipo === 'Lançamento' || c.tipo === 'Geral') ? (() => {
                       const lps = (c.lancamento_livros||[]).flatMap(ll => ll.lancamento_parceiros||[])
                       return lps.length > 0
@@ -2235,8 +2241,30 @@ export default function Campanhas() {
                     )}
                   </div>
                 )
-              })}
-            </div>
+              }
+
+              return (
+                <div>
+                  {grupos.map(grupo => (
+                    <div key={grupo.tipo} style={{marginBottom:32}}>
+                      {/* Subtítulo do tipo */}
+                      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
+                        <h2 style={{fontSize:13,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'var(--text-muted)',margin:0}}>
+                          {grupo.tipo}
+                        </h2>
+                        <span style={{fontSize:12,color:'var(--text-muted)',background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:20,padding:'1px 8px'}}>
+                          {grupo.items.length}
+                        </span>
+                        <div style={{flex:1,height:'1px',background:'var(--border)'}}/>
+                      </div>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(340px,1fr))',gap:16}}>
+                        {grupo.items.map(renderCard)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()
       }
 
       </>}
