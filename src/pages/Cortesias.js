@@ -1343,33 +1343,69 @@ function DivulgacoesTab({ envios, setEnvios }) {
 
 // ── RELATÓRIOS TAB ────────────────────────────────────────
 function RelatoriosTab({ parceiros, envios }) {
+  const [modo, setModo]               = useState('parceiro') // 'parceiro' | 'livro'
+  // Modo parceiro
   const [parceiroId, setParceiroId]   = useState('')
   const [parceiroSearch, setParceiroSearch] = useState('')
   const [parceiroOpen, setParceiroOpen]     = useState(false)
   const [dataInicio, setDataInicio]   = useState('')
   const [dataFim, setDataFim]         = useState('')
+  // Modo livro
+  const [livroSearch, setLivroSearch] = useState('')
   const [resultado, setResultado]     = useState(null)
 
-  function gerarRelatorio() {
+  function gerarRelatorioParceiro() {
     if (!parceiroId) return
     const parceiro = parceiros.find(p => p.id === parceiroId)
-
     let enviosFiltrados = envios.filter(e => e.parceiro_id === parceiroId)
-
-    if (dataInicio) {
-      enviosFiltrados = enviosFiltrados.filter(e => e.data_envio && e.data_envio >= dataInicio)
-    }
-    if (dataFim) {
-      enviosFiltrados = enviosFiltrados.filter(e => e.data_envio && e.data_envio <= dataFim)
-    }
-
+    if (dataInicio) enviosFiltrados = enviosFiltrados.filter(e => e.data_envio && e.data_envio >= dataInicio)
+    if (dataFim)    enviosFiltrados = enviosFiltrados.filter(e => e.data_envio && e.data_envio <= dataFim)
     const totalLivros = enviosFiltrados.reduce((acc, e) => acc + (e.envio_livros||[]).length, 0)
     const porStatus = {}
     STATUS_OPTIONS.forEach(s => {
       porStatus[s.value] = enviosFiltrados.filter(e => e.status === s.value).reduce((acc, e) => acc + (e.envio_livros||[]).length, 0)
     })
+    setResultado({ tipo: 'parceiro', parceiro, envios: enviosFiltrados, totalLivros, porStatus })
+  }
 
-    setResultado({ parceiro, envios: enviosFiltrados, totalLivros, porStatus })
+  function gerarRelatorioLivro() {
+    if (!livroSearch.trim()) return
+    const busca = livroSearch.trim().toLowerCase().replace(/-/g,'')
+    // Busca todos os envios que contém o livro pesquisado
+    const encontrados = []
+    for (const envio of envios) {
+      for (const el of (envio.envio_livros||[])) {
+        const titulo = (el.livros?.titulo||'').toLowerCase()
+        const isbn   = (el.livros?.isbn||'').replace(/-/g,'').toLowerCase()
+        const sku    = (el.livros?.sku||'').toLowerCase()
+        if (titulo.includes(busca) || isbn.includes(busca) || sku.includes(busca)) {
+          encontrados.push({ envio, el })
+          break // um livro por envio basta para listar o parceiro
+        }
+      }
+    }
+    // Agrupa por parceiro
+    const porParceiro = {}
+    for (const { envio, el } of encontrados) {
+      const pId = envio.parceiro_id
+      if (!porParceiro[pId]) {
+        const parceiro = parceiros.find(p => p.id === pId)
+        porParceiro[pId] = { parceiro, envios: [], livrosEnviados: [] }
+      }
+      porParceiro[pId].envios.push(envio)
+      // Coleta todos os livros do envio que batem com a busca
+      for (const item of (envio.envio_livros||[])) {
+        const t = (item.livros?.titulo||'').toLowerCase()
+        const i = (item.livros?.isbn||'').replace(/-/g,'').toLowerCase()
+        const s = (item.livros?.sku||'').toLowerCase()
+        if (t.includes(busca)||i.includes(busca)||s.includes(busca)) {
+          if (!porParceiro[pId].livrosEnviados.find(x=>x.id===item.livros?.id)) {
+            porParceiro[pId].livrosEnviados.push({ ...item.livros, data_envio: envio.data_envio, status: envio.status })
+          }
+        }
+      }
+    }
+    setResultado({ tipo: 'livro', busca: livroSearch, parceiros: Object.values(porParceiro) })
   }
 
   const STATUS_OPTIONS_LOCAL = [
@@ -1383,60 +1419,116 @@ function RelatoriosTab({ parceiros, envios }) {
       <div className="page-header">
         <div>
           <h1 className="page-title">Relatórios</h1>
-          <p className="page-subtitle">Consulte cortesias por parceiro e período</p>
+          <p className="page-subtitle">Consulte cortesias por parceiro ou por livro</p>
         </div>
+      </div>
+
+      {/* Toggle modo */}
+      <div style={{display:'flex',gap:8,marginBottom:16}}>
+        {[{v:'parceiro',l:'🔍 Por parceiro'},{v:'livro',l:'📚 Por livro / ISBN'}].map(({v,l})=>(
+          <button key={v} onClick={()=>{setModo(v);setResultado(null)}}
+            className={`btn btn-sm ${modo===v?'btn-primary':'btn-ghost'}`}>
+            {l}
+          </button>
+        ))}
       </div>
 
       <div className="table-card" style={{padding:'20px 24px', marginBottom:24, overflow:'visible'}}>
-        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:16, alignItems:'end'}}>
-          <div className="form-group" style={{position:'relative', margin:0}}>
-            <label className="form-label">Parceiro</label>
-            <input
-              className="form-input"
-              placeholder="Digite para buscar..."
-              value={parceiroSearch}
-              onChange={e=>{ setParceiroSearch(e.target.value); setParceiroId(''); setParceiroOpen(true); setResultado(null) }}
-              onFocus={()=>setParceiroOpen(true)}
-              autoComplete="off"
-            />
-            {parceiroOpen && parceiroSearch && (
-              <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:100,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,maxHeight:200,overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,0.3)'}}>
-                {parceiros.filter(p=>p.nome.toLowerCase().includes(parceiroSearch.toLowerCase())).length === 0
-                  ? <div style={{padding:'10px 14px',fontSize:13,color:'var(--text-muted)'}}>Nenhum parceiro encontrado.</div>
-                  : parceiros.filter(p=>p.nome.toLowerCase().includes(parceiroSearch.toLowerCase())).map(p=>(
-                    <div key={p.id}
-                      onClick={()=>{ setParceiroId(p.id); setParceiroSearch(p.nome); setParceiroOpen(false); setResultado(null) }}
-                      style={{padding:'10px 14px',cursor:'pointer',fontSize:13,borderBottom:'1px solid var(--border)',color:'var(--text)'}}
-                      onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'}
-                      onMouseLeave={e=>e.currentTarget.style.background='transparent'}
-                    >
-                      {p.nome}
-                      {p.tipo_parceria && <span style={{fontSize:11,color:'var(--text-muted)',marginLeft:8}}>{p.tipo_parceria}</span>}
-                    </div>
-                  ))
-                }
+        {modo === 'parceiro' ? (
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:16, alignItems:'end'}}>
+            <div className="form-group" style={{position:'relative', margin:0}}>
+              <label className="form-label">Parceiro</label>
+              <input className="form-input" placeholder="Digite para buscar..."
+                value={parceiroSearch}
+                onChange={e=>{ setParceiroSearch(e.target.value); setParceiroId(''); setParceiroOpen(true); setResultado(null) }}
+                onFocus={()=>setParceiroOpen(true)} autoComplete="off"/>
+              {parceiroOpen && parceiroSearch && (
+                <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:100,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,maxHeight:200,overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,0.3)'}}>
+                  {parceiros.filter(p=>p.nome.toLowerCase().includes(parceiroSearch.toLowerCase())).length === 0
+                    ? <div style={{padding:'10px 14px',fontSize:13,color:'var(--text-muted)'}}>Nenhum parceiro encontrado.</div>
+                    : parceiros.filter(p=>p.nome.toLowerCase().includes(parceiroSearch.toLowerCase())).map(p=>(
+                      <div key={p.id} onClick={()=>{ setParceiroId(p.id); setParceiroSearch(p.nome); setParceiroOpen(false); setResultado(null) }}
+                        style={{padding:'10px 14px',cursor:'pointer',fontSize:13,borderBottom:'1px solid var(--border)',color:'var(--text)'}}
+                        onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'}
+                        onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                        {p.nome}
+                        {p.tipo_parceria && <span style={{fontSize:11,color:'var(--text-muted)',marginLeft:8}}>{p.tipo_parceria}</span>}
+                      </div>
+                    ))
+                  }
+                </div>
+              )}
+            </div>
+            <div style={{display:'flex', gap:10}}>
+              <div className="form-group" style={{margin:0, flex:1}}>
+                <label className="form-label">Data início</label>
+                <input className="form-input" type="date" value={dataInicio} onChange={e=>{ setDataInicio(e.target.value); setResultado(null) }}/>
               </div>
-            )}
-          </div>
-
-          <div style={{display:'flex', gap:10}}>
-            <div className="form-group" style={{margin:0, flex:1}}>
-              <label className="form-label">Data início</label>
-              <input className="form-input" type="date" value={dataInicio} onChange={e=>{ setDataInicio(e.target.value); setResultado(null) }}/>
+              <div className="form-group" style={{margin:0, flex:1}}>
+                <label className="form-label">Data fim</label>
+                <input className="form-input" type="date" value={dataFim} onChange={e=>{ setDataFim(e.target.value); setResultado(null) }}/>
+              </div>
             </div>
-            <div className="form-group" style={{margin:0, flex:1}}>
-              <label className="form-label">Data fim</label>
-              <input className="form-input" type="date" value={dataFim} onChange={e=>{ setDataFim(e.target.value); setResultado(null) }}/>
-            </div>
+            <button className="btn btn-primary" onClick={gerarRelatorioParceiro} disabled={!parceiroId} style={{justifyContent:'center'}}>
+              <Search size={15}/> Gerar relatório
+            </button>
           </div>
-
-          <button className="btn btn-primary" onClick={gerarRelatorio} disabled={!parceiroId} style={{justifyContent:'center'}}>
-            <Search size={15}/> Gerar relatório
-          </button>
-        </div>
+        ) : (
+          <div style={{display:'grid', gridTemplateColumns:'1fr auto', gap:16, alignItems:'end'}}>
+            <div className="form-group" style={{margin:0}}>
+              <label className="form-label">Título do livro ou ISBN</label>
+              <input className="form-input" placeholder="Ex: Dom Casmurro ou 9788535914849"
+                value={livroSearch} onChange={e=>{ setLivroSearch(e.target.value); setResultado(null) }}
+                onKeyDown={e=>e.key==='Enter'&&gerarRelatorioLivro()}/>
+            </div>
+            <button className="btn btn-primary" onClick={gerarRelatorioLivro} disabled={!livroSearch.trim()} style={{justifyContent:'center',whiteSpace:'nowrap'}}>
+              <Search size={15}/> Buscar
+            </button>
+          </div>
+        )}
       </div>
 
-      {resultado && (
+      {resultado && resultado.tipo === 'livro' && (
+        <div className="table-card">
+          <div className="table-toolbar">
+            <span className="table-title">
+              Parceiros que receberam <strong>"{resultado.busca}"</strong>
+              <span style={{fontWeight:400,color:'var(--text-muted)',marginLeft:6}}>({resultado.parceiros.length} parceiro{resultado.parceiros.length!==1?'s':''})</span>
+            </span>
+          </div>
+          {resultado.parceiros.length === 0
+            ? <div className="empty-state"><p>Nenhum parceiro encontrou este livro nas cortesias.</p></div>
+            : <table>
+                <thead><tr><th>Parceiro</th><th>Livro(s) enviado(s)</th><th>Data do envio</th><th>Status</th></tr></thead>
+                <tbody>
+                  {resultado.parceiros.map(({ parceiro, livrosEnviados }) => (
+                    livrosEnviados.map((l, i) => {
+                      const s = STATUS_OPTIONS_LOCAL.find(x=>x.value===l.status)||STATUS_OPTIONS_LOCAL[0]
+                      return (
+                        <tr key={`${parceiro?.id}-${i}`}>
+                          {i===0 && <td className="td-strong" rowSpan={livrosEnviados.length} style={{verticalAlign:'top',paddingTop:12}}>
+                            {parceiro?.nome||'—'}
+                            {parceiro?.tipo_parceria&&<div style={{fontSize:11,color:'var(--text-muted)'}}>{parceiro.tipo_parceria}</div>}
+                          </td>}
+                          <td style={{fontSize:12}}>
+                            <div>{l.titulo}</div>
+                            {l.isbn&&<div style={{fontSize:11,color:'var(--text-muted)'}}>ISBN: {l.isbn}</div>}
+                          </td>
+                          <td className="td-muted" style={{fontSize:12,whiteSpace:'nowrap'}}>
+                            {l.data_envio ? format(new Date(l.data_envio+'T12:00:00'),'dd/MM/yyyy',{locale:ptBR}) : '—'}
+                          </td>
+                          <td><span className={`badge ${s.cls}`}>{s.label}</span></td>
+                        </tr>
+                      )
+                    })
+                  ))}
+                </tbody>
+              </table>
+          }
+        </div>
+      )}
+
+      {resultado && resultado.tipo === 'parceiro' && (
         <>
           {/* Cards de resumo */}
           <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:20}}>
