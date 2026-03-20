@@ -6,6 +6,7 @@ import {
   getFollowUps, registrarContato,
   getDivulgacoesParceiro, createDivulgacaoCampanha, updateDivulgacaoCampanha, deleteDivulgacaoCampanha,
   importarDivulgacoesPromocao,
+  getLivrosDestaqueParceiro, addLivroDestaqueParceiro, removeLivroDestaqueParceiro, importarLivrosDestaquePlanilha,
   getLancamentoLivros, addLancamentoLivro, removeLancamentoLivro,
   addLancamentoParceiro, updateLancamentoParceiro, removeLancamentoParceiro,
   addLivroCampanha, removeLivroCampanha
@@ -328,8 +329,11 @@ function ModalParceiro({ cp, campanha, onSave, onClose }) {
   })
   const [divulgacoes, setDivulgacoes]   = useState([])
   const [loadingDiv, setLoadingDiv]     = useState(true)
-  const [modalDiv, setModalDiv]         = useState(null) // null | 'new' | divulgacao obj
+  const [modalDiv, setModalDiv]         = useState(null)
   const [modalImportarDiv, setModalImportarDiv] = useState(false)
+  const [livrosDestaque, setLivrosDestaque] = useState([])
+  const [adicionarLivroOpen, setAdicionarLivroOpen] = useState(false)
+  const [modalImportarLivros, setModalImportarLivros] = useState(false)
   const [saving, setSaving]             = useState(false)
   const [toast, showToast]              = useToast()
 
@@ -337,7 +341,24 @@ function ModalParceiro({ cp, campanha, onSave, onClose }) {
     getDivulgacoesParceiro(cp.id)
       .then(setDivulgacoes)
       .finally(() => setLoadingDiv(false))
+    getLivrosDestaqueParceiro(cp.id)
+      .then(setLivrosDestaque)
+      .catch(console.error)
   }, [cp.id])
+
+  async function handleAddLivroDestaque(livro) {
+    try {
+      const novo = await addLivroDestaqueParceiro(cp.id, livro.id)
+      setLivrosDestaque(prev => [...prev.filter(l=>l.livro_id!==livro.id), novo])
+      showToast('Livro adicionado!')
+    } catch(e) { showToast('Erro ao adicionar','error') }
+  }
+
+  async function handleRemoveLivroDestaque(id) {
+    await removeLivroDestaqueParceiro(id)
+    setLivrosDestaque(prev => prev.filter(l => l.id !== id))
+    showToast('Removido!')
+  }
 
   async function salvarStatus() {
     setSaving(true)
@@ -420,14 +441,51 @@ function ModalParceiro({ cp, campanha, onSave, onClose }) {
           </div>
         </div>
 
+        {/* Livros destaque do parceiro */}
+        <div style={{borderTop:'1px solid var(--border)',marginTop:16,paddingTop:16,marginBottom:16}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+            <span style={{fontSize:13,fontWeight:700,color:'var(--text)'}}>
+              📚 Livros destaque ({livrosDestaque.length})
+            </span>
+            <div style={{display:'flex',gap:6}}>
+              <button className="btn btn-ghost btn-sm" onClick={()=>setModalImportarLivros(true)}
+                style={{fontSize:11,display:'flex',alignItems:'center',gap:4}}>
+                <Upload size={11}/> Planilha ISBN
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={()=>setAdicionarLivroOpen(true)}
+                style={{fontSize:11,display:'flex',alignItems:'center',gap:4}}>
+                <Plus size={11}/> Adicionar livro
+              </button>
+            </div>
+          </div>
+          {adicionarLivroOpen && (
+            <div style={{marginBottom:10}}>
+              <BuscaLivro livroId={''} livroTitulo={''}
+                onChange={async livro=>{ if(!livro)return; await handleAddLivroDestaque(livro); setAdicionarLivroOpen(false) }}
+                placeholder="Buscar livro por título ou ISBN..."/>
+            </div>
+          )}
+          {livrosDestaque.length === 0
+            ? <p style={{fontSize:12,color:'var(--text-muted)'}}>Nenhum livro destaque definido.</p>
+            : <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                {livrosDestaque.map(ld=>(
+                  <div key={ld.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:6,padding:'7px 12px'}}>
+                    <div>
+                      <div style={{fontSize:12,fontWeight:600,color:'var(--text)'}}>{ld.livros?.titulo}</div>
+                      {ld.livros?.isbn&&<div style={{fontSize:10,color:'var(--text-muted)'}}>ISBN: {ld.livros.isbn}</div>}
+                    </div>
+                    <button className="btn btn-danger btn-icon btn-sm" onClick={()=>handleRemoveLivroDestaque(ld.id)}><Trash2 size={11}/></button>
+                  </div>
+                ))}
+              </div>
+          }
+        </div>
+
         {/* Divulgações */}
-        <div style={{borderTop:'1px solid var(--border)',marginTop:16,paddingTop:16}}>
+        <div style={{borderTop:'1px solid var(--border)',paddingTop:16}}>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
             <span style={{fontSize:13,fontWeight:700,color:'var(--text)'}}>Divulgações ({divulgacoes.length})</span>
             <div style={{display:'flex',gap:8}}>
-              <button className="btn btn-ghost btn-sm" onClick={()=>setModalImportarDiv(true)} style={{display:'flex',alignItems:'center',gap:4,fontSize:12}}>
-                <Upload size={12}/> Importar planilha
-              </button>
               <button className="btn btn-sm btn-primary" onClick={()=>setModalDiv('new')}><Plus size={13}/> Nova divulgação</button>
             </div>
           </div>
@@ -490,6 +548,101 @@ function ModalParceiro({ cp, campanha, onSave, onClose }) {
           onClose={()=>setModalImportarDiv(false)}
         />
       )}
+      {modalImportarLivros && (
+        <ModalImportarLivrosDestaque
+          campanhaParceiro_id={cp.id}
+          onImport={()=>getLivrosDestaqueParceiro(cp.id).then(setLivrosDestaque)}
+          onClose={()=>setModalImportarLivros(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── MODAL IMPORTAR LIVROS DESTAQUE POR PLANILHA ────────────
+function ModalImportarLivrosDestaque({ campanhaParceiro_id, onImport, onClose }) {
+  const [preview, setPreview]     = useState([])
+  const [loading, setLoading]     = useState(false)
+  const [saving, setSaving]       = useState(false)
+  const [resultado, setResultado] = useState(null)
+  const inputRef = useRef()
+
+  async function handleFile(e) {
+    const file = e.target.files[0]; if(!file)return
+    setPreview([]); setResultado(null); setLoading(true)
+    try {
+      const data = await file.arrayBuffer()
+      const wb = XLSX.read(new Uint8Array(data), {type:'array',cellDates:false})
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:'',raw:true})
+      if(!rows.length)return
+      function norm(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim()}
+      const headers = Object.keys(rows[0])
+      const isbnCol = headers.find(h=>/isbn|ean/i.test(h)) || headers[0]
+      const isbns = [...new Set(rows.map(r=>String(r[isbnCol]||'').replace(/\.0$/,'').trim()).filter(s=>s.length>=10))]
+      setPreview(isbns)
+    } catch(e){console.error(e)} finally{setLoading(false)}
+  }
+
+  async function salvar() {
+    if(!preview.length)return
+    setSaving(true)
+    try {
+      const res = await importarLivrosDestaquePlanilha(campanhaParceiro_id, preview)
+      setResultado(res)
+      if(res.erros.length===0) onImport()
+    } catch(e){console.error(e)} finally{setSaving(false)}
+  }
+
+  return (
+    <div className="modal-backdrop" style={{zIndex:1300}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal" style={{maxWidth:460}}>
+        <div className="modal-header">
+          <h2 className="modal-title">Importar livros destaque por ISBN</h2>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
+        </div>
+        {!resultado ? (<>
+          <div style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,padding:'10px 14px',marginBottom:14,fontSize:12,color:'var(--text-muted)'}}>
+            Envie uma planilha <strong style={{color:'var(--text)'}}>.xlsx</strong> com uma coluna <strong style={{color:'var(--text)'}}>ISBN</strong>. Cada linha será um livro destaque para este parceiro.
+          </div>
+          <div style={{border:'2px dashed var(--border)',borderRadius:10,padding:'20px',textAlign:'center',cursor:'pointer',marginBottom:14}}
+            onClick={()=>inputRef.current?.click()}>
+            <Upload size={20} color="var(--text-muted)" style={{marginBottom:6}}/>
+            <p style={{fontSize:13,color:'var(--text-soft)'}}>Clique para selecionar a planilha</p>
+          </div>
+          <input ref={inputRef} type="file" accept=".xlsx" style={{display:'none'}} onChange={handleFile}/>
+          {loading && <p style={{fontSize:13,color:'var(--text-muted)',textAlign:'center'}}>Lendo ISBNs...</p>}
+          {preview.length > 0 && !loading && (
+            <div style={{marginBottom:14}}>
+              <p style={{fontSize:12,color:'var(--text-muted)',marginBottom:6}}>{preview.length} ISBN{preview.length!==1?'s':''} encontrado{preview.length!==1?'s':''}:</p>
+              <div style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,padding:'8px 12px',maxHeight:140,overflowY:'auto',fontSize:12}}>
+                {preview.map((isbn,i)=><div key={i} style={{color:'var(--text)',marginBottom:2}}>• {isbn}</div>)}
+              </div>
+            </div>
+          )}
+          <div className="form-actions">
+            <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+            {preview.length > 0 && (
+              <button className="btn btn-primary" onClick={salvar} disabled={saving}>
+                {saving?'Importando...':`Adicionar ${preview.length} livro${preview.length!==1?'s':''}`}
+              </button>
+            )}
+          </div>
+        </>) : (
+          <div style={{textAlign:'center',padding:'20px 0'}}>
+            <div style={{fontSize:32,marginBottom:10}}>{resultado.naoEncontrados.length===0&&resultado.erros.length===0?'✅':'⚠️'}</div>
+            <div style={{fontSize:14,fontWeight:700,color:'var(--text)',marginBottom:6}}>
+              {resultado.adicionados} livro{resultado.adicionados!==1?'s':''} adicionado{resultado.adicionados!==1?'s':''}
+            </div>
+            {resultado.naoEncontrados.length>0&&(
+              <div style={{marginTop:10,textAlign:'left',background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',borderRadius:8,padding:'8px 12px',fontSize:12,color:'var(--red)'}}>
+                <strong style={{display:'block',marginBottom:4}}>ISBNs não encontrados no cadastro:</strong>
+                {resultado.naoEncontrados.map((isbn,i)=><div key={i}>• {isbn}</div>)}
+              </div>
+            )}
+            <button className="btn btn-primary" style={{marginTop:14}} onClick={onClose}>Fechar</button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
