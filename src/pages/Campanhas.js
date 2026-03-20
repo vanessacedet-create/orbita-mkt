@@ -19,7 +19,7 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
 // ── CONSTANTES ─────────────────────────────────────────────
-const TIPOS_CAMPANHA = ['Lançamento', 'Relançamento', 'Promoção', 'Sazonal', 'Institucional', 'Outro']
+const TIPOS_CAMPANHA = ['Lançamento', 'Geral', 'Promoção']
 
 const STATUS_CAMPANHA = [
   { value: 'planejamento', label: 'Planejada',     cls: 'badge-indigo', icon: Clock },
@@ -186,7 +186,7 @@ function ModalCampanha({ campanha, livros, parceiros, onSave, onClose }) {
           </div>
 
           {/* Livros e Parceiros — ocultos para Lançamento (gerenciados depois) */}
-          {form.tipo !== 'Lançamento' && <div className="form-group">
+          {form.tipo !== 'Lançamento' && form.tipo !== 'Geral' && <div className="form-group">
             <label className="form-label">
               Livros vinculados
               {form.livro_ids.length > 0 && <span style={{color:'var(--accent)',marginLeft:6}}>({form.livro_ids.length} selecionado{form.livro_ids.length>1?'s':''})</span>}
@@ -234,7 +234,7 @@ function ModalCampanha({ campanha, livros, parceiros, onSave, onClose }) {
             <p style={{fontSize:11.5,color:'var(--text-muted)',marginTop:4}}>Deixe em branco para campanha genérica (sem livro específico).</p>
           </div>}
 
-          {form.tipo !== 'Lançamento' && <>{/* Parceiros vinculados */}
+          {form.tipo !== 'Lançamento' && form.tipo !== 'Geral' && <>{/* Parceiros vinculados */}
           <div className="form-group">
             <label className="form-label">
               Parceiros
@@ -287,7 +287,7 @@ function ModalCampanha({ campanha, livros, parceiros, onSave, onClose }) {
             <p style={{fontSize:11.5,color:'var(--text-muted)',marginTop:4}}>Parceiros podem ser adicionados ou removidos depois também.</p>
           </div></>}
 
-          {form.tipo === 'Lançamento' && (
+          {(form.tipo === 'Lançamento' || form.tipo === 'Geral') && (
             <div style={{padding:'10px 14px',background:'var(--accent-glow)',borderRadius:8,fontSize:13,color:'var(--accent)'}}>
               📚 Os livros e parceiros serão adicionados após criar a campanha.
             </div>
@@ -634,7 +634,7 @@ function ModalDivulgacao({ divulgacao, onSave, onClose }) {
 // Cada divulgação é um registro separado em lancamento_parceiros
 // lp        = registro "principal" (status + obs ficam aqui)
 // irmãos    = outros registros com mesmo ll_id + parceiro_id
-function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, onSave, onClose }) {
+function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, tipoCampanha, onSave, onClose }) {
   const EMPTY_DIV = () => ({ _tmpId: Math.random(), id: null, tipo_divulgacao:'', data_divulgacao:'', link:'', curtidas:'', comentarios:'', visualizacoes:'' })
 
   const toDiv = r => ({
@@ -702,15 +702,17 @@ function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, onSave, onClose }) {
                 {STATUS_PARCEIRO.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </div>
-            {/* Data combinada — destaque visual */}
-            <div className="form-group">
-              <label className="form-label" style={{display:'flex',alignItems:'center',gap:5}}>
-                <span style={{color:'var(--amber)'}}>⭐</span> Data combinada
-              </label>
-              <input className="form-input" type="date" value={dataCombinada}
-                onChange={e=>setDataCombinada(e.target.value)}
-                style={{borderColor: dataCombinada ? 'var(--amber)' : undefined}}/>
-            </div>
+            {/* Data combinada — só para Lançamento */}
+            {tipoCampanha !== 'Geral' && (
+              <div className="form-group">
+                <label className="form-label" style={{display:'flex',alignItems:'center',gap:5}}>
+                  <span style={{color:'var(--amber)'}}>⭐</span> Data combinada
+                </label>
+                <input className="form-input" type="date" value={dataCombinada}
+                  onChange={e=>setDataCombinada(e.target.value)}
+                  style={{borderColor: dataCombinada ? 'var(--amber)' : undefined}}/>
+              </div>
+            )}
           </div>
           <div className="form-group">
             <label className="form-label">Observações</label>
@@ -805,7 +807,7 @@ function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, onSave, onClose }) {
 }
 
 // ── DETALHE LANÇAMENTO ─────────────────────────────────────
-function DetalheLancamento({ campanhaId, lancamentoLivros, setLancamentoLivros, parceiros, reload, showToast }) {
+function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLancamentoLivros, parceiros, reload, showToast }) {
   const [livroSearch, setLivroSearch]   = useState('')
   const [livroResults, setLivroResults] = useState([])
   const [livroOpen, setLivroOpen]       = useState(false)
@@ -1109,7 +1111,7 @@ function DetalheLancamento({ campanhaId, lancamentoLivros, setLancamentoLivros, 
                                     <td style={{verticalAlign:'top',paddingTop:8}}>
                                       <div className="actions-cell">
                                         <button className="btn btn-ghost btn-icon btn-sm"
-                                          onClick={()=>setModalParceiro({ lp: principal, irmaos, ll_id: ll.id })}>
+                                          onClick={()=>setModalParceiro({ lp: principal, irmaos, ll_id: ll.id, tipoCampanha })}>
                                           <Pencil size={12}/>
                                         </button>
                                         <button className="btn btn-danger btn-icon btn-sm"
@@ -1138,6 +1140,7 @@ function DetalheLancamento({ campanhaId, lancamentoLivros, setLancamentoLivros, 
           lp={modalParceiro.lp}
           irmaos={modalParceiro.irmaos}
           ll_id={modalParceiro.ll_id}
+          tipoCampanha={modalParceiro.tipoCampanha}
           onSave={handleUpdateParceiro}
           onClose={()=>setModalParceiro(null)}
         />
@@ -1299,7 +1302,7 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
   async function reload() {
     const c = await getCampanha(campanhaId)
     setCampanha(c)
-    if (c.tipo === 'Lançamento') {
+    if ((c.tipo === 'Lançamento' || c.tipo === 'Geral')) {
       const ll = await getLancamentoLivros(campanhaId)
       setLancamentoLivros(ll)
     }
@@ -1420,9 +1423,10 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
         ))}
       </div>
 
-      {campanha.tipo === 'Lançamento'
+      {(campanha.tipo === 'Lançamento' || campanha.tipo === 'Geral')
         ? <DetalheLancamento
             campanhaId={campanhaId}
+            tipoCampanha={campanha.tipo}
             lancamentoLivros={lancamentoLivros}
             setLancamentoLivros={setLancamentoLivros}
             parceiros={parceiros}
@@ -1861,7 +1865,7 @@ export default function Campanhas() {
                     )}
 
                     {/* Progresso — Lançamento usa lancamento_parceiros, outros usam campanha_parceiros */}
-                    {c.tipo === 'Lançamento' ? (() => {
+                    {(c.tipo === 'Lançamento' || c.tipo === 'Geral') ? (() => {
                       const lps = (c.lancamento_livros||[]).flatMap(ll => ll.lancamento_parceiros||[])
                       return lps.length > 0
                         ? <ProgressoParceiros parceiros={lps}/>
