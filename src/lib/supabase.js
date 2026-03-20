@@ -809,3 +809,49 @@ export async function getLancamentosMonitoramento({ ano, mes } = {}) {
   if (error) throw error
   return data || []
 }
+
+// ── IMPORTAR DIVULGAÇÕES PROMOÇÃO POR PLANILHA ─────────────
+// Planilha: coluna Parceiro + coluna ISBN → cria divulgações para cada parceiro
+export async function importarDivulgacoesPromocao(campanhaId, rows) {
+  // rows = [{ parceiro_nome, isbn, tipo, origem, data_divulgacao }]
+  const results = { criados: 0, erros: [] }
+
+  // Busca todos os campanha_parceiros da campanha
+  const { data: cps } = await supabase
+    .from('campanha_parceiros')
+    .select('id, parceiro_id, parceiros(id, nome)')
+    .eq('campanha_id', campanhaId)
+
+  // Busca livros pelos ISBNs
+  const isbns = [...new Set(rows.map(r => r.isbn).filter(Boolean))]
+  const livrosMap = {}
+  for (const isbn of isbns) {
+    const { data } = await supabase.from('livros').select('id, titulo, isbn').eq('isbn', isbn).maybeSingle()
+    if (data) livrosMap[isbn] = data
+  }
+
+  for (const row of rows) {
+    try {
+      // Encontra o campanha_parceiro pelo nome do parceiro
+      const cp = cps?.find(c =>
+        c.parceiros?.nome?.toLowerCase().trim() === row.parceiro_nome?.toLowerCase().trim()
+      )
+      if (!cp) { results.erros.push(`Parceiro não encontrado: "${row.parceiro_nome}"`); continue }
+
+      const livro = row.isbn ? livrosMap[row.isbn] : null
+      if (row.isbn && !livro) { results.erros.push(`ISBN não encontrado: ${row.isbn} (parceiro: ${row.parceiro_nome})`); continue }
+
+      await supabase.from('campanha_divulgacoes').insert([{
+        campanha_parceiro_id: cp.id,
+        livro_id: livro?.id || null,
+        tipo: row.tipo || null,
+        origem: row.origem || 'combinada',
+        data_divulgacao: row.data_divulgacao || null,
+      }])
+      results.criados++
+    } catch(e) {
+      results.erros.push(`${row.parceiro_nome}: ${e?.message || e}`)
+    }
+  }
+  return results
+}
