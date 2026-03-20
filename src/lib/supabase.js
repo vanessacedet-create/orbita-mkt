@@ -498,7 +498,7 @@ export async function deleteDivulgacaoCampanha(id) {
 export async function getLancamentoLivros(campanha_id) {
   const { data, error } = await supabase
     .from('lancamento_livros')
-    .select('id, livro_id, livros(id, titulo, autor, isbn, sku), lancamento_parceiros(id, status, data_divulgacao, tipo_divulgacao, link, curtidas, comentarios, visualizacoes, observacoes, parceiro_id, parceiros(id, nome, tipo_parceria))')
+    .select('id, livro_id, livros(id, titulo, autor, isbn, sku), lancamento_parceiros(id, status, data_combinada, data_divulgacao, tipo_divulgacao, link, curtidas, comentarios, visualizacoes, observacoes, parceiro_id, parceiros(id, nome, tipo_parceria))')
     .eq('campanha_id', campanha_id)
     .order('created_at', { ascending: true })
   if (error) throw error
@@ -524,7 +524,7 @@ export async function addLancamentoParceiro(lancamento_livro_id, parceiro_id) {
   const { data, error } = await supabase
     .from('lancamento_parceiros')
     .insert([{ lancamento_livro_id, parceiro_id, status: 'convidado' }])
-    .select('id, status, data_divulgacao, tipo_divulgacao, link, curtidas, comentarios, visualizacoes, observacoes, parceiro_id, parceiros(id, nome, tipo_parceria)')
+    .select('id, status, data_combinada, data_divulgacao, tipo_divulgacao, link, curtidas, comentarios, visualizacoes, observacoes, parceiro_id, parceiros(id, nome, tipo_parceria)')
     .single()
   if (error) throw error
   return data
@@ -535,7 +535,7 @@ export async function updateLancamentoParceiro(id, updates) {
     .from('lancamento_parceiros')
     .update(updates)
     .eq('id', id)
-    .select('id, status, data_divulgacao, tipo_divulgacao, link, curtidas, comentarios, visualizacoes, observacoes, parceiro_id, parceiros(id, nome, tipo_parceria)')
+    .select('id, status, data_combinada, data_divulgacao, tipo_divulgacao, link, curtidas, comentarios, visualizacoes, observacoes, parceiro_id, parceiros(id, nome, tipo_parceria)')
     .single()
   if (error) throw error
   return data
@@ -752,4 +752,24 @@ export async function updateRegistroMonitoramento(id, updates) {
 export async function deleteRegistroMonitoramento(id) {
   const { error } = await supabase.from('monitoramento').delete().eq('id', id)
   if (error) throw error
+}
+
+// ── MONITORAMENTO — LANÇAMENTOS ────────────────────────────
+// Retorna lancamento_parceiros com data_combinada no mês para integração com Monitoramento
+export async function getLancamentosMonitoramento({ ano, mes } = {}) {
+  const ini = `${ano}-${String(mes).padStart(2,'0')}-01`
+  const ultimoDia = new Date(ano, mes, 0).getDate()
+  const fim = `${ano}-${String(mes).padStart(2,'0')}-${String(ultimoDia).padStart(2,'0')}`
+  const { data, error } = await supabase
+    .from('lancamento_parceiros')
+    .select(`
+      id, status, data_combinada, tipo_divulgacao, link,
+      parceiros(id, nome),
+      lancamento_livros(id, livros(id, titulo), campanhas(id, nome))
+    `)
+    .not('data_combinada', 'is', null)
+    .gte('data_combinada', ini)
+    .lte('data_combinada', fim)
+  if (error) throw error
+  return data || []
 }
