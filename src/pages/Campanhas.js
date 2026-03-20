@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import {
-  getCampanhas, getCampanha, createCampanha, updateCampanha, deleteCampanha,
+  getCampanhas, getCampanha, createCampanha, updateCampanha, deleteCampanha, reordenarCampanhas,
   getParceiros, getLivros,
   addParceiroCampanha, updateParceiroCampanha, removeParceiroCampanha,
   getFollowUps, registrarContato,
@@ -2048,6 +2048,8 @@ function FollowUpTab() {
 export default function Campanhas() {
   const [tab, setTab]               = useState('campanhas')
   const [campanhas, setCampanhas]   = useState([])
+  const [dragId, setDragId]         = useState(null)
+  const [dragOver, setDragOver]     = useState(null)
   const [loading, setLoading]       = useState(true)
   const [modal, setModal]           = useState(false)
   const [detalhe, setDetalhe]       = useState(null)
@@ -2086,6 +2088,23 @@ export default function Campanhas() {
     await deleteCampanha(id)
     setCampanhas(prev=>prev.filter(c=>c.id!==id))
     showToast('Excluída!')
+  }
+
+  async function handleDragEnd(fromId, toId) {
+    if (!fromId || !toId || fromId === toId) { setDragId(null); setDragOver(null); return }
+    // Reorder in state using current filtradas order
+    const allIds = campanhas.map(c => c.id)
+    const fromIdx = allIds.indexOf(fromId)
+    const toIdx   = allIds.indexOf(toId)
+    if (fromIdx < 0 || toIdx < 0) { setDragId(null); setDragOver(null); return }
+    const reordenadas = [...campanhas]
+    const [moved] = reordenadas.splice(fromIdx, 1)
+    reordenadas.splice(toIdx, 0, moved)
+    setCampanhas(reordenadas)
+    setDragId(null); setDragOver(null)
+    // Persist — assign sequential ordem values
+    const ordens = reordenadas.map((c, i) => ({ id: c.id, ordem: i }))
+    try { await reordenarCampanhas(ordens) } catch(e) { console.error(e) }
   }
 
   const filtradas = campanhas
@@ -2152,9 +2171,25 @@ export default function Campanhas() {
                 const cps = c.campanha_parceiros||[]
                 const hoje = new Date().toISOString().slice(0,10)
                 const urgente = c.data_fim && c.data_fim <= hoje && c.status === 'em_andamento'
+                const isDragging = dragId === c.id
+                const isOver = dragOver === c.id
                 return (
-                  <div key={c.id} className="table-card" style={{padding:'18px 20px',cursor:'pointer',border:urgente?'1px solid rgba(245,101,101,0.3)':'1px solid var(--border)',transition:'border-color 0.2s'}}
-                    onClick={()=>setDetalhe(c.id)}>
+                  <div key={c.id}
+                    draggable
+                    onDragStart={e=>{ e.dataTransfer.effectAllowed='move'; setDragId(c.id) }}
+                    onDragOver={e=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; setDragOver(c.id) }}
+                    onDragLeave={()=>setDragOver(null)}
+                    onDrop={e=>{ e.preventDefault(); handleDragEnd(dragId, c.id) }}
+                    onDragEnd={()=>{ setDragId(null); setDragOver(null) }}
+                    className="table-card"
+                    style={{
+                      padding:'18px 20px', cursor:'grab',
+                      border: isOver ? '2px solid var(--accent)' : urgente ? '1px solid rgba(245,101,101,0.3)' : '1px solid var(--border)',
+                      transition:'border-color 0.15s, opacity 0.15s, transform 0.15s',
+                      opacity: isDragging ? 0.4 : 1,
+                      transform: isOver ? 'scale(1.01)' : 'scale(1)',
+                    }}
+                    onClick={()=>!dragId&&setDetalhe(c.id)}>
                     <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:10}}>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontWeight:700,fontSize:15,color:'var(--text)',marginBottom:4,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.nome}</div>
