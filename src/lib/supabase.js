@@ -629,26 +629,41 @@ export async function getEditoras() {
   return [...new Set((data || []).map(l => l.editora).filter(Boolean))].sort()
 }
 // ── MONITORAMENTO ──────────────────────────────────────────
-export async function getMonitoramento({ ano, mes } = {}) {
+export async function getRegistrosMonitoramento({ ano, mes } = {}) {
   const ini = `${ano}-${String(mes).padStart(2,'0')}-01`
   const ultimoDia = new Date(ano, mes, 0).getDate()
   const fim = `${ano}-${String(mes).padStart(2,'0')}-${String(ultimoDia).padStart(2,'0')}`
-
   const { data, error } = await supabase
-    .from('campanha_parceiros')
-    .select(`
-      id, status, data_inicio, data_fim, data_publicacao_combinada, link_publicacao,
-      parceiros(id, nome),
-      campanhas(id, nome, tipo, status),
-      campanha_divulgacoes(id, tipo, link, curtidas, comentarios, visualizacoes, data_divulgacao, livro_id, livros(id, titulo))
-    `)
-    .or(
-      `and(data_inicio.lte.${fim},data_fim.gte.${ini}),` +
-      `and(data_publicacao_combinada.gte.${ini},data_publicacao_combinada.lte.${fim}),` +
-      `and(data_inicio.gte.${ini},data_inicio.lte.${fim}),` +
-      `and(data_fim.gte.${ini},data_fim.lte.${fim})`
-    )
-    .not('campanhas', 'is', null)
+    .from('monitoramento')
+    .select('*, parceiros(id, nome)')
+    .gte('data', ini).lte('data', fim)
+    .order('data', { ascending: true })
   if (error) throw error
   return data || []
+}
+
+export async function createRegistroMonitoramento(payload) {
+  const { data, error } = await supabase
+    .from('monitoramento')
+    .insert([payload])
+    .select('*, parceiros(id, nome)')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateRegistroMonitoramento(id, updates) {
+  const { data, error } = await supabase
+    .from('monitoramento')
+    .update(updates)
+    .eq('id', id)
+    .select('*, parceiros(id, nome)')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteRegistroMonitoramento(id) {
+  const { error } = await supabase.from('monitoramento').delete().eq('id', id)
+  if (error) throw error
 }
