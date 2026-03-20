@@ -5,6 +5,7 @@ import {
   addParceiroCampanha, updateParceiroCampanha, removeParceiroCampanha,
   getFollowUps, registrarContato,
   getDivulgacoesParceiro, createDivulgacaoCampanha, updateDivulgacaoCampanha, deleteDivulgacaoCampanha,
+  importarDivulgacoesPromocao,
   getLancamentoLivros, addLancamentoLivro, removeLancamentoLivro,
   addLancamentoParceiro, updateLancamentoParceiro, removeLancamentoParceiro,
   addLivroCampanha, removeLivroCampanha
@@ -328,6 +329,7 @@ function ModalParceiro({ cp, campanha, onSave, onClose }) {
   const [divulgacoes, setDivulgacoes]   = useState([])
   const [loadingDiv, setLoadingDiv]     = useState(true)
   const [modalDiv, setModalDiv]         = useState(null) // null | 'new' | divulgacao obj
+  const [modalImportarDiv, setModalImportarDiv] = useState(false)
   const [saving, setSaving]             = useState(false)
   const [toast, showToast]              = useToast()
 
@@ -422,7 +424,12 @@ function ModalParceiro({ cp, campanha, onSave, onClose }) {
         <div style={{borderTop:'1px solid var(--border)',marginTop:16,paddingTop:16}}>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
             <span style={{fontSize:13,fontWeight:700,color:'var(--text)'}}>Divulgações ({divulgacoes.length})</span>
-            <button className="btn btn-sm btn-primary" onClick={()=>setModalDiv('new')}><Plus size={13}/> Nova divulgação</button>
+            <div style={{display:'flex',gap:8}}>
+              <button className="btn btn-ghost btn-sm" onClick={()=>setModalImportarDiv(true)} style={{display:'flex',alignItems:'center',gap:4,fontSize:12}}>
+                <Upload size={12}/> Importar planilha
+              </button>
+              <button className="btn btn-sm btn-primary" onClick={()=>setModalDiv('new')}><Plus size={13}/> Nova divulgação</button>
+            </div>
           </div>
 
           {loadingDiv ? <div style={{padding:'12px 0',color:'var(--text-muted)',fontSize:13}}>Carregando...</div>
@@ -435,11 +442,14 @@ function ModalParceiro({ cp, campanha, onSave, onClose }) {
                     <div key={d.id} style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,padding:'10px 14px'}}>
                       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8}}>
                         <div style={{flex:1}}>
-                          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+                          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:4,flexWrap:'wrap'}}>
                             <span className="badge badge-indigo" style={{fontSize:11}}>{tipo?.label||d.tipo}</span>
-  
+                            {d.origem==='organica'
+                              ? <span style={{fontSize:10,background:'rgba(34,197,94,0.12)',color:'#22c55e',borderRadius:4,padding:'1px 6px',fontWeight:600}}>🌱 Orgânica</span>
+                              : <span style={{fontSize:10,background:'rgba(249,115,22,0.12)',color:'var(--accent)',borderRadius:4,padding:'1px 6px',fontWeight:600}}>🤝 Combinada</span>
+                            }
                             {d.data_divulgacao && <span style={{fontSize:11,color:'var(--text-muted)'}}>{format(new Date(d.data_divulgacao+'T12:00:00'),'dd/MM/yyyy',{locale:ptBR})}</span>}
-                          {d.livros?.titulo && <span style={{fontSize:11,color:'var(--accent)'}}>📚 {d.livros.titulo}</span>}
+                            {d.livros?.titulo && <span style={{fontSize:11,color:'var(--accent)'}}>📚 {d.livros.titulo}</span>}
                           </div>
                           {d.link && <a href={d.link} target="_blank" rel="noreferrer" style={{fontSize:12,color:'var(--accent)',display:'flex',alignItems:'center',gap:4,marginBottom:4}}><Link size={11}/>Ver publicação</a>}
                           {(d.curtidas||d.comentarios||d.visualizacoes) && (
@@ -473,134 +483,184 @@ function ModalParceiro({ cp, campanha, onSave, onClose }) {
           onClose={()=>setModalDiv(null)}
         />
       )}
+      {modalImportarDiv && (
+        <ModalImportarDivulgacoes
+          campanhaId={campanha?.id}
+          onImport={()=>getDivulgacoesParceiro(cp.id).then(setDivulgacoes)}
+          onClose={()=>setModalImportarDiv(false)}
+        />
+      )}
     </div>
   )
 }
 
 // ── MODAL DIVULGAÇÃO ───────────────────────────────────────
-function ModalDivulgacao({ divulgacao, onSave, onClose }) {
-  const hoje = new Date().toISOString().slice(0,10)
-  const EMPTY = { tipo:'', link:'', curtidas:'', comentarios:'', visualizacoes:'', livro_id:'', livro_titulo:'', data_divulgacao: hoje }
-  const [form, setForm] = useState(divulgacao ? {
-    id: divulgacao.id,
-    tipo: divulgacao.tipo||'',
-    link: divulgacao.link||'',
-    curtidas: divulgacao.curtidas??'',
-    comentarios: divulgacao.comentarios??'',
-    visualizacoes: divulgacao.visualizacoes??'',
-    livro_id: divulgacao.livro_id||'',
-    livro_titulo: divulgacao.livros?.titulo||'',
-    data_divulgacao: divulgacao.data_divulgacao||hoje,
-  } : EMPTY)
-  const [livroSearch, setLivroSearch] = useState(divulgacao?.livros?.titulo||'')
-  const [livroResults, setLivroResults] = useState([])
-  const [livroOpen, setLivroOpen]       = useState(false)
-  const [saving, setSaving] = useState(false)
-
-  const tipoSel = TIPOS_DIVULGACAO.find(t => t.value === form.tipo)
-  const temLink = tipoSel?.temLink || false
+// ── BUSCA DE LIVRO (reutilizável) ─────────────────────────
+function BuscaLivro({ livroId, livroTitulo, onChange, placeholder }) {
+  const [search, setSearch] = useState(livroTitulo||'')
+  const [results, setResults] = useState([])
+  const [open, setOpen] = useState(false)
 
   useEffect(() => {
-    if (!livroSearch || livroSearch.length < 2) { setLivroResults([]); return }
+    if (!search || search.length < 2) { setResults([]); return }
     const t = setTimeout(async () => {
-      try {
-        const { data } = await getLivros({ page:0, pageSize:1000, search: livroSearch })
-        setLivroResults(data || [])
-        setLivroOpen(true)
-      } catch {}
+      try { const { data } = await getLivros({ page:0, pageSize:50, search }); setResults(data||[]); setOpen(true) } catch {}
     }, 300)
     return () => clearTimeout(t)
-  }, [livroSearch])
+  }, [search])
 
-  function selecionarLivro(l) {
-    setForm(f => ({ ...f, livro_id: l.id, livro_titulo: l.titulo }))
-    setLivroSearch(l.titulo)
-    setLivroOpen(false)
-  }
+  function selecionar(l) { onChange(l); setSearch(l.titulo); setOpen(false) }
+  function limpar() { onChange(null); setSearch(''); setResults([]) }
 
-  function limparLivro() {
-    setForm(f => ({ ...f, livro_id: '', livro_titulo: '' }))
-    setLivroSearch('')
-    setLivroResults([])
+  return (
+    <div style={{position:'relative'}}>
+      <div style={{display:'flex',gap:6}}>
+        <input className="form-input" value={search}
+          onChange={e=>{ setSearch(e.target.value); if(!e.target.value) limpar() }}
+          placeholder={placeholder||'Buscar por título, ISBN ou SKU...'} autoComplete="off"/>
+        {livroId && <button className="btn btn-ghost btn-icon" onClick={limpar}><X size={14}/></button>}
+      </div>
+      {open && results.length > 0 && (
+        <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:300,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,boxShadow:'0 4px 16px rgba(0,0,0,0.3)',maxHeight:200,overflowY:'auto'}}>
+          {results.map(l=>(
+            <div key={l.id} onClick={()=>selecionar(l)} style={{padding:'8px 12px',cursor:'pointer',borderBottom:'1px solid var(--border)',fontSize:13}}
+              onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'}
+              onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+              <div style={{fontWeight:600,color:'var(--text)'}}>{l.titulo}</div>
+              <div style={{fontSize:11,color:'var(--text-muted)'}}>{l.autor}{l.isbn?` · ${l.isbn}`:''}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {livroId && <div style={{fontSize:11,color:'var(--accent)',marginTop:3}}>📚 {livroTitulo}</div>}
+    </div>
+  )
+}
+
+function ModalDivulgacao({ divulgacao, onSave, onClose }) {
+  const hoje = new Date().toISOString().slice(0,10)
+  const EMPTY_LIVRO = () => ({ _id: Math.random(), livro_id:'', livro_titulo:'' })
+
+  const [origem, setOrigem] = useState(divulgacao?.origem || 'combinada')
+  const [tipo, setTipo]     = useState(divulgacao?.tipo || '')
+  const [data, setData]     = useState(divulgacao?.data_divulgacao || hoje)
+  const [link, setLink]     = useState(divulgacao?.link || '')
+  const [curtidas, setCurtidas]       = useState(divulgacao?.curtidas ?? '')
+  const [comentarios, setComentarios] = useState(divulgacao?.comentarios ?? '')
+  const [visualizacoes, setVisual]    = useState(divulgacao?.visualizacoes ?? '')
+  // Múltiplos livros — se editando, começa com o livro atual
+  const [livros, setLivros] = useState(
+    divulgacao?.livro_id
+      ? [{ _id: divulgacao.livro_id, livro_id: divulgacao.livro_id, livro_titulo: divulgacao.livros?.titulo||'' }]
+      : [EMPTY_LIVRO()]
+  )
+  const [saving, setSaving] = useState(false)
+
+  const tipoSel = TIPOS_DIVULGACAO.find(t => t.value === tipo)
+  const temLink = tipoSel?.temLink || false
+
+  function addLivro() { setLivros(p => [...p, EMPTY_LIVRO()]) }
+  function removeLivro(id) { setLivros(p => p.filter(l => l._id !== id)) }
+  function setLivroItem(id, livro) {
+    setLivros(p => p.map(l => l._id===id ? { ...l, livro_id: livro?.id||'', livro_titulo: livro?.titulo||'' } : l))
   }
 
   async function save() {
-    if (!form.tipo) return
+    if (!tipo) return
     setSaving(true)
     try {
-      const payload = {
-        tipo: form.tipo,
-        livro_id:      form.livro_id || null,
-        data_divulgacao: form.data_divulgacao || null,
-        link:          temLink ? (form.link||null) : null,
-        curtidas:      temLink && form.curtidas     !== '' ? Number(form.curtidas)     : null,
-        comentarios:   temLink && form.comentarios  !== '' ? Number(form.comentarios)  : null,
-        visualizacoes: temLink && form.visualizacoes!== '' ? Number(form.visualizacoes): null,
+      const base = {
+        tipo, origem, data_divulgacao: data||null,
+        link: temLink?(link||null):null,
+        curtidas: temLink&&curtidas!==''?Number(curtidas):null,
+        comentarios: temLink&&comentarios!==''?Number(comentarios):null,
+        visualizacoes: temLink&&visualizacoes!==''?Number(visualizacoes):null,
       }
-      if (form.id) payload.id = form.id
-      await onSave(payload)
+      // Se editando, salva apenas o primeiro livro (comportamento original)
+      if (divulgacao?.id) {
+        await onSave({ ...base, id: divulgacao.id, livro_id: livros[0]?.livro_id||null })
+      } else {
+        // Cria uma divulgação por livro (ou uma sem livro se todos vazios)
+        const livrosValidos = livros.filter(l => l.livro_id)
+        if (livrosValidos.length === 0) {
+          await onSave({ ...base, livro_id: null })
+        } else {
+          for (const l of livrosValidos) {
+            await onSave({ ...base, livro_id: l.livro_id })
+          }
+        }
+      }
     } finally { setSaving(false) }
   }
 
   return (
     <div className="modal-backdrop" style={{zIndex:1100}} onClick={()=>{}}>
-      <div className="modal" style={{maxWidth:440}}>
+      <div className="modal" style={{maxWidth:480, maxHeight:'90vh', overflowY:'auto'}}>
         <div className="modal-header">
           <h2 className="modal-title">{divulgacao ? 'Editar divulgação' : 'Nova divulgação'}</h2>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
         </div>
         <div className="form-grid">
+
+          {/* Origem */}
+          <div className="form-group">
+            <label className="form-label">Origem da divulgação</label>
+            <div style={{display:'flex',gap:8}}>
+              {[{v:'combinada',l:'🤝 Combinada'},{v:'organica',l:'🌱 Orgânica'}].map(({v,l})=>(
+                <button key={v} type="button" onClick={()=>setOrigem(v)}
+                  style={{flex:1,padding:'8px 0',borderRadius:8,fontSize:13,fontWeight:600,cursor:'pointer',border:'2px solid',
+                    borderColor: origem===v?'var(--accent)':'var(--border)',
+                    background: origem===v?'var(--accent-glow)':'transparent',
+                    color: origem===v?'var(--accent)':'var(--text-muted)',transition:'all 0.15s'}}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Tipo */}
           <div className="form-group">
             <label className="form-label">Tipo de divulgação *</label>
-            <select className="form-select" value={form.tipo} onChange={e=>setForm(f=>({...f,tipo:e.target.value,link:'',curtidas:'',comentarios:'',visualizacoes:''}))}>
+            <select className="form-select" value={tipo} onChange={e=>{setTipo(e.target.value);setLink('');setCurtidas('');setComentarios('');setVisual('')}}>
               <option value="">Selecionar...</option>
               {TIPOS_DIVULGACAO.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
 
-          {/* Busca de livro */}
-          <div className="form-group" style={{position:'relative'}}>
-            <label className="form-label">Livro divulgado <span style={{color:'var(--text-muted)',fontWeight:400}}>(opcional)</span></label>
-            <div style={{display:'flex',gap:6}}>
-              <input
-                className="form-input"
-                value={livroSearch}
-                onChange={e=>{ setLivroSearch(e.target.value); if(!e.target.value) limparLivro() }}
-                placeholder="Buscar por título, ISBN ou SKU..."
-                autoComplete="off"
-              />
-              {form.livro_id && (
-                <button className="btn btn-ghost btn-icon" onClick={limparLivro} title="Remover livro"><X size={14}/></button>
-              )}
-            </div>
-            {livroOpen && livroResults.length > 0 && (
-              <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:200,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,boxShadow:'0 4px 16px rgba(0,0,0,0.3)',maxHeight:200,overflowY:'auto'}}>
-                <div style={{padding:'6px 10px',fontSize:11,color:'var(--text-muted)',borderBottom:'1px solid var(--border)'}}>Campanha como um todo</div>
-                <div style={{padding:'8px 10px',fontSize:13,cursor:'pointer',color:'var(--text-muted)'}} onClick={limparLivro}>— Nenhum livro específico</div>
-                {livroResults.map(l=>(
-                  <div key={l.id} onClick={()=>selecionarLivro(l)} style={{padding:'8px 12px',cursor:'pointer',borderTop:'1px solid var(--border)',fontSize:13,color:'var(--text)'}}
-                    onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'}
-                    onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-                    <div style={{fontWeight:600}}>{l.titulo}</div>
-                    <div style={{fontSize:11,color:'var(--text-muted)'}}>{l.autor}{l.isbn?` · ISBN: ${l.isbn}`:''}</div>
-                  </div>
-                ))}
+          {/* Livros — múltiplos */}
+          <div className="form-group">
+            <label className="form-label">Livros divulgados <span style={{color:'var(--text-muted)',fontWeight:400}}>(opcional)</span></label>
+            {livros.map((l, i) => (
+              <div key={l._id} style={{display:'flex',gap:6,marginBottom:6,alignItems:'center'}}>
+                <div style={{flex:1}}>
+                  <BuscaLivro livroId={l.livro_id} livroTitulo={l.livro_titulo}
+                    onChange={livro=>setLivroItem(l._id,livro)} placeholder="Buscar livro..."/>
+                </div>
+                {livros.length > 1 && (
+                  <button onClick={()=>removeLivro(l._id)}
+                    style={{background:'none',border:'none',cursor:'pointer',color:'var(--red)',flexShrink:0,padding:4}}>
+                    <Trash2 size={13}/>
+                  </button>
+                )}
               </div>
-            )}
-            {form.livro_id && (
-              <div style={{fontSize:11,color:'var(--accent)',marginTop:4}}>📚 {form.livro_titulo}</div>
+            ))}
+            {!divulgacao && (
+              <button className="btn btn-ghost btn-sm" onClick={addLivro}
+                style={{fontSize:11,marginTop:2,display:'flex',alignItems:'center',gap:4}}>
+                <Plus size={11}/> Adicionar outro livro
+              </button>
             )}
           </div>
 
           <div className="form-group">
             <label className="form-label">Data da divulgação</label>
-            <input className="form-input" type="date" value={form.data_divulgacao} onChange={e=>setForm(f=>({...f,data_divulgacao:e.target.value}))}/>
+            <input className="form-input" type="date" value={data} onChange={e=>setData(e.target.value)}/>
           </div>
 
           {temLink && (
             <div className="form-group">
               <label className="form-label">Link da publicação</label>
-              <input className="form-input" value={form.link} onChange={e=>setForm(f=>({...f,link:e.target.value}))} placeholder="https://..."/>
+              <input className="form-input" value={link} onChange={e=>setLink(e.target.value)} placeholder="https://..."/>
             </div>
           )}
 
@@ -608,15 +668,15 @@ function ModalDivulgacao({ divulgacao, onSave, onClose }) {
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}}>
               <div className="form-group">
                 <label className="form-label">Curtidas</label>
-                <input className="form-input" type="number" value={form.curtidas} onChange={e=>setForm(f=>({...f,curtidas:e.target.value}))} placeholder="0"/>
+                <input className="form-input" type="number" value={curtidas} onChange={e=>setCurtidas(e.target.value)} placeholder="0"/>
               </div>
               <div className="form-group">
                 <label className="form-label">Comentários</label>
-                <input className="form-input" type="number" value={form.comentarios} onChange={e=>setForm(f=>({...f,comentarios:e.target.value}))} placeholder="0"/>
+                <input className="form-input" type="number" value={comentarios} onChange={e=>setComentarios(e.target.value)} placeholder="0"/>
               </div>
               <div className="form-group">
                 <label className="form-label">Visualizações</label>
-                <input className="form-input" type="number" value={form.visualizacoes} onChange={e=>setForm(f=>({...f,visualizacoes:e.target.value}))} placeholder="0"/>
+                <input className="form-input" type="number" value={visualizacoes} onChange={e=>setVisual(e.target.value)} placeholder="0"/>
               </div>
             </div>
           )}
@@ -635,11 +695,12 @@ function ModalDivulgacao({ divulgacao, onSave, onClose }) {
 // lp        = registro "principal" (status + obs ficam aqui)
 // irmãos    = outros registros com mesmo ll_id + parceiro_id
 function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, tipoCampanha, onSave, onClose }) {
-  const EMPTY_DIV = () => ({ _tmpId: Math.random(), id: null, tipo_divulgacao:'', data_divulgacao:'', link:'', curtidas:'', comentarios:'', visualizacoes:'' })
+  const EMPTY_DIV = () => ({ _tmpId: Math.random(), id: null, origem:'combinada', tipo_divulgacao:'', data_divulgacao:'', link:'', curtidas:'', comentarios:'', visualizacoes:'' })
 
   const toDiv = r => ({
     _tmpId: r.id || Math.random(),
     id: r.id,
+    origem: r.origem || 'combinada',
     tipo_divulgacao: r.tipo_divulgacao || '',
     data_divulgacao: r.data_divulgacao || '',
     link: r.link || '',
@@ -755,6 +816,21 @@ function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, tipoCampanha, onSave,
                     style={{background:'none',border:'none',cursor:'pointer',color:'var(--red)',display:'flex',padding:4}}>
                     <Trash2 size={13}/>
                   </button>
+                </div>
+                {/* Origem */}
+                <div className="form-group" style={{marginBottom:10}}>
+                  <label className="form-label">Origem</label>
+                  <div style={{display:'flex',gap:8}}>
+                    {[{v:'combinada',l:'🤝 Combinada'},{v:'organica',l:'🌱 Orgânica'}].map(({v,l})=>(
+                      <button key={v} type="button" onClick={()=>upd(div._tmpId,'origem',v)}
+                        style={{flex:1,padding:'6px 0',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',border:'2px solid',
+                          borderColor:(div.origem||'combinada')===v?'var(--accent)':'var(--border)',
+                          background:(div.origem||'combinada')===v?'var(--accent-glow)':'transparent',
+                          color:(div.origem||'combinada')===v?'var(--accent)':'var(--text-muted)',transition:'all 0.15s'}}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div className="form-row">
                   <div className="form-group">
@@ -1279,6 +1355,130 @@ function ModalImportarLivros({ campanhaId, livrosExistentes, onImport, onClose }
               {resultado.adicionados} livro{resultado.adicionados!==1?'s':''} vinculado{resultado.adicionados!==1?'s':''} à campanha
               {resultado.naoEncontrados > 0 && ` · ${resultado.naoEncontrados} ISBN${resultado.naoEncontrados!==1?'s':''} não encontrado${resultado.naoEncontrados!==1?'s':''}`}
             </div>
+            <button className="btn btn-primary" style={{marginTop:16}} onClick={onClose}>Fechar</button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+
+// ── MODAL IMPORTAR DIVULGAÇÕES POR PLANILHA (Promoção) ────
+function ModalImportarDivulgacoes({ campanhaId, onImport, onClose }) {
+  const [preview, setPreview]     = useState([])
+  const [loading, setLoading]     = useState(false)
+  const [saving, setSaving]       = useState(false)
+  const [resultado, setResultado] = useState(null)
+  const inputRef = useRef()
+
+  async function handleFile(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    setPreview([]); setResultado(null); setLoading(true)
+    try {
+      const data = await file.arrayBuffer()
+      const wb = XLSX.read(new Uint8Array(data), { type:'array', cellDates:false })
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval:'', raw:true })
+      if (!rows.length) return
+
+      function norm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim() }
+      function getCol(row, ...keys){ const h=Object.keys(row).find(k=>keys.includes(norm(k))); return h?String(row[h]).trim():'' }
+
+      const parsed = rows.map((row,i) => ({
+        parceiro_nome: getCol(row,'parceiro','nome','name'),
+        isbn:          getCol(row,'isbn','ean').replace(/\.0$/,''),
+        tipo:          getCol(row,'tipo','type') || '',
+        origem:        getCol(row,'origem','origin') || 'combinada',
+        data_divulgacao: getCol(row,'data','data divulgacao','data_divulgacao') || null,
+        _linha: i+2
+      })).filter(r => r.parceiro_nome || r.isbn)
+
+      setPreview(parsed)
+    } catch(e) { console.error(e) } finally { setLoading(false) }
+  }
+
+  async function salvar() {
+    if (!preview.length) return
+    setSaving(true)
+    try {
+      const res = await importarDivulgacoesPromocao(campanhaId, preview)
+      setResultado(res)
+      if (res.erros.length === 0) { onImport(); setTimeout(onClose, 2000) }
+    } catch(e) { console.error(e) } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="modal-backdrop" style={{zIndex:1200}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal" style={{maxWidth:520}}>
+        <div className="modal-header">
+          <h2 className="modal-title">Importar divulgações por planilha</h2>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
+        </div>
+
+        {!resultado ? (<>
+          <div style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,padding:'12px 14px',marginBottom:16,fontSize:12,color:'var(--text-muted)'}}>
+            <strong style={{color:'var(--text)',display:'block',marginBottom:4}}>Colunas esperadas na planilha:</strong>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+              {['Parceiro','ISBN','Tipo','Origem','Data'].map(c=>(
+                <span key={c} className="badge badge-indigo" style={{fontSize:11}}>{c}</span>
+              ))}
+            </div>
+            <div style={{marginTop:6}}>Origem: <strong>combinada</strong> ou <strong>organica</strong> (padrão: combinada)</div>
+          </div>
+
+          <div style={{border:'2px dashed var(--border)',borderRadius:10,padding:'24px 20px',textAlign:'center',cursor:'pointer',marginBottom:16}}
+            onClick={()=>inputRef.current?.click()}>
+            <Upload size={22} color="var(--text-muted)" style={{marginBottom:8}}/>
+            <p style={{fontSize:13,color:'var(--text-soft)'}}>Clique para selecionar a planilha</p>
+            <p style={{fontSize:11,color:'var(--text-muted)',marginTop:4}}>.xlsx</p>
+          </div>
+          <input ref={inputRef} type="file" accept=".xlsx" style={{display:'none'}} onChange={handleFile}/>
+
+          {loading && <div style={{textAlign:'center',fontSize:13,color:'var(--text-muted)',padding:'8px 0'}}>Lendo planilha...</div>}
+
+          {preview.length > 0 && !loading && (
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:8}}>{preview.length} linha{preview.length!==1?'s':''} encontrada{preview.length!==1?'s':''}</div>
+              <div style={{border:'1px solid var(--border)',borderRadius:8,overflow:'hidden',maxHeight:200,overflowY:'auto'}}>
+                <table style={{fontSize:12}}>
+                  <thead><tr><th>Parceiro</th><th>ISBN</th><th>Tipo</th><th>Origem</th></tr></thead>
+                  <tbody>
+                    {preview.slice(0,5).map((r,i)=>(
+                      <tr key={i}>
+                        <td>{r.parceiro_nome||'—'}</td>
+                        <td>{r.isbn||'—'}</td>
+                        <td>{r.tipo||'—'}</td>
+                        <td>{r.origem==='organica'?'🌱 Orgânica':'🤝 Combinada'}</td>
+                      </tr>
+                    ))}
+                    {preview.length>5&&<tr><td colSpan={4} style={{color:'var(--text-muted)',textAlign:'center'}}>...e mais {preview.length-5}</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <div className="form-actions">
+            <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+            {preview.length > 0 && (
+              <button className="btn btn-primary" onClick={salvar} disabled={saving}>
+                {saving?'Importando...':`Importar ${preview.length} registro${preview.length!==1?'s':''}`}
+              </button>
+            )}
+          </div>
+        </>) : (
+          <div style={{textAlign:'center',padding:'24px 0'}}>
+            <div style={{fontSize:36,marginBottom:12}}>{resultado.erros.length===0?'✅':'⚠️'}</div>
+            <div style={{fontSize:15,fontWeight:700,color:'var(--text)',marginBottom:8}}>
+              {resultado.erros.length===0?'Importação concluída!':'Importado com erros'}
+            </div>
+            <div style={{fontSize:13,color:'var(--text-muted)'}}>{resultado.criados} registro{resultado.criados!==1?'s':''} criado{resultado.criados!==1?'s':''}</div>
+            {resultado.erros.length>0&&(
+              <div style={{marginTop:12,textAlign:'left',background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',borderRadius:8,padding:'10px 14px',fontSize:12,color:'var(--red)',maxHeight:140,overflowY:'auto'}}>
+                {resultado.erros.map((e,i)=><div key={i}>• {e}</div>)}
+              </div>
+            )}
             <button className="btn btn-primary" style={{marginTop:16}} onClick={onClose}>Fechar</button>
           </div>
         )}
