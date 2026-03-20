@@ -31,6 +31,7 @@ const STATUS_CAMPANHA = [
 const STATUS_PARCEIRO = [
   { value: 'convidado',         label: 'Convidado',          cls: 'badge-indigo' },
   { value: 'confirmado',        label: 'Confirmado',         cls: 'badge-amber'  },
+  { value: 'agendado',          label: 'Agendado',           cls: 'badge-cyan'   },
   { value: 'recusou',           label: 'Recusou',            cls: 'badge-red'    },
   { value: 'publicado',         label: 'Publicado',          cls: 'badge-green'  },
   { value: 'nao_publicou',      label: 'Não publicou',       cls: 'badge-red'    },
@@ -636,9 +637,8 @@ function ModalDivulgacao({ divulgacao, onSave, onClose }) {
 function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, onSave, onClose }) {
   const EMPTY_DIV = () => ({ _tmpId: Math.random(), id: null, tipo_divulgacao:'', data_divulgacao:'', link:'', curtidas:'', comentarios:'', visualizacoes:'' })
 
-  // Monta lista: lp + irmãos
   const toDiv = r => ({
-    _tmpId: r.id,
+    _tmpId: r.id || Math.random(),
     id: r.id,
     tipo_divulgacao: r.tipo_divulgacao || '',
     data_divulgacao: r.data_divulgacao || '',
@@ -648,10 +648,15 @@ function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, onSave, onClose }) {
     visualizacoes: r.visualizacoes ?? '',
   })
 
-  const [status, setStatus]         = useState(lp.status || 'convidado')
+  const [status, setStatus]           = useState(lp.status || 'convidado')
+  const [dataCombinada, setDataCombinada] = useState(lp.data_combinada || lp.data_divulgacao || '')
   const [observacoes, setObservacoes] = useState(lp.observacoes || '')
-  const [divs, setDivs]             = useState([toDiv(lp), ...irmaos.map(toDiv)])
-  const [saving, setSaving]          = useState(false)
+  const [divs, setDivs]               = useState(() => {
+    // Só mostra divulgações já salvas (não cria uma vazia automaticamente)
+    const todas = [lp, ...irmaos].filter(r => r.tipo_divulgacao)
+    return todas.length > 0 ? todas.map(toDiv) : []
+  })
+  const [saving, setSaving] = useState(false)
 
   function upd(tmpId, field, val) {
     setDivs(prev => prev.map(d => d._tmpId===tmpId ? {...d, [field]:val} : d))
@@ -667,6 +672,7 @@ function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, onSave, onClose }) {
         ll_id,
         parceiro_id: lp.parceiro_id,
         status,
+        data_combinada: dataCombinada || null,
         observacoes,
         divs,
       })
@@ -674,22 +680,36 @@ function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, onSave, onClose }) {
     } catch(e) { console.error(e) } finally { setSaving(false) }
   }
 
+  const stInfo = STATUS_PARCEIRO.find(s=>s.value===status)
+
   return (
     <div className="modal-backdrop" style={{zIndex:1100}} onClick={()=>{}}>
-      <div className="modal" style={{maxWidth:560, maxHeight:'90vh', overflowY:'auto'}}>
+      <div className="modal" style={{maxWidth:520, maxHeight:'90vh', overflowY:'auto'}}>
         <div className="modal-header" style={{position:'sticky',top:0,background:'var(--surface)',zIndex:10,borderBottom:'1px solid var(--border)'}}>
-          <h2 className="modal-title">{lp.parceiros?.nome}</h2>
+          <div>
+            <h2 className="modal-title" style={{marginBottom:2}}>{lp.parceiros?.nome}</h2>
+            {stInfo && <span className={`badge ${stInfo.cls}`} style={{fontSize:11}}>{stInfo.label}</span>}
+          </div>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
         </div>
 
-        {/* Status e observações */}
         <div className="form-grid" style={{padding:'16px 0 0'}}>
+          {/* Status */}
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Status</label>
               <select className="form-select" value={status} onChange={e=>setStatus(e.target.value)}>
                 {STATUS_PARCEIRO.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
+            </div>
+            {/* Data combinada — destaque visual */}
+            <div className="form-group">
+              <label className="form-label" style={{display:'flex',alignItems:'center',gap:5}}>
+                <span style={{color:'var(--amber)'}}>⭐</span> Data combinada
+              </label>
+              <input className="form-input" type="date" value={dataCombinada}
+                onChange={e=>setDataCombinada(e.target.value)}
+                style={{borderColor: dataCombinada ? 'var(--amber)' : undefined}}/>
             </div>
           </div>
           <div className="form-group">
@@ -705,10 +725,17 @@ function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, onSave, onClose }) {
             <span style={{fontSize:13,fontWeight:700,color:'var(--text)'}}>
               Divulgações ({divs.length})
             </span>
-            <button className="btn btn-ghost btn-sm" onClick={addDiv} style={{fontSize:12,display:'flex',alignItems:'center',gap:4}}>
+            <button className="btn btn-primary btn-sm" onClick={addDiv}
+              style={{fontSize:12,display:'flex',alignItems:'center',gap:4}}>
               <Plus size={13}/> Adicionar divulgação
             </button>
           </div>
+
+          {divs.length === 0 && (
+            <p style={{fontSize:13,color:'var(--text-muted)',paddingBottom:8}}>
+              Nenhuma divulgação registrada ainda. Clique em "+ Adicionar divulgação" para começar.
+            </p>
+          )}
 
           {divs.map((div, i) => {
             const tipoSel = TIPOS_DIVULGACAO.find(t=>t.value===div.tipo_divulgacao)
@@ -722,12 +749,10 @@ function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, onSave, onClose }) {
                   <span style={{fontSize:11,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.05em'}}>
                     Divulgação {i+1}
                   </span>
-                  {divs.length > 1 && (
-                    <button onClick={()=>removeDiv(div._tmpId)}
-                      style={{background:'none',border:'none',cursor:'pointer',color:'var(--red)',display:'flex',padding:4}}>
-                      <Trash2 size={13}/>
-                    </button>
-                  )}
+                  <button onClick={()=>removeDiv(div._tmpId)}
+                    style={{background:'none',border:'none',cursor:'pointer',color:'var(--red)',display:'flex',padding:4}}>
+                    <Trash2 size={13}/>
+                  </button>
                 </div>
                 <div className="form-row">
                   <div className="form-group">
@@ -739,36 +764,29 @@ function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, onSave, onClose }) {
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Data</label>
+                    <label className="form-label">Data divulgada</label>
                     <input className="form-input" type="date" value={div.data_divulgacao}
                       onChange={e=>upd(div._tmpId,'data_divulgacao',e.target.value)}/>
                   </div>
                 </div>
+                <div className="form-group" style={{marginBottom:10}}>
+                  <label className="form-label">Link</label>
+                  <input className="form-input" value={div.link}
+                    onChange={e=>upd(div._tmpId,'link',e.target.value)} placeholder="https://..."/>
+                </div>
                 {temLink && (
-                  <>
-                    <div className="form-group" style={{marginBottom:10}}>
-                      <label className="form-label">Link</label>
-                      <input className="form-input" value={div.link}
-                        onChange={e=>upd(div._tmpId,'link',e.target.value)} placeholder="https://..."/>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                    <div className="form-group">
+                      <label className="form-label">Curtidas</label>
+                      <input className="form-input" type="number" value={div.curtidas}
+                        onChange={e=>upd(div._tmpId,'curtidas',e.target.value)} placeholder="0"/>
                     </div>
-                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}}>
-                      <div className="form-group">
-                        <label className="form-label">Curtidas</label>
-                        <input className="form-input" type="number" value={div.curtidas}
-                          onChange={e=>upd(div._tmpId,'curtidas',e.target.value)} placeholder="0"/>
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Comentários</label>
-                        <input className="form-input" type="number" value={div.comentarios}
-                          onChange={e=>upd(div._tmpId,'comentarios',e.target.value)} placeholder="0"/>
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Visualizações</label>
-                        <input className="form-input" type="number" value={div.visualizacoes}
-                          onChange={e=>upd(div._tmpId,'visualizacoes',e.target.value)} placeholder="0"/>
-                      </div>
+                    <div className="form-group">
+                      <label className="form-label">Visualizações</label>
+                      <input className="form-input" type="number" value={div.visualizacoes}
+                        onChange={e=>upd(div._tmpId,'visualizacoes',e.target.value)} placeholder="0"/>
                     </div>
-                  </>
+                  </div>
                 )}
               </div>
             )
@@ -848,20 +866,21 @@ function DetalheLancamento({ campanhaId, lancamentoLivros, setLancamentoLivros, 
     } catch(e) { console.error(e); showToast('Erro ao adicionar','error') }
   }
 
-  async function handleUpdateParceiro({ lpId, ll_id, parceiro_id, status, observacoes, divs }) {
-    // 1. Atualiza registro principal (lpId) com status, obs e primeira divulgação
-    const primeira = divs[0] || {}
+  async function handleUpdateParceiro({ lpId, ll_id, parceiro_id, status, data_combinada, observacoes, divs }) {
+    // 1. Atualiza registro principal (lpId) com status, obs, data_combinada e primeira divulgação
+    const primeira = divs[0] || null
     const ts0 = TIPOS_DIVULGACAO.find(t=>t.value===primeira.tipo_divulgacao)
     const tl0 = ts0?.temLink||false
     await updateLancamentoParceiro(lpId, {
       status,
       observacoes,
-      tipo_divulgacao: primeira.tipo_divulgacao||null,
-      data_divulgacao: primeira.data_divulgacao||null,
-      link: tl0?(primeira.link||null):null,
-      curtidas: tl0&&primeira.curtidas!==''?Number(primeira.curtidas):null,
-      comentarios: tl0&&primeira.comentarios!==''?Number(primeira.comentarios):null,
-      visualizacoes: tl0&&primeira.visualizacoes!==''?Number(primeira.visualizacoes):null,
+      data_combinada: data_combinada||null,
+      tipo_divulgacao: primeira?.tipo_divulgacao||null,
+      data_divulgacao: primeira?.data_divulgacao||null,
+      link: tl0?(primeira?.link||null):null,
+      curtidas: tl0&&primeira?.curtidas!==''?Number(primeira?.curtidas):null,
+      comentarios: tl0&&primeira?.comentarios!==''?Number(primeira?.comentarios):null,
+      visualizacoes: tl0&&primeira?.visualizacoes!==''?Number(primeira?.visualizacoes):null,
     })
 
     // 2. Pega os irmãos atuais (mesmos ll_id+parceiro_id, exceto lp principal)
