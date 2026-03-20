@@ -67,7 +67,6 @@ export async function getParceirosComPontuacao() {
       id, parceiro_id, status, data_contato, contato_realizado,
       campanhas(id, nome, data_inicio, status)
     `)
-    .not('campanhas', 'is', null)
     .in('status', ['publicado','nao_publicou','confirmado','recusou','sem_retorno'])
   if (ce) throw ce
 
