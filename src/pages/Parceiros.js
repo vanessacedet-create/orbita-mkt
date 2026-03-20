@@ -69,10 +69,12 @@ function ModalPontuacao({ parceiro, onClose }) {
         </div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,paddingBottom:16}}>
           {[
-            {label:'Campanhas totais', value:p.totalCampanhas},
-            {label:'Publicações', value:p.publicadas},
+            {label:'Total de participações', value:p.totalCampanhas},
+            {label:'Lançamentos', value:p.totalLancamentos||0},
+            {label:'Total publicado', value:p.publicadas},
             {label:'Taxa de publicação', value:p.totalCampanhas>0?`${Math.round(p.publicadas/p.totalCampanhas*100)}%`:'—'},
-            {label:'Nível', value:`${n.emoji} ${n.label}`},
+            {label:'Publicou em campanhas', value:p.publicadasNormais||0},
+            {label:'Publicou em lançamentos', value:p.publicadasLancamentos||0},
           ].map(({label,value})=>(
             <div key={label} style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,padding:'10px 14px'}}>
               <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:4}}>{label}</div>
@@ -82,8 +84,8 @@ function ModalPontuacao({ parceiro, onClose }) {
         </div>
         <div style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,padding:'12px 14px',fontSize:12,color:'var(--text-muted)',marginBottom:16}}>
           <strong style={{color:'var(--text)',display:'block',marginBottom:6}}>Como a nota é calculada:</strong>
-          Publicou (10pts) · Confirmado (5pts) · Sem retorno (3pts) · Recusou (2pts) · Não publicou (0pts)
-          <span style={{marginTop:4,display:'block'}}>+1pt por rapidez (confirmou em até 3 dias) · +0.5pt por constância (3+ publicações) · Campanhas recentes pesam mais.</span>
+          Publicou (10pts) · Agendado (6pts) · Confirmado (5pts) · Sem retorno (3pts) · Recusou (2pts) · Não publicou (0pts)
+          <span style={{marginTop:4,display:'block'}}>Inclui campanhas normais <strong style={{color:'var(--text)'}}>e lançamentos</strong>. +1pt por rapidez (confirmou em até 3 dias) · +0.5pt por constância (3+ publicações) · Participações recentes pesam mais.</span>
         </div>
         <div className="form-actions">
           <button className="btn btn-primary" onClick={onClose}>Fechar</button>
