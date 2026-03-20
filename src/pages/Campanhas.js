@@ -683,7 +683,7 @@ function ModalDivulgacao({ divulgacao, onSave, onClose }) {
         </div>
         <div className="form-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={save} disabled={saving||!form.tipo}>{saving?'Salvando...':'Salvar'}</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving||!tipo}>{saving?'Salvando...':'Salvar'}</button>
         </div>
       </div>
     </div>
