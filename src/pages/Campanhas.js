@@ -2075,12 +2075,16 @@ export default function Campanhas() {
   async function handleCreate(form) {
     const { parceiro_ids = [], ...rest } = form
     const campanha = await createCampanha(rest)
-    // Adiciona parceiros se selecionados no modal
     for (const pid of parceiro_ids) {
       await addParceiroCampanha(campanha.id, pid)
     }
     await reload()
-    showToast('Campanha criada!')
+    const autoLivros = campanha._livrosAutoAdicionados || 0
+    if (autoLivros > 0) {
+      showToast(`Campanha criada! ${autoLivros} livro${autoLivros!==1?'s':''} do período adicionado${autoLivros!==1?'s':''} automaticamente.`)
+    } else {
+      showToast('Campanha criada!')
+    }
   }
 
   async function handleDelete(id) {
