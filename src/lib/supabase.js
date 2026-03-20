@@ -60,81 +60,117 @@ export async function getParceirosComPontuacao() {
     .from('parceiros').select('*').order('nome')
   if (pe) throw pe
 
-  // Busca campanha_parceiros com dados necessários para scoring
+  // Busca campanha_parceiros (campanhas normais)
   const { data: cps, error: ce } = await supabase
     .from('campanha_parceiros')
-    .select(`
-      id, parceiro_id, status, data_contato, contato_realizado,
-      campanhas(id, nome, data_inicio, status)
-    `)
-    .in('status', ['publicado','nao_publicou','confirmado','recusou','sem_retorno'])
+    .select(`id, parceiro_id, status, data_contato, contato_realizado, campanhas(id, nome, data_inicio, status)`)
+    .in('status', ['publicado','nao_publicou','confirmado','recusou','sem_retorno','agendado'])
   if (ce) throw ce
 
-  // Agrupa campanha_parceiros por parceiro
-  const cpsPorParceiro = {}
+  // Busca lancamento_parceiros (campanhas de lançamento) — registros com status relevante
+  const { data: lps, error: le } = await supabase
+    .from('lancamento_parceiros')
+    .select(`
+      id, parceiro_id, status, data_combinada, data_contato,
+      lancamento_livros(id, campanhas(id, nome, data_inicio))
+    `)
+    .in('status', ['publicado','nao_publicou','confirmado','recusou','sem_retorno','agendado'])
+  if (le) throw le
+
+  // Agrupa por parceiro — combina campanhas normais + lançamentos
+  const porParceiro = {}
   for (const cp of cps) {
-    if (!cpsPorParceiro[cp.parceiro_id]) cpsPorParceiro[cp.parceiro_id] = []
-    cpsPorParceiro[cp.parceiro_id].push(cp)
+    if (!porParceiro[cp.parceiro_id]) porParceiro[cp.parceiro_id] = { normais: [], lancamentos: [] }
+    porParceiro[cp.parceiro_id].normais.push(cp)
+  }
+  for (const lp of lps) {
+    if (!porParceiro[lp.parceiro_id]) porParceiro[lp.parceiro_id] = { normais: [], lancamentos: [] }
+    // Evita duplicar o mesmo parceiro em múltiplos livros do mesmo lançamento
+    const campanhaId = lp.lancamento_livros?.campanhas?.id
+    const jatem = porParceiro[lp.parceiro_id].lancamentos.find(x => x._campanhaId === campanhaId && campanhaId)
+    if (!jatem) {
+      porParceiro[lp.parceiro_id].lancamentos.push({
+        ...lp,
+        _campanhaId: campanhaId,
+        _dataRef: lp.data_combinada || lp.lancamento_livros?.campanhas?.data_inicio || null,
+      })
+    }
   }
 
   return parceiros.map(p => ({
     ...p,
-    pontuacao: calcularPontuacao(cpsPorParceiro[p.id] || [])
+    pontuacao: calcularPontuacao(porParceiro[p.id] || { normais: [], lancamentos: [] })
   }))
 }
 
-function calcularPontuacao(participacoes) {
-  // Ignora campanhas ainda em aberto (convidado)
-  const validas = participacoes.filter(cp =>
-    ['publicado','nao_publicou','confirmado','recusou','sem_retorno'].includes(cp.status)
-  )
-  if (validas.length === 0) return null
+function calcularPontuacao({ normais = [], lancamentos = [] }) {
+  const STATUS_VALIDOS = ['publicado','nao_publicou','confirmado','recusou','sem_retorno','agendado']
 
-  // Nota por campanha
-  function notaCampanha(cp) {
+  // Normaliza ambas as fontes em formato uniforme: { status, dataRef, data_contato, dataInicioRef }
+  function normalizar(cp, tipo) {
+    const dataRef = tipo === 'normal'
+      ? (cp.campanhas?.data_inicio || null)
+      : (cp._dataRef || null)
+    return { status: cp.status, dataRef, data_contato: cp.data_contato || null, tipo }
+  }
+
+  const todasNormais    = normais.filter(cp => STATUS_VALIDOS.includes(cp.status)).map(cp => normalizar(cp, 'normal'))
+  const todasLancamentos = lancamentos.filter(lp => STATUS_VALIDOS.includes(lp.status)).map(lp => normalizar(lp, 'lancamento'))
+  const todas = [...todasNormais, ...todasLancamentos]
+
+  if (todas.length === 0) return null
+
+  // Nota individual por participação
+  function notaParticipacao(p) {
     let nota = 0
-    switch (cp.status) {
+    switch (p.status) {
       case 'publicado':    nota = 10; break
+      case 'agendado':     nota = 6;  break  // Agendado = comprometeu-se, vale mais que confirmado simples
       case 'confirmado':   nota = 5;  break
       case 'sem_retorno':  nota = 3;  break
       case 'recusou':      nota = 2;  break
       case 'nao_publicou': nota = 0;  break
       default:             nota = 0
     }
-    // Bônus de rapidez: confirmou em até 3 dias da data_inicio da campanha
-    if (cp.status === 'publicado' && cp.data_contato && cp.campanhas?.data_inicio) {
-      const diasAteContato = Math.abs(
-        (new Date(cp.data_contato) - new Date(cp.campanhas.data_inicio)) / 86400000
-      )
-      if (diasAteContato <= 3) nota = Math.min(10, nota + 1)
+    // Bônus de rapidez (+1): confirmou/agendou em até 3 dias da data de referência
+    if (['publicado','confirmado','agendado'].includes(p.status) && p.data_contato && p.dataRef) {
+      const dias = Math.abs((new Date(p.data_contato) - new Date(p.dataRef)) / 86400000)
+      if (dias <= 3) nota = Math.min(10, nota + 1)
     }
     return nota
   }
 
-  // Ordena por data_inicio da campanha (mais recente primeiro)
-  const ordenadas = [...validas].sort((a, b) => {
-    const da = a.campanhas?.data_inicio || '0000-00-00'
-    const db = b.campanhas?.data_inicio || '0000-00-00'
+  // Ordena por dataRef (mais recente primeiro)
+  const ordenadas = [...todas].sort((a, b) => {
+    const da = a.dataRef || '0000-00-00'
+    const db = b.dataRef || '0000-00-00'
     return db.localeCompare(da)
   })
 
-  // Pesos: mais recente = 2x, segunda = 1.5x, demais = 1x
+  // Pesos: 1ª = 2x, 2ª = 1.5x, demais = 1x (campanhas recentes pesam mais)
   const pesos = ordenadas.map((_, i) => i === 0 ? 2 : i === 1 ? 1.5 : 1)
   const somaPesos = pesos.reduce((a, b) => a + b, 0)
-  const somaNotas = ordenadas.reduce((acc, cp, i) => acc + notaCampanha(cp) * pesos[i], 0)
+  const somaNotas = ordenadas.reduce((acc, p, i) => acc + notaParticipacao(p) * pesos[i], 0)
 
   const media = somaNotas / somaPesos
-  const notaFinal = Math.round(media * 10) / 10
 
-  // Bônus de constância: +0.5 se publicou em 3+ campanhas
-  const publicadas = validas.filter(cp => cp.status === 'publicado').length
-  const comBonus = publicadas >= 3 ? Math.min(10, notaFinal + 0.5) : notaFinal
+  // Bônus de constância (+0.5): publicou em 3+ participações (normais ou lançamentos)
+  const totalPublicadas = todas.filter(p => p.status === 'publicado').length
+  const comBonus = totalPublicadas >= 3 ? Math.min(10, media + 0.5) : media
+
+  const notaFinal = Math.round(comBonus * 10) / 10
+  const totalCampanhas = todas.length
+  const publicadasNormais = todasNormais.filter(p => p.status === 'publicado').length
+  const publicadasLanc    = todasLancamentos.filter(p => p.status === 'publicado').length
 
   return {
-    nota: Math.round(comBonus * 10) / 10,
-    totalCampanhas: validas.length,
-    publicadas,
-    nivel: comBonus >= 8 ? 'ouro' : comBonus >= 6 ? 'prata' : comBonus >= 4 ? 'bronze' : 'atencao'
+    nota: notaFinal,
+    totalCampanhas,
+    totalLancamentos: todasLancamentos.length,
+    publicadas: totalPublicadas,
+    publicadasNormais,
+    publicadasLancamentos: publicadasLanc,
+    nivel: notaFinal >= 8 ? 'ouro' : notaFinal >= 6 ? 'prata' : notaFinal >= 4 ? 'bronze' : 'atencao'
   }
 }
 
