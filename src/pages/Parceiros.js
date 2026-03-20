@@ -113,11 +113,10 @@ function UploadPlanilha({ onImport }) {
   const [resultado, setResultado] = useState(null)
   const inputRef                  = useRef()
 
-  const colunas    = ['nome', 'tipo_parceria', 'cpf', 'livraria', 'canal_comunicacao', 'taxa_engajamento', 'editoras_divulga', 'temas']
+  const colunas    = ['nome', 'tipo_parceria', 'cpf', 'livraria', 'canal_comunicacao', 'editoras_divulga', 'temas']
   const nomeColuna = {
     nome: 'Nome', tipo_parceria: 'Tipo de Parceria', cpf: 'CPF', livraria: 'Livraria',
-    canal_comunicacao: 'Canal', taxa_engajamento: 'Engajamento',
-    editoras_divulga: 'Editoras', temas: 'Temas'
+    canal_comunicacao: 'Canal', editoras_divulga: 'Editoras', temas: 'Temas'
   }
   const aliases = {
     nome:             ['nome', 'name', 'parceiro'],
@@ -125,7 +124,6 @@ function UploadPlanilha({ onImport }) {
     cpf:              ['cpf', 'documento', 'doc'],
     livraria:         ['livraria', 'loja', 'bookstore'],
     canal_comunicacao:['canal_comunicacao', 'canal de comunicacao', 'canal', 'melhor canal'],
-    taxa_engajamento: ['taxa_engajamento', 'taxa de engajamento', 'engajamento', 'taxa'],
     editoras_divulga: ['editoras_divulga', 'editoras que divulga', 'editoras', 'editora'],
     temas:            ['temas', 'tema', 'assuntos'],
   }
@@ -179,7 +177,6 @@ function UploadPlanilha({ onImport }) {
         const payload = {
           nome: row.nome, tipo_parceria: row.tipo_parceria||'', cpf: row.cpf||'',
           livraria: row.livraria||'', canal_comunicacao: row.canal_comunicacao||'',
-          taxa_engajamento: row.taxa_engajamento||'',
           editoras_divulga: row.editoras_divulga||'', temas: row.temas||'',
         }
         const existente = existentes.find(p => normalizar(p.nome) === normalizar(row.nome||''))
@@ -288,7 +285,7 @@ export default function Parceiros() {
   const [editoras, setEditoras]   = useState([])
   const [editoraSearch, setEditoraSearch] = useState('')
 
-  const EMPTY = { nome:'', tipo_parceria:'', cpf:'', livraria:'', canal_comunicacao:'', taxa_engajamento:'', editoras_divulga:[], temas:'' }
+  const EMPTY = { nome:'', tipo_parceria:'', cpf:'', livraria:'', canal_comunicacao:'', editoras_divulga:[], temas:'' }
   const [form, setForm] = useState(EMPTY)
 
   async function reload() {
@@ -316,7 +313,6 @@ export default function Parceiros() {
       cpf:               p.cpf||'',
       livraria:          p.livraria||'',
       canal_comunicacao: p.canal_comunicacao||'',
-      taxa_engajamento:  p.taxa_engajamento||'',
       editoras_divulga:  p.editoras_divulga ? p.editoras_divulga.split(',').map(e=>e.trim()).filter(Boolean) : [],
       temas:             p.temas||'',
     })
@@ -349,7 +345,6 @@ export default function Parceiros() {
       'CPF':                      p.cpf||'',
       'Livraria':                 p.livraria||'',
       'Melhor Canal de Comunicação': p.canal_comunicacao||'',
-      'Taxa de Engajamento':      p.taxa_engajamento||'',
       'Editoras que Divulga':     p.editoras_divulga||'',
       'Temas':                    p.temas||'',
     }))
@@ -411,7 +406,6 @@ export default function Parceiros() {
                   <th>Tipo de Parceria</th>
                   <th>Livraria</th>
                   <th>Canal</th>
-                  <th>Engajamento</th>
                   <th>Temas</th>
                   <th></th>
                 </tr>
@@ -437,11 +431,6 @@ export default function Parceiros() {
                     <td style={{fontSize:12}}>
                       {p.canal_comunicacao
                         ? <span className="badge badge-amber" style={{fontSize:10}}>{p.canal_comunicacao}</span>
-                        : <span className="td-muted">—</span>}
-                    </td>
-                    <td style={{fontSize:12}}>
-                      {p.taxa_engajamento
-                        ? <span style={{color:'var(--green)',fontWeight:700}}>{p.taxa_engajamento}</span>
                         : <span className="td-muted">—</span>}
                     </td>
                     <td style={{fontSize:12,maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
@@ -501,11 +490,6 @@ export default function Parceiros() {
                   <option value="">Selecionar...</option>
                   {CANAIS_COMUNICACAO.map(c=><option key={c} value={c}>{c}</option>)}
                 </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Taxa de Engajamento Interno</label>
-                <input className="form-input" value={form.taxa_engajamento} onChange={e=>setForm(f=>({...f,taxa_engajamento:e.target.value}))} placeholder="Ex: 5%, alto, médio..."/>
               </div>
 
               <div className="form-group">
