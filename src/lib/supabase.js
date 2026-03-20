@@ -404,35 +404,34 @@ export async function createCampanha({ nome, tipo, status, data_inicio, data_fim
     .select().single()
   if (error) throw error
 
-  let idsParaVincular = [...livro_ids]
+  let autoAdicionados = 0
 
-  // Para Lançamento e Geral: busca automaticamente livros com data_lancamento no range
   if ((tipo === 'Lançamento' || tipo === 'Geral') && data_inicio && data_fim) {
+    // Busca livros com data_lancamento dentro do range
     const { data: livrosNoRange } = await supabase
       .from('livros')
       .select('id')
       .not('data_lancamento', 'is', null)
       .gte('data_lancamento', data_inicio)
       .lte('data_lancamento', data_fim)
-    if (livrosNoRange?.length) {
-      // Adiciona os livros do range que ainda não estão na lista
-      const idsRange = livrosNoRange.map(l => l.id)
-      for (const id of idsRange) {
-        if (!idsParaVincular.includes(id)) idsParaVincular.push(id)
-      }
-    }
-  }
 
-  if (idsParaVincular.length > 0) {
+    if (livrosNoRange?.length) {
+      // Lançamento e Geral usam lancamento_livros (não campanha_livros)
+      const inserir = livrosNoRange.map(l => ({ campanha_id: campanha.id, livro_id: l.id }))
+      const { error: le } = await supabase.from('lancamento_livros').insert(inserir)
+      if (le) throw le
+      autoAdicionados = livrosNoRange.length
+    }
+  } else if (livro_ids.length > 0) {
+    // Para outros tipos, usa campanha_livros normalmente
     const { error: le } = await supabase.from('campanha_livros').insert(
-      idsParaVincular.map(livro_id => ({ campanha_id: campanha.id, livro_id }))
+      livro_ids.map(livro_id => ({ campanha_id: campanha.id, livro_id }))
     )
     if (le) throw le
   }
 
   const result = await getCampanha(campanha.id)
-  // Retorna quantidade de livros adicionados automaticamente para o toast
-  result._livrosAutoAdicionados = idsParaVincular.length - livro_ids.length
+  result._livrosAutoAdicionados = autoAdicionados
   return result
 }
 
