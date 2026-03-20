@@ -855,3 +855,56 @@ export async function importarDivulgacoesPromocao(campanhaId, rows) {
   }
   return results
 }
+
+// ── LIVROS DESTAQUE POR PARCEIRO NA CAMPANHA ───────────────
+export async function getLivrosDestaqueParceiro(campanha_parceiro_id) {
+  const { data, error } = await supabase
+    .from('campanha_parceiro_livros')
+    .select('id, livro_id, livros(id, titulo, isbn, autor, editora)')
+    .eq('campanha_parceiro_id', campanha_parceiro_id)
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return data || []
+}
+
+export async function addLivroDestaqueParceiro(campanha_parceiro_id, livro_id) {
+  // Evita duplicata
+  const { data: existing } = await supabase
+    .from('campanha_parceiro_livros')
+    .select('id')
+    .eq('campanha_parceiro_id', campanha_parceiro_id)
+    .eq('livro_id', livro_id)
+    .maybeSingle()
+  if (existing) return existing
+  const { data, error } = await supabase
+    .from('campanha_parceiro_livros')
+    .insert([{ campanha_parceiro_id, livro_id }])
+    .select('id, livro_id, livros(id, titulo, isbn, autor, editora)')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function removeLivroDestaqueParceiro(id) {
+  const { error } = await supabase.from('campanha_parceiro_livros').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function importarLivrosDestaquePlanilha(campanha_parceiro_id, isbns) {
+  // isbns = string[] de ISBNs vindos da planilha
+  const results = { adicionados: 0, naoEncontrados: [], erros: [] }
+  for (const isbn of isbns) {
+    try {
+      const isbnStr = String(isbn).replace(/\.0$/, '').trim()
+      if (!isbnStr) continue
+      const { data: livro } = await supabase
+        .from('livros').select('id, titulo').eq('isbn', isbnStr).maybeSingle()
+      if (!livro) { results.naoEncontrados.push(isbnStr); continue }
+      await addLivroDestaqueParceiro(campanha_parceiro_id, livro.id)
+      results.adicionados++
+    } catch(e) {
+      results.erros.push(`${isbn}: ${e?.message || e}`)
+    }
+  }
+  return results
+}
