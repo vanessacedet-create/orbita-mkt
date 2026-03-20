@@ -377,6 +377,7 @@ export async function getCampanhas() {
       campanha_parceiros(id, status, parceiros(id, nome, tipo_parceria)),
       lancamento_livros(id, lancamento_parceiros(id, status))
     `)
+    .order('ordem', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: false })
   if (error) throw error
   return data
@@ -420,6 +421,15 @@ export async function updateCampanha(id, { nome, tipo, status, data_inicio, data
     }
   }
   return getCampanha(id)
+}
+
+
+// ── REORDENAÇÃO DE CAMPANHAS ───────────────────────────────
+export async function reordenarCampanhas(ordens) {
+  // ordens = [{ id, ordem }]
+  await Promise.all(ordens.map(({ id, ordem }) =>
+    supabase.from('campanhas').update({ ordem }).eq('id', id)
+  ))
 }
 
 export async function deleteCampanha(id) {
