@@ -1786,7 +1786,7 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
             reload={reload}
             showToast={showToast}
           />
-        : <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:20}}>
+        : <div style={{display:'flex',flexDirection:'column',gap:16}}>
             {/* Parceiros */}
             <div className="table-card">
               <div className="table-toolbar">
@@ -1845,32 +1845,9 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
                   </table>
               }
             </div>
-            {/* Livros + resumo */}
-            <div style={{display:'flex',flexDirection:'column',gap:16}}>
-              <div className="table-card" style={{padding:'16px 20px'}}>
-                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
-                  <div style={{fontSize:12,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',color:'var(--text-muted)'}}>Livros da campanha</div>
-                  <button className="btn btn-ghost btn-sm" style={{fontSize:11,display:'flex',alignItems:'center',gap:4}} onClick={()=>setModalImportarLivros(true)}>
-                    <Upload size={12}/> Importar ISBN
-                  </button>
-                </div>
-                {(campanha.campanha_livros||[]).length===0
-                  ? <p style={{fontSize:13,color:'var(--text-muted)'}}>Campanha genérica (sem livros vinculados)</p>
-                  : (campanha.campanha_livros||[]).map(cl=>(
-                    <div key={cl.id} style={{display:'flex',alignItems:'flex-start',gap:8,marginBottom:10}}>
-                      <BookOpen size={13} color="var(--accent)" style={{marginTop:2,flexShrink:0}}/>
-                      <div>
-                        <div style={{fontSize:13,fontWeight:600,color:'var(--text)'}}>{cl.livros?.titulo}</div>
-                        {cl.livros?.autor&&<div style={{fontSize:11.5,color:'var(--text-muted)'}}>{cl.livros.autor}</div>}
-                      </div>
-                    </div>
-                  ))
-                }
-              </div>
-              <div className="table-card" style={{padding:'16px 20px'}}>
-                <div style={{fontSize:12,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',color:'var(--text-muted)',marginBottom:12}}>Progresso</div>
-                <ProgressoParceiros parceiros={cps}/>
-              </div>
+            <div className="table-card" style={{padding:'16px 20px'}}>
+              <div style={{fontSize:12,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',color:'var(--text-muted)',marginBottom:12}}>Progresso</div>
+              <ProgressoParceiros parceiros={cps}/>
             </div>
           </div>
       }
@@ -1878,14 +1855,7 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
       {modalEdicao && (
         <ModalCampanha campanha={campanha} livros={livros} parceiros={parceiros} onSave={handleUpdateCampanha} onClose={()=>setModalEdicao(false)}/>
       )}
-      {modalImportarLivros && (
-        <ModalImportarLivros
-          campanhaId={campanha.id}
-          livrosExistentes={campanha.campanha_livros||[]}
-          onImport={handleImportarLivros}
-          onClose={()=>setModalImportarLivros(false)}
-        />
-      )}
+
       {modalParceiro && (
         <ModalParceiro cp={modalParceiro} campanha={campanha} onSave={handleUpdateParceiro} onClose={()=>setModalParceiro(null)}/>
       )}
