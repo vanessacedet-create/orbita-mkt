@@ -22,6 +22,78 @@ const CANAIS_COMUNICACAO = [
   'Outro',
 ]
 
+const NIVEIS = {
+  ouro:    { label:'Ouro',    emoji:'🏆', cor:'#f59e0b', bg:'rgba(245,158,11,0.12)'  },
+  prata:   { label:'Prata',   emoji:'🥈', cor:'#9ca3af', bg:'rgba(156,163,175,0.12)' },
+  bronze:  { label:'Bronze',  emoji:'🥉', cor:'#b45309', bg:'rgba(180,83,9,0.12)'    },
+  atencao: { label:'Atenção', emoji:'⚠️', cor:'#ef4444', bg:'rgba(239,68,68,0.12)'   },
+}
+
+function BadgeNivel({ nivel }) {
+  if (!nivel) return <span style={{fontSize:11,color:'var(--text-muted)'}}>—</span>
+  const n = NIVEIS[nivel] || NIVEIS.atencao
+  return (
+    <span style={{display:'inline-flex',alignItems:'center',gap:4,background:n.bg,border:`1px solid ${n.cor}40`,borderRadius:20,padding:'2px 8px',fontSize:11,fontWeight:700,color:n.cor}}>
+      {n.emoji} {n.label}
+    </span>
+  )
+}
+
+function NotaCirculo({ nota }) {
+  if (nota === null || nota === undefined) return <span style={{fontSize:12,color:'var(--text-muted)'}}>—</span>
+  const cor = nota >= 8 ? '#f59e0b' : nota >= 6 ? '#9ca3af' : nota >= 4 ? '#b45309' : '#ef4444'
+  return (
+    <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:34,height:34,borderRadius:'50%',fontSize:13,fontWeight:800,color:'#fff',background:cor,boxShadow:`0 0 0 3px ${cor}30`}}>
+      {nota.toFixed(1)}
+    </span>
+  )
+}
+
+function ModalPontuacao({ parceiro, onClose }) {
+  const p = parceiro.pontuacao
+  if (!p) return null
+  const n = NIVEIS[p.nivel] || NIVEIS.atencao
+  return (
+    <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal" style={{maxWidth:420}}>
+        <div className="modal-header">
+          <h2 className="modal-title">Pontuação — {parceiro.nome}</h2>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
+        </div>
+        <div style={{textAlign:'center',padding:'16px 0 20px'}}>
+          <NotaCirculo nota={p.nota}/>
+          <div style={{marginTop:10}}><BadgeNivel nivel={p.nivel}/></div>
+          <div style={{fontSize:12,color:'var(--text-muted)',marginTop:8}}>
+            Baseado em {p.totalCampanhas} campanha{p.totalCampanhas!==1?'s':''}
+          </div>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,paddingBottom:16}}>
+          {[
+            {label:'Campanhas totais', value:p.totalCampanhas},
+            {label:'Publicações', value:p.publicadas},
+            {label:'Taxa de publicação', value:p.totalCampanhas>0?`${Math.round(p.publicadas/p.totalCampanhas*100)}%`:'—'},
+            {label:'Nível', value:`${n.emoji} ${n.label}`},
+          ].map(({label,value})=>(
+            <div key={label} style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,padding:'10px 14px'}}>
+              <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:4}}>{label}</div>
+              <div style={{fontSize:16,fontWeight:800,color:'var(--text)'}}>{value}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,padding:'12px 14px',fontSize:12,color:'var(--text-muted)',marginBottom:16}}>
+          <strong style={{color:'var(--text)',display:'block',marginBottom:6}}>Como a nota é calculada:</strong>
+          Publicou (10pts) · Confirmado (5pts) · Sem retorno (3pts) · Recusou (2pts) · Não publicou (0pts)
+          <span style={{marginTop:4,display:'block'}}>+1pt por rapidez (confirmou em até 3 dias) · +0.5pt por constância (3+ publicações) · Campanhas recentes pesam mais.</span>
+        </div>
+        <div className="form-actions">
+          <button className="btn btn-primary" onClick={onClose}>Fechar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
 function normalizar(s) {
   return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim()
 }
@@ -208,6 +280,7 @@ function UploadPlanilha({ onImport }) {
 export default function Parceiros() {
   const [parceiros, setParceiros] = useState([])
   const [modal, setModal]         = useState(false)
+  const [modalPontuacao, setModalPontuacao] = useState(null)
   const [editing, setEditing]     = useState(null)
   const [search, setSearch]       = useState('')
   const [saving, setSaving]       = useState(false)
@@ -218,7 +291,7 @@ export default function Parceiros() {
   const EMPTY = { nome:'', tipo_parceria:'', cpf:'', livraria:'', canal_comunicacao:'', taxa_engajamento:'', editoras_divulga:[], temas:'' }
   const [form, setForm] = useState(EMPTY)
 
-  async function reload() { setParceiros(await getParceiros()) }
+  async function reload() { setParceiros(await getParceirosComPontuacao()) }
 
   useEffect(() => {
     reload()
@@ -277,13 +350,20 @@ export default function Parceiros() {
     XLSX.writeFile(wb, 'parceiros.xlsx')
   }
 
-  const filtered = parceiros.filter(p =>
+  const filtered = parceiros
+    .filter(p =>
     p.nome.toLowerCase().includes(search.toLowerCase()) ||
     (p.tipo_parceria||'').toLowerCase().includes(search.toLowerCase()) ||
     (p.livraria||'').toLowerCase().includes(search.toLowerCase()) ||
     (p.canal_comunicacao||'').toLowerCase().includes(search.toLowerCase()) ||
     (p.temas||'').toLowerCase().includes(search.toLowerCase())
   )
+  .sort((a,b) => {
+    const na = a.pontuacao?.nota ?? -1
+    const nb = b.pontuacao?.nota ?? -1
+    if (na !== nb) return nb - na
+    return a.nome.localeCompare(b.nome, 'pt-BR')
+  })
 
   return (
     <div>
@@ -318,6 +398,7 @@ export default function Parceiros() {
               <thead>
                 <tr>
                   <th>Nome</th>
+                  <th>Nota</th>
                   <th>Tipo de Parceria</th>
                   <th>Livraria</th>
                   <th>Canal</th>
@@ -332,6 +413,15 @@ export default function Parceiros() {
                     <td>
                       <div className="td-strong">{p.nome}</div>
                       {p.cpf&&<div style={{fontSize:11,color:'var(--text-muted)'}}>CPF: {p.cpf}</div>}
+                    </td>
+                    <td style={{cursor:'pointer'}} onClick={()=>p.pontuacao&&setModalPontuacao(p)}>
+                      {p.pontuacao
+                        ? <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
+                            <NotaCirculo nota={p.pontuacao.nota}/>
+                            <BadgeNivel nivel={p.pontuacao.nivel}/>
+                          </div>
+                        : <span style={{fontSize:11,color:'var(--text-muted)'}}>Sem histórico</span>
+                      }
                     </td>
                     <td>{p.tipo_parceria?<span className="badge badge-indigo">{p.tipo_parceria}</span>:<span className="td-muted">—</span>}</td>
                     <td style={{fontSize:12}}>{p.livraria||<span className="td-muted">—</span>}</td>
@@ -454,6 +544,7 @@ export default function Parceiros() {
         </div>
       )}
 
+      {modalPontuacao&&<ModalPontuacao parceiro={modalPontuacao} onClose={()=>setModalPontuacao(null)}/>}
       {toast&&<div className={`toast ${toast.type}`}>{toast.msg}</div>}
     </div>
   )
