@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getRegistrosMonitoramento, createRegistroMonitoramento, updateRegistroMonitoramento, deleteRegistroMonitoramento, getParceiros } from '../lib/supabase'
+import { getRegistrosMonitoramento, createRegistroMonitoramento, updateRegistroMonitoramento, deleteRegistroMonitoramento, getParceiros, getLancamentosMonitoramento } from '../lib/supabase'
 import { ChevronLeft, ChevronRight, Eye, Plus, Pencil, Trash2, X } from 'lucide-react'
 
 // ── UTILITÁRIOS DE DATA ────────────────────────────────────
@@ -205,14 +205,19 @@ function ModalDia({dataKey, registros, parceiros, onAdd, onEdit, onDelete, onClo
           :registros.map(r=>{
             const st=statusInfo(r.status)
             const tipo=TIPOS_DIV.find(t=>t.value===r.tipo_postagem)
+            const eLanc = r._origem==='lancamento'
             return(
-              <div key={r.id} style={{background:'var(--surface-2)',border:`1px solid var(--border)`,borderLeft:`3px solid ${st.cor}`,borderRadius:8,padding:'10px 14px',marginBottom:8}}>
+              <div key={r.id||r._lancamentoId} style={{background:'var(--surface-2)',border:`1px solid var(--border)`,borderLeft:`3px solid ${st.cor}`,borderRadius:8,padding:'10px 14px',marginBottom:8}}>
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:4}}>
-                  <div style={{fontWeight:700,fontSize:13,color:'var(--text)'}}>{r.parceiros?.nome}</div>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:13,color:'var(--text)'}}>{r.parceiros?.nome}</div>
+                    {eLanc&&r._campanha&&<div style={{fontSize:11,color:'var(--accent)'}}>{r._campanha}{r._livro?` · ${r._livro}`:''}</div>}
+                    {eLanc&&<span style={{fontSize:10,background:'var(--accent-glow)',color:'var(--accent)',borderRadius:4,padding:'1px 6px',marginTop:2,display:'inline-block'}}>Lançamento</span>}
+                  </div>
                   <div style={{display:'flex',alignItems:'center',gap:6}}>
                     <span style={{fontSize:11,color:st.cor,fontWeight:600}}>{st.icon} {st.label}</span>
-                    <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>onEdit(r)}><Pencil size={11}/></button>
-                    <button className="btn btn-danger btn-icon btn-sm" onClick={()=>onDelete(r.id)}><Trash2 size={11}/></button>
+                    {!eLanc&&<button className="btn btn-ghost btn-icon btn-sm" onClick={()=>onEdit(r)}><Pencil size={11}/></button>}
+                    {!eLanc&&<button className="btn btn-danger btn-icon btn-sm" onClick={()=>onDelete(r.id)}><Trash2 size={11}/></button>}
                   </div>
                 </div>
                 {tipo&&<div style={{fontSize:11,marginBottom:2}}><span className="badge badge-indigo" style={{fontSize:10}}>{tipo.label}</span></div>}
@@ -303,6 +308,7 @@ export default function Monitoramento(){
   const[semDom,setSemDom] = useState(domingoDeKey(hojeKey()))
   const[visao,setVisao] = useState('mensal')
   const[registros,setRegistros] = useState([])
+  const[lancamentos,setLancamentos] = useState([])
   const[parceiros,setParceiros] = useState([])
   const[loading,setLoading] = useState(true)
   const[modalDia,setModalDia] = useState(null)     // dataKey
@@ -311,7 +317,14 @@ export default function Monitoramento(){
 
   async function carregar(a,m){
     setLoading(true)
-    try{ setRegistros(await getRegistrosMonitoramento({ano:a,mes:m})) }
+    try{
+      const [regs, lancs] = await Promise.all([
+        getRegistrosMonitoramento({ano:a,mes:m}),
+        getLancamentosMonitoramento({ano:a,mes:m}),
+      ])
+      setRegistros(regs)
+      setLancamentos(lancs)
+    }
     catch(e){ console.error(e) }finally{ setLoading(false) }
   }
 
@@ -325,12 +338,32 @@ export default function Monitoramento(){
   function navMes(d){let nm=mes+d,na=ano;if(nm>12){nm=1;na++}if(nm<1){nm=12;na--}setMes(nm);setAno(na)}
   function navSem(d){setSemDom(addDias(semDom,d*7))}
 
-  // porDia
+  // porDia — registros manuais + lançamentos com data_combinada
   const porDia={}
   for(const r of registros){
     if(!r.data)continue
     if(!porDia[r.data])porDia[r.data]=[]
-    porDia[r.data].push(r)
+    porDia[r.data].push({...r, _origem:'manual'})
+  }
+  // Adiciona lançamentos agendados pela data_combinada
+  for(const lp of lancamentos){
+    if(!lp.data_combinada)continue
+    if(!porDia[lp.data_combinada])porDia[lp.data_combinada]=[]
+    // Evita duplicata
+    if(!porDia[lp.data_combinada].find(x=>x._lancamentoId===lp.id)){
+      porDia[lp.data_combinada].push({
+        _lancamentoId: lp.id,
+        _origem: 'lancamento',
+        parceiros: lp.parceiros,
+        status: lp.status==='agendado'?'pendente': lp.status==='publicado'?'postou': lp.status==='nao_publicou'?'nao_postou':'pendente',
+        data: lp.data_combinada,
+        tipo_postagem: lp.tipo_divulgacao,
+        link: lp.link,
+        _campanha: lp.lancamento_livros?.campanhas?.nome,
+        _livro: lp.lancamento_livros?.livros?.titulo,
+        _statusOriginal: lp.status,
+      })
+    }
   }
 
   // Grids
@@ -442,7 +475,7 @@ export default function Monitoramento(){
       {modalDia&&(
         <ModalDia
           dataKey={modalDia}
-          registros={registros.filter(r=>r.data===modalDia)}
+          registros={porDia[modalDia]||[]}
           parceiros={parceiros}
           onAdd={key=>{setModalDia(null);setModalForm({dataInicial:key})}}
           onEdit={r=>{setModalDia(null);setModalForm({registro:r})}}
