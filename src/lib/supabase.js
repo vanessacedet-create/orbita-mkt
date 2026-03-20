@@ -52,6 +52,93 @@ export async function getParceiros() {
   if (error) throw error
   return data
 }
+
+// ── PONTUAÇÃO DE PARCEIROS ─────────────────────────────────
+export async function getParceirosComPontuacao() {
+  // Busca todos os parceiros
+  const { data: parceiros, error: pe } = await supabase
+    .from('parceiros').select('*').order('nome')
+  if (pe) throw pe
+
+  // Busca campanha_parceiros com dados necessários para scoring
+  const { data: cps, error: ce } = await supabase
+    .from('campanha_parceiros')
+    .select(`
+      id, parceiro_id, status, data_contato, contato_realizado,
+      campanhas(id, nome, data_inicio, status)
+    `)
+    .not('campanhas', 'is', null)
+    .in('status', ['publicado','nao_publicou','confirmado','recusou','sem_retorno'])
+  if (ce) throw ce
+
+  // Agrupa campanha_parceiros por parceiro
+  const cpsPorParceiro = {}
+  for (const cp of cps) {
+    if (!cpsPorParceiro[cp.parceiro_id]) cpsPorParceiro[cp.parceiro_id] = []
+    cpsPorParceiro[cp.parceiro_id].push(cp)
+  }
+
+  return parceiros.map(p => ({
+    ...p,
+    pontuacao: calcularPontuacao(cpsPorParceiro[p.id] || [])
+  }))
+}
+
+function calcularPontuacao(participacoes) {
+  // Ignora campanhas ainda em aberto (convidado)
+  const validas = participacoes.filter(cp =>
+    ['publicado','nao_publicou','confirmado','recusou','sem_retorno'].includes(cp.status)
+  )
+  if (validas.length === 0) return null
+
+  // Nota por campanha
+  function notaCampanha(cp) {
+    let nota = 0
+    switch (cp.status) {
+      case 'publicado':    nota = 10; break
+      case 'confirmado':   nota = 5;  break
+      case 'sem_retorno':  nota = 3;  break
+      case 'recusou':      nota = 2;  break
+      case 'nao_publicou': nota = 0;  break
+      default:             nota = 0
+    }
+    // Bônus de rapidez: confirmou em até 3 dias da data_inicio da campanha
+    if (cp.status === 'publicado' && cp.data_contato && cp.campanhas?.data_inicio) {
+      const diasAteContato = Math.abs(
+        (new Date(cp.data_contato) - new Date(cp.campanhas.data_inicio)) / 86400000
+      )
+      if (diasAteContato <= 3) nota = Math.min(10, nota + 1)
+    }
+    return nota
+  }
+
+  // Ordena por data_inicio da campanha (mais recente primeiro)
+  const ordenadas = [...validas].sort((a, b) => {
+    const da = a.campanhas?.data_inicio || '0000-00-00'
+    const db = b.campanhas?.data_inicio || '0000-00-00'
+    return db.localeCompare(da)
+  })
+
+  // Pesos: mais recente = 2x, segunda = 1.5x, demais = 1x
+  const pesos = ordenadas.map((_, i) => i === 0 ? 2 : i === 1 ? 1.5 : 1)
+  const somaPesos = pesos.reduce((a, b) => a + b, 0)
+  const somaNotas = ordenadas.reduce((acc, cp, i) => acc + notaCampanha(cp) * pesos[i], 0)
+
+  const media = somaNotas / somaPesos
+  const notaFinal = Math.round(media * 10) / 10
+
+  // Bônus de constância: +0.5 se publicou em 3+ campanhas
+  const publicadas = validas.filter(cp => cp.status === 'publicado').length
+  const comBonus = publicadas >= 3 ? Math.min(10, notaFinal + 0.5) : notaFinal
+
+  return {
+    nota: Math.round(comBonus * 10) / 10,
+    totalCampanhas: validas.length,
+    publicadas,
+    nivel: comBonus >= 8 ? 'ouro' : comBonus >= 6 ? 'prata' : comBonus >= 4 ? 'bronze' : 'atencao'
+  }
+}
+
 export async function createParceiro(p) {
   const { data, error } = await supabase.from('parceiros').insert([p]).select().single()
   if (error) throw error
