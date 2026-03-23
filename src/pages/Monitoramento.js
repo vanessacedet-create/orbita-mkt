@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getRegistrosMonitoramento, createRegistroMonitoramento, updateRegistroMonitoramento, deleteRegistroMonitoramento, getParceiros, getLancamentosMonitoramento } from '../lib/supabase'
+import { getRegistrosMonitoramento, createRegistroMonitoramento, updateRegistroMonitoramento, deleteRegistroMonitoramento, getParceiros, getParceirosAtivos, getLancamentosMonitoramento } from '../lib/supabase'
 import { ChevronLeft, ChevronRight, Eye, Plus, Pencil, Trash2, X } from 'lucide-react'
 
 // ── UTILITÁRIOS DE DATA ────────────────────────────────────
