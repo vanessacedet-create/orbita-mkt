@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import {
   getCampanhas, getCampanha, createCampanha, updateCampanha, deleteCampanha, reordenarCampanhas,
-  getParceiros, getParceirosAtivos, getLivros,
+  getParceiros, getParceirosAtivos, getLivros, getUsuarios,
   addParceiroCampanha, updateParceiroCampanha, removeParceiroCampanha,
   getFollowUps, registrarContato,
   getDivulgacoesParceiro, createDivulgacaoCampanha, updateDivulgacaoCampanha, deleteDivulgacaoCampanha,
@@ -1037,7 +1037,7 @@ function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, tipoCampanha, onSave,
 }
 
 // ── DETALHE LANÇAMENTO ─────────────────────────────────────
-function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLancamentoLivros, parceiros, reload, showToast }) {
+function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLancamentoLivros, parceiros, usuarios = [], reload, showToast }) {
   const [livroSearch, setLivroSearch]   = useState('')
   const [livroResults, setLivroResults] = useState([])
   const [livroOpen, setLivroOpen]       = useState(false)
@@ -1332,6 +1332,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                               <tr>
                                 <th>Parceiro</th>
                                 <th>Status</th>
+                                <th>Responsável</th>
                                 <th>Tipo</th>
                                 <th>Data</th>
                                 <th>Métricas</th>
@@ -1349,6 +1350,13 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                                     </td>
                                     <td style={{verticalAlign:'top',paddingTop:10}}>
                                       <StatusBadge value={principal.status} options={STATUS_PARCEIRO}/>
+                                    </td>
+                                    <td style={{verticalAlign:'top',paddingTop:10,fontSize:12,color:'var(--text-muted)'}}>
+                                      {(() => {
+                                        const parc = parceiros.find(p=>p.id===principal.parceiro_id)
+                                        const resp = parc?.responsavel_interno_id ? usuarios.find(u=>u.id===parc.responsavel_interno_id) : null
+                                        return resp ? <span style={{fontWeight:600,color:'var(--text)'}}>{resp.nome}</span> : <span className="td-muted">—</span>
+                                      })()}
                                     </td>
                                     <td style={{verticalAlign:'top',paddingTop:8}}>
                                       {todos.map((lp,i) => {
@@ -1879,7 +1887,7 @@ function ModalDivulgacaoLibraria({ campanhaId, parceiros, onSave, onClose }) {
   )
 }
 
-function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
+function DetalheCampanha({ campanhaId, onBack, livros, parceiros, usuarios = [] }) {
   const [campanha, setCampanha]           = useState(null)
   const [loading, setLoading]             = useState(true)
   const [modalParceiro, setModalParceiro] = useState(null)
@@ -2025,6 +2033,7 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
             lancamentoLivros={lancamentoLivros}
             setLancamentoLivros={setLancamentoLivros}
             parceiros={parceiros}
+            usuarios={usuarios}
             reload={reload}
             showToast={showToast}
           />
@@ -2067,12 +2076,19 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
               {cps.length===0
                 ? <div className="empty-state"><p>Nenhum parceiro adicionado ainda.</p></div>
                 : <table>
-                    <thead><tr><th>Parceiro</th><th>Status</th><th>Período</th><th>Divulgações</th><th></th></tr></thead>
+                    <thead><tr><th>Parceiro</th><th>Status</th><th>Responsável</th><th>Período</th><th>Divulgações</th><th></th></tr></thead>
                     <tbody>
                       {cps.map(cp=>(
                         <tr key={cp.id}>
                           <td className="td-strong">{cp.parceiros?.nome||'—'}</td>
                           <td><StatusBadge value={cp.status} options={STATUS_PARCEIRO}/></td>
+                          <td style={{fontSize:12,color:'var(--text-muted)'}}>
+                            {(() => {
+                              const parc = parceiros.find(p=>p.id===cp.parceiros?.id)
+                              const resp = parc?.responsavel_interno_id ? usuarios.find(u=>u.id===parc.responsavel_interno_id) : null
+                              return resp ? <span style={{fontWeight:600,color:'var(--text)'}}>{resp.nome}</span> : <span className="td-muted">—</span>
+                            })()}
+                          </td>
                           <td className="td-muted" style={{fontSize:12}}>
                             {cp.data_inicio ? format(new Date(cp.data_inicio+'T12:00:00'),'dd/MM',{locale:ptBR}) : '—'}
                             {cp.data_fim ? <span> → {format(new Date(cp.data_fim+'T12:00:00'),'dd/MM',{locale:ptBR})}</span> : ''}
@@ -2303,17 +2319,20 @@ export default function Campanhas() {
   const [search, setSearch]         = useState('')
   const [livros, setLivros]         = useState({ data: [] })
   const [parceiros, setParceiros]   = useState([])
+  const [usuarios, setUsuarios]     = useState([])
   const [toast, showToast]          = useToast()
 
   async function reload() {
-    const [cs, ps, ls] = await Promise.all([
+    const [cs, ps, ls, us] = await Promise.all([
       getCampanhas(),
       getParceirosAtivos(),
       getLivros({ page:0, pageSize:5000 }),
+      getUsuarios(),
     ])
     setCampanhas(cs)
     setParceiros(ps)
     setLivros(ls)
+    setUsuarios(us||[])
   }
 
   useEffect(() => { reload().finally(()=>setLoading(false)) }, [])
@@ -2372,6 +2391,7 @@ export default function Campanhas() {
       onBack={()=>setDetalhe(null)}
       livros={livros}
       parceiros={parceiros}
+      usuarios={usuarios}
     />
   )
 
