@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import {
-  getParceiros, createParceiro, updateParceiro, deleteParceiro, getEditoras,
+  getParceiros, createParceiro, updateParceiro, deleteParceiro, getEditoras, getUsuarios,
 } from '../lib/supabase'
 import {
   Plus, Pencil, Trash2, X, Upload, Download, Users,
