@@ -328,7 +328,7 @@ export default function Monitoramento(){
     catch(e){ console.error(e) }finally{ setLoading(false) }
   }
 
-  useEffect(()=>{ getParceiros().then(setParceiros).catch(console.error) },[])
+  useEffect(()=>{ getParceirosAtivos().then(setParceiros).catch(console.error) },[])
   useEffect(()=>{
     const a = visao==='mensal' ? ano : Number(semDom.split('-')[0])
     const m = visao==='mensal' ? mes  : Number(semDom.split('-')[1])
