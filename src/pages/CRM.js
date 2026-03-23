@@ -686,12 +686,20 @@ export default function CRM() {
 
   useEffect(() => { carregar() }, [])
 
-  function handleSave(upd) {
-    setParceiros(prev => prev.map(p => p.id===upd.id ? { ...p, ...upd } : p))
+  async function handleSave(upd) {
+    // Recarrega do banco para garantir que current_status e todos os campos estão atualizados
+    try {
+      const atualizado = await getCRMParceiros()
+      setParceiros(atualizado)
+    } catch {
+      // Fallback: atualiza só o parceiro editado
+      setParceiros(prev => prev.map(p => p.id===upd.id ? { ...p, ...upd } : p))
+    }
   }
 
   function handleNovoParceiro(novo) {
-    setParceiros(prev => [...prev, novo])
+    // Recarrega lista completa para incluir o novo com status correto
+    carregar()
     showToast(`${novo.nome} adicionado ao CRM!`)
   }
 
