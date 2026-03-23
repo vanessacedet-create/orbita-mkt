@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
-  getParceiros,
+  getParceiros, getEditoras,
   getCRMParceiros, updateParceiroCRM, getStatusHistory, addStatusHistory, createParceiroCRM,
 } from '../lib/supabase'
 import {
@@ -364,12 +364,23 @@ function KanbanCard({ parceiro, onClick, onDragStart, onDragEnd, isDragging }) {
       {parceiro.username && (
         <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:4}}>@{parceiro.username}</div>
       )}
-      <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
-        {plats.slice(0,3).map(p=>(
-          <span key={p} style={{fontSize:10,background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:4,padding:'1px 6px',color:'var(--text-muted)'}}>{p}</span>
-        ))}
-        {eng && <span style={{fontSize:10,color:'#22c55e',fontWeight:700,marginLeft:'auto'}}>{eng}%</span>}
-      </div>
+      {/* Redes sociais */}
+      {plats.length > 0 && (
+        <div style={{display:'flex',flexWrap:'wrap',gap:4,marginBottom:4}}>
+          {plats.slice(0,3).map(p=>(
+            <span key={p} style={{fontSize:10,background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:4,padding:'1px 6px',color:'var(--text-muted)'}}>{p}</span>
+          ))}
+          {eng && <span style={{fontSize:10,color:'#22c55e',fontWeight:700,marginLeft:'auto'}}>{eng}%</span>}
+        </div>
+      )}
+      {/* Editoras sugeridas */}
+      {parceiro.editoras_sugeridas && (
+        <div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:2}}>
+          {String(parceiro.editoras_sugeridas).split(',').filter(Boolean).map(e=>(
+            <span key={e} style={{fontSize:9,background:'var(--accent-glow)',border:'1px solid var(--accent)',borderRadius:3,padding:'1px 5px',color:'var(--accent)',fontWeight:600}}>{e.trim()}</span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -383,9 +394,14 @@ function ModalNovoParceiro({ onSave, onClose }) {
     canal_comunicacao: '', temas: '', editoras_divulga: '',
     username: '', platforms: [], profile_url: '', contact_value: '',
     source: '', model: '', notes: '',
+    editoras_sugeridas: [],
   })
   const [statusInicial, setStatusInicial] = useState('prospected')
-  const [saving, setSaving] = useState(false)
+  const [saving, setSaving]   = useState(false)
+  const [editoras, setEditoras] = useState([])
+  const [editoraSearch, setEditoraSearch] = useState('')
+
+  useEffect(() => { getEditoras().then(setEditoras).catch(console.error) }, [])
 
   function togglePlat(p) {
     setForm(f=>({...f, platforms: f.platforms.includes(p)?f.platforms.filter(x=>x!==p):[...f.platforms,p]}))
@@ -410,6 +426,7 @@ function ModalNovoParceiro({ onSave, onClose }) {
         source: form.source||null,
         model: form.model ? Number(form.model) : null,
         notes: form.notes||null,
+        editoras_sugeridas: form.editoras_sugeridas.length ? form.editoras_sugeridas.join(',') : null,
       }
       const novo = await createParceiroCRM(payload, statusInicial)
       onSave({ ...novo, current_status: statusInicial })
@@ -491,6 +508,37 @@ function ModalNovoParceiro({ onSave, onClose }) {
           <div className="form-group">
             <label className="form-label">Observações</label>
             <textarea className="form-textarea" rows={2} value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} placeholder="Anotações iniciais..."/>
+          </div>
+
+          {/* Editoras sugeridas */}
+          <div className="form-group">
+            <label className="form-label">Editoras a oferecer</label>
+            {form.editoras_sugeridas.length > 0 && (
+              <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:8}}>
+                {form.editoras_sugeridas.map(e=>(
+                  <span key={e} style={{display:'inline-flex',alignItems:'center',gap:4,background:'var(--accent-glow)',border:'1px solid var(--accent)',borderRadius:20,padding:'2px 10px',fontSize:12,color:'var(--accent)',fontWeight:600}}>
+                    {e}
+                    <button onClick={()=>setForm(f=>({...f,editoras_sugeridas:f.editoras_sugeridas.filter(x=>x!==e)}))} style={{background:'none',border:'none',cursor:'pointer',color:'var(--accent)',padding:0,display:'flex',lineHeight:1}}><X size={11}/></button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <input className="form-input" value={editoraSearch} onChange={e=>setEditoraSearch(e.target.value)} placeholder="Buscar editora..."/>
+            {editoraSearch.trim() && (
+              <div style={{border:'1px solid var(--border)',borderRadius:8,marginTop:4,maxHeight:140,overflowY:'auto',background:'var(--surface-2)'}}>
+                {editoras.filter(e=>e.toLowerCase().includes(editoraSearch.toLowerCase())&&!form.editoras_sugeridas.includes(e)).length===0
+                  ? <div style={{padding:'10px 14px',fontSize:12,color:'var(--text-muted)'}}>Nenhuma editora encontrada</div>
+                  : editoras.filter(e=>e.toLowerCase().includes(editoraSearch.toLowerCase())&&!form.editoras_sugeridas.includes(e)).map(e=>(
+                      <div key={e} onClick={()=>{setForm(f=>({...f,editoras_sugeridas:[...f.editoras_sugeridas,e]}));setEditoraSearch('')}}
+                        style={{padding:'8px 14px',fontSize:13,cursor:'pointer',borderBottom:'1px solid var(--border)'}}
+                        onMouseEnter={ev=>ev.currentTarget.style.background='var(--surface-3)'}
+                        onMouseLeave={ev=>ev.currentTarget.style.background='transparent'}>
+                        {e}
+                      </div>
+                    ))
+                }
+              </div>
+            )}
           </div>
 
           {/* Status inicial */}
