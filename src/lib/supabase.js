@@ -48,32 +48,32 @@ export async function createUsuarioAdmin({ email, password, nome, perfil }) {
 
 // ── PARCEIROS ──────────────────────────────────────────────
 export async function getParceiros() {
+  // Retorna TODOS os parceiros — visível para todos os usuários em todas as telas
+  const { data, error } = await supabase.from('parceiros').select('*').order('nome')
+  if (error) throw error
+  return data || []
+}
+
+// Retorna apenas parceiros com status 'active' no CRM — usado em Campanhas, Cortesias, Monitoramento
+export async function getParceirosAtivos() {
   const { data, error } = await supabase.from('parceiros').select('*').order('nome')
   if (error) throw error
   const todos = data || []
   if (!todos.length) return []
-
-  // Tenta filtrar por status ativo — se a tabela ainda não existir, retorna todos
   try {
     const { data: history, error: he } = await supabase
       .from('partner_status_history')
       .select('partner_id, status, changed_at')
       .in('partner_id', todos.map(p=>p.id))
       .order('changed_at', { ascending: false })
-
-    // Se a tabela não existe ou deu erro, retorna todos os parceiros
     if (he) return todos
-
     const statusMap = {}
     for (const h of (history||[])) {
       if (!statusMap[h.partner_id]) statusMap[h.partner_id] = h.status
     }
-
-    // Se nenhum parceiro tem status (tabela vazia), retorna todos
-    const comStatus = todos.filter(p => statusMap[p.id] === 'active')
-    return comStatus.length > 0 ? comStatus : todos
+    const ativos = todos.filter(p => statusMap[p.id] === 'active')
+    return ativos.length > 0 ? ativos : todos
   } catch {
-    // Fallback: retorna todos se algo der errado
     return todos
   }
 }
