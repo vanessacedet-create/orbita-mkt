@@ -569,7 +569,7 @@ export async function deleteDivulgacaoCampanha(id) {
 export async function getLancamentoLivros(campanha_id) {
   const { data, error } = await supabase
     .from('lancamento_livros')
-    .select('id, livro_id, livros(id, titulo, autor, isbn, sku), lancamento_parceiros(id, status, data_combinada, data_divulgacao, tipo_divulgacao, link, curtidas, comentarios, visualizacoes, observacoes, parceiro_id, parceiros(id, nome, tipo_parceria))')
+    .select('id, livro_id, livros(id, titulo, autor, isbn, sku, data_lancamento), lancamento_parceiros(id, status, data_combinada, data_divulgacao, tipo_divulgacao, link, curtidas, comentarios, visualizacoes, observacoes, parceiro_id, parceiros(id, nome, tipo_parceria))')
     .eq('campanha_id', campanha_id)
     .order('created_at', { ascending: true })
   if (error) throw error
@@ -942,4 +942,62 @@ export async function importarLivrosDestaquePlanilha(campanha_parceiro_id, isbns
     }
   }
   return results
+}
+
+// ── CRM DE INFLUENCERS ─────────────────────────────────────
+export async function getCRMParceiros() {
+  const { data, error } = await supabase
+    .from('parceiros')
+    .select('*')
+    .order('nome')
+  if (error) throw error
+
+  // Busca o status atual de cada parceiro
+  const ids = (data||[]).map(p=>p.id)
+  if (!ids.length) return []
+
+  const { data: history } = await supabase
+    .from('partner_status_history')
+    .select('partner_id, status, changed_at')
+    .in('partner_id', ids)
+    .order('changed_at', { ascending: false })
+
+  // Mapeia status atual por parceiro
+  const statusMap = {}
+  for (const h of (history||[])) {
+    if (!statusMap[h.partner_id]) statusMap[h.partner_id] = h.status
+  }
+
+  return (data||[]).map(p => ({ ...p, current_status: statusMap[p.id] || null }))
+}
+
+export async function updateParceiroCRM(id, updates) {
+  const { data, error } = await supabase
+    .from('parceiros')
+    .update(updates)
+    .eq('id', id)
+    .select('*')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function getStatusHistory(parceiro_id) {
+  const { data, error } = await supabase
+    .from('partner_status_history')
+    .select('*')
+    .eq('partner_id', parceiro_id)
+    .order('changed_at', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function addStatusHistory(parceiro_id, status, reason) {
+  const { data, error } = await supabase
+    .from('partner_status_history')
+    .insert([{ partner_id: parceiro_id, status, reason: reason||null }])
+    .select('*')
+    .single()
+  if (error) throw error
+  return data
 }
