@@ -48,9 +48,34 @@ export async function createUsuarioAdmin({ email, password, nome, perfil }) {
 
 // ── PARCEIROS ──────────────────────────────────────────────
 export async function getParceiros() {
+  // Retorna apenas parceiros ativos (status = active no pipeline CRM)
+  // Parceiros sem histórico de status NÃO são retornados (precisam ser ativados no CRM)
   const { data, error } = await supabase.from('parceiros').select('*').order('nome')
   if (error) throw error
-  return data
+  const todos = data || []
+  if (!todos.length) return []
+
+  // Busca o status atual de cada parceiro
+  const { data: history } = await supabase
+    .from('partner_status_history')
+    .select('partner_id, status, changed_at')
+    .in('partner_id', todos.map(p=>p.id))
+    .order('changed_at', { ascending: false })
+
+  const statusMap = {}
+  for (const h of (history||[])) {
+    if (!statusMap[h.partner_id]) statusMap[h.partner_id] = h.status
+  }
+
+  // Só retorna quem tem status 'active'
+  return todos.filter(p => statusMap[p.id] === 'active')
+}
+
+// Retorna TODOS os parceiros independente de status (uso interno do CRM)
+export async function getTodosParceiros() {
+  const { data, error } = await supabase.from('parceiros').select('*').order('nome')
+  if (error) throw error
+  return data || []
 }
 
 // ── PONTUAÇÃO DE PARCEIROS ─────────────────────────────────
@@ -945,6 +970,20 @@ export async function importarLivrosDestaquePlanilha(campanha_parceiro_id, isbns
 }
 
 // ── CRM DE INFLUENCERS ─────────────────────────────────────
+
+export async function createParceiroCRM(payload, statusInicial = 'prospected') {
+  // Cria o parceiro
+  const { data, error } = await supabase
+    .from('parceiros')
+    .insert([payload])
+    .select('*')
+    .single()
+  if (error) throw error
+  // Adiciona status inicial no histórico
+  await addStatusHistory(data.id, statusInicial, 'Parceiro cadastrado via CRM')
+  return data
+}
+
 export async function getCRMParceiros() {
   const { data, error } = await supabase
     .from('parceiros')
