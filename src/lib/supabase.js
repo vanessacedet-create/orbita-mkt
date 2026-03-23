@@ -807,15 +807,24 @@ export async function addComentario(tarefa_id, usuario_id, texto) {
 
 // ── EDITORAS ───────────────────────────────────────────────
 export async function getEditoras() {
-  const { data, error } = await supabase
-    .from('livros')
-    .select('editora')
-    .not('editora', 'is', null)
-    .neq('editora', '')
-    .order('editora')
-  if (error) throw error
-  // Return unique editoras
-  return [...new Set((data || []).map(l => l.editora).filter(Boolean))].sort()
+  // Busca todas as editoras únicas — usa paginação para garantir que busca além do limite de 1000
+  let todas = []
+  let page = 0
+  const pageSize = 1000
+  while (true) {
+    const { data, error } = await supabase
+      .from('livros')
+      .select('editora')
+      .not('editora', 'is', null)
+      .neq('editora', '')
+      .range(page * pageSize, (page + 1) * pageSize - 1)
+    if (error) throw error
+    if (!data || data.length === 0) break
+    todas = todas.concat(data.map(l => l.editora).filter(Boolean))
+    if (data.length < pageSize) break
+    page++
+  }
+  return [...new Set(todas)].sort((a, b) => a.localeCompare(b, 'pt-BR'))
 }
 // ── MONITORAMENTO ──────────────────────────────────────────
 export async function getRegistrosMonitoramento({ ano, mes } = {}) {
