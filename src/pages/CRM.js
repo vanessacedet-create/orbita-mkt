@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   getParceiros,
-  getCRMParceiros, updateParceiroCRM, getStatusHistory, addStatusHistory,
+  getCRMParceiros, updateParceiroCRM, getStatusHistory, addStatusHistory, createParceiroCRM,
 } from '../lib/supabase'
 import {
   Users, Plus, X, ChevronRight, Clock, ExternalLink,
@@ -340,15 +340,22 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose }) {
 }
 
 // ── CARD DO PARCEIRO NO KANBAN ─────────────────────────────
-function KanbanCard({ parceiro, onClick }) {
+function KanbanCard({ parceiro, onClick, onDragStart, onDragEnd, isDragging }) {
   const plats = parceiro.platforms || []
   const eng = parceiro.engagement_rate
   return (
-    <div onClick={onClick} style={{
-      background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,
-      padding:'10px 12px',cursor:'pointer',transition:'border-color 0.15s',marginBottom:8
-    }}
-      onMouseEnter={e=>e.currentTarget.style.borderColor='var(--accent)'}
+    <div
+      draggable
+      onDragStart={e=>{ e.dataTransfer.effectAllowed='move'; onDragStart && onDragStart() }}
+      onDragEnd={()=>{ onDragEnd && onDragEnd() }}
+      onClick={()=>!isDragging && onClick()}
+      style={{
+        background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,
+        padding:'10px 12px',cursor:'grab',transition:'border-color 0.15s, opacity 0.15s',
+        marginBottom:8, opacity: isDragging ? 0.4 : 1,
+        userSelect:'none',
+      }}
+      onMouseEnter={e=>{if(!isDragging)e.currentTarget.style.borderColor='var(--accent)'}}
       onMouseLeave={e=>e.currentTarget.style.borderColor='var(--border)'}>
       <div style={{fontWeight:700,fontSize:13,color:'var(--text)',marginBottom:3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
         {parceiro.nome}
@@ -366,6 +373,161 @@ function KanbanCard({ parceiro, onClick }) {
   )
 }
 
+
+// ── MODAL NOVO PARCEIRO ────────────────────────────────────
+function ModalNovoParceiro({ onSave, onClose }) {
+  const TIPOS_PARCERIA = ['Livraria de influencer', 'Booktime', 'Divulgação editoras próprias']
+  const [form, setForm] = useState({
+    nome: '', tipo_parceria: '', cpf: '', livraria: '',
+    canal_comunicacao: '', temas: '', editoras_divulga: '',
+    username: '', platforms: [], profile_url: '', contact_value: '',
+    source: '', model: '', notes: '',
+  })
+  const [statusInicial, setStatusInicial] = useState('prospected')
+  const [saving, setSaving] = useState(false)
+
+  function togglePlat(p) {
+    setForm(f=>({...f, platforms: f.platforms.includes(p)?f.platforms.filter(x=>x!==p):[...f.platforms,p]}))
+  }
+
+  async function salvar() {
+    if (!form.nome.trim()) return
+    setSaving(true)
+    try {
+      const payload = {
+        nome: form.nome.trim(),
+        tipo_parceria: form.tipo_parceria||null,
+        cpf: form.cpf||null,
+        livraria: form.livraria||null,
+        canal_comunicacao: form.canal_comunicacao||null,
+        temas: form.temas||null,
+        editoras_divulga: form.editoras_divulga||null,
+        username: form.username||null,
+        platforms: form.platforms,
+        profile_url: form.profile_url||null,
+        contact_value: form.contact_value||null,
+        source: form.source||null,
+        model: form.model ? Number(form.model) : null,
+        notes: form.notes||null,
+      }
+      const novo = await createParceiroCRM(payload, statusInicial)
+      onSave({ ...novo, current_status: statusInicial })
+      onClose()
+    } catch(e) { console.error(e) } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal" style={{maxWidth:520,maxHeight:'90vh',overflowY:'auto'}}>
+        <div className="modal-header" style={{position:'sticky',top:0,background:'var(--surface)',zIndex:10,borderBottom:'1px solid var(--border)'}}>
+          <h2 className="modal-title">Novo parceiro</h2>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
+        </div>
+        <div className="form-grid">
+          {/* Dados básicos */}
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Nome *</label>
+              <input className="form-input" value={form.nome} onChange={e=>setForm(f=>({...f,nome:e.target.value}))} placeholder="Nome completo"/>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Username / @</label>
+              <input className="form-input" value={form.username} onChange={e=>setForm(f=>({...f,username:e.target.value}))} placeholder="@usuario"/>
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Tipo de parceria</label>
+              <select className="form-select" value={form.tipo_parceria} onChange={e=>setForm(f=>({...f,tipo_parceria:e.target.value}))}>
+                <option value="">Selecionar...</option>
+                {TIPOS_PARCERIA.map(t=><option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Modelo</label>
+              <select className="form-select" value={form.model} onChange={e=>setForm(f=>({...f,model:e.target.value}))}>
+                <option value="">Selecionar...</option>
+                {MODELOS.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Plataformas */}
+          <div className="form-group">
+            <label className="form-label">Plataformas</label>
+            <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+              {PLATAFORMAS.map(p=>(
+                <button key={p} type="button" onClick={()=>togglePlat(p)}
+                  style={{padding:'3px 10px',borderRadius:20,fontSize:12,fontWeight:600,cursor:'pointer',border:'2px solid',
+                    borderColor:form.platforms.includes(p)?'var(--accent)':'var(--border)',
+                    background:form.platforms.includes(p)?'var(--accent-glow)':'transparent',
+                    color:form.platforms.includes(p)?'var(--accent)':'var(--text-muted)'}}>
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Contato (WhatsApp/Email)</label>
+              <input className="form-input" value={form.contact_value} onChange={e=>setForm(f=>({...f,contact_value:e.target.value}))} placeholder="+55 11 99999-9999"/>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Origem</label>
+              <select className="form-select" value={form.source} onChange={e=>setForm(f=>({...f,source:e.target.value}))}>
+                <option value="">Selecionar...</option>
+                {ORIGENS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Link do perfil</label>
+            <input className="form-input" value={form.profile_url} onChange={e=>setForm(f=>({...f,profile_url:e.target.value}))} placeholder="https://instagram.com/..."/>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Observações</label>
+            <textarea className="form-textarea" rows={2} value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} placeholder="Anotações iniciais..."/>
+          </div>
+
+          {/* Status inicial */}
+          <div className="form-group">
+            <label className="form-label">Status inicial no pipeline</label>
+            <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+              {PIPELINE.map(s=>(
+                <button key={s.value} type="button" onClick={()=>setStatusInicial(s.value)}
+                  style={{padding:'4px 12px',borderRadius:20,fontSize:12,fontWeight:600,cursor:'pointer',border:`2px solid ${s.cor}`,
+                    background:statusInicial===s.value?s.cor:'transparent',
+                    color:statusInicial===s.value?'#fff':s.cor,transition:'all 0.15s'}}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+            {statusInicial === 'active' && (
+              <div style={{marginTop:6,fontSize:11,background:'rgba(34,197,94,0.1)',border:'1px solid rgba(34,197,94,0.3)',borderRadius:6,padding:'5px 10px',color:'#22c55e'}}>
+                ✓ Este parceiro ficará visível em todo o Orbita imediatamente.
+              </div>
+            )}
+            {statusInicial !== 'active' && (
+              <div style={{marginTop:6,fontSize:11,color:'var(--text-muted)'}}>
+                O parceiro só aparecerá em outras telas do Orbita quando o status for alterado para <strong>Ativo</strong>.
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="form-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={salvar} disabled={saving||!form.nome.trim()}>
+            {saving?'Salvando...':'Criar parceiro'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── PÁGINA PRINCIPAL ───────────────────────────────────────
 export default function CRM() {
   const [parceiros, setParceiros]     = useState([])
@@ -373,6 +535,9 @@ export default function CRM() {
   const [loading, setLoading]         = useState(true)
   const [search, setSearch]           = useState('')
   const [modalParceiro, setModalParceiro] = useState(null)
+  const [modalNovo, setModalNovo]       = useState(false)
+  const [dragId, setDragId]             = useState(null)
+  const [dragOverCol, setDragOverCol]   = useState(null)
   const [toast, showToast]            = useToast()
 
   async function carregar() {
@@ -391,6 +556,28 @@ export default function CRM() {
 
   function handleSave(upd) {
     setParceiros(prev => prev.map(p => p.id===upd.id ? { ...p, ...upd } : p))
+  }
+
+  function handleNovoParceiro(novo) {
+    setParceiros(prev => [...prev, novo])
+    showToast(`${novo.nome} adicionado ao CRM!`)
+  }
+
+  async function handleDrop(novoStatus) {
+    if (!dragId || !novoStatus) { setDragId(null); setDragOverCol(null); return }
+    const parceiro = parceiros.find(p => p.id === dragId)
+    if (!parceiro || parceiro.current_status === novoStatus) { setDragId(null); setDragOverCol(null); return }
+    setDragId(null); setDragOverCol(null)
+    // Atualiza estado local imediatamente
+    setParceiros(prev => prev.map(p => p.id === dragId ? { ...p, current_status: novoStatus } : p))
+    try {
+      await addStatusHistory(dragId, novoStatus, 'Status alterado via kanban')
+      showToast(`${parceiro.nome} → ${pipelineInfo(novoStatus).label}`)
+    } catch(e) {
+      // Reverte se falhar
+      setParceiros(prev => prev.map(p => p.id === dragId ? { ...p, current_status: parceiro.current_status } : p))
+      showToast('Erro ao atualizar status', 'error')
+    }
   }
 
   const filtrados = parceiros.filter(p =>
@@ -429,6 +616,9 @@ export default function CRM() {
             <Search size={14} style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-muted)'}}/>
             <input className="search-input" style={{paddingLeft:32}} placeholder="Buscar parceiro..." value={search} onChange={e=>setSearch(e.target.value)}/>
           </div>
+          <button className="btn btn-primary" onClick={()=>setModalNovo(true)} style={{display:'flex',alignItems:'center',gap:6}}>
+            <Plus size={15}/> Novo Parceiro
+          </button>
         </div>
       </div>
 
@@ -446,7 +636,11 @@ export default function CRM() {
                     <span style={{fontSize:11,color:'var(--text-muted)',background:'var(--surface)',border:'1px solid var(--border)',borderRadius:20,padding:'1px 7px'}}>{semStatus.length}</span>
                   </div>
                   {semStatus.map(p=>(
-                    <KanbanCard key={p.id} parceiro={p} onClick={()=>setModalParceiro(p)}/>
+                    <KanbanCard key={p.id} parceiro={p}
+                      onClick={()=>setModalParceiro(p)}
+                      onDragStart={()=>setDragId(p.id)}
+                      onDragEnd={()=>{ setDragId(null); setDragOverCol(null) }}
+                      isDragging={dragId===p.id}/>
                   ))}
                 </div>
               )}
@@ -461,12 +655,27 @@ export default function CRM() {
                       <span style={{fontSize:12,fontWeight:700,color:st.cor,flex:1}}>{st.label}</span>
                       <span style={{fontSize:11,color:st.cor,background:'var(--surface)',border:`1px solid ${st.cor}30`,borderRadius:20,padding:'1px 7px'}}>{items.length}</span>
                     </div>
-                    {items.length===0
-                      ? <div style={{padding:'16px 10px',textAlign:'center',fontSize:12,color:'var(--text-muted)',border:'1px dashed var(--border)',borderRadius:8}}>Vazio</div>
-                      : items.map(p=>(
-                          <KanbanCard key={p.id} parceiro={p} onClick={()=>setModalParceiro(p)}/>
-                        ))
-                    }
+                    <div
+                      onDragOver={e=>{ e.preventDefault(); setDragOverCol(st.value) }}
+                      onDragLeave={()=>setDragOverCol(null)}
+                      onDrop={e=>{ e.preventDefault(); handleDrop(st.value) }}
+                      style={{minHeight:60,borderRadius:8,transition:'background 0.15s',
+                        background: dragOverCol===st.value ? `${st.cor}18` : 'transparent',
+                        border: dragOverCol===st.value ? `2px dashed ${st.cor}` : '2px solid transparent',
+                        padding:2}}>
+                      {items.length===0
+                        ? <div style={{padding:'16px 10px',textAlign:'center',fontSize:12,color:'var(--text-muted)'}}>
+                            {dragOverCol===st.value ? `Soltar aqui` : 'Vazio'}
+                          </div>
+                        : items.map(p=>(
+                            <KanbanCard key={p.id} parceiro={p}
+                              onClick={()=>setModalParceiro(p)}
+                              onDragStart={()=>setDragId(p.id)}
+                              onDragEnd={()=>{ setDragId(null); setDragOverCol(null) }}
+                              isDragging={dragId===p.id}/>
+                          ))
+                      }
+                    </div>
                   </div>
                 )
               })}
@@ -475,6 +684,12 @@ export default function CRM() {
         )
       }
 
+      {modalNovo && (
+        <ModalNovoParceiro
+          onSave={handleNovoParceiro}
+          onClose={()=>setModalNovo(false)}
+        />
+      )}
       {modalParceiro && (
         <ModalParceiroCRM
           parceiro={modalParceiro}
