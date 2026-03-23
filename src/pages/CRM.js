@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
-  getParceiros, getEditoras, getUsuarios,
+  getParceiros, getParceirosAtivos, getEditoras, getUsuarios,
   getCRMParceiros, updateParceiroCRM, getStatusHistory, addStatusHistory, createParceiroCRM, deleteParceiro,
 } from '../lib/supabase'
 import {
@@ -666,6 +666,10 @@ export default function CRM() {
   const [modalNovo, setModalNovo]       = useState(false)
   const [dragId, setDragId]             = useState(null)
   const [dragOverCol, setDragOverCol]   = useState(null)
+  const [filtroStatus, setFiltroStatus]   = useState('')
+  const [filtroPlat, setFiltroPlat]       = useState('')
+  const [filtroResp, setFiltroResp]       = useState('')
+  const [filtroOrigem, setFiltroOrigem]   = useState('')
   const [toast, showToast]            = useToast()
 
   async function carregar() {
@@ -717,11 +721,20 @@ export default function CRM() {
     }
   }
 
-  const filtrados = parceiros.filter(p =>
-    p.nome.toLowerCase().includes(search.toLowerCase()) ||
-    (p.username||'').toLowerCase().includes(search.toLowerCase()) ||
-    (p.platforms||[]).some(pl=>pl.toLowerCase().includes(search.toLowerCase()))
-  )
+  const filtrados = parceiros.filter(p => {
+    const q = search.toLowerCase()
+    if (q && !(
+      p.nome.toLowerCase().includes(q) ||
+      (p.username||'').toLowerCase().includes(q) ||
+      (p.platforms||[]).some(pl=>pl.toLowerCase().includes(q))
+    )) return false
+    if (filtroStatus && (p.current_status||'prospected') !== filtroStatus) return false
+    if (filtroPlat   && !(p.platforms||[]).includes(filtroPlat)) return false
+    if (filtroResp   && p.responsavel_interno_id !== filtroResp) return false
+    if (filtroOrigem && p.source !== filtroOrigem) return false
+    return true
+  })
+  const temFiltro = filtroStatus || filtroPlat || filtroResp || filtroOrigem
 
   // Agrupa por status
   const porStatus = {}
@@ -749,11 +762,37 @@ export default function CRM() {
           </div>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
-          <div style={{position:'relative'}}>
-            <Search size={14} style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-muted)'}}/>
-            <input className="search-input" style={{paddingLeft:32}} placeholder="Buscar parceiro..." value={search} onChange={e=>setSearch(e.target.value)}/>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
+            <div style={{position:'relative'}}>
+              <Search size={14} style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-muted)'}}/>
+              <input className="search-input" style={{paddingLeft:32}} placeholder="Buscar parceiro..." value={search} onChange={e=>setSearch(e.target.value)}/>
+            </div>
+            <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
+              <option value="">Todos os status</option>
+              {PIPELINE.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
+            <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroPlat} onChange={e=>setFiltroPlat(e.target.value)}>
+              <option value="">Todas as plataformas</option>
+              {PLATAFORMAS.map(p=><option key={p} value={p}>{p}</option>)}
+            </select>
+            <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroResp} onChange={e=>setFiltroResp(e.target.value)}>
+              <option value="">Todos os responsáveis</option>
+              {todos.filter(u=>u.responsavel_interno_id===undefined).length===0 && todos.map(u=>u).filter((u,i,a)=>a.findIndex(x=>x.responsavel_interno_id===u.responsavel_interno_id)===i)}
+              {[...new Map(parceiros.filter(p=>p.responsavel_interno_id&&p.responsavel_interno_nome).map(p=>[p.responsavel_interno_id,p])).values()].map(p=>(
+                <option key={p.responsavel_interno_id} value={p.responsavel_interno_id}>{p.responsavel_interno_nome}</option>
+              ))}
+            </select>
+            <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroOrigem} onChange={e=>setFiltroOrigem(e.target.value)}>
+              <option value="">Todas as origens</option>
+              {ORIGENS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            {temFiltro && (
+              <button className="btn btn-ghost btn-sm" onClick={()=>{setFiltroStatus('');setFiltroPlat('');setFiltroResp('');setFiltroOrigem('')}}>
+                <X size={12}/> Limpar
+              </button>
+            )}
           </div>
-          <button className="btn btn-primary" onClick={()=>setModalNovo(true)} style={{display:'flex',alignItems:'center',gap:6}}>
+          <button className="btn btn-primary" onClick={()=>setModalNovo(true)} style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
             <Plus size={15}/> Novo Parceiro
           </button>
         </div>
