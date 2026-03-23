@@ -14,13 +14,13 @@ import CRM from './pages/CRM'
 import './App.css'
 import {
   LayoutDashboard, BookOpen, Users, LogOut,
-  Orbit, ShieldAlert, Megaphone, CalendarDays, CheckSquare, UserRound, Eye, Handshake
+  Orbit, ShieldAlert, Megaphone, CalendarDays, CheckSquare, UserRound, Eye, Network
 } from 'lucide-react'
 
 const MENU = [
   { path: '/',           label: 'Dashboard',  icon: LayoutDashboard, modulo: 'dashboard' },
   { path: '/parceiros',  label: 'Parceiros',  icon: UserRound,       modulo: 'parceiros' },
-  { path: '/crm',        label: 'CRM',        icon: Handshake,       modulo: 'crm'       },
+  { path: '/crm',        label: 'CRM',        icon: Network,       modulo: 'crm'       },
   { path: '/cortesias',  label: 'Cortesias',  icon: BookOpen,        modulo: 'cortesias' },
   { path: '/campanhas',  label: 'Campanhas',  icon: Megaphone,       modulo: 'campanhas' },
   { path: '/monitoramento', label: 'Monitoramento', icon: Eye,           modulo: 'monitoramento' },
