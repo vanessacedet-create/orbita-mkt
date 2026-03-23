@@ -286,6 +286,7 @@ export default function Parceiros() {
   const [toast, showToast]        = useToast()
   const [editoras, setEditoras]   = useState([])
   const [editoraSearch, setEditoraSearch] = useState('')
+  const [usuarios, setUsuarios]     = useState([])
 
   const EMPTY = { nome:'', tipo_parceria:'', cpf:'', livraria:'', canal_comunicacao:'', editoras_divulga:[], temas:'', responsavel_interno_id:'' }
   const [form, setForm] = useState(EMPTY)
