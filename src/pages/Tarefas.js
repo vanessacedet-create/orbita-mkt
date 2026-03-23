@@ -270,19 +270,26 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
 }
 
 // ── CARD KANBAN ────────────────────────────────────────────
-function CardKanban({ tarefa, onClick }) {
+function CardKanban({ tarefa, onClick, onDragStart, onDragEnd, isDragging }) {
   const checkTotal = tarefa.tarefa_checklist?.length || 0
   const checkDone  = tarefa.tarefa_checklist?.filter(x=>x.concluido).length || 0
   const p = PRIORIDADE.find(x => x.value === tarefa.prioridade)
 
   return (
-    <div onClick={onClick} style={{
-      background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10,
-      padding:'12px 14px', cursor:'pointer', transition:'all 0.15s',
-      borderLeft: `3px solid ${p?.color||'var(--border)'}`,
-    }}
-    onMouseEnter={e=>{ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.transform='translateY(-1px)' }}
-    onMouseLeave={e=>{ e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.transform='none'; e.currentTarget.style.borderLeftColor=p?.color||'var(--border)' }}>
+    <div
+      draggable
+      onDragStart={e=>{ e.dataTransfer.effectAllowed='move'; onDragStart && onDragStart() }}
+      onDragEnd={()=>{ onDragEnd && onDragEnd() }}
+      onClick={()=>!isDragging && onClick()}
+      style={{
+        background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10,
+        padding:'12px 14px', cursor:'grab', transition:'all 0.15s',
+        borderLeft: `3px solid ${p?.color||'var(--border)'}`,
+        opacity: isDragging ? 0.4 : 1,
+        userSelect: 'none',
+      }}
+      onMouseEnter={e=>{ if(!isDragging){ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.transform='translateY(-1px)' }}}
+      onMouseLeave={e=>{ e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.transform='none'; e.currentTarget.style.borderLeftColor=p?.color||'var(--border)' }}>
       <div style={{ fontSize:13, fontWeight:600, color:'var(--text)', marginBottom:8, lineHeight:1.4 }}>{tarefa.titulo}</div>
       {tarefa.descricao && (
         <div style={{ fontSize:11.5, color:'var(--text-muted)', marginBottom:8, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical' }}>{tarefa.descricao}</div>
@@ -303,13 +310,19 @@ function CardKanban({ tarefa, onClick }) {
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           <PrazoBadge data_prazo={tarefa.data_prazo} status={tarefa.status}/>
-          {tarefa.responsavel?.nome && (
-            <div title={tarefa.responsavel.nome} style={{ width:22, height:22, borderRadius:'50%', background:'var(--accent-glow)', border:'1px solid var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, fontWeight:700, color:'var(--accent)' }}>
-              {tarefa.responsavel.nome[0].toUpperCase()}
-            </div>
-          )}
         </div>
       </div>
+      {/* Responsável — nome completo na parte inferior */}
+      {tarefa.responsavel?.nome && (
+        <div style={{ marginTop:8, paddingTop:8, borderTop:'1px solid var(--border)', display:'flex', alignItems:'center', gap:6 }}>
+          <div style={{ width:18, height:18, borderRadius:'50%', background:'var(--accent-glow)', border:'1px solid var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, fontWeight:700, color:'var(--accent)', flexShrink:0 }}>
+            {tarefa.responsavel.nome[0].toUpperCase()}
+          </div>
+          <span style={{ fontSize:11, color:'var(--text-muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            {tarefa.responsavel.nome}
+          </span>
+        </div>
+      )}
     </div>
   )
 }
@@ -326,6 +339,8 @@ export default function Tarefas() {
   const [filtroPrioridade, setFiltroPrioridade] = useState('todas')
   const [filtroResponsavel, setFiltroResponsavel] = useState('todos')
   const [toast, showToast]          = useToast()
+  const [dragId, setDragId]           = useState(null)
+  const [dragOverCol, setDragOverCol] = useState(null)
 
   async function carregar() {
     setLoading(true)
@@ -360,6 +375,20 @@ export default function Tarefas() {
   async function handleStatusChange(tarefa, novoStatus) {
     const upd = await updateTarefa(tarefa.id, { status: novoStatus })
     setTarefas(prev => prev.map(t => t.id === upd.id ? upd : t))
+  }
+
+  async function handleDragDrop(novoStatus) {
+    if (!dragId || !novoStatus) { setDragId(null); setDragOverCol(null); return }
+    const tarefa = tarefas.find(t => t.id === dragId)
+    if (!tarefa || tarefa.status === novoStatus) { setDragId(null); setDragOverCol(null); return }
+    setDragId(null); setDragOverCol(null)
+    setTarefas(prev => prev.map(t => t.id === dragId ? { ...t, status: novoStatus } : t))
+    try {
+      await updateTarefa(dragId, { status: novoStatus })
+    } catch(e) {
+      setTarefas(prev => prev.map(t => t.id === dragId ? { ...t, status: tarefa.status } : t))
+      showToast('Erro ao mover tarefa', 'error')
+    }
   }
 
   // Filtros
@@ -441,22 +470,44 @@ export default function Tarefas() {
           {STATUS.map(s => {
             const Icon = s.icon
             const lista = porStatus[s.value] || []
+            const isOver = dragOverCol === s.value
+            const corCol = s.value==='concluido'?'var(--green)':s.value==='em_andamento'?'var(--amber)':'var(--indigo)'
             return (
-              <div key={s.value} style={{ background:'var(--surface-2)', borderRadius:12, overflow:'hidden', border:'1px solid var(--border)' }}>
+              <div key={s.value}
+                onDragOver={e=>{ e.preventDefault(); setDragOverCol(s.value) }}
+                onDragLeave={e=>{ if(!e.currentTarget.contains(e.relatedTarget)) setDragOverCol(null) }}
+                onDrop={e=>{ e.preventDefault(); handleDragDrop(s.value) }}
+                style={{
+                  background: isOver ? 'var(--surface-3)' : 'var(--surface-2)',
+                  borderRadius:12, overflow:'hidden',
+                  border: isOver ? `2px solid ${corCol}` : '1px solid var(--border)',
+                  transition:'border 0.15s, background 0.15s',
+                }}>
                 {/* Header coluna */}
                 <div style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                   <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                    <Icon size={14} color={s.value==='concluido'?'var(--green)':s.value==='em_andamento'?'var(--amber)':'var(--indigo)'}/>
+                    <Icon size={14} color={corCol}/>
                     <span style={{ fontSize:12, fontWeight:700, color:'var(--text)', textTransform:'uppercase', letterSpacing:'0.05em' }}>{s.label}</span>
                   </div>
                   <span style={{ fontSize:11, fontWeight:700, color:'var(--text-muted)', background:'var(--surface-3)', borderRadius:20, padding:'2px 8px' }}>{lista.length}</span>
                 </div>
                 {/* Cards */}
-                <div style={{ padding:'10px', display:'flex', flexDirection:'column', gap:8, minHeight:100 }}>
+                <div style={{ padding:'10px', display:'flex', flexDirection:'column', gap:8, minHeight:120 }}>
                   {lista.length === 0
-                    ? <div style={{ fontSize:12, color:'var(--text-muted)', textAlign:'center', padding:'20px 0', opacity:0.5 }}>Nenhuma tarefa</div>
-                    : lista.map(t => <CardKanban key={t.id} tarefa={t} onClick={()=>setModal(t)}/>)
+                    ? <div style={{ fontSize:12, color: isOver ? corCol : 'var(--text-muted)', textAlign:'center', padding:'20px 0', opacity: isOver ? 1 : 0.5, fontWeight: isOver ? 600 : 400, transition:'all 0.15s' }}>
+                        {isOver ? '↓ Soltar aqui' : 'Nenhuma tarefa'}
+                      </div>
+                    : lista.map(t => (
+                        <CardKanban key={t.id} tarefa={t}
+                          onClick={()=>setModal(t)}
+                          onDragStart={()=>setDragId(t.id)}
+                          onDragEnd={()=>{ setDragId(null); setDragOverCol(null) }}
+                          isDragging={dragId===t.id}/>
+                      ))
                   }
+                  {isOver && lista.length > 0 && (
+                    <div style={{ height:4, borderRadius:99, background:corCol, opacity:0.4, margin:'4px 0' }}/>
+                  )}
                   <button onClick={()=>setModal('new')} style={{
                     width:'100%', padding:'8px', border:'1px dashed var(--border)', borderRadius:8,
                     background:'transparent', cursor:'pointer', fontSize:12, color:'var(--text-muted)',
