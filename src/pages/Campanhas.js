@@ -1646,12 +1646,78 @@ function ModalImportarDivulgacoes({ campanhaId, onImport, onClose }) {
 }
 
 // ── DETALHE DA CAMPANHA ─────────────────────────────────────
+
+// ── MODAL DIVULGAÇÃO DA LIVRARIA ──────────────────────────
+function ModalDivulgacaoLibraria({ campanha, onClose }) {
+  const parceiros = campanha.campanha_parceiros || []
+  const total = parceiros.length
+  const confirmados = parceiros.filter(p => ['confirmado','agendado','publicado'].includes(p.status)).length
+  const publicados  = parceiros.filter(p => p.status === 'publicado').length
+
+  return (
+    <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal" style={{maxWidth:560, maxHeight:'85vh', overflowY:'auto'}}>
+        <div className="modal-header" style={{position:'sticky',top:0,background:'var(--surface)',zIndex:10,borderBottom:'1px solid var(--border)'}}>
+          <div>
+            <h2 className="modal-title">Divulgação da Livraria</h2>
+            <p style={{fontSize:12,color:'var(--text-muted)',margin:0}}>{campanha.nome}</p>
+          </div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
+        </div>
+
+        {/* Resumo */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12,margin:'16px 0'}}>
+          {[
+            {label:'Parceiros',   value:total,       color:'var(--text)'},
+            {label:'Confirmados', value:confirmados, color:'var(--amber)'},
+            {label:'Publicados',  value:publicados,  color:'var(--green)'},
+          ].map(({label,value,color})=>(
+            <div key={label} style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,padding:'12px 14px',textAlign:'center'}}>
+              <div style={{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',color:'var(--text-muted)',marginBottom:4}}>{label}</div>
+              <div style={{fontSize:28,fontWeight:800,color}}>{value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Lista de parceiros com livros destaque */}
+        {parceiros.length === 0
+          ? <p style={{fontSize:13,color:'var(--text-muted)',textAlign:'center',padding:'20px 0'}}>Nenhum parceiro nesta campanha ainda.</p>
+          : parceiros.map(cp => {
+              const s = STATUS_PARCEIRO.find(x=>x.value===cp.status)||STATUS_PARCEIRO[0]
+              return (
+                <div key={cp.id} style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,padding:'12px 14px',marginBottom:10}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:cp.campanha_parceiro_livros?.length?8:0}}>
+                    <div style={{fontWeight:700,fontSize:13,color:'var(--text)'}}>{cp.parceiros?.nome}</div>
+                    <span className={`badge ${s.cls}`} style={{fontSize:10}}>{s.label}</span>
+                  </div>
+                  {cp.campanha_parceiro_livros?.length > 0 && (
+                    <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
+                      {cp.campanha_parceiro_livros.map(cpl=>(
+                        <span key={cpl.id} style={{fontSize:11,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:4,padding:'2px 8px',color:'var(--text-muted)'}}>
+                          📚 {cpl.livros?.titulo||'—'}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {(!cp.campanha_parceiro_livros||cp.campanha_parceiro_livros.length===0) && (
+                    <div style={{fontSize:11,color:'var(--text-muted)',fontStyle:'italic'}}>Nenhum livro destaque definido</div>
+                  )}
+                </div>
+              )
+            })
+        }
+      </div>
+    </div>
+  )
+}
+
 function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
   const [campanha, setCampanha]           = useState(null)
   const [loading, setLoading]             = useState(true)
   const [modalParceiro, setModalParceiro] = useState(null)
   const [modalEdicao, setModalEdicao]         = useState(false)
   const [modalImportarLivros, setModalImportarLivros] = useState(false)
+  const [modalDivLibraria, setModalDivLibraria]   = useState(false)
   const [addParceiroSearch, setAddParceiroSearch] = useState('')
   const [addParceiroOpen, setAddParceiroOpen]     = useState(false)
   const [lancamentoLivros, setLancamentoLivros]   = useState([])
@@ -1749,7 +1815,15 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
             {campanha.data_fim    && <span>Fim: {format(new Date(campanha.data_fim+'T12:00:00'),'dd MMM yyyy',{locale:ptBR})}</span>}
           </div>
         </div>
-        <button className="btn btn-ghost" onClick={()=>setModalEdicao(true)}><Pencil size={14}/> Editar</button>
+        <div style={{display:'flex',gap:8,alignItems:'center'}}>
+          {campanha.tipo === 'Geral' && (
+            <button className="btn btn-primary btn-sm" onClick={()=>setModalDivLibraria(true)}
+              style={{display:'flex',alignItems:'center',gap:6}}>
+              <BookOpen size={14}/> Divulgação da Livraria
+            </button>
+          )}
+          <button className="btn btn-ghost" onClick={()=>setModalEdicao(true)}><Pencil size={14}/> Editar</button>
+        </div>
       </div>
 
       {/* Linha do tempo de etapas */}
@@ -1859,6 +1933,9 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
 
       {modalEdicao && (
         <ModalCampanha campanha={campanha} livros={livros} parceiros={parceiros} onSave={handleUpdateCampanha} onClose={()=>setModalEdicao(false)}/>
+      )}
+      {modalDivLibraria && (
+        <ModalDivulgacaoLibraria campanha={campanha} onClose={()=>setModalDivLibraria(false)}/>
       )}
 
       {modalParceiro && (
