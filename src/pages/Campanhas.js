@@ -1045,6 +1045,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
   const [addParceiroOpen, setAddParceiroOpen]     = useState({})
   const [modalParceiro, setModalParceiro]         = useState(null) // lp obj
   const [modalDivLib, setModalDivLib]             = useState(false)
+  const [filtroTexto, setFiltroTexto]             = useState('')
 
   // Busca de livros para adicionar
   useEffect(() => {
@@ -1203,14 +1204,15 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
             {totalParceiros} parceiro{totalParceiros!==1?'s':''} · {totalPublicados} publicado{totalPublicados!==1?'s':''}
           </div>
         </div>
-        <div style={{position:'relative',maxWidth:400}}>
-          <input
-            className="form-input"
-            value={livroSearch}
-            onChange={e=>setLivroSearch(e.target.value)}
-            placeholder="🔍 Adicionar livro por título, ISBN ou SKU..."
-            autoComplete="off"
-          />
+        <div style={{display:'flex',gap:10,maxWidth:700,marginTop:8}}>
+          <div style={{position:'relative',flex:1}}>
+            <input
+              className="form-input"
+              value={livroSearch}
+              onChange={e=>setLivroSearch(e.target.value)}
+              placeholder="🔍 Adicionar livro por título, ISBN ou SKU..."
+              autoComplete="off"
+            />
           {livroOpen && livroResults.length > 0 && (
             <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:200,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,boxShadow:'0 4px 16px rgba(0,0,0,0.3)',maxHeight:220,overflowY:'auto'}}>
               {livroResults.map(l=>(
@@ -1224,14 +1226,26 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
               ))}
             </div>
           )}
+          </div>
+          <input className="form-input" value={filtroTexto}
+            onChange={e=>setFiltroTexto(e.target.value)}
+            placeholder="🔎 Filtrar por livro ou parceiro..."
+            style={{flex:1}}/>
         </div>
       </div>
 
       {/* Lista de livros */}
-      {lancamentoLivros.length === 0
-        ? <div className="empty-state"><p>Nenhum livro adicionado ainda. Busque acima para começar.</p></div>
+      {(() => {
+        const q = filtroTexto.toLowerCase().trim()
+        const livrosFiltrados = !q ? lancamentoLivros : lancamentoLivros.filter(ll =>
+          (ll.livros?.titulo||'').toLowerCase().includes(q) ||
+          (ll.livros?.isbn||'').replace(/-/g,'').includes(q.replace(/-/g,'')) ||
+          (ll.lancamento_parceiros||[]).some(lp=>(lp.parceiros?.nome||'').toLowerCase().includes(q))
+        )
+        return livrosFiltrados.length === 0
+        ? <div className="empty-state"><p>{filtroTexto ? 'Nenhum resultado para o filtro.' : 'Nenhum livro adicionado ainda. Busque acima para começar.'}</p></div>
         : <div style={{display:'flex',flexDirection:'column',gap:16}}>
-            {lancamentoLivros.map(ll => {
+            {livrosFiltrados.map(ll => {
               const lps = ll.lancamento_parceiros || []
               const aberto = expandido[ll.id] !== false
               const parceirosFiltrados = parceiros.filter(p =>
@@ -1376,7 +1390,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
               )
             })}
           </div>
-      }
+      })()}
 
       {modalParceiro && (
         <ModalLancamentoParceiro
@@ -1392,6 +1406,8 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
         <ModalDivulgacaoLibraria
           campanhaId={campanhaId}
           lancamentoLivros={lancamentoLivros}
+          parceiros={parceiros}
+          onSave={reload}
           onClose={()=>setModalDivLib(false)}
         />
       )}
@@ -1664,111 +1680,126 @@ function ModalImportarDivulgacoes({ campanhaId, onImport, onClose }) {
 // ── DETALHE DA CAMPANHA ─────────────────────────────────────
 
 // ── MODAL DIVULGAÇÃO DA LIVRARIA ──────────────────────────
-// Mostra todos os parceiros de todos os livros da campanha Geral
-// e permite registrar tipo de divulgação + data para cada um
-function ModalDivulgacaoLibraria({ campanhaId, lancamentoLivros, onClose }) {
+// Adiciona uma nova divulgação para um parceiro específico na campanha Geral
+function ModalDivulgacaoLibraria({ campanhaId, lancamentoLivros, parceiros, onSave, onClose }) {
   const hoje = new Date().toISOString().slice(0,10)
-  // Monta lista única de parceiros a partir dos lancamento_livros
-  const parceirosMap = {}
+
+  // Monta lista de parceiros já vinculados à campanha (sem duplicatas)
+  const parceirosVinculados = []
+  const seen = new Set()
   for (const ll of (lancamentoLivros||[])) {
     for (const lp of (ll.lancamento_parceiros||[])) {
-      const pid = lp.parceiro_id
-      if (!parceirosMap[pid]) {
-        parceirosMap[pid] = {
-          parceiro_id: pid,
-          nome: lp.parceiros?.nome || '—',
-          lp_principal: lp, // primeiro registro do parceiro
-          status: lp.status,
-        }
+      if (!seen.has(lp.parceiro_id)) {
+        seen.add(lp.parceiro_id)
+        parceirosVinculados.push({ id: lp.parceiro_id, nome: lp.parceiros?.nome||'—', ll_id: ll.id })
       }
     }
   }
-  const parceiros = Object.values(parceirosMap)
 
-  // Estado: { [parceiro_id]: { tipo, data } }
-  const [registros, setRegistros] = useState(() => {
-    const init = {}
-    for (const p of Object.values(parceirosMap)) {
-      init[p.parceiro_id] = {
-        tipo: p.lp_principal?.tipo_divulgacao || '',
-        data: p.lp_principal?.data_divulgacao || hoje,
-      }
-    }
-    return init
-  })
-  const [saving, setSaving] = useState(false)
-  const [toast, showToast]  = useToast()
+  const [parceiroId, setParceiroId] = useState('')
+  const [tipo, setTipo]             = useState('')
+  const [data, setData]             = useState(hoje)
+  const [link, setLink]             = useState('')
+  const [origem, setOrigem]         = useState('combinada')
+  const [saving, setSaving]         = useState(false)
+  const [toast, showToast]          = useToast()
 
-  function upd(pid, field, val) {
-    setRegistros(prev => ({ ...prev, [pid]: { ...prev[pid], [field]: val } }))
-  }
+  const tipoSel = TIPOS_DIVULGACAO.find(t=>t.value===tipo)
+  const temLink = tipoSel?.temLink || false
 
   async function salvar() {
+    if (!parceiroId || !tipo) return
     setSaving(true)
     try {
-      for (const p of parceiros) {
-        const r = registros[p.parceiro_id]
-        if (!r?.tipo && !r?.data) continue
-        await updateLancamentoParceiro(p.lp_principal.id, {
-          tipo_divulgacao: r.tipo || null,
-          data_divulgacao: r.data || null,
+      // Encontra o ll_id deste parceiro
+      const parceiroInfo = parceirosVinculados.find(p=>p.id===parceiroId)
+      if (!parceiroInfo) { showToast('Parceiro não encontrado','error'); return }
+      // Cria novo registro em lancamento_parceiros
+      await addLancamentoParceiro(parceiroInfo.ll_id, parceiroId)
+      // Depois atualiza com os dados da divulgação
+      // Busca o registro recém criado para atualizar
+      const ll = lancamentoLivros.find(x=>x.id===parceiroInfo.ll_id)
+      const novoLp = (ll?.lancamento_parceiros||[]).find(lp=>lp.parceiro_id===parceiroId)
+      if (novoLp) {
+        await updateLancamentoParceiro(novoLp.id, {
+          tipo_divulgacao: tipo,
+          data_divulgacao: data||null,
+          origem: origem,
+          link: link||null,
         })
       }
-      showToast('Divulgações salvas!')
-      setTimeout(onClose, 1200)
-    } catch(e) { showToast('Erro ao salvar','error') } finally { setSaving(false) }
+      onSave && onSave()
+      showToast('Divulgação registrada!')
+      setTimeout(onClose, 1000)
+    } catch(e) { showToast('Erro ao salvar','error'); console.error(e) }
+    finally { setSaving(false) }
   }
 
   return (
-    <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="modal" style={{maxWidth:560, maxHeight:'90vh', overflowY:'auto'}}>
-        <div className="modal-header" style={{position:'sticky',top:0,background:'var(--surface)',zIndex:10,borderBottom:'1px solid var(--border)'}}>
-          <h2 className="modal-title">Divulgação da Livraria</h2>
+    <div className="modal-backdrop" style={{zIndex:1100}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal" style={{maxWidth:480}}>
+        <div className="modal-header" style={{borderBottom:'1px solid var(--border)'}}>
+          <h2 className="modal-title">Nova divulgação da Livraria</h2>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
         </div>
+        <div className="form-grid">
+          {/* Parceiro */}
+          <div className="form-group">
+            <label className="form-label">Nome do parceiro *</label>
+            {parceirosVinculados.length === 0
+              ? <p style={{fontSize:13,color:'var(--text-muted)'}}>Nenhum parceiro vinculado ainda. Adicione livros e parceiros primeiro.</p>
+              : <select className="form-select" value={parceiroId} onChange={e=>setParceiroId(e.target.value)}>
+                  <option value="">Selecionar parceiro...</option>
+                  {parceirosVinculados.map(p=><option key={p.id} value={p.id}>{p.nome}</option>)}
+                </select>
+            }
+          </div>
 
-        {parceiros.length === 0
-          ? <p style={{fontSize:13,color:'var(--text-muted)',padding:'20px 0',textAlign:'center'}}>
-              Nenhum parceiro vinculado ainda. Adicione livros e parceiros primeiro.
-            </p>
-          : <>
-              <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:16,paddingTop:8}}>
-                Registre o tipo e a data de divulgação para cada parceiro desta campanha.
-              </div>
-              {parceiros.map(p => {
-                const r = registros[p.parceiro_id] || {}
-                const st = STATUS_PARCEIRO.find(s=>s.value===p.status)
-                return (
-                  <div key={p.parceiro_id} style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,padding:'12px 14px',marginBottom:10}}>
-                    {/* Nome + status */}
-                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
-                      <div style={{fontWeight:700,fontSize:13,color:'var(--text)'}}>{p.nome}</div>
-                      {st && <span className={`badge ${st.cls}`} style={{fontSize:10}}>{st.label}</span>}
-                    </div>
-                    <div className="form-row">
-                      <div className="form-group" style={{margin:0}}>
-                        <label className="form-label">Tipo de divulgação</label>
-                        <select className="form-select" value={r.tipo||''} onChange={e=>upd(p.parceiro_id,'tipo',e.target.value)}>
-                          <option value="">Selecionar...</option>
-                          {TIPOS_DIVULGACAO.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
-                        </select>
-                      </div>
-                      <div className="form-group" style={{margin:0}}>
-                        <label className="form-label">Data divulgada</label>
-                        <input className="form-input" type="date" value={r.data||''} onChange={e=>upd(p.parceiro_id,'data',e.target.value)}/>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-              <div className="form-actions">
-                <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-                <button className="btn btn-primary" onClick={salvar} disabled={saving}>
-                  {saving ? 'Salvando...' : 'Salvar divulgações'}
+          {/* Origem */}
+          <div className="form-group">
+            <label className="form-label">Origem da divulgação</label>
+            <div style={{display:'flex',gap:8}}>
+              {[{v:'combinada',l:'🤝 Combinada'},{v:'organica',l:'🌱 Orgânica'}].map(({v,l})=>(
+                <button key={v} type="button" onClick={()=>setOrigem(v)}
+                  style={{flex:1,padding:'8px 0',borderRadius:8,fontSize:13,fontWeight:600,cursor:'pointer',border:'2px solid',
+                    borderColor:origem===v?'var(--accent)':'var(--border)',
+                    background:origem===v?'var(--accent-glow)':'transparent',
+                    color:origem===v?'var(--accent)':'var(--text-muted)'}}>
+                  {l}
                 </button>
-              </div>
-            </>
-        }
+              ))}
+            </div>
+          </div>
+
+          {/* Tipo */}
+          <div className="form-group">
+            <label className="form-label">Tipo de divulgação *</label>
+            <select className="form-select" value={tipo} onChange={e=>setTipo(e.target.value)}>
+              <option value="">Selecionar...</option>
+              {TIPOS_DIVULGACAO.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+
+          {/* Data */}
+          <div className="form-group">
+            <label className="form-label">Data divulgada</label>
+            <input className="form-input" type="date" value={data} onChange={e=>setData(e.target.value)}/>
+          </div>
+
+          {/* Link — só para tipos com link */}
+          {temLink && (
+            <div className="form-group">
+              <label className="form-label">Link da publicação</label>
+              <input className="form-input" value={link} onChange={e=>setLink(e.target.value)} placeholder="https://..."/>
+            </div>
+          )}
+        </div>
+        <div className="form-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={salvar} disabled={saving||!parceiroId||!tipo}>
+            {saving?'Salvando...':'Registrar divulgação'}
+          </button>
+        </div>
         {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
       </div>
     </div>
@@ -1784,6 +1815,7 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
   const [addParceiroSearch, setAddParceiroSearch] = useState('')
   const [addParceiroOpen, setAddParceiroOpen]     = useState(false)
   const [lancamentoLivros, setLancamentoLivros]   = useState([])
+  const [filtroCampanha, setFiltroCampanha]       = useState('')
   const [toast, showToast]                = useToast()
 
   async function reload() {
@@ -1852,6 +1884,9 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
 
   const parceirosFiltrados = parceiros.filter(p =>
     p.nome.toLowerCase().includes(addParceiroSearch.toLowerCase())
+  )
+  const cpsFiltrados = !filtroCampanha ? cps : cps.filter(cp =>
+    (cp.parceiros?.nome||'').toLowerCase().includes(filtroCampanha.toLowerCase())
   )
 
   // Etapa atual baseada nos parceiros
@@ -1923,8 +1958,11 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
         : <div style={{display:'flex',flexDirection:'column',gap:16}}>
             {/* Parceiros */}
             <div className="table-card">
-              <div className="table-toolbar">
+              <div className="table-toolbar" style={{flexWrap:'wrap',gap:8}}>
                 <span className="table-title">Parceiros ({cps.length})</span>
+                <input className="search-input" style={{flex:1,minWidth:160,maxWidth:260}}
+                  placeholder="🔎 Filtrar parceiro..."
+                  value={filtroCampanha} onChange={e=>setFiltroCampanha(e.target.value)}/>
                 <div style={{position:'relative'}}>
                   <input
                     className="search-input"
