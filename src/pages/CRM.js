@@ -777,7 +777,6 @@ export default function CRM() {
             </select>
             <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroResp} onChange={e=>setFiltroResp(e.target.value)}>
               <option value="">Todos os responsáveis</option>
-              {todos.filter(u=>u.responsavel_interno_id===undefined).length===0 && todos.map(u=>u).filter((u,i,a)=>a.findIndex(x=>x.responsavel_interno_id===u.responsavel_interno_id)===i)}
               {[...new Map(parceiros.filter(p=>p.responsavel_interno_id&&p.responsavel_interno_nome).map(p=>[p.responsavel_interno_id,p])).values()].map(p=>(
                 <option key={p.responsavel_interno_id} value={p.responsavel_interno_id}>{p.responsavel_interno_nome}</option>
               ))}
