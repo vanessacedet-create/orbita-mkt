@@ -136,7 +136,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose }) {
   }
 
   return (
-    <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div className="modal-backdrop">
       <div className="modal" style={{maxWidth:580,maxHeight:'90vh',overflowY:'auto'}}>
         <div className="modal-header" style={{position:'sticky',top:0,background:'var(--surface)',zIndex:10,borderBottom:'1px solid var(--border)'}}>
           <div>
@@ -514,7 +514,7 @@ function ModalNovoParceiro({ onSave, onClose }) {
   }
 
   return (
-    <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div className="modal-backdrop">
       <div className="modal" style={{maxWidth:520,maxHeight:'90vh',overflowY:'auto'}}>
         <div className="modal-header" style={{position:'sticky',top:0,background:'var(--surface)',zIndex:10,borderBottom:'1px solid var(--border)'}}>
           <h2 className="modal-title">Novo parceiro</h2>
