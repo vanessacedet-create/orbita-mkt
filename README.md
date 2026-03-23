@@ -1,7 +1,7 @@
 # 🪐 Orbita MKT — CEDET
 
 Plataforma interna de apoio para a equipe de marketing do CEDET.
-Sistema modular com controle de acesso por perfil.
+Sistema modular com controle de acesso por perfil. 
 
 ---
 
