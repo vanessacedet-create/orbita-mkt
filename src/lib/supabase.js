@@ -987,7 +987,7 @@ export async function createParceiroCRM(payload, statusInicial = 'prospected') {
 export async function getCRMParceiros() {
   const { data, error } = await supabase
     .from('parceiros')
-    .select('*')
+    .select('*, responsavel_interno:usuarios!responsavel_interno_id(id, nome)')
     .order('nome')
   if (error) throw error
 
@@ -1007,7 +1007,7 @@ export async function getCRMParceiros() {
     if (!statusMap[h.partner_id]) statusMap[h.partner_id] = h.status
   }
 
-  return (data||[]).map(p => ({ ...p, current_status: statusMap[p.id] || null }))
+  return (data||[]).map(p => ({ ...p, current_status: statusMap[p.id] || null, responsavel_interno_nome: p.responsavel_interno?.nome || null }))
 }
 
 export async function updateParceiroCRM(id, updates) {
