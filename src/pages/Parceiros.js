@@ -438,6 +438,9 @@ export default function Parceiros() {
                         ? <span className="badge badge-amber" style={{fontSize:10}}>{p.canal_comunicacao}</span>
                         : <span className="td-muted">—</span>}
                     </td>
+                    <td style={{fontSize:12,color:'var(--text-muted)'}}>
+                      {usuarios.find(u=>u.id===p.responsavel_interno_id)?.nome || <span className="td-muted">—</span>}
+                    </td>
                     <td style={{fontSize:12,maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
                       {p.temas||<span className="td-muted">—</span>}
                     </td>
