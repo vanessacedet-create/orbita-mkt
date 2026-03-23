@@ -1264,11 +1264,9 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
             (ll.lancamento_parceiros||[]).some(lp=>(lp.parceiros?.nome||'').toLowerCase().includes(q))
           )) return false
           if (filtroResp) {
-            // Verifica se algum parceiro deste livro tem o responsável selecionado
-            const temResp = (ll.lancamento_parceiros||[]).some(lp => {
-              const parc = parceiros.find(p=>p.id===lp.parceiro_id)
-              return parc?.responsavel_interno_id === filtroResp
-            })
+            const temResp = (ll.lancamento_parceiros||[]).some(lp =>
+              lp.parceiros?.responsavel_interno_id === filtroResp
+            )
             if (!temResp) return false
           }
           return true
@@ -1375,8 +1373,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                                     </td>
                                     <td style={{verticalAlign:'top',paddingTop:10,fontSize:12,color:'var(--text-muted)'}}>
                                       {(() => {
-                                        const parc = parceiros.find(p=>p.id===principal.parceiro_id)
-                                        const resp = parc?.responsavel_interno_id ? usuarios.find(u=>u.id===parc.responsavel_interno_id) : null
+                                        const resp = principal.parceiros?.responsavel_interno_id ? usuarios.find(u=>u.id===principal.parceiros.responsavel_interno_id) : null
                                         return resp ? <span style={{fontWeight:600,color:'var(--text)'}}>{resp.nome}</span> : <span className="td-muted">—</span>
                                       })()}
                                     </td>
@@ -1991,10 +1988,7 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros, usuarios = [] 
   )
   const cpsFiltrados = cps.filter(cp => {
     if (filtroCampanha && !(cp.parceiros?.nome||'').toLowerCase().includes(filtroCampanha.toLowerCase())) return false
-    if (filtroRespCamp) {
-      const parc = parceiros.find(p=>p.id===cp.parceiros?.id)
-      if (parc?.responsavel_interno_id !== filtroRespCamp) return false
-    }
+    if (filtroRespCamp && cp.parceiros?.responsavel_interno_id !== filtroRespCamp) return false
     return true
   })
 
@@ -2122,8 +2116,7 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros, usuarios = [] 
                           <td><StatusBadge value={cp.status} options={STATUS_PARCEIRO}/></td>
                           <td style={{fontSize:12,color:'var(--text-muted)'}}>
                             {(() => {
-                              const parc = parceiros.find(p=>p.id===cp.parceiros?.id)
-                              const resp = parc?.responsavel_interno_id ? usuarios.find(u=>u.id===parc.responsavel_interno_id) : null
+                              const resp = cp.parceiros?.responsavel_interno_id ? usuarios.find(u=>u.id===cp.parceiros.responsavel_interno_id) : null
                               return resp ? <span style={{fontWeight:600,color:'var(--text)'}}>{resp.nome}</span> : <span className="td-muted">—</span>
                             })()}
                           </td>
