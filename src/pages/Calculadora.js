@@ -154,75 +154,29 @@ function ModalEditarFaixas({ faixas, onSave, onClose }) {
 }
 
 
-// ── ENTREGÁVEIS POR CLASSE ─────────────────────────────────
-const ENTREGAVEIS = {
-  C: {
-    label: 'Micro creator (1k – 30k)',
-    objetivo: 'Foco em volume e testes rápidos.',
-    principal: {
-      titulo: 'Proposta principal',
-      cor: '#6366f1',
-      entregas: [
-        '2 vídeos verticais (15–35s) para ads',
-        '5 hooks gravados (aberturas curtas, 2–4s)',
-        'B-roll do livro (capa, folheando, páginas-chave)',
-        'Direito de uso por 12 meses',
-      ]
-    },
-    alternativa: {
-      titulo: 'Alternativa',
-      cor: '#f97316',
-      entregas: [
-        '1 Reel/TikTok (20–35s) com CTA',
-        '3 stories no dia (com cupom) + 1 lembrete',
-        'Cupom exclusivo (10% Book Time)',
-        'Direito de uso por 12 meses',
-      ]
-    }
+// ── ENTREGÁVEIS POR PLATAFORMA ────────────────────────────
+const ENTREGAVEIS_PLATAFORMA = {
+  instagram: {
+    titulo: 'Instagram',
+    cor: '#e1306c',
+    icone: '📸',
+    entregas: [
+      '1 Reel ou vídeo no feed (30–60s) apresentando o livro com CTA',
+      '3 a 5 stories no dia da publicação com cupom e link',
+      '1 story de lembrete 2–3 dias depois',
+      'Cupom exclusivo para uso no site da livraria ou editora combinados previamente',
+    ]
   },
-  B: {
-    label: 'Creator médio (30k – 150k)',
-    objetivo: 'Qualidade + tração orgânica.',
-    principal: {
-      titulo: 'Proposta principal',
-      cor: '#6366f1',
-      entregas: [
-        '2 vídeos UGC (15–35s) + 1 Reel/TikTok postado no perfil',
-        '3 stories no dia (com cupom e CTA) + 1 lembrete',
-        'Direito de uso por 12 meses',
-      ]
-    },
-    alternativa: {
-      titulo: 'Alternativa',
-      cor: '#f97316',
-      entregas: [
-        '1 vídeo postado (Reel/TikTok 25–45s) com CTA',
-        '3 stories + 1 story de lembrete no dia seguinte',
-        'Cupom exclusivo (10% Book Time)',
-      ]
-    }
-  },
-  A: {
-    label: 'Creator grande (150k+)',
-    objetivo: 'Impacto e autoridade — ativação clara e objetiva.',
-    principal: {
-      titulo: 'Proposta principal',
-      cor: '#6366f1',
-      entregas: [
-        '1 vídeo forte postado (45–75s) com CTA',
-        '5–10 stories ao longo de 2 dias + 1 lembrete',
-        'Cupom exclusivo (10% Book Time)',
-      ]
-    },
-    alternativa: {
-      titulo: 'Alternativa',
-      cor: '#f97316',
-      entregas: [
-        '1 vídeo principal apresentando a livraria/seleção',
-        '3–5 stories por semana (2 semanas) + destaque fixo',
-        'Live curta opcional (15–30 min)',
-      ]
-    }
+  youtube: {
+    titulo: 'YouTube',
+    cor: '#ff0000',
+    icone: '▶️',
+    entregas: [
+      '1 vídeo dedicado ou menção dentro de um vídeo (mín. 60s de destaque)',
+      'Link do livro na descrição com cupom exclusivo e CTA claro',
+      '1 card ou tela final direcionando para compra durante o vídeo',
+      'Cupom exclusivo para uso no site da livraria ou editora combinados previamente',
+    ]
   }
 }
 
@@ -238,6 +192,7 @@ export default function Calculadora() {
   const [tipos, setTipos]               = useState(['reels'])
   const [resultado, setResultado]       = useState(null)
   const [mostrarFaixas, setMostrarFaixas] = useState(false)
+  const [arroba, setArroba]               = useState('')
 
   // Carrega faixas salvas do localStorage (persistência simples)
   useEffect(() => {
@@ -294,6 +249,26 @@ export default function Calculadora() {
           <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', marginBottom: 16 }}>
             Dados do influencer
           </h2>
+
+          <div className="form-group">
+            <label className="form-label">@ do perfil <span style={{fontSize:11,color:'var(--text-muted)',fontWeight:400}}>(opcional)</span></label>
+            <div style={{display:'flex',gap:8}}>
+              <input className="form-input" value={arroba}
+                onChange={e=>setArroba(e.target.value.replace('@',''))}
+                placeholder="Ex: usuario.instagram" style={{flex:1}}/>
+              {arroba && (
+                <a href={`https://thesocialcat.com/tools/instagram-engagement-rate-calculator?username=${arroba}`}
+                  target="_blank" rel="noreferrer"
+                  className="btn btn-ghost btn-sm"
+                  style={{display:'flex',alignItems:'center',gap:5,whiteSpace:'nowrap',textDecoration:'none'}}>
+                  📊 Ver engajamento
+                </a>
+              )}
+            </div>
+            <div style={{fontSize:11,color:'var(--text-muted)',marginTop:3}}>
+              Digite o @ e clique em "Ver engajamento" para consultar a taxa no Social Cat (gratuito)
+            </div>
+          </div>
 
           <div className="form-group">
             <label className="form-label">Número de seguidores *</label>
@@ -419,39 +394,35 @@ export default function Calculadora() {
       </div>
 
       {/* Entregáveis por classe */}
-      {resultado && (() => {
-        const info = ENTREGAVEIS[resultado.faixa.classe]
-        if (!info) return null
-        return (
-          <div className="table-card" style={{marginTop:16, padding:'20px 24px'}}>
-            <div style={{marginBottom:16}}>
-              <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:4}}>
-                <h2 style={{fontSize:14,fontWeight:700,color:'var(--text)',margin:0}}>
-                  📋 Entregáveis sugeridos
-                </h2>
-                <span style={{fontSize:11,background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:20,padding:'2px 10px',color:'var(--text-muted)'}}>
-                  {info.label}
-                </span>
-              </div>
-              <p style={{fontSize:12,color:'var(--text-muted)',margin:0}}>{info.objetivo}</p>
-            </div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              {[info.principal, info.alternativa].map(op=>(
-                <div key={op.titulo} style={{background:'var(--surface-2)',border:`1px solid ${op.cor}30`,borderLeft:`3px solid ${op.cor}`,borderRadius:8,padding:'12px 14px'}}>
-                  <div style={{fontSize:11,fontWeight:700,color:op.cor,marginBottom:8,textTransform:'uppercase',letterSpacing:'0.05em'}}>
-                    {op.titulo}
-                  </div>
-                  <ul style={{margin:0,padding:'0 0 0 16px',display:'flex',flexDirection:'column',gap:5}}>
-                    {op.entregas.map((e,i)=>(
-                      <li key={i} style={{fontSize:12,color:'var(--text-muted)',lineHeight:1.5}}>{e}</li>
-                    ))}
-                  </ul>
+      {resultado && (
+        <div className="table-card" style={{marginTop:16, padding:'20px 24px'}}>
+          <h2 style={{fontSize:14,fontWeight:700,color:'var(--text)',marginBottom:4}}>
+            📋 Entregáveis sugeridos
+          </h2>
+          <p style={{fontSize:12,color:'var(--text-muted)',marginBottom:16}}>
+            Selecione a plataforma principal do creator para ver os entregáveis combinados.
+          </p>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+            {Object.values(ENTREGAVEIS_PLATAFORMA).map(plat=>(
+              <div key={plat.titulo} style={{background:'var(--surface-2)',border:`1px solid ${plat.cor}30`,borderLeft:`3px solid ${plat.cor}`,borderRadius:8,padding:'14px 16px'}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+                  <span style={{fontSize:16}}>{plat.icone}</span>
+                  <span style={{fontSize:13,fontWeight:700,color:plat.cor}}>{plat.titulo}</span>
                 </div>
-              ))}
-            </div>
+                <ul style={{margin:0,padding:'0 0 0 16px',display:'flex',flexDirection:'column',gap:6}}>
+                  {plat.entregas.map((e,i)=>(
+                    <li key={i} style={{
+                      fontSize:12,lineHeight:1.5,
+                      color: i===plat.entregas.length-1 ? 'var(--accent)' : 'var(--text-muted)',
+                      fontWeight: i===plat.entregas.length-1 ? 600 : 400,
+                    }}>{e}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </div>
-        )
-      })()}
+        </div>
+      )}
 
       {/* Tabela de faixas (recolhível) */}
       <div className="table-card" style={{ marginTop: 24 }}>
