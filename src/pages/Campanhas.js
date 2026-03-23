@@ -1044,6 +1044,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
   const [addParceiroSearch, setAddParceiroSearch] = useState({}) // { [ll_id]: string }
   const [addParceiroOpen, setAddParceiroOpen]     = useState({})
   const [modalParceiro, setModalParceiro]         = useState(null) // lp obj
+  const [modalDivLib, setModalDivLib]             = useState(false)
 
   // Busca de livros para adicionar
   useEffect(() => {
@@ -1187,9 +1188,17 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
       {/* Busca de livro para adicionar */}
       <div style={{marginBottom:20}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
-          <span style={{fontSize:14,fontWeight:700,color:'var(--text)'}}>
-            Livros desta campanha ({lancamentoLivros.length})
-          </span>
+          <div style={{display:'flex',alignItems:'center',gap:12}}>
+            <span style={{fontSize:14,fontWeight:700,color:'var(--text)'}}>
+              Livros desta campanha ({lancamentoLivros.length})
+            </span>
+            {tipoCampanha === 'Geral' && (
+              <button className="btn btn-primary btn-sm" onClick={()=>setModalDivLib(true)}
+                style={{display:'flex',alignItems:'center',gap:5,fontSize:12}}>
+                <BookOpen size={13}/> Divulgação da Livraria
+              </button>
+            )}
+          </div>
           <div style={{fontSize:12,color:'var(--text-muted)'}}>
             {totalParceiros} parceiro{totalParceiros!==1?'s':''} · {totalPublicados} publicado{totalPublicados!==1?'s':''}
           </div>
@@ -1377,6 +1386,13 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
           tipoCampanha={modalParceiro.tipoCampanha}
           onSave={handleUpdateParceiro}
           onClose={()=>setModalParceiro(null)}
+        />
+      )}
+      {modalDivLib && (
+        <ModalDivulgacaoLibraria
+          campanhaId={campanhaId}
+          lancamentoLivros={lancamentoLivros}
+          onClose={()=>setModalDivLib(false)}
         />
       )}
     </div>
@@ -1648,64 +1664,112 @@ function ModalImportarDivulgacoes({ campanhaId, onImport, onClose }) {
 // ── DETALHE DA CAMPANHA ─────────────────────────────────────
 
 // ── MODAL DIVULGAÇÃO DA LIVRARIA ──────────────────────────
-function ModalDivulgacaoLibraria({ campanha, onClose }) {
-  const parceiros = campanha.campanha_parceiros || []
-  const total = parceiros.length
-  const confirmados = parceiros.filter(p => ['confirmado','agendado','publicado'].includes(p.status)).length
-  const publicados  = parceiros.filter(p => p.status === 'publicado').length
+// Mostra todos os parceiros de todos os livros da campanha Geral
+// e permite registrar tipo de divulgação + data para cada um
+function ModalDivulgacaoLibraria({ campanhaId, lancamentoLivros, onClose }) {
+  const hoje = new Date().toISOString().slice(0,10)
+  // Monta lista única de parceiros a partir dos lancamento_livros
+  const parceirosMap = {}
+  for (const ll of (lancamentoLivros||[])) {
+    for (const lp of (ll.lancamento_parceiros||[])) {
+      const pid = lp.parceiro_id
+      if (!parceirosMap[pid]) {
+        parceirosMap[pid] = {
+          parceiro_id: pid,
+          nome: lp.parceiros?.nome || '—',
+          lp_principal: lp, // primeiro registro do parceiro
+          status: lp.status,
+        }
+      }
+    }
+  }
+  const parceiros = Object.values(parceirosMap)
+
+  // Estado: { [parceiro_id]: { tipo, data } }
+  const [registros, setRegistros] = useState(() => {
+    const init = {}
+    for (const p of Object.values(parceirosMap)) {
+      init[p.parceiro_id] = {
+        tipo: p.lp_principal?.tipo_divulgacao || '',
+        data: p.lp_principal?.data_divulgacao || hoje,
+      }
+    }
+    return init
+  })
+  const [saving, setSaving] = useState(false)
+  const [toast, showToast]  = useToast()
+
+  function upd(pid, field, val) {
+    setRegistros(prev => ({ ...prev, [pid]: { ...prev[pid], [field]: val } }))
+  }
+
+  async function salvar() {
+    setSaving(true)
+    try {
+      for (const p of parceiros) {
+        const r = registros[p.parceiro_id]
+        if (!r?.tipo && !r?.data) continue
+        await updateLancamentoParceiro(p.lp_principal.id, {
+          tipo_divulgacao: r.tipo || null,
+          data_divulgacao: r.data || null,
+        })
+      }
+      showToast('Divulgações salvas!')
+      setTimeout(onClose, 1200)
+    } catch(e) { showToast('Erro ao salvar','error') } finally { setSaving(false) }
+  }
 
   return (
     <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="modal" style={{maxWidth:560, maxHeight:'85vh', overflowY:'auto'}}>
+      <div className="modal" style={{maxWidth:560, maxHeight:'90vh', overflowY:'auto'}}>
         <div className="modal-header" style={{position:'sticky',top:0,background:'var(--surface)',zIndex:10,borderBottom:'1px solid var(--border)'}}>
-          <div>
-            <h2 className="modal-title">Divulgação da Livraria</h2>
-            <p style={{fontSize:12,color:'var(--text-muted)',margin:0}}>{campanha.nome}</p>
-          </div>
+          <h2 className="modal-title">Divulgação da Livraria</h2>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
         </div>
 
-        {/* Resumo */}
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12,margin:'16px 0'}}>
-          {[
-            {label:'Parceiros',   value:total,       color:'var(--text)'},
-            {label:'Confirmados', value:confirmados, color:'var(--amber)'},
-            {label:'Publicados',  value:publicados,  color:'var(--green)'},
-          ].map(({label,value,color})=>(
-            <div key={label} style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,padding:'12px 14px',textAlign:'center'}}>
-              <div style={{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',color:'var(--text-muted)',marginBottom:4}}>{label}</div>
-              <div style={{fontSize:28,fontWeight:800,color}}>{value}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Lista de parceiros com livros destaque */}
         {parceiros.length === 0
-          ? <p style={{fontSize:13,color:'var(--text-muted)',textAlign:'center',padding:'20px 0'}}>Nenhum parceiro nesta campanha ainda.</p>
-          : parceiros.map(cp => {
-              const s = STATUS_PARCEIRO.find(x=>x.value===cp.status)||STATUS_PARCEIRO[0]
-              return (
-                <div key={cp.id} style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,padding:'12px 14px',marginBottom:10}}>
-                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:cp.campanha_parceiro_livros?.length?8:0}}>
-                    <div style={{fontWeight:700,fontSize:13,color:'var(--text)'}}>{cp.parceiros?.nome}</div>
-                    <span className={`badge ${s.cls}`} style={{fontSize:10}}>{s.label}</span>
-                  </div>
-                  {cp.campanha_parceiro_livros?.length > 0 && (
-                    <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
-                      {cp.campanha_parceiro_livros.map(cpl=>(
-                        <span key={cpl.id} style={{fontSize:11,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:4,padding:'2px 8px',color:'var(--text-muted)'}}>
-                          📚 {cpl.livros?.titulo||'—'}
-                        </span>
-                      ))}
+          ? <p style={{fontSize:13,color:'var(--text-muted)',padding:'20px 0',textAlign:'center'}}>
+              Nenhum parceiro vinculado ainda. Adicione livros e parceiros primeiro.
+            </p>
+          : <>
+              <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:16,paddingTop:8}}>
+                Registre o tipo e a data de divulgação para cada parceiro desta campanha.
+              </div>
+              {parceiros.map(p => {
+                const r = registros[p.parceiro_id] || {}
+                const st = STATUS_PARCEIRO.find(s=>s.value===p.status)
+                return (
+                  <div key={p.parceiro_id} style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,padding:'12px 14px',marginBottom:10}}>
+                    {/* Nome + status */}
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                      <div style={{fontWeight:700,fontSize:13,color:'var(--text)'}}>{p.nome}</div>
+                      {st && <span className={`badge ${st.cls}`} style={{fontSize:10}}>{st.label}</span>}
                     </div>
-                  )}
-                  {(!cp.campanha_parceiro_livros||cp.campanha_parceiro_livros.length===0) && (
-                    <div style={{fontSize:11,color:'var(--text-muted)',fontStyle:'italic'}}>Nenhum livro destaque definido</div>
-                  )}
-                </div>
-              )
-            })
+                    <div className="form-row">
+                      <div className="form-group" style={{margin:0}}>
+                        <label className="form-label">Tipo de divulgação</label>
+                        <select className="form-select" value={r.tipo||''} onChange={e=>upd(p.parceiro_id,'tipo',e.target.value)}>
+                          <option value="">Selecionar...</option>
+                          {TIPOS_DIVULGACAO.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
+                        </select>
+                      </div>
+                      <div className="form-group" style={{margin:0}}>
+                        <label className="form-label">Data divulgada</label>
+                        <input className="form-input" type="date" value={r.data||''} onChange={e=>upd(p.parceiro_id,'data',e.target.value)}/>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+              <div className="form-actions">
+                <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+                <button className="btn btn-primary" onClick={salvar} disabled={saving}>
+                  {saving ? 'Salvando...' : 'Salvar divulgações'}
+                </button>
+              </div>
+            </>
         }
+        {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
       </div>
     </div>
   )
@@ -1717,7 +1781,6 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
   const [modalParceiro, setModalParceiro] = useState(null)
   const [modalEdicao, setModalEdicao]         = useState(false)
   const [modalImportarLivros, setModalImportarLivros] = useState(false)
-  const [modalDivLibraria, setModalDivLibraria]   = useState(false)
   const [addParceiroSearch, setAddParceiroSearch] = useState('')
   const [addParceiroOpen, setAddParceiroOpen]     = useState(false)
   const [lancamentoLivros, setLancamentoLivros]   = useState([])
@@ -1815,15 +1878,7 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
             {campanha.data_fim    && <span>Fim: {format(new Date(campanha.data_fim+'T12:00:00'),'dd MMM yyyy',{locale:ptBR})}</span>}
           </div>
         </div>
-        <div style={{display:'flex',gap:8,alignItems:'center'}}>
-          {campanha.tipo === 'Geral' && (
-            <button className="btn btn-primary btn-sm" onClick={()=>setModalDivLibraria(true)}
-              style={{display:'flex',alignItems:'center',gap:6}}>
-              <BookOpen size={14}/> Divulgação da Livraria
-            </button>
-          )}
-          <button className="btn btn-ghost" onClick={()=>setModalEdicao(true)}><Pencil size={14}/> Editar</button>
-        </div>
+        <button className="btn btn-ghost" onClick={()=>setModalEdicao(true)}><Pencil size={14}/> Editar</button>
       </div>
 
       {/* Linha do tempo de etapas */}
@@ -1934,9 +1989,7 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros }) {
       {modalEdicao && (
         <ModalCampanha campanha={campanha} livros={livros} parceiros={parceiros} onSave={handleUpdateCampanha} onClose={()=>setModalEdicao(false)}/>
       )}
-      {modalDivLibraria && (
-        <ModalDivulgacaoLibraria campanha={campanha} onClose={()=>setModalDivLibraria(false)}/>
-      )}
+
 
       {modalParceiro && (
         <ModalParceiro cp={modalParceiro} campanha={campanha} onSave={handleUpdateParceiro} onClose={()=>setModalParceiro(null)}/>
