@@ -1047,3 +1047,40 @@ export async function addStatusHistory(parceiro_id, status, reason) {
   if (error) throw error
   return data
 }
+
+// ── DIVULGAÇÕES DA LIVRARIA (campanha Geral) ───────────────
+export async function getDivulgacoesLibraria(campanha_id) {
+  const { data, error } = await supabase
+    .from('divulgacoes_livraria')
+    .select('*, parceiros(id, nome, tipo_parceria)')
+    .eq('campanha_id', campanha_id)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function createDivulgacaoLibraria(payload) {
+  const { data, error } = await supabase
+    .from('divulgacoes_livraria')
+    .insert([payload])
+    .select('*, parceiros(id, nome, tipo_parceria)')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateDivulgacaoLibraria(id, updates) {
+  const { data, error } = await supabase
+    .from('divulgacoes_livraria')
+    .update(updates)
+    .eq('id', id)
+    .select('*, parceiros(id, nome, tipo_parceria)')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteDivulgacaoLibraria(id) {
+  const { error } = await supabase.from('divulgacoes_livraria').delete().eq('id', id)
+  if (error) throw error
+}
