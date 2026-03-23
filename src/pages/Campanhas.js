@@ -2105,12 +2105,12 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros, usuarios = [] 
                   )}
                 </div>
               </div>
-              {cps.length===0
-                ? <div className="empty-state"><p>Nenhum parceiro adicionado ainda.</p></div>
+              {cpsFiltrados.length===0
+                ? <div className="empty-state"><p>{filtroRespCamp||filtroCampanha ? 'Nenhum resultado para o filtro.' : 'Nenhum parceiro adicionado ainda.'}</p></div>
                 : <table>
                     <thead><tr><th>Parceiro</th><th>Status</th><th>Responsável</th><th>Período</th><th>Divulgações</th><th></th></tr></thead>
                     <tbody>
-                      {cps.map(cp=>(
+                      {cpsFiltrados.map(cp=>(
                         <tr key={cp.id}>
                           <td className="td-strong">{cp.parceiros?.nome||'—'}</td>
                           <td><StatusBadge value={cp.status} options={STATUS_PARCEIRO}/></td>
