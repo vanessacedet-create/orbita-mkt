@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import {
   getCampanhas, getCampanha, createCampanha, updateCampanha, deleteCampanha, reordenarCampanhas,
-  getParceiros, getLivros,
+  getParceiros, getParceirosAtivos, getLivros,
   addParceiroCampanha, updateParceiroCampanha, removeParceiroCampanha,
   getFollowUps, registrarContato,
   getDivulgacoesParceiro, createDivulgacaoCampanha, updateDivulgacaoCampanha, deleteDivulgacaoCampanha,
@@ -1237,6 +1237,11 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                     <div style={{flex:1}}>
                       <div style={{fontSize:14,fontWeight:700,color:'var(--text)'}}>{ll.livros?.titulo}</div>
                       {ll.livros?.autor && <div style={{fontSize:12,color:'var(--text-muted)'}}>{ll.livros.autor}{ll.livros.isbn?` · ISBN: ${ll.livros.isbn}`:''}</div>}
+                      {ll.livros?.data_lancamento && (
+                        <div style={{fontSize:11,color:'var(--accent)',marginTop:2,fontWeight:600}}>
+                          📅 {format(new Date(ll.livros.data_lancamento+'T12:00:00'),'dd MMM yyyy',{locale:ptBR})}
+                        </div>
+                      )}
                     </div>
                     <div style={{display:'flex',alignItems:'center',gap:10}}>
                       <span style={{fontSize:12,color:'var(--text-muted)'}}>{lps.length} parceiro{lps.length!==1?'s':''}</span>
@@ -2062,7 +2067,7 @@ export default function Campanhas() {
   async function reload() {
     const [cs, ps, ls] = await Promise.all([
       getCampanhas(),
-      getParceiros(),
+      getParceirosAtivos(),
       getLivros({ page:0, pageSize:5000 }),
     ])
     setCampanhas(cs)
