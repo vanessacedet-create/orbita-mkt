@@ -1047,6 +1047,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
   const [modalParceiro, setModalParceiro]         = useState(null) // lp obj
   const [modalDivLib, setModalDivLib]             = useState(false)
   const [filtroTexto, setFiltroTexto]             = useState('')
+  const [filtroResp, setFiltroResp]               = useState('')
   const [divulgacoesLib, setDivulgacoesLib]       = useState([])
 
   // Carrega divulgações da livraria para campanhas Geral
@@ -1213,8 +1214,8 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
             {totalParceiros} parceiro{totalParceiros!==1?'s':''} · {totalPublicados} publicado{totalPublicados!==1?'s':''}
           </div>
         </div>
-        <div style={{display:'flex',gap:10,maxWidth:700,marginTop:8}}>
-          <div style={{position:'relative',flex:1}}>
+        <div style={{display:'flex',gap:10,flexWrap:'wrap',marginTop:8}}>
+          <div style={{position:'relative',flex:'1 1 240px'}}>
             <input
               className="form-input"
               value={livroSearch}
@@ -1239,18 +1240,39 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
           <input className="form-input" value={filtroTexto}
             onChange={e=>setFiltroTexto(e.target.value)}
             placeholder="🔎 Filtrar por livro ou parceiro..."
-            style={{flex:1}}/>
+            style={{flex:'1 1 180px'}}/>
+          <select className="form-select" style={{flex:'0 0 auto',minWidth:160,fontSize:12,padding:'6px 10px'}}
+            value={filtroResp} onChange={e=>setFiltroResp(e.target.value)}>
+            <option value="">Todos os responsáveis</option>
+            {usuarios.map(u=><option key={u.id} value={u.id}>{u.nome}</option>)}
+          </select>
+          {(filtroTexto||filtroResp) && (
+            <button className="btn btn-ghost btn-sm" onClick={()=>{setFiltroTexto('');setFiltroResp('')}}>
+              <X size={12}/> Limpar
+            </button>
+          )}
         </div>
       </div>
 
       {/* Lista de livros */}
       {(() => {
         const q = filtroTexto.toLowerCase().trim()
-        const livrosFiltrados = !q ? lancamentoLivros : lancamentoLivros.filter(ll =>
-          (ll.livros?.titulo||'').toLowerCase().includes(q) ||
-          (ll.livros?.isbn||'').replace(/-/g,'').includes(q.replace(/-/g,'')) ||
-          (ll.lancamento_parceiros||[]).some(lp=>(lp.parceiros?.nome||'').toLowerCase().includes(q))
-        )
+        const livrosFiltrados = lancamentoLivros.filter(ll => {
+          if (q && !(
+            (ll.livros?.titulo||'').toLowerCase().includes(q) ||
+            (ll.livros?.isbn||'').replace(/-/g,'').includes(q.replace(/-/g,'')) ||
+            (ll.lancamento_parceiros||[]).some(lp=>(lp.parceiros?.nome||'').toLowerCase().includes(q))
+          )) return false
+          if (filtroResp) {
+            // Verifica se algum parceiro deste livro tem o responsável selecionado
+            const temResp = (ll.lancamento_parceiros||[]).some(lp => {
+              const parc = parceiros.find(p=>p.id===lp.parceiro_id)
+              return parc?.responsavel_interno_id === filtroResp
+            })
+            if (!temResp) return false
+          }
+          return true
+        })
         return livrosFiltrados.length === 0
         ? <div className="empty-state"><p>{filtroTexto ? 'Nenhum resultado para o filtro.' : 'Nenhum livro adicionado ainda. Busque acima para começar.'}</p></div>
         : <div style={{display:'flex',flexDirection:'column',gap:16}}>
@@ -1897,6 +1919,7 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros, usuarios = [] 
   const [addParceiroOpen, setAddParceiroOpen]     = useState(false)
   const [lancamentoLivros, setLancamentoLivros]   = useState([])
   const [filtroCampanha, setFiltroCampanha]       = useState('')
+  const [filtroRespCamp, setFiltroRespCamp]       = useState('')
   const [toast, showToast]                = useToast()
 
   async function reload() {
@@ -1966,9 +1989,14 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros, usuarios = [] 
   const parceirosFiltrados = parceiros.filter(p =>
     p.nome.toLowerCase().includes(addParceiroSearch.toLowerCase())
   )
-  const cpsFiltrados = !filtroCampanha ? cps : cps.filter(cp =>
-    (cp.parceiros?.nome||'').toLowerCase().includes(filtroCampanha.toLowerCase())
-  )
+  const cpsFiltrados = cps.filter(cp => {
+    if (filtroCampanha && !(cp.parceiros?.nome||'').toLowerCase().includes(filtroCampanha.toLowerCase())) return false
+    if (filtroRespCamp) {
+      const parc = parceiros.find(p=>p.id===cp.parceiros?.id)
+      if (parc?.responsavel_interno_id !== filtroRespCamp) return false
+    }
+    return true
+  })
 
   // Etapa atual baseada nos parceiros
   // 0=Planejamento, 1=Envio Cortesia, 2=Aprovação, 3=Monitoramento, 4=Resultados
@@ -2042,9 +2070,19 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros, usuarios = [] 
             <div className="table-card">
               <div className="table-toolbar" style={{flexWrap:'wrap',gap:8}}>
                 <span className="table-title">Parceiros ({cps.length})</span>
-                <input className="search-input" style={{flex:1,minWidth:160,maxWidth:260}}
+                <input className="search-input" style={{flex:1,minWidth:140,maxWidth:220}}
                   placeholder="🔎 Filtrar parceiro..."
                   value={filtroCampanha} onChange={e=>setFiltroCampanha(e.target.value)}/>
+                <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}}
+                  value={filtroRespCamp} onChange={e=>setFiltroRespCamp(e.target.value)}>
+                  <option value="">Todos os responsáveis</option>
+                  {usuarios.map(u=><option key={u.id} value={u.id}>{u.nome}</option>)}
+                </select>
+                {(filtroCampanha||filtroRespCamp) && (
+                  <button className="btn btn-ghost btn-sm" onClick={()=>{setFiltroCampanha('');setFiltroRespCamp('')}}>
+                    <X size={12}/> Limpar
+                  </button>
+                )}
                 <div style={{position:'relative'}}>
                   <input
                     className="search-input"
