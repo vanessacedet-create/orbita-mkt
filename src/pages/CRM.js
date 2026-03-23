@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
-  getParceiros, getEditoras,
+  getParceiros, getEditoras, getUsuarios,
   getCRMParceiros, updateParceiroCRM, getStatusHistory, addStatusHistory, createParceiroCRM, deleteParceiro,
 } from '../lib/supabase'
 import {
@@ -59,6 +59,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose }) {
     library_url:  inicial.library_url||'',
     coupon_code:  inicial.coupon_code||'',
     model:        inicial.model||'',
+    responsavel_interno_id: inicial.responsavel_interno_id||'',
     notes:        inicial.notes||'',
     editoras_sugeridas: inicial.editoras_sugeridas ? String(inicial.editoras_sugeridas).split(',').map(e=>e.trim()).filter(Boolean) : [],
   })
@@ -68,11 +69,13 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose }) {
   const [savingStatus, setSavingStatus] = useState(false)
   const [editoras, setEditoras]       = useState([])
   const [editoraSearch, setEditoraSearch] = useState('')
+  const [usuarios, setUsuarios]       = useState([])
   const [toast, showToast]          = useToast()
 
   useEffect(() => {
     getStatusHistory(parceiro.id).then(setHistory).catch(console.error)
     getEditoras().then(setEditoras).catch(console.error)
+    getUsuarios().then(setUsuarios).catch(console.error)
   }, [parceiro.id])
 
   async function salvarPerfil() {
@@ -94,6 +97,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose }) {
         library_url:     form.library_url||null,
         coupon_code:     form.coupon_code||null,
         model:           form.model ? Number(form.model) : null,
+        responsavel_interno_id: form.responsavel_interno_id||null,
         notes:           form.notes||null,
         editoras_sugeridas: form.editoras_sugeridas.length ? form.editoras_sugeridas.join(',') : null,
       }
@@ -203,6 +207,14 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose }) {
                   {MODELOS.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}
                 </select>
               </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Responsável interno</label>
+              <select className="form-select" value={form.responsavel_interno_id} onChange={e=>setForm(f=>({...f,responsavel_interno_id:e.target.value}))}>
+                <option value="">Sem responsável</option>
+                {usuarios.map(u=><option key={u.id} value={u.id}>{u.nome}</option>)}
+              </select>
             </div>
 
             <div className="form-row">
@@ -417,6 +429,15 @@ function KanbanCard({ parceiro, onClick, onDragStart, onDragEnd, isDragging, onD
           {eng && <span style={{fontSize:10,color:'#22c55e',fontWeight:700,marginLeft:'auto'}}>{eng}%</span>}
         </div>
       )}
+      {/* Responsável interno */}
+      {parceiro.responsavel_interno_nome && (
+        <div style={{display:'flex',alignItems:'center',gap:5,marginTop:4}}>
+          <div style={{width:14,height:14,borderRadius:'50%',background:'var(--surface-2)',border:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:700,color:'var(--text-muted)',flexShrink:0}}>
+            {parceiro.responsavel_interno_nome[0].toUpperCase()}
+          </div>
+          <span style={{fontSize:10,color:'var(--text-muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{parceiro.responsavel_interno_nome}</span>
+        </div>
+      )}
       {/* Editoras sugeridas */}
       {parceiro.editoras_sugeridas && (
         <div style={{display:'flex',flexWrap:'wrap',gap:3,marginTop:2}}>
@@ -438,14 +459,19 @@ function ModalNovoParceiro({ onSave, onClose }) {
     canal_comunicacao: '', temas: '', editoras_divulga: '',
     username: '', platforms: [], profile_url: '', contact_value: '',
     source: '', model: '', notes: '',
+    responsavel_interno_id: '',
     editoras_sugeridas: [],
   })
   const [statusInicial, setStatusInicial] = useState('prospected')
   const [saving, setSaving]   = useState(false)
   const [editoras, setEditoras] = useState([])
   const [editoraSearch, setEditoraSearch] = useState('')
+  const [usuarios, setUsuarios] = useState([])
 
-  useEffect(() => { getEditoras().then(setEditoras).catch(console.error) }, [])
+  useEffect(() => {
+    getEditoras().then(setEditoras).catch(console.error)
+    getUsuarios().then(setUsuarios).catch(console.error)
+  }, [])
 
   function togglePlat(p) {
     setForm(f=>({...f, platforms: f.platforms.includes(p)?f.platforms.filter(x=>x!==p):[...f.platforms,p]}))
@@ -469,6 +495,7 @@ function ModalNovoParceiro({ onSave, onClose }) {
         contact_value: form.contact_value||null,
         source: form.source||null,
         model: form.model ? Number(form.model) : null,
+        responsavel_interno_id: form.responsavel_interno_id||null,
         notes: form.notes||null,
         editoras_sugeridas: form.editoras_sugeridas.length ? form.editoras_sugeridas.join(',') : null,
       }
@@ -547,6 +574,14 @@ function ModalNovoParceiro({ onSave, onClose }) {
           <div className="form-group">
             <label className="form-label">Link do perfil</label>
             <input className="form-input" value={form.profile_url} onChange={e=>setForm(f=>({...f,profile_url:e.target.value}))} placeholder="https://instagram.com/..."/>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Responsável interno</label>
+            <select className="form-select" value={form.responsavel_interno_id} onChange={e=>setForm(f=>({...f,responsavel_interno_id:e.target.value}))}>
+              <option value="">Sem responsável</option>
+              {usuarios.map(u=><option key={u.id} value={u.id}>{u.nome}</option>)}
+            </select>
           </div>
 
           <div className="form-group">
