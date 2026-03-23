@@ -158,102 +158,71 @@ function ModalEditarFaixas({ faixas, onSave, onClose }) {
 const ENTREGAVEIS = {
   C: {
     label: 'Micro creator (1k – 30k)',
-    objetivo: 'Volume e testes rápidos — ideal para UGC.',
-    ativacoes: [
-      {
-        tipo: 'UGC',
-        cor: '#6366f1',
-        entregas: [
-          '2 vídeos verticais (15–35s) para ads',
-          '5 hooks gravados (aberturas curtas, 2–4s)',
-          '1–2 tomadas de b-roll do livro por vídeo',
-          'Envio dos arquivos "crus" (sem música/legenda queimada)',
-          'Direito de uso por 12 meses',
-        ]
-      },
-      {
-        tipo: 'Afiliado',
-        cor: '#f97316',
-        entregas: [
-          '1 Reel/TikTok (20–35s) com CTA claro',
-          '2 stories no dia (com cupom) + 1 story de lembrete',
-          'Cupom exclusivo (comissão 10% Book Time)',
-        ]
-      }
-    ]
+    objetivo: 'Foco em volume e testes rápidos.',
+    principal: {
+      titulo: 'Proposta principal',
+      cor: '#6366f1',
+      entregas: [
+        '2 vídeos verticais (15–35s) para ads',
+        '5 hooks gravados (aberturas curtas, 2–4s)',
+        'B-roll do livro (capa, folheando, páginas-chave)',
+        'Direito de uso por 12 meses',
+      ]
+    },
+    alternativa: {
+      titulo: 'Alternativa',
+      cor: '#f97316',
+      entregas: [
+        '1 Reel/TikTok (20–35s) com CTA',
+        '3 stories no dia (com cupom) + 1 lembrete',
+        'Cupom exclusivo (10% Book Time)',
+        'Direito de uso por 12 meses',
+      ]
+    }
   },
   B: {
     label: 'Creator médio (30k – 150k)',
-    objetivo: 'UGC melhor produzido + tração orgânica.',
-    ativacoes: [
-      {
-        tipo: 'UGC',
-        cor: '#6366f1',
-        entregas: [
-          '3 vídeos verticais (15–35s) para ads',
-          '8–10 hooks gravados (aberturas curtas, 2–4s)',
-          'B-roll bem feito (mínimo 6 tomadas: capa, folheando, sumário, 1–2 páginas-chave)',
-          'Envio dos arquivos "crus" (sem música/legenda queimada)',
-          'Direito de uso por 12 meses',
-        ]
-      },
-      {
-        tipo: 'Híbrido',
-        cor: '#22c55e',
-        entregas: [
-          '2 vídeos UGC + 1 postagem no perfil (Reel/TikTok 25–45s)',
-          '3 stories no dia (com cupom e CTA) + 1 story de lembrete',
-          'Cupom exclusivo (comissão 10% Book Time)',
-        ]
-      },
-      {
-        tipo: 'Afiliado',
-        cor: '#f97316',
-        entregas: [
-          '1 vídeo postado (Reel/TikTok 25–45s) com CTA',
-          '3 stories no dia (com cupom) + 1 story de lembrete no dia seguinte',
-          'Cupom exclusivo (comissão 10% Book Time)',
-        ]
-      }
-    ]
+    objetivo: 'Qualidade + tração orgânica.',
+    principal: {
+      titulo: 'Proposta principal',
+      cor: '#6366f1',
+      entregas: [
+        '2 vídeos UGC (15–35s) + 1 Reel/TikTok postado no perfil',
+        '3 stories no dia (com cupom e CTA) + 1 lembrete',
+        'Direito de uso por 12 meses',
+      ]
+    },
+    alternativa: {
+      titulo: 'Alternativa',
+      cor: '#f97316',
+      entregas: [
+        '1 vídeo postado (Reel/TikTok 25–45s) com CTA',
+        '3 stories + 1 story de lembrete no dia seguinte',
+        'Cupom exclusivo (10% Book Time)',
+      ]
+    }
   },
   A: {
     label: 'Creator grande (150k+)',
-    objetivo: 'Menos quantidade, mais impacto. Ativação clara e objetiva.',
-    ativacoes: [
-      {
-        tipo: 'Afiliado',
-        cor: '#f97316',
-        entregas: [
-          '1 vídeo forte postado (45–75s) com CTA',
-          '5–10 stories (pode dividir ao longo de 2 dias)',
-          '1 lembrete em stories 2–3 dias depois',
-          '1 live curta opcional (15–30 min) ou Q&A nos stories',
-          'Cupom exclusivo (comissão 10% Book Time)',
-        ]
-      },
-      {
-        tipo: 'UGC Premium',
-        cor: '#6366f1',
-        entregas: [
-          '4–6 vídeos com qualidade bem alta + variações',
-          '8–10 hooks gravados',
-          'B-roll do livro (mínimo 8 tomadas de alta qualidade)',
-          'Envio dos arquivos "crus"',
-          'Direito de uso por 12 meses',
-        ]
-      },
-      {
-        tipo: 'Livraria Personalizada',
-        cor: '#06b6d4',
-        entregas: [
-          '1 vídeo principal apresentando a livraria/seleção',
-          '3–10 stories por semana por 2 semanas',
-          'Destaque fixo ("minha livraria") no perfil',
-          'Live curta opcional (15–30 min)',
-        ]
-      }
-    ]
+    objetivo: 'Impacto e autoridade — ativação clara e objetiva.',
+    principal: {
+      titulo: 'Proposta principal',
+      cor: '#6366f1',
+      entregas: [
+        '1 vídeo forte postado (45–75s) com CTA',
+        '5–10 stories ao longo de 2 dias + 1 lembrete',
+        'Cupom exclusivo (10% Book Time)',
+      ]
+    },
+    alternativa: {
+      titulo: 'Alternativa',
+      cor: '#f97316',
+      entregas: [
+        '1 vídeo principal apresentando a livraria/seleção',
+        '3–5 stories por semana (2 semanas) + destaque fixo',
+        'Live curta opcional (15–30 min)',
+      ]
+    }
   }
 }
 
@@ -466,14 +435,14 @@ export default function Calculadora() {
               </div>
               <p style={{fontSize:12,color:'var(--text-muted)',margin:0}}>{info.objetivo}</p>
             </div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:12}}>
-              {info.ativacoes.map(at=>(
-                <div key={at.tipo} style={{background:'var(--surface-2)',border:`1px solid ${at.cor}30`,borderLeft:`3px solid ${at.cor}`,borderRadius:8,padding:'12px 14px'}}>
-                  <div style={{fontSize:12,fontWeight:700,color:at.cor,marginBottom:8,textTransform:'uppercase',letterSpacing:'0.05em'}}>
-                    {at.tipo}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              {[info.principal, info.alternativa].map(op=>(
+                <div key={op.titulo} style={{background:'var(--surface-2)',border:`1px solid ${op.cor}30`,borderLeft:`3px solid ${op.cor}`,borderRadius:8,padding:'12px 14px'}}>
+                  <div style={{fontSize:11,fontWeight:700,color:op.cor,marginBottom:8,textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                    {op.titulo}
                   </div>
-                  <ul style={{margin:0,padding:'0 0 0 16px',display:'flex',flexDirection:'column',gap:4}}>
-                    {at.entregas.map((e,i)=>(
+                  <ul style={{margin:0,padding:'0 0 0 16px',display:'flex',flexDirection:'column',gap:5}}>
+                    {op.entregas.map((e,i)=>(
                       <li key={i} style={{fontSize:12,color:'var(--text-muted)',lineHeight:1.5}}>{e}</li>
                     ))}
                   </ul>
