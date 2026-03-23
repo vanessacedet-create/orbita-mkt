@@ -421,7 +421,7 @@ export async function getCampanha(id) {
     .select(`
       *,
       campanha_livros(id, livros(id, titulo, autor, isbn, sku, editora)),
-      campanha_parceiros(id, status, data_inicio, data_fim, data_publicacao_combinada, link_publicacao, curtidas, visualizacoes, observacoes, parceiros(id, nome, tipo_parceria))
+      campanha_parceiros(id, status, data_inicio, data_fim, data_publicacao_combinada, link_publicacao, curtidas, visualizacoes, observacoes, parceiros(id, nome, tipo_parceria, responsavel_interno_id))
     `)
     .eq('id', id)
     .single()
@@ -601,7 +601,7 @@ export async function deleteDivulgacaoCampanha(id) {
 export async function getLancamentoLivros(campanha_id) {
   const { data, error } = await supabase
     .from('lancamento_livros')
-    .select('id, livro_id, livros(id, titulo, autor, isbn, sku, data_lancamento), lancamento_parceiros(id, status, data_combinada, data_divulgacao, tipo_divulgacao, link, curtidas, comentarios, visualizacoes, observacoes, parceiro_id, parceiros(id, nome, tipo_parceria))')
+    .select('id, livro_id, livros(id, titulo, autor, isbn, sku, data_lancamento), lancamento_parceiros(id, status, data_combinada, data_divulgacao, tipo_divulgacao, link, curtidas, comentarios, visualizacoes, observacoes, parceiro_id, parceiros(id, nome, tipo_parceria, responsavel_interno_id))')
     .eq('campanha_id', campanha_id)
     .order('created_at', { ascending: true })
   if (error) throw error
