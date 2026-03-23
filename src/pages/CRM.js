@@ -12,6 +12,7 @@ import { ptBR } from 'date-fns/locale'
 
 // ── PIPELINE ───────────────────────────────────────────────
 const PIPELINE = [
+  { value: 'found',       label: 'Encontrado',    cor: '#06b6d4', bg: 'rgba(6,182,212,0.12)'   },
   { value: 'prospected',  label: 'Prospectado',   cor: '#6b7280', bg: 'rgba(107,114,128,0.12)' },
   { value: 'qualified',   label: 'Qualificado',   cor: '#6366f1', bg: 'rgba(99,102,241,0.12)'  },
   { value: 'negotiating', label: 'Negociando',    cor: '#eab308', bg: 'rgba(234,179,8,0.12)'   },
