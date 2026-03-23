@@ -438,7 +438,7 @@ export async function createCampanha({ nome, tipo, status, data_inicio, data_fim
 
   let autoAdicionados = 0
 
-  if ((tipo === 'Lançamento' || tipo === 'Geral') && data_inicio && data_fim) {
+  if (tipo === 'Lançamento' && data_inicio && data_fim) {
     // Busca livros com data_lancamento dentro do range
     const { data: livrosNoRange } = await supabase
       .from('livros')
@@ -448,7 +448,7 @@ export async function createCampanha({ nome, tipo, status, data_inicio, data_fim
       .lte('data_lancamento', data_fim)
 
     if (livrosNoRange?.length) {
-      // Lançamento e Geral usam lancamento_livros (não campanha_livros)
+      // Lançamento usa lancamento_livros
       const inserir = livrosNoRange.map(l => ({ campanha_id: campanha.id, livro_id: l.id }))
       const { error: le } = await supabase.from('lancamento_livros').insert(inserir)
       if (le) throw le
