@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import {
   getParceiros, getEditoras,
-  getCRMParceiros, updateParceiroCRM, getStatusHistory, addStatusHistory, createParceiroCRM,
+  getCRMParceiros, updateParceiroCRM, getStatusHistory, addStatusHistory, createParceiroCRM, deleteParceiro,
 } from '../lib/supabase'
 import {
   Users, Plus, X, ChevronRight, Clock, ExternalLink,
-  Instagram, Youtube, Search, ArrowRight
+  Instagram, Youtube, Search, ArrowRight, Trash2
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -60,15 +60,19 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose }) {
     coupon_code:  inicial.coupon_code||'',
     model:        inicial.model||'',
     notes:        inicial.notes||'',
+    editoras_sugeridas: inicial.editoras_sugeridas ? String(inicial.editoras_sugeridas).split(',').map(e=>e.trim()).filter(Boolean) : [],
   })
   const [novoStatus, setNovoStatus] = useState('')
   const [motivo, setMotivo]         = useState('')
   const [saving, setSaving]         = useState(false)
   const [savingStatus, setSavingStatus] = useState(false)
+  const [editoras, setEditoras]       = useState([])
+  const [editoraSearch, setEditoraSearch] = useState('')
   const [toast, showToast]          = useToast()
 
   useEffect(() => {
     getStatusHistory(parceiro.id).then(setHistory).catch(console.error)
+    getEditoras().then(setEditoras).catch(console.error)
   }, [parceiro.id])
 
   async function salvarPerfil() {
@@ -91,6 +95,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose }) {
         coupon_code:     form.coupon_code||null,
         model:           form.model ? Number(form.model) : null,
         notes:           form.notes||null,
+        editoras_sugeridas: form.editoras_sugeridas.length ? form.editoras_sugeridas.join(',') : null,
       }
       const upd = await updateParceiroCRM(parceiro.id, payload)
       setParceiro(upd)
@@ -247,6 +252,35 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose }) {
                 onChange={e=>setForm(f=>({...f,notes:e.target.value}))} placeholder="Anotações sobre este parceiro..."/>
             </div>
 
+            <div className="form-group">
+              <label className="form-label">Editoras a oferecer</label>
+              {form.editoras_sugeridas.length > 0 && (
+                <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:8}}>
+                  {form.editoras_sugeridas.map(e=>(
+                    <span key={e} style={{display:'inline-flex',alignItems:'center',gap:4,background:'var(--accent-glow)',border:'1px solid var(--accent)',borderRadius:20,padding:'2px 10px',fontSize:12,color:'var(--accent)',fontWeight:600}}>
+                      {e}
+                      <button onClick={()=>setForm(f=>({...f,editoras_sugeridas:f.editoras_sugeridas.filter(x=>x!==e)}))} style={{background:'none',border:'none',cursor:'pointer',color:'var(--accent)',padding:0,display:'flex',lineHeight:1}}><X size={11}/></button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <input className="form-input" value={editoraSearch} onChange={e=>setEditoraSearch(e.target.value)} placeholder="Buscar editora..."/>
+              {editoraSearch.trim() && (
+                <div style={{border:'1px solid var(--border)',borderRadius:8,marginTop:4,maxHeight:140,overflowY:'auto',background:'var(--surface-2)'}}>
+                  {editoras.filter(e=>e.toLowerCase().includes(editoraSearch.toLowerCase())&&!form.editoras_sugeridas.includes(e)).length===0
+                    ? <div style={{padding:'10px 14px',fontSize:12,color:'var(--text-muted)'}}>Nenhuma editora encontrada</div>
+                    : editoras.filter(e=>e.toLowerCase().includes(editoraSearch.toLowerCase())&&!form.editoras_sugeridas.includes(e)).map(e=>(
+                        <div key={e} onClick={()=>{setForm(f=>({...f,editoras_sugeridas:[...f.editoras_sugeridas,e]}));setEditoraSearch('')}}
+                          style={{padding:'8px 14px',fontSize:13,cursor:'pointer',borderBottom:'1px solid var(--border)'}}
+                          onMouseEnter={ev=>ev.currentTarget.style.background='var(--surface-3)'}
+                          onMouseLeave={ev=>ev.currentTarget.style.background='transparent'}>
+                          {e}
+                        </div>
+                      ))
+                  }
+                </div>
+              )}
+            </div>
             <div style={{display:'flex',justifyContent:'flex-end'}}>
               <button className="btn btn-primary" onClick={salvarPerfil} disabled={saving}>
                 {saving?'Salvando...':'Salvar perfil'}
@@ -341,7 +375,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose }) {
 }
 
 // ── CARD DO PARCEIRO NO KANBAN ─────────────────────────────
-function KanbanCard({ parceiro, onClick, onDragStart, onDragEnd, isDragging }) {
+function KanbanCard({ parceiro, onClick, onDragStart, onDragEnd, isDragging, onDelete }) {
   const plats = parceiro.platforms || []
   const eng = parceiro.engagement_rate
   return (
@@ -354,12 +388,22 @@ function KanbanCard({ parceiro, onClick, onDragStart, onDragEnd, isDragging }) {
         background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,
         padding:'10px 12px',cursor:'grab',transition:'border-color 0.15s, opacity 0.15s',
         marginBottom:8, opacity: isDragging ? 0.4 : 1,
-        userSelect:'none',
+        userSelect:'none', position:'relative',
       }}
       onMouseEnter={e=>{if(!isDragging)e.currentTarget.style.borderColor='var(--accent)'}}
       onMouseLeave={e=>e.currentTarget.style.borderColor='var(--border)'}>
-      <div style={{fontWeight:700,fontSize:13,color:'var(--text)',marginBottom:3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-        {parceiro.nome}
+      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:4,marginBottom:3}}>
+        <div style={{fontWeight:700,fontSize:13,color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}>
+          {parceiro.nome}
+        </div>
+        {onDelete && (
+          <button onClick={e=>{e.stopPropagation();onDelete()}}
+            style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',padding:2,flexShrink:0,display:'flex',borderRadius:4,transition:'color 0.15s'}}
+            onMouseEnter={e=>e.currentTarget.style.color='var(--red)'}
+            onMouseLeave={e=>e.currentTarget.style.color='var(--text-muted)'}>
+            <Trash2 size={12}/>
+          </button>
+        )}
       </div>
       {parceiro.username && (
         <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:4}}>@{parceiro.username}</div>
@@ -612,6 +656,15 @@ export default function CRM() {
     showToast(`${novo.nome} adicionado ao CRM!`)
   }
 
+  async function handleDeleteParceiro(id, nome) {
+    if (!window.confirm(`Excluir "${nome}" do CRM? Esta ação não pode ser desfeita.`)) return
+    try {
+      await deleteParceiro(id)
+      setParceiros(prev => prev.filter(p => p.id !== id))
+      showToast(`${nome} excluído.`)
+    } catch(e) { showToast('Erro ao excluir', 'error') }
+  }
+
   async function handleDrop(novoStatus) {
     if (!dragId || !novoStatus) { setDragId(null); setDragOverCol(null); return }
     const parceiro = parceiros.find(p => p.id === dragId)
@@ -689,7 +742,8 @@ export default function CRM() {
                       onClick={()=>setModalParceiro(p)}
                       onDragStart={()=>setDragId(p.id)}
                       onDragEnd={()=>{ setDragId(null); setDragOverCol(null) }}
-                      isDragging={dragId===p.id}/>
+                      isDragging={dragId===p.id}
+                      onDelete={()=>handleDeleteParceiro(p.id, p.nome)}/>
                   ))}
                 </div>
               )}
@@ -721,7 +775,8 @@ export default function CRM() {
                               onClick={()=>setModalParceiro(p)}
                               onDragStart={()=>setDragId(p.id)}
                               onDragEnd={()=>{ setDragId(null); setDragOverCol(null) }}
-                              isDragging={dragId===p.id}/>
+                              isDragging={dragId===p.id}
+                              onDelete={()=>handleDeleteParceiro(p.id, p.nome)}/>
                           ))
                       }
                     </div>
