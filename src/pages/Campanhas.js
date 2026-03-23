@@ -1696,38 +1696,53 @@ function ModalDivulgacaoLibraria({ campanhaId, lancamentoLivros, parceiros, onSa
     }
   }
 
-  const [parceiroId, setParceiroId] = useState('')
-  const [tipo, setTipo]             = useState('')
-  const [data, setData]             = useState(hoje)
-  const [link, setLink]             = useState('')
-  const [origem, setOrigem]         = useState('combinada')
-  const [saving, setSaving]         = useState(false)
-  const [toast, showToast]          = useToast()
+  const [parceiroId, setParceiroId]     = useState('')
+  const [parceiroNome, setParceiroNome] = useState('')
+  const [parceiroSearch, setParceiroSearch] = useState('')
+  const [parceiroOpen, setParceiroOpen] = useState(false)
+  const [tipo, setTipo]                 = useState('')
+  const [data, setData]                 = useState(hoje)
+  const [link, setLink]                 = useState('')
+  const [origem, setOrigem]             = useState('combinada')
+  const [saving, setSaving]             = useState(false)
+  const [toast, showToast]              = useToast()
 
   const tipoSel = TIPOS_DIVULGACAO.find(t=>t.value===tipo)
   const temLink = tipoSel?.temLink || false
+
+  // Busca todos os parceiros cadastrados filtrados pelo texto digitado
+  const parceirosDisponiveis = (parceiros||[]).filter(p =>
+    p.nome.toLowerCase().includes(parceiroSearch.toLowerCase())
+  )
+
+  function selecionarParceiro(p) {
+    setParceiroId(p.id)
+    setParceiroNome(p.nome)
+    setParceiroSearch(p.nome)
+    setParceiroOpen(false)
+  }
 
   async function salvar() {
     if (!parceiroId || !tipo) return
     setSaving(true)
     try {
-      // Encontra o ll_id deste parceiro
-      const parceiroInfo = parceirosVinculados.find(p=>p.id===parceiroId)
-      if (!parceiroInfo) { showToast('Parceiro não encontrado','error'); return }
-      // Cria novo registro em lancamento_parceiros
-      await addLancamentoParceiro(parceiroInfo.ll_id, parceiroId)
-      // Depois atualiza com os dados da divulgação
-      // Busca o registro recém criado para atualizar
-      const ll = lancamentoLivros.find(x=>x.id===parceiroInfo.ll_id)
-      const novoLp = (ll?.lancamento_parceiros||[]).find(lp=>lp.parceiro_id===parceiroId)
-      if (novoLp) {
-        await updateLancamentoParceiro(novoLp.id, {
-          tipo_divulgacao: tipo,
-          data_divulgacao: data||null,
-          origem: origem,
-          link: link||null,
-        })
+      // Pega o primeiro ll_id disponível (ou o do parceiro se já vinculado)
+      let ll_id = null
+      for (const ll of (lancamentoLivros||[])) {
+        const lp = (ll.lancamento_parceiros||[]).find(lp=>lp.parceiro_id===parceiroId)
+        if (lp) { ll_id = ll.id; break }
       }
+      // Se não está vinculado a nenhum livro, usa o primeiro livro da campanha
+      if (!ll_id && lancamentoLivros?.length > 0) ll_id = lancamentoLivros[0].id
+      if (!ll_id) { showToast('Adicione ao menos um livro à campanha primeiro','error'); return }
+
+      const novo = await addLancamentoParceiro(ll_id, parceiroId)
+      await updateLancamentoParceiro(novo.id, {
+        tipo_divulgacao: tipo,
+        data_divulgacao: data||null,
+        origem: origem,
+        link: link||null,
+      })
       onSave && onSave()
       showToast('Divulgação registrada!')
       setTimeout(onClose, 1000)
@@ -1743,16 +1758,32 @@ function ModalDivulgacaoLibraria({ campanhaId, lancamentoLivros, parceiros, onSa
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
         </div>
         <div className="form-grid">
-          {/* Parceiro */}
-          <div className="form-group">
+          {/* Parceiro — busca em todos os cadastrados */}
+          <div className="form-group" style={{position:'relative'}}>
             <label className="form-label">Nome do parceiro *</label>
-            {parceirosVinculados.length === 0
-              ? <p style={{fontSize:13,color:'var(--text-muted)'}}>Nenhum parceiro vinculado ainda. Adicione livros e parceiros primeiro.</p>
-              : <select className="form-select" value={parceiroId} onChange={e=>setParceiroId(e.target.value)}>
-                  <option value="">Selecionar parceiro...</option>
-                  {parceirosVinculados.map(p=><option key={p.id} value={p.id}>{p.nome}</option>)}
-                </select>
-            }
+            <input className="form-input"
+              value={parceiroSearch}
+              onChange={e=>{ setParceiroSearch(e.target.value); setParceiroId(''); setParceiroOpen(true) }}
+              onFocus={()=>setParceiroOpen(true)}
+              placeholder="Buscar parceiro..."
+              autoComplete="off"/>
+            {parceiroId && <div style={{fontSize:11,color:'var(--accent)',marginTop:3}}>✓ {parceiroNome}</div>}
+            {parceiroOpen && parceiroSearch && (
+              <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:300,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,maxHeight:200,overflowY:'auto',boxShadow:'0 4px 16px rgba(0,0,0,0.3)'}}>
+                {parceirosDisponiveis.length===0
+                  ? <div style={{padding:'10px 14px',fontSize:13,color:'var(--text-muted)'}}>Nenhum parceiro encontrado</div>
+                  : parceirosDisponiveis.map(p=>(
+                      <div key={p.id} onClick={()=>selecionarParceiro(p)}
+                        style={{padding:'9px 14px',cursor:'pointer',borderBottom:'1px solid var(--border)',fontSize:13}}
+                        onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'}
+                        onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                        <div style={{fontWeight:600,color:'var(--text)'}}>{p.nome}</div>
+                        {p.tipo_parceria&&<div style={{fontSize:11,color:'var(--text-muted)'}}>{p.tipo_parceria}</div>}
+                      </div>
+                    ))
+                }
+              </div>
+            )}
           </div>
 
           {/* Origem */}
