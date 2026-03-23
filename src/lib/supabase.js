@@ -1093,3 +1093,62 @@ export async function deleteDivulgacaoLibraria(id) {
   const { error } = await supabase.from('divulgacoes_livraria').delete().eq('id', id)
   if (error) throw error
 }
+
+// ── DASHBOARD STATS ────────────────────────────────────────
+export async function getDashboardStats() {
+  const [
+    { count: totalParceiros },
+    { count: totalLivros },
+    { count: totalCampanhas },
+    lpData,
+    cpData,
+    dlData,
+  ] = await Promise.all([
+    supabase.from('parceiros').select('*', { count: 'exact', head: true }),
+    supabase.from('livros').select('*', { count: 'exact', head: true }),
+    supabase.from('campanhas').select('*', { count: 'exact', head: true }),
+    // divulgações de lançamento/geral (lancamento_parceiros com data_divulgacao)
+    supabase.from('lancamento_parceiros')
+      .select('id, status, origem, data_divulgacao')
+      .eq('status', 'publicado'),
+    // divulgações de promoção (campanha_parceiros publicados)
+    supabase.from('campanha_parceiros')
+      .select('id, status, origem'),
+    // divulgações da livraria (tabela separada)
+    supabase.from('divulgacoes_livraria')
+      .select('id, origem'),
+  ])
+
+  // Lançamento/Geral: publicados
+  const lpPublicados = lpData.data || []
+  const divLancOrganic  = lpPublicados.filter(lp => lp.origem === 'organica').length
+  const divLancCombinada = lpPublicados.filter(lp => lp.origem !== 'organica').length
+
+  // Promoção: publicados
+  const cpPublicados = (cpData.data || []).filter(cp => cp.status === 'publicado')
+  const divPromOrg  = cpPublicados.filter(cp => cp.origem === 'organica').length
+  const divPromComb = cpPublicados.filter(cp => cp.origem !== 'organica').length
+
+  // Livraria
+  const dlAll = dlData.data || []
+  const divLibOrg  = dlAll.filter(d => d.origem === 'organica').length
+  const divLibComb = dlAll.filter(d => d.origem !== 'organica').length
+
+  const totalDivulgacoes = lpPublicados.length + cpPublicados.length + dlAll.length
+  const totalOrganicas   = divLancOrganic + divPromOrg + divLibOrg
+  const totalCombinadas  = divLancCombinada + divPromComb + divLibComb
+
+  return {
+    totalParceiros: totalParceiros || 0,
+    totalLivros: totalLivros || 0,
+    totalCampanhas: totalCampanhas || 0,
+    totalDivulgacoes,
+    totalOrganicas,
+    totalCombinadas,
+    breakdown: {
+      lancamento: { total: lpPublicados.length, organica: divLancOrganic, combinada: divLancCombinada },
+      promocao:   { total: cpPublicados.length, organica: divPromOrg,   combinada: divPromComb   },
+      livraria:   { total: dlAll.length,         organica: divLibOrg,    combinada: divLibComb    },
+    }
+  }
+}
