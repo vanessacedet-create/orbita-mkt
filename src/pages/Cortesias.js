@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import {
-  getParceiros, createParceiro, updateParceiro, deleteParceiro, getEditoras,
+  getParceiros, getParceirosAtivos, createParceiro, updateParceiro, deleteParceiro, getEditoras,
   getLivros, createLivro, updateLivro, deleteLivro,
   getEnvios, getEnvioCompleto, createEnvio, updateEnvio, updateEnvioStatus, deleteEnvio, updateEnvioLivroDivulgacao
 } from '../lib/supabase'
@@ -819,7 +819,7 @@ function ParceirosTab({ parceiros, setParceiros }) {
     temas:             p.temas||'',
   }); setModal(true) }
   function close()     { setModal(false); setEditing(null) }
-  async function reload() { setParceiros(await getParceiros()) }
+  async function reload() { setParceiros(await getParceirosAtivos()) }
 
   useEffect(() => {
     getEditoras().then(setEditoras).catch(console.error)
@@ -1601,7 +1601,7 @@ export default function Cortesias() {
   const [envios, setEnvios]       = useState([])
 
   useEffect(() => {
-    getParceiros().then(setParceiros).catch(console.error)
+    getParceirosAtivos().then(setParceiros).catch(console.error)
     getLivros({ page:0, pageSize:5000 }).then(r => setLivros(r.data || [])).catch(console.error)
     getEnvios().then(setEnvios).catch(console.error)
   }, [])
