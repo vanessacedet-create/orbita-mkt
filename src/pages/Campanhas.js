@@ -7,6 +7,7 @@ import {
   getDivulgacoesParceiro, createDivulgacaoCampanha, updateDivulgacaoCampanha, deleteDivulgacaoCampanha,
   importarDivulgacoesPromocao,
   getLivrosDestaqueParceiro, addLivroDestaqueParceiro, removeLivroDestaqueParceiro, importarLivrosDestaquePlanilha,
+  getDivulgacoesLibraria, createDivulgacaoLibraria, updateDivulgacaoLibraria, deleteDivulgacaoLibraria,
   getLancamentoLivros, addLancamentoLivro, removeLancamentoLivro,
   addLancamentoParceiro, updateLancamentoParceiro, removeLancamentoParceiro,
   addLivroCampanha, removeLivroCampanha
@@ -1046,6 +1047,14 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
   const [modalParceiro, setModalParceiro]         = useState(null) // lp obj
   const [modalDivLib, setModalDivLib]             = useState(false)
   const [filtroTexto, setFiltroTexto]             = useState('')
+  const [divulgacoesLib, setDivulgacoesLib]       = useState([])
+
+  // Carrega divulgações da livraria para campanhas Geral
+  useEffect(() => {
+    if (tipoCampanha === 'Geral') {
+      getDivulgacoesLibraria(campanhaId).then(setDivulgacoesLib).catch(console.error)
+    }
+  }, [campanhaId, tipoCampanha])
 
   // Busca de livros para adicionar
   useEffect(() => {
@@ -1392,6 +1401,61 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
           </div>
       })()}
 
+      {/* ── DIVULGAÇÕES DA LIVRARIA (só Geral) ── */}
+      {tipoCampanha === 'Geral' && (
+        <div style={{marginTop:24}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+            <span style={{fontSize:14,fontWeight:700,color:'var(--text)'}}>
+              📚 Divulgações da Livraria ({divulgacoesLib.length})
+            </span>
+          </div>
+          {divulgacoesLib.length === 0
+            ? <div style={{padding:'16px',background:'var(--surface-2)',border:'1px dashed var(--border)',borderRadius:8,fontSize:13,color:'var(--text-muted)',textAlign:'center'}}>
+                Nenhuma divulgação registrada. Clique em "Divulgação da Livraria" para adicionar.
+              </div>
+            : <div className="table-card">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Parceiro</th>
+                      <th>Origem</th>
+                      <th>Tipo</th>
+                      <th>Data</th>
+                      <th>Link</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {divulgacoesLib.map(d => {
+                      const tipo = TIPOS_DIVULGACAO.find(t=>t.value===d.tipo_divulgacao)
+                      return (
+                        <tr key={d.id}>
+                          <td style={{fontWeight:600,fontSize:13}}>{d.parceiros?.nome||'—'}</td>
+                          <td>
+                            {d.origem==='organica'
+                              ? <span style={{fontSize:11,color:'#22c55e',fontWeight:600}}>🌱 Orgânica</span>
+                              : <span style={{fontSize:11,color:'var(--accent)',fontWeight:600}}>🤝 Combinada</span>}
+                          </td>
+                          <td>{tipo ? <span className="badge badge-indigo" style={{fontSize:11}}>{tipo.label}</span> : '—'}</td>
+                          <td className="td-muted" style={{fontSize:12}}>{d.data_divulgacao ? format(new Date(d.data_divulgacao+'T12:00:00'),'dd/MM/yyyy',{locale:ptBR}) : '—'}</td>
+                          <td>{d.link ? <a href={d.link} target="_blank" rel="noreferrer" style={{fontSize:12,color:'var(--accent)'}}>🔗 Ver</a> : '—'}</td>
+                          <td>
+                            <button className="btn btn-danger btn-icon btn-sm" onClick={async()=>{
+                              if(!window.confirm('Excluir esta divulgação?'))return
+                              await deleteDivulgacaoLibraria(d.id)
+                              setDivulgacoesLib(prev=>prev.filter(x=>x.id!==d.id))
+                            }}><Trash2 size={12}/></button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+          }
+        </div>
+      )}
+
       {modalParceiro && (
         <ModalLancamentoParceiro
           lp={modalParceiro.lp}
@@ -1405,9 +1469,8 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
       {modalDivLib && (
         <ModalDivulgacaoLibraria
           campanhaId={campanhaId}
-          lancamentoLivros={lancamentoLivros}
           parceiros={parceiros}
-          onSave={reload}
+          onSave={async()=>{ const d=await getDivulgacoesLibraria(campanhaId); setDivulgacoesLib(d) }}
           onClose={()=>setModalDivLib(false)}
         />
       )}
@@ -1681,20 +1744,8 @@ function ModalImportarDivulgacoes({ campanhaId, onImport, onClose }) {
 
 // ── MODAL DIVULGAÇÃO DA LIVRARIA ──────────────────────────
 // Adiciona uma nova divulgação para um parceiro específico na campanha Geral
-function ModalDivulgacaoLibraria({ campanhaId, lancamentoLivros, parceiros, onSave, onClose }) {
+function ModalDivulgacaoLibraria({ campanhaId, parceiros, onSave, onClose }) {
   const hoje = new Date().toISOString().slice(0,10)
-
-  // Monta lista de parceiros já vinculados à campanha (sem duplicatas)
-  const parceirosVinculados = []
-  const seen = new Set()
-  for (const ll of (lancamentoLivros||[])) {
-    for (const lp of (ll.lancamento_parceiros||[])) {
-      if (!seen.has(lp.parceiro_id)) {
-        seen.add(lp.parceiro_id)
-        parceirosVinculados.push({ id: lp.parceiro_id, nome: lp.parceiros?.nome||'—', ll_id: ll.id })
-      }
-    }
-  }
 
   const [parceiroId, setParceiroId]     = useState('')
   const [parceiroNome, setParceiroNome] = useState('')
@@ -1726,24 +1777,15 @@ function ModalDivulgacaoLibraria({ campanhaId, lancamentoLivros, parceiros, onSa
     if (!parceiroId || !tipo) return
     setSaving(true)
     try {
-      // Pega o primeiro ll_id disponível (ou o do parceiro se já vinculado)
-      let ll_id = null
-      for (const ll of (lancamentoLivros||[])) {
-        const lp = (ll.lancamento_parceiros||[]).find(lp=>lp.parceiro_id===parceiroId)
-        if (lp) { ll_id = ll.id; break }
-      }
-      // Se não está vinculado a nenhum livro, usa o primeiro livro da campanha
-      if (!ll_id && lancamentoLivros?.length > 0) ll_id = lancamentoLivros[0].id
-      if (!ll_id) { showToast('Adicione ao menos um livro à campanha primeiro','error'); return }
-
-      const novo = await addLancamentoParceiro(ll_id, parceiroId)
-      await updateLancamentoParceiro(novo.id, {
+      await createDivulgacaoLibraria({
+        campanha_id: campanhaId,
+        parceiro_id: parceiroId,
         tipo_divulgacao: tipo,
         data_divulgacao: data||null,
         origem: origem,
         link: link||null,
       })
-      onSave && onSave()
+      onSave && await onSave()
       showToast('Divulgação registrada!')
       setTimeout(onClose, 1000)
     } catch(e) { showToast('Erro ao salvar','error'); console.error(e) }
