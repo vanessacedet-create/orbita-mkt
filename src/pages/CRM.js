@@ -48,6 +48,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose }) {
   const [history, setHistory]   = useState([])
   const [aba, setAba]           = useState('perfil') // perfil | pipeline | historico
   const [form, setForm]         = useState({
+    nome:         inicial.nome||'',
     username:     inicial.username||'',
     platforms:    inicial.platforms||[],
     followers:    inicial.followers_count ? JSON.stringify(inicial.followers_count) : '',
@@ -86,6 +87,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose }) {
         try { followers_count = JSON.parse(form.followers) } catch {}
       }
       const payload = {
+        nome:            form.nome.trim()||inicial.nome,
         username:        form.username||null,
         platforms:       form.platforms,
         followers_count: followers_count,
@@ -102,8 +104,8 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose }) {
         editoras_sugeridas: form.editoras_sugeridas.length ? form.editoras_sugeridas.join(',') : null,
       }
       const upd = await updateParceiroCRM(parceiro.id, payload)
-      setParceiro(upd)
-      onSave(upd)
+      setParceiro({...upd, nome: payload.nome||upd.nome})
+      onSave({...upd, nome: payload.nome||upd.nome})
       showToast('Perfil atualizado!')
     } catch(e) { showToast('Erro ao salvar','error') } finally { setSaving(false) }
   }
@@ -138,7 +140,13 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose }) {
       <div className="modal" style={{maxWidth:580,maxHeight:'90vh',overflowY:'auto'}}>
         <div className="modal-header" style={{position:'sticky',top:0,background:'var(--surface)',zIndex:10,borderBottom:'1px solid var(--border)'}}>
           <div>
-            <h2 className="modal-title" style={{marginBottom:4}}>{parceiro.nome}</h2>
+            <input
+                className="form-input"
+                value={form.nome}
+                onChange={e=>setForm(f=>({...f,nome:e.target.value}))}
+                style={{fontSize:16,fontWeight:700,background:'transparent',border:'none',borderBottom:'1px solid var(--border)',borderRadius:0,padding:'2px 0',color:'var(--text)',width:'100%',outline:'none'}}
+                placeholder="Nome do parceiro"
+              />
             <span style={{display:'inline-flex',alignItems:'center',gap:5,background:stInfo.bg,border:`1px solid ${stInfo.cor}40`,borderRadius:20,padding:'2px 10px',fontSize:11,fontWeight:700,color:stInfo.cor}}>
               {stInfo.label}
             </span>
