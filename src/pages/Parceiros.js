@@ -287,7 +287,7 @@ export default function Parceiros() {
   const [editoras, setEditoras]   = useState([])
   const [editoraSearch, setEditoraSearch] = useState('')
 
-  const EMPTY = { nome:'', tipo_parceria:'', cpf:'', livraria:'', canal_comunicacao:'', editoras_divulga:[], temas:'' }
+  const EMPTY = { nome:'', tipo_parceria:'', cpf:'', livraria:'', canal_comunicacao:'', editoras_divulga:[], temas:'', responsavel_interno_id:'' }
   const [form, setForm] = useState(EMPTY)
 
   async function reload() {
@@ -304,6 +304,7 @@ export default function Parceiros() {
   useEffect(() => {
     reload()
     getEditoras().then(setEditoras).catch(console.error)
+    getUsuarios().then(setUsuarios).catch(console.error)
   }, [])
 
   function openNew()   { setEditing(null); setForm(EMPTY); setModal(true) }
@@ -315,6 +316,7 @@ export default function Parceiros() {
       cpf:               p.cpf||'',
       livraria:          p.livraria||'',
       canal_comunicacao: p.canal_comunicacao||'',
+      responsavel_interno_id: p.responsavel_interno_id||'',
       editoras_divulga:  p.editoras_divulga ? p.editoras_divulga.split(',').map(e=>e.trim()).filter(Boolean) : [],
       temas:             p.temas||'',
     })
@@ -491,6 +493,14 @@ export default function Parceiros() {
                 <select className="form-select" value={form.canal_comunicacao} onChange={e=>setForm(f=>({...f,canal_comunicacao:e.target.value}))}>
                   <option value="">Selecionar...</option>
                   {CANAIS_COMUNICACAO.map(c=><option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Responsável interno</label>
+                <select className="form-select" value={form.responsavel_interno_id} onChange={e=>setForm(f=>({...f,responsavel_interno_id:e.target.value}))}>
+                  <option value="">Sem responsável</option>
+                  {usuarios.map(u=><option key={u.id} value={u.id}>{u.nome}</option>)}
                 </select>
               </div>
 
