@@ -281,7 +281,11 @@ export default function Parceiros() {
   const [modal, setModal]         = useState(false)
   const [modalPontuacao, setModalPontuacao] = useState(null)
   const [editing, setEditing]     = useState(null)
-  const [search, setSearch]       = useState('')
+  const [search, setSearch]           = useState('')
+  const [filtroTipo, setFiltroTipo]       = useState('')
+  const [filtroCanal, setFiltroCanal]     = useState('')
+  const [filtroResp, setFiltroResp]       = useState('')
+  const [filtroNivel, setFiltroNivel]     = useState('')
   const [saving, setSaving]       = useState(false)
   const [toast, showToast]        = useToast()
   const [editoras, setEditoras]   = useState([])
@@ -360,19 +364,28 @@ export default function Parceiros() {
   }
 
   const filtered = parceiros
-    .filter(p =>
-    p.nome.toLowerCase().includes(search.toLowerCase()) ||
-    (p.tipo_parceria||'').toLowerCase().includes(search.toLowerCase()) ||
-    (p.livraria||'').toLowerCase().includes(search.toLowerCase()) ||
-    (p.canal_comunicacao||'').toLowerCase().includes(search.toLowerCase()) ||
-    (p.temas||'').toLowerCase().includes(search.toLowerCase())
-  )
-  .sort((a,b) => {
-    const na = a.pontuacao?.nota ?? -1
-    const nb = b.pontuacao?.nota ?? -1
-    if (na !== nb) return nb - na
-    return a.nome.localeCompare(b.nome, 'pt-BR')
-  })
+    .filter(p => {
+      const q = search.toLowerCase()
+      if (q && !(
+        p.nome.toLowerCase().includes(q) ||
+        (p.tipo_parceria||'').toLowerCase().includes(q) ||
+        (p.livraria||'').toLowerCase().includes(q) ||
+        (p.canal_comunicacao||'').toLowerCase().includes(q) ||
+        (p.temas||'').toLowerCase().includes(q)
+      )) return false
+      if (filtroTipo  && p.tipo_parceria !== filtroTipo) return false
+      if (filtroCanal && p.canal_comunicacao !== filtroCanal) return false
+      if (filtroResp  && p.responsavel_interno_id !== filtroResp) return false
+      if (filtroNivel && p.pontuacao?.nivel !== filtroNivel) return false
+      return true
+    })
+    .sort((a,b) => {
+      const na = a.pontuacao?.nota ?? -1
+      const nb = b.pontuacao?.nota ?? -1
+      if (na !== nb) return nb - na
+      return a.nome.localeCompare(b.nome, 'pt-BR')
+    })
+  const temFiltro = filtroTipo || filtroCanal || filtroResp || filtroNivel
 
   return (
     <div>
@@ -394,11 +407,39 @@ export default function Parceiros() {
         </div>
       </div>
 
+      {/* Filtros */}
+      <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap',alignItems:'center'}}>
+        <input className="search-input" style={{flex:1,minWidth:200}} placeholder="Buscar por nome, tipo, livraria..." value={search} onChange={e=>setSearch(e.target.value)}/>
+        <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroTipo} onChange={e=>setFiltroTipo(e.target.value)}>
+          <option value="">Todos os tipos</option>
+          {TIPOS_PARCERIA.map(t=><option key={t} value={t}>{t}</option>)}
+        </select>
+        <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroCanal} onChange={e=>setFiltroCanal(e.target.value)}>
+          <option value="">Todos os canais</option>
+          {CANAIS_COMUNICACAO.map(c=><option key={c} value={c}>{c}</option>)}
+        </select>
+        <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroResp} onChange={e=>setFiltroResp(e.target.value)}>
+          <option value="">Todos os responsáveis</option>
+          {usuarios.map(u=><option key={u.id} value={u.id}>{u.nome}</option>)}
+        </select>
+        <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroNivel} onChange={e=>setFiltroNivel(e.target.value)}>
+          <option value="">Todos os níveis</option>
+          <option value="ouro">🏆 Ouro</option>
+          <option value="prata">🥈 Prata</option>
+          <option value="bronze">🥉 Bronze</option>
+          <option value="atencao">⚠️ Atenção</option>
+        </select>
+        {temFiltro && (
+          <button className="btn btn-ghost btn-sm" onClick={()=>{setFiltroTipo('');setFiltroCanal('');setFiltroResp('');setFiltroNivel('')}}>
+            <X size={12}/> Limpar
+          </button>
+        )}
+      </div>
+
       {/* Tabela */}
       <div className="table-card">
         <div className="table-toolbar">
           <span className="table-title">Parceiros ({filtered.length})</span>
-          <input className="search-input" placeholder="Buscar por nome, tipo, livraria, canal..." value={search} onChange={e=>setSearch(e.target.value)}/>
         </div>
         {filtered.length===0
           ? <div className="empty-state"><p>Nenhum parceiro encontrado.</p></div>
