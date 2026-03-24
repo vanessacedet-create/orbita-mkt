@@ -322,7 +322,8 @@ function ModalCampanha({ campanha, livros, parceiros, onSave, onClose }) {
 
 // ── TIPOS DE DIVULGAÇÃO ────────────────────────────────────
 const TIPOS_DIVULGACAO = [
-  { value: 'stories',          label: 'Stories',               temLink: false },
+  { value: 'stories_estatico', label: 'Stories Estático',      temLink: false },
+  { value: 'stories_dinamico', label: 'Stories Dinâmico',      temLink: false },
   { value: 'feed',             label: 'Feed',                  temLink: true  },
   { value: 'reels',            label: 'Reels',                 temLink: true  },
   { value: 'tiktok',           label: 'TikTok',                temLink: true  },
@@ -330,6 +331,8 @@ const TIPOS_DIVULGACAO = [
   { value: 'shorts',           label: 'Shorts',                temLink: true  },
   { value: 'twitter',          label: 'Twitter/X',             temLink: true  },
   { value: 'grupo_interno',    label: 'Grupo interno',         temLink: false },
+  // Compatibilidade retroativa
+  { value: 'stories',          label: 'Stories (legado)',      temLink: false },
 ]
 
 // ── MODAL PARCEIRO NA CAMPANHA ─────────────────────────────
@@ -879,9 +882,10 @@ function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, tipoCampanha, onSave,
   const [dataCombinada, setDataCombinada] = useState(lp.data_combinada || lp.data_divulgacao || '')
   const [observacoes, setObservacoes] = useState(lp.observacoes || '')
   const [divs, setDivs]               = useState(() => {
-    // Só mostra divulgações já salvas (não cria uma vazia automaticamente)
-    const todas = [lp, ...irmaos].filter(r => r.tipo_divulgacao)
-    return todas.length > 0 ? todas.map(toDiv) : []
+    // Cada irmão é uma divulgação independente — o principal não carrega divulgação
+    // Os irmãos são todos os registros com tipo_divulgacao preenchido
+    const todasDivs = [lp, ...irmaos].filter(r => r.tipo_divulgacao && r.tipo_divulgacao !== '')
+    return todasDivs.map(toDiv)
   })
   const [saving, setSaving] = useState(false)
 
@@ -1122,60 +1126,59 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
   }
 
   async function handleUpdateParceiro({ lpId, ll_id, parceiro_id, status, data_combinada, observacoes, divs }) {
-    // 1. Atualiza registro principal (lpId) com status, obs, data_combinada e primeira divulgação
-    const primeira = divs[0] || null
-    const ts0 = TIPOS_DIVULGACAO.find(t=>t.value===primeira.tipo_divulgacao)
-    const tl0 = ts0?.temLink||false
+    // 1. Atualiza o registro principal com status, obs e data_combinada (sem dados de divulgação)
     await updateLancamentoParceiro(lpId, {
       status,
       observacoes,
       data_combinada: data_combinada||null,
-      tipo_divulgacao: primeira?.tipo_divulgacao||null,
-      data_divulgacao: primeira?.data_divulgacao||null,
-      link: tl0?(primeira?.link||null):null,
-      curtidas: tl0&&primeira?.curtidas!==''?Number(primeira?.curtidas):null,
-      comentarios: tl0&&primeira?.comentarios!==''?Number(primeira?.comentarios):null,
-      visualizacoes: tl0&&primeira?.visualizacoes!==''?Number(primeira?.visualizacoes):null,
+      // Limpa campos de divulgação do principal — cada divulgação é independente
+      tipo_divulgacao: null,
+      data_divulgacao: null,
+      link: null, curtidas: null, comentarios: null, visualizacoes: null,
     })
 
-    // 2. Pega os irmãos atuais (mesmos ll_id+parceiro_id, exceto lp principal)
+    // 2. Pega todos os irmãos atuais (registros separados para cada divulgação)
     const ll = lancamentoLivros.find(x=>x.id===ll_id)
-    const irmaosAtuais = (ll?.lancamento_parceiros||[]).filter(lp => lp.id!==lpId && lp.parceiro_id===parceiro_id)
+    const irmaosAtuais = (ll?.lancamento_parceiros||[])
+      .filter(lp => lp.id!==lpId && lp.parceiro_id===parceiro_id)
 
-    // 3. Divulgações extras (índice 1 em diante)
-    const extras = divs.slice(1)
-
-    // 4. Remove irmãos que sobraram além das extras
-    for (const irmao of irmaosAtuais.slice(extras.length)) {
-      await removeLancamentoParceiro(irmao.id)
-    }
-
-    // 5. Atualiza ou cria irmãos
+    // 3. Para cada divulgação no form: atualiza se já existe, cria se é nova
     const irmaosAtualizados = []
-    for (let i=0; i<extras.length; i++) {
-      const d = extras[i]
+    for (let i=0; i<divs.length; i++) {
+      const d = divs[i]
       const ts = TIPOS_DIVULGACAO.find(t=>t.value===d.tipo_divulgacao)
       const tl = ts?.temLink||false
       const payload = {
         tipo_divulgacao: d.tipo_divulgacao||null,
         data_divulgacao: d.data_divulgacao||null,
+        origem: d.origem||'combinada',
         link: tl?(d.link||null):null,
         curtidas: tl&&d.curtidas!==''?Number(d.curtidas):null,
         comentarios: tl&&d.comentarios!==''?Number(d.comentarios):null,
         visualizacoes: tl&&d.visualizacoes!==''?Number(d.visualizacoes):null,
       }
-      if (irmaosAtuais[i]) {
-        const upd = await updateLancamentoParceiro(irmaosAtuais[i].id, payload)
+      if (d.id && irmaosAtuais.find(x=>x.id===d.id)) {
+        // Registro existente — atualiza
+        const upd = await updateLancamentoParceiro(d.id, payload)
         irmaosAtualizados.push(upd)
       } else {
+        // Nova divulgação — cria registro independente
         const novo = await addLancamentoParceiro(ll_id, parceiro_id)
         const upd = await updateLancamentoParceiro(novo.id, payload)
         irmaosAtualizados.push(upd)
       }
     }
 
-    // 6. Recarrega lista do livro do estado local
-    const updatedMain = await updateLancamentoParceiro(lpId, {}) // re-fetch via update sem mudança
+    // 4. Remove irmãos que foram deletados no form
+    const idsManutidos = divs.filter(d=>d.id).map(d=>d.id)
+    for (const irmao of irmaosAtuais) {
+      if (!idsManutidos.includes(irmao.id)) {
+        await removeLancamentoParceiro(irmao.id)
+      }
+    }
+
+    // 5. Recarrega estado local
+    const updatedMain = await updateLancamentoParceiro(lpId, {})
     setLancamentoLivros(prev => prev.map(x => {
       if (x.id !== ll_id) return x
       const outros = (x.lancamento_parceiros||[]).filter(lp => lp.id!==lpId && lp.parceiro_id!==parceiro_id)
