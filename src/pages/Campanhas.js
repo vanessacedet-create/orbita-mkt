@@ -17,6 +17,18 @@ import {
   Users, Link, BarChart2, Calendar, CheckCircle, Clock, AlertCircle, Phone, Bell
 } from 'lucide-react'
 import { differenceInDays } from 'date-fns'
+
+// Helper: formata data com segurança — evita RangeError se a data for inválida
+function fmtDate(dateStr, fmt, opts) {
+  if (!dateStr || String(dateStr).trim() === '') return '—'
+  try {
+    const s = String(dateStr).trim()
+    const d = new Date(s.length === 10 ? s + 'T12:00:00' : s)
+    if (isNaN(d.getTime())) return '—'
+    return format(d, fmt, opts)
+  } catch { return '—' }
+}
+
 import * as XLSX from 'xlsx'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -410,8 +422,8 @@ function ModalParceiro({ cp, campanha, onSave, onClose }) {
         {(campanha?.data_inicio || campanha?.data_fim) && (
           <div style={{display:'flex',gap:16,marginBottom:16,padding:'10px 14px',background:'var(--surface-2)',borderRadius:8,fontSize:12,color:'var(--text-muted)'}}>
             <Calendar size={13} style={{marginTop:1,flexShrink:0}}/>
-            {campanha.data_inicio && <span>Início: <strong style={{color:'var(--text)'}}>{format(new Date(campanha.data_inicio+'T12:00:00'),'dd MMM yyyy',{locale:ptBR})}</strong></span>}
-            {campanha.data_fim    && <span>Término: <strong style={{color:'var(--text)'}}>{format(new Date(campanha.data_fim+'T12:00:00'),'dd MMM yyyy',{locale:ptBR})}</strong></span>}
+            {campanha.data_inicio && <span>Início: <strong style={{color:'var(--text)'}}>{fmtDate(campanha.data_inicio, 'dd MMM yyyy', {locale:ptBR})}</strong></span>}
+            {campanha.data_fim    && <span>Término: <strong style={{color:'var(--text)'}}>{fmtDate(campanha.data_fim, 'dd MMM yyyy', {locale:ptBR})}</strong></span>}
           </div>
         )}
 
@@ -507,7 +519,7 @@ function ModalParceiro({ cp, campanha, onSave, onClose }) {
                               ? <span style={{fontSize:10,background:'rgba(34,197,94,0.12)',color:'#22c55e',borderRadius:4,padding:'1px 6px',fontWeight:600}}>🌱 Orgânica</span>
                               : <span style={{fontSize:10,background:'rgba(249,115,22,0.12)',color:'var(--accent)',borderRadius:4,padding:'1px 6px',fontWeight:600}}>🤝 Combinada</span>
                             }
-                            {d.data_divulgacao && <span style={{fontSize:11,color:'var(--text-muted)'}}>{format(new Date(d.data_divulgacao+'T12:00:00'),'dd/MM/yyyy',{locale:ptBR})}</span>}
+                            {d.data_divulgacao && <span style={{fontSize:11,color:'var(--text-muted)'}}>{fmtDate(d.data_divulgacao, 'dd/MM/yyyy', {locale:ptBR})}</span>}
                             {d.livros?.titulo && <span style={{fontSize:11,color:'var(--accent)'}}>📚 {d.livros.titulo}</span>}
                           </div>
                           {d.link && <a href={d.link} target="_blank" rel="noreferrer" style={{fontSize:12,color:'var(--accent)',display:'flex',alignItems:'center',gap:4,marginBottom:4}}><Link size={11}/>Ver publicação</a>}
@@ -1291,7 +1303,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                       {ll.livros?.autor && <div style={{fontSize:12,color:'var(--text-muted)'}}>{ll.livros.autor}{ll.livros.isbn?` · ISBN: ${ll.livros.isbn}`:''}</div>}
                       {ll.livros?.data_lancamento && (
                         <div style={{fontSize:11,color:'var(--accent)',marginTop:2,fontWeight:600}}>
-                          📅 {format(new Date(ll.livros.data_lancamento+'T12:00:00'),'dd MMM yyyy',{locale:ptBR})}
+                          📅 {fmtDate(ll.livros.data_lancamento, 'dd MMM yyyy', {locale:ptBR})}
                         </div>
                       )}
                     </div>
@@ -1388,7 +1400,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                                     <td className="td-muted" style={{fontSize:12,verticalAlign:'top',paddingTop:10}}>
                                       {todos.map((lp,i) => (
                                         <div key={lp.id} style={{marginBottom:4}}>
-                                          {lp.data_divulgacao ? format(new Date(lp.data_divulgacao+'T12:00:00'),'dd/MM/yy',{locale:ptBR}) : '—'}
+                                          {lp.data_divulgacao ? fmtDate(lp.data_divulgacao, 'dd/MM/yy', {locale:ptBR}) : '—'}
                                         </div>
                                       ))}
                                     </td>
@@ -1464,7 +1476,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                               : <span style={{fontSize:11,color:'var(--accent)',fontWeight:600}}>🤝 Combinada</span>}
                           </td>
                           <td>{tipo ? <span className="badge badge-indigo" style={{fontSize:11}}>{tipo.label}</span> : '—'}</td>
-                          <td className="td-muted" style={{fontSize:12}}>{d.data_divulgacao ? format(new Date(d.data_divulgacao+'T12:00:00'),'dd/MM/yyyy',{locale:ptBR}) : '—'}</td>
+                          <td className="td-muted" style={{fontSize:12}}>{d.data_divulgacao ? fmtDate(d.data_divulgacao, 'dd/MM/yyyy', {locale:ptBR}) : '—'}</td>
                           <td>{d.link ? <a href={d.link} target="_blank" rel="noreferrer" style={{fontSize:12,color:'var(--accent)'}}>🔗 Ver</a> : '—'}</td>
                           <td>
                             <button className="btn btn-danger btn-icon btn-sm" onClick={async()=>{
@@ -2012,8 +2024,8 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros, usuarios = [] 
           </div>
           {campanha.descricao && <p style={{fontSize:13,color:'var(--text-muted)',marginTop:4}}>{campanha.descricao}</p>}
           <div style={{display:'flex',gap:16,marginTop:6,fontSize:12,color:'var(--text-muted)'}}>
-            {campanha.data_inicio && <span><Calendar size={12} style={{marginRight:4}}/>Início: {format(new Date(campanha.data_inicio+'T12:00:00'),'dd MMM yyyy',{locale:ptBR})}</span>}
-            {campanha.data_fim    && <span>Fim: {format(new Date(campanha.data_fim+'T12:00:00'),'dd MMM yyyy',{locale:ptBR})}</span>}
+            {campanha.data_inicio && <span><Calendar size={12} style={{marginRight:4}}/>Início: {fmtDate(campanha.data_inicio, 'dd MMM yyyy', {locale:ptBR})}</span>}
+            {campanha.data_fim    && <span>Fim: {fmtDate(campanha.data_fim, 'dd MMM yyyy', {locale:ptBR})}</span>}
           </div>
         </div>
         <button className="btn btn-ghost" onClick={()=>setModalEdicao(true)}><Pencil size={14}/> Editar</button>
@@ -2121,8 +2133,8 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros, usuarios = [] 
                             })()}
                           </td>
                           <td className="td-muted" style={{fontSize:12}}>
-                            {cp.data_inicio ? format(new Date(cp.data_inicio+'T12:00:00'),'dd/MM',{locale:ptBR}) : '—'}
-                            {cp.data_fim ? <span> → {format(new Date(cp.data_fim+'T12:00:00'),'dd/MM',{locale:ptBR})}</span> : ''}
+                            {cp.data_inicio ? fmtDate(cp.data_inicio, 'dd/MM', {locale:ptBR}) : '—'}
+                            {cp.data_fim ? <span> → {fmtDate(cp.data_fim, 'dd/MM', {locale:ptBR})}</span> : ''}
                           </td>
                           <td style={{fontSize:12,color:'var(--text-muted)'}}>—</td>
                           <td>
@@ -2195,7 +2207,7 @@ function FollowUpTab() {
   // Monta lista de lembretes: 1 item por parceiro de cada campanha
   const lembretes = dados.flatMap(campanha => {
     const diasParaInicio = campanha.data_inicio
-      ? differenceInDays(new Date(campanha.data_inicio + 'T12:00:00'), hoje)
+      ? (() => { try { const d = new Date(campanha.data_inicio + 'T12:00:00'); return isNaN(d.getTime()) ? 0 : differenceInDays(d, hoje) } catch { return 0 } })()
       : null
     const noJanela = diasParaInicio !== null && diasParaInicio <= 15
     return (campanha.campanha_parceiros||[]).map(cp => ({
@@ -2277,13 +2289,13 @@ function FollowUpTab() {
                     </td>
                     <td className="td-muted">
                       {campanha.data_inicio
-                        ? format(new Date(campanha.data_inicio+'T12:00:00'),'dd MMM yyyy',{locale:ptBR})
+                        ? fmtDate(campanha.data_inicio, 'dd MMM yyyy', {locale:ptBR})
                         : '—'}
                     </td>
                     <td><span className={`badge ${situacaoCls}`}>{situacaoLabel}</span></td>
                     <td className="td-muted" style={{fontSize:12}}>
                       {cp.data_contato
-                        ? format(new Date(cp.data_contato+'T12:00:00'),'dd MMM yyyy',{locale:ptBR})
+                        ? fmtDate(cp.data_contato, 'dd MMM yyyy', {locale:ptBR})
                         : '—'}
                       {cp.nota_contato && <div style={{fontSize:11,color:'var(--text-muted)',marginTop:2,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{cp.nota_contato}</div>}
                     </td>
@@ -2525,8 +2537,8 @@ export default function Campanhas() {
                     {/* Datas */}
                     {(c.data_inicio||c.data_fim) && (
                       <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:10,display:'flex',gap:10}}>
-                        {c.data_inicio&&<span>📅 {format(new Date(c.data_inicio+'T12:00:00'),'dd MMM yyyy',{locale:ptBR})}</span>}
-                        {c.data_fim&&<span>→ {format(new Date(c.data_fim+'T12:00:00'),'dd MMM yyyy',{locale:ptBR})}</span>}
+                        {c.data_inicio&&c.data_inicio.length>=10&&<span>📅 {fmtDate(c.data_inicio, 'dd MMM yyyy', {locale:ptBR})}</span>}
+                        {c.data_fim&&c.data_fim.length>=10&&<span>→ {fmtDate(c.data_fim, 'dd MMM yyyy', {locale:ptBR})}</span>}
                       </div>
                     )}
                     {/* Progresso */}
