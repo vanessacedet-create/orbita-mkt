@@ -34,7 +34,7 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
 // ── CONSTANTES ─────────────────────────────────────────────
-const TIPOS_CAMPANHA = ['Lançamento', 'Geral', 'Promoção']
+const TIPOS_CAMPANHA = ['Lançamento', 'Geral', 'Promoção', 'Book Time']
 
 const STATUS_CAMPANHA = [
   { value: 'planejamento', label: 'Planejada',     cls: 'badge-indigo', icon: Clock },
@@ -103,13 +103,14 @@ function ProgressoParceiros({ parceiros }) {
 
 // ── MODAL CAMPANHA (criar/editar) ──────────────────────────
 function ModalCampanha({ campanha, livros, parceiros, onSave, onClose }) {
-  const EMPTY = { nome:'', tipo:'', status:'planejamento', data_inicio:'', data_fim:'', descricao:'', livro_ids:[], parceiro_ids:[] }
+  const EMPTY = { nome:'', tipo:'', status:'planejamento', data_inicio:'', data_fim:'', descricao:'', livro_ids:[], parceiro_ids:[], adicionar_lancamentos_auto: false }
   const [form, setForm]         = useState(campanha ? {
     nome: campanha.nome, tipo: campanha.tipo||'', status: campanha.status,
     data_inicio: campanha.data_inicio||'', data_fim: campanha.data_fim||'',
     descricao: campanha.descricao||'',
     livro_ids: (campanha.campanha_livros||[]).map(cl => cl.livros?.id).filter(Boolean),
-    parceiro_ids: (campanha.campanha_parceiros||[]).map(cp => cp.parceiros?.id).filter(Boolean)
+    parceiro_ids: (campanha.campanha_parceiros||[]).map(cp => cp.parceiros?.id).filter(Boolean),
+    adicionar_lancamentos_auto: false
   } : EMPTY)
   const [livroSearch, setLivroSearch]       = useState('')
   const [livroResults, setLivroResults]     = useState([])
@@ -302,9 +303,26 @@ function ModalCampanha({ campanha, livros, parceiros, onSave, onClose }) {
             <p style={{fontSize:11.5,color:'var(--text-muted)',marginTop:4}}>Parceiros podem ser adicionados ou removidos depois também.</p>
           </div></>}
 
-          {(form.tipo === 'Lançamento' || form.tipo === 'Geral') && (
-            <div style={{padding:'10px 14px',background:'var(--accent-glow)',borderRadius:8,fontSize:13,color:'var(--accent)'}}>
-              📚 Os livros e parceiros serão adicionados após criar a campanha.
+          {(form.tipo === 'Lançamento' || form.tipo === 'Geral' || form.tipo === 'Book Time') && (
+            <div style={{padding:'12px 14px',background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8}}>
+              <label style={{display:'flex',alignItems:'flex-start',gap:10,cursor:'pointer'}}>
+                <input type="checkbox" checked={form.adicionar_lancamentos_auto}
+                  onChange={e=>setForm(f=>({...f,adicionar_lancamentos_auto:e.target.checked}))}
+                  style={{marginTop:2,width:16,height:16,accentColor:'var(--accent)',flexShrink:0}}/>
+                <div>
+                  <div style={{fontSize:13,fontWeight:600,color:'var(--text)'}}>
+                    Adicionar lançamentos automaticamente pelo período
+                  </div>
+                  <div style={{fontSize:11,color:'var(--text-muted)',marginTop:2}}>
+                    Quando marcado, todos os livros com data de lançamento entre a data início e fim serão incluídos automaticamente na campanha.
+                  </div>
+                </div>
+              </label>
+              {!form.adicionar_lancamentos_auto && (
+                <div style={{fontSize:12,color:'var(--text-muted)',marginTop:8,paddingTop:8,borderTop:'1px solid var(--border)'}}>
+                  📚 Os livros e parceiros poderão ser adicionados manualmente após criar a campanha.
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1937,7 +1955,7 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros, usuarios = [] 
   async function reload() {
     const c = await getCampanha(campanhaId)
     setCampanha(c)
-    if ((c.tipo === 'Lançamento' || c.tipo === 'Geral')) {
+    if ((c.tipo === 'Lançamento' || c.tipo === 'Geral' || c.tipo === 'Book Time')) {
       const ll = await getLancamentoLivros(campanhaId)
       setLancamentoLivros(ll)
     }
@@ -2063,7 +2081,7 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros, usuarios = [] 
         ))}
       </div>
 
-      {(campanha.tipo === 'Lançamento' || campanha.tipo === 'Geral')
+      {(campanha.tipo === 'Lançamento' || campanha.tipo === 'Geral' || campanha.tipo === 'Book Time')
         ? <DetalheLancamento
             campanhaId={campanhaId}
             tipoCampanha={campanha.tipo}
@@ -2482,7 +2500,7 @@ export default function Campanhas() {
         : filtradas.length === 0
           ? <div className="empty-state" style={{marginTop:40}}><p>Nenhuma campanha encontrada.</p></div>
           : (() => {
-              // Agrupa por tipo na ordem: Promoção → Lançamento → Geral → sem tipo
+              // Agrupa por tipo na ordem: Promoção → Lançamento → Geral → Book Time → sem tipo
               const ORDEM_TIPOS = ['Promoção', 'Lançamento', 'Geral']
               const grupos = ORDEM_TIPOS.map(tipo => ({
                 tipo,
@@ -2545,7 +2563,7 @@ export default function Campanhas() {
                       </div>
                     )}
                     {/* Progresso */}
-                    {(c.tipo === 'Lançamento' || c.tipo === 'Geral') ? (() => {
+                    {(c.tipo === 'Lançamento' || c.tipo === 'Geral' || c.tipo === 'Book Time') ? (() => {
                       const lps = (c.lancamento_livros||[]).flatMap(ll => ll.lancamento_parceiros||[])
                       return lps.length > 0
                         ? <ProgressoParceiros parceiros={lps}/>
