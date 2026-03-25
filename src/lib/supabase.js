@@ -429,7 +429,7 @@ export async function getCampanha(id) {
   return data
 }
 
-export async function createCampanha({ nome, tipo, status, data_inicio, data_fim, descricao, livro_ids = [] }) {
+export async function createCampanha({ nome, tipo, status, data_inicio, data_fim, descricao, livro_ids = [], adicionar_lancamentos_auto = false }) {
   const { data: campanha, error } = await supabase
     .from('campanhas')
     .insert([{ nome, tipo, status, data_inicio, data_fim, descricao }])
@@ -438,8 +438,8 @@ export async function createCampanha({ nome, tipo, status, data_inicio, data_fim
 
   let autoAdicionados = 0
 
-  if (tipo === 'Lançamento' && data_inicio && data_fim) {
-    // Busca livros com data_lancamento dentro do range
+  if (adicionar_lancamentos_auto && (tipo === 'Lançamento' || tipo === 'Geral' || tipo === 'Book Time') && data_inicio && data_fim) {
+    // Busca livros com data_lancamento dentro do range (somente se checkbox ativado)
     const { data: livrosNoRange } = await supabase
       .from('livros')
       .select('id')
@@ -448,7 +448,6 @@ export async function createCampanha({ nome, tipo, status, data_inicio, data_fim
       .lte('data_lancamento', data_fim)
 
     if (livrosNoRange?.length) {
-      // Lançamento usa lancamento_livros
       const inserir = livrosNoRange.map(l => ({ campanha_id: campanha.id, livro_id: l.id }))
       const { error: le } = await supabase.from('lancamento_livros').insert(inserir)
       if (le) throw le
@@ -468,7 +467,9 @@ export async function createCampanha({ nome, tipo, status, data_inicio, data_fim
 }
 
 export async function updateCampanha(id, { nome, tipo, status, data_inicio, data_fim, descricao, livro_ids }) {
-  const { error } = await supabase.from('campanhas').update({ nome, tipo, status, data_inicio, data_fim, descricao }).eq('id', id)
+  const updates = { nome, status, data_inicio, data_fim, descricao }
+  if (tipo !== undefined) updates.tipo = tipo
+  const { error } = await supabase.from('campanhas').update(updates).eq('id', id)
   if (error) throw error
   if (livro_ids !== undefined) {
     await supabase.from('campanha_livros').delete().eq('campanha_id', id)
