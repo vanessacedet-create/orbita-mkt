@@ -1535,6 +1535,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                                 const t = div ? TIPOS_DIVULGACAO.find(x=>x.value===div.tipo_divulgacao) : null
                                 // Mostra nome só na primeira linha do parceiro
                                 const primeiraDoP = idx===0 || linhas[idx-1].principal.parceiro_id !== principal.parceiro_id
+                                const ultimaDoP = idx===linhas.length-1 || linhas[idx+1].principal.parceiro_id !== principal.parceiro_id
                                 return (
                                   <tr key={div ? `d-${div.id}` : `p-${principal.id}`}
                                     style={{borderTop: primeiraDoP && idx>0 ? '2px solid var(--border)' : undefined}}>
@@ -1570,45 +1571,38 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                                       {div?.data_divulgacao ? fmtDate(div.data_divulgacao,'dd/MM/yy',{locale:ptBR}) : '—'}
                                     </td>
                                     <td>
-                                      <div className="actions-cell">
+                                      <div className="actions-cell" style={{gap:4,flexWrap:'nowrap'}}>
+                                        {/* Botão + nova divulgação — aparece na última linha do parceiro */}
+                                        {ultimaDoP && (
+                                          <button className="btn btn-primary btn-sm" title="Nova divulgação"
+                                            style={{fontSize:10,padding:'3px 7px',display:'flex',alignItems:'center',gap:2,whiteSpace:'nowrap'}}
+                                            onClick={()=>setModalNovaDiv({principal, ll_id:ll.id})}>
+                                            <Plus size={11}/> Div.
+                                          </button>
+                                        )}
+                                        {/* Editar divulgação (se linha tem div) */}
+                                        {div && (
+                                          <button className="btn btn-ghost btn-icon btn-sm" title="Editar esta divulgação"
+                                            onClick={()=>setModalDivEdit({div, principal, ll_id:ll.id})}>
+                                            <Pencil size={12}/>
+                                          </button>
+                                        )}
+                                        {/* Excluir divulgação OU remover parceiro */}
                                         {div
-                                          ? <>
-                                              {/* Editar/excluir divulgação individual */}
-                                              <button className="btn btn-ghost btn-icon btn-sm" title="Editar divulgação"
-                                                onClick={()=>setModalDivEdit({div, principal, ll_id:ll.id})}>
-                                                <Pencil size={12}/>
-                                              </button>
-                                              <button className="btn btn-danger btn-icon btn-sm" title="Excluir divulgação"
-                                                onClick={async()=>{
-                                                  if(!window.confirm('Excluir esta divulgação?'))return
-                                                  await removeLancamentoParceiro(div.id)
-                                                  const refreshed = await getLancamentoLivros(campanhaId)
-                                                  setLancamentoLivros(refreshed)
-                                                  showToast('Divulgação removida!')
-                                                }}>
-                                                <Trash2 size={12}/>
-                                              </button>
-                                            </>
-                                          : <>
-                                              {/* Editar parceiro (abre modal completo) */}
-                                              <button className="btn btn-ghost btn-icon btn-sm" title="Editar parceiro"
-                                                onClick={async()=>{
-                                                // Recarrega do banco para garantir irmaos atualizados
-                                                const fresh = await getLancamentoLivros(campanhaId)
-                                                setLancamentoLivros(fresh)
-                                                const freshLl = fresh.find(x=>x.id===ll.id)
-                                                const freshLps = freshLl?.lancamento_parceiros || []
-                                                const freshPrincipal = freshLps.find(x=>x.id===principal.id) || principal
-                                                const freshIrmaos = freshLps.filter(x=>x.parceiro_id===principal.parceiro_id && x.id!==principal.id)
-                                                setModalParceiro({ lp: freshPrincipal, irmaos: freshIrmaos, ll_id: ll.id, tipoCampanha })
+                                          ? <button className="btn btn-danger btn-icon btn-sm" title="Excluir divulgação"
+                                              onClick={async()=>{
+                                                if(!window.confirm('Excluir esta divulgação?'))return
+                                                await removeLancamentoParceiro(div.id)
+                                                const refreshed = await getLancamentoLivros(campanhaId)
+                                                setLancamentoLivros(refreshed)
+                                                showToast('Divulgação removida!')
                                               }}>
-                                                <Pencil size={12}/>
-                                              </button>
-                                              <button className="btn btn-danger btn-icon btn-sm" title="Remover parceiro"
-                                                onClick={()=>handleRemoveParceiro(ll.id, principal.parceiro_id)}>
-                                                <Trash2 size={12}/>
-                                              </button>
-                                            </>
+                                              <Trash2 size={12}/>
+                                            </button>
+                                          : <button className="btn btn-danger btn-icon btn-sm" title="Remover parceiro"
+                                              onClick={()=>handleRemoveParceiro(ll.id, principal.parceiro_id)}>
+                                              <Trash2 size={12}/>
+                                            </button>
                                         }
                                       </div>
                                     </td>
