@@ -10,6 +10,7 @@ export const MODULOS_PERMISSOES = {
   parceiros:  ['administrador', 'gerente', 'analista'],
   crm:        ['administrador', 'gerente', 'analista'],
   calculadora: ['administrador', 'gerente', 'analista', 'assistente'],
+  rh:          ['administrador'],
   cortesias:  ['administrador', 'gerente', 'analista'],
   campanhas:      ['administrador', 'gerente', 'analista'],
   monitoramento:  ['administrador', 'gerente', 'analista', 'assistente'],
