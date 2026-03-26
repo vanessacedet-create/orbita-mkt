@@ -1020,7 +1020,7 @@ export default function RH() {
                 const ultAval = avaliacoes.filter(av=>av.colaborador_id===c.id).sort((a,b)=>b.created_at.localeCompare(a.created_at))[0]
                 return <tr key={c.id} style={{cursor:'pointer'}} onClick={()=>setPerfil(c)}
                   onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'}
-                  onMouseLeave={e=>e.currentTarget.style.background=>''}>
+                  onMouseLeave={e=>e.currentTarget.style.background=''}>
                   <td><div style={{display:'flex',alignItems:'center',gap:8}}>
                     <span className="td-strong">{c.nome}</span>
                     {ultAval&&<span style={{fontSize:11,fontWeight:700,color:notaCor(ultAval.nota_geral)}}>★{Number(ultAval.nota_geral).toFixed(1)}</span>}
