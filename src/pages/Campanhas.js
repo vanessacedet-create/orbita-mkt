@@ -1199,6 +1199,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
   const [modalParceiro, setModalParceiro]         = useState(null) // lp obj
   const [modalDivLib, setModalDivLib]             = useState(false)
   const [modalDivEdit, setModalDivEdit]           = useState(null) // {div, principal, ll_id}
+  const [modalNovaDiv, setModalNovaDiv]           = useState(null) // {principal, ll_id}
   const [filtroTexto, setFiltroTexto]             = useState('')
   const [filtroResp, setFiltroResp]               = useState('')
   const [divulgacoesLib, setDivulgacoesLib]       = useState([])
@@ -1302,10 +1303,11 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
         comentarios: tl&&d.comentarios!==''?Number(d.comentarios):null,
         visualizacoes: tl&&d.visualizacoes!==''?Number(d.visualizacoes):null,
       }
-      if (d.id && irmaosAtuais.find(x=>x.id===d.id)) {
+      if (d.id) {
+        // Registro existente — atualiza diretamente pelo id, sem depender do estado local
         await updateLancamentoParceiro(d.id, payload)
       } else {
-        // Nova divulgação — cria um irmão com ll_id correto
+        // Nova divulgação — cria irmão
         const novo = await addLancamentoParceiro(ll_id, parceiro_id)
         await updateLancamentoParceiro(novo.id, payload)
       }
@@ -1677,6 +1679,23 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
               </div>
           }
         </div>
+      )}
+
+      {/* Modal nova divulgação rápida */}
+      {modalNovaDiv && (
+        <ModalEditarDivulgacao
+          div={{status: modalNovaDiv.principal.status||'convidado', origem:'combinada', tipo_divulgacao:'', data_combinada:'', data_divulgacao:'', link:''}}
+          principal={modalNovaDiv.principal}
+          onSave={async(updates) => {
+            const novo = await addLancamentoParceiro(modalNovaDiv.ll_id, modalNovaDiv.principal.parceiro_id)
+            await updateLancamentoParceiro(novo.id, updates)
+            const refreshed = await getLancamentoLivros(campanhaId)
+            setLancamentoLivros(refreshed)
+            setModalNovaDiv(null)
+            showToast('Divulgação adicionada!')
+          }}
+          onClose={()=>setModalNovaDiv(null)}
+        />
       )}
 
       {/* Modal edição rápida de divulgação individual */}
