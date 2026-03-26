@@ -893,18 +893,20 @@ function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, tipoCampanha, onSave,
     data_combinada: r.data_combinada || '',
     data_divulgacao: r.data_divulgacao || '',
     link: r.link || '',
-    curtidas: r.curtidas ?? '',
-    comentarios: r.comentarios ?? '',
-    visualizacoes: r.visualizacoes ?? '',
+    curtidas: r.curtidas != null ? r.curtidas : '',
+    comentarios: r.comentarios != null ? r.comentarios : '',
+    visualizacoes: r.visualizacoes != null ? r.visualizacoes : '',
   })
 
   const [status, setStatus]           = useState(lp.status || 'convidado')
   const [dataCombinada, setDataCombinada] = useState(lp.data_combinada || lp.data_divulgacao || '')
   const [observacoes, setObservacoes] = useState(lp.observacoes || '')
   const [divs, setDivs]               = useState(() => {
-    // Cada irmão é uma divulgação independente — o principal não carrega divulgação
-    // Os irmãos são todos os registros com tipo_divulgacao preenchido
-    const todasDivs = [lp, ...irmaos].filter(r => r.tipo_divulgacao && r.tipo_divulgacao !== '')
+    // Os irmãos são os registros de divulgação (excluir o principal que só guarda status/obs)
+    // Inclui qualquer irmão que tenha tipo_divulgacao OU data_divulgacao preenchidos
+    const todasDivs = irmaos.filter(r => r.tipo_divulgacao || r.data_divulgacao)
+    // Se o próprio lp tem tipo_divulgacao preenchido, inclui também
+    if (lp.tipo_divulgacao) todasDivs.unshift(lp)
     return todasDivs.map(toDiv)
   })
   const [saving, setSaving] = useState(false)
@@ -1588,7 +1590,16 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                                           : <>
                                               {/* Editar parceiro (abre modal completo) */}
                                               <button className="btn btn-ghost btn-icon btn-sm" title="Editar parceiro"
-                                                onClick={()=>setModalParceiro({ lp: principal, irmaos, ll_id: ll.id, tipoCampanha })}>
+                                                onClick={async()=>{
+                                                // Recarrega do banco para garantir irmaos atualizados
+                                                const fresh = await getLancamentoLivros(campanhaId)
+                                                setLancamentoLivros(fresh)
+                                                const freshLl = fresh.find(x=>x.id===ll.id)
+                                                const freshLps = freshLl?.lancamento_parceiros || []
+                                                const freshPrincipal = freshLps.find(x=>x.id===principal.id) || principal
+                                                const freshIrmaos = freshLps.filter(x=>x.parceiro_id===principal.parceiro_id && x.id!==principal.id)
+                                                setModalParceiro({ lp: freshPrincipal, irmaos: freshIrmaos, ll_id: ll.id, tipoCampanha })
+                                              }}>
                                                 <Pencil size={12}/>
                                               </button>
                                               <button className="btn btn-danger btn-icon btn-sm" title="Remover parceiro"
