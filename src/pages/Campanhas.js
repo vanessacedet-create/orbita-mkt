@@ -882,11 +882,12 @@ function ModalDivulgacao({ divulgacao, onSave, onClose }) {
 // lp        = registro "principal" (status + obs ficam aqui)
 // irmãos    = outros registros com mesmo ll_id + parceiro_id
 function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, tipoCampanha, onSave, onClose }) {
-  const EMPTY_DIV = () => ({ _tmpId: Math.random(), id: null, origem:'combinada', tipo_divulgacao:'', data_combinada:'', data_divulgacao:'', link:'', curtidas:'', comentarios:'', visualizacoes:'' })
+  const EMPTY_DIV = () => ({ _tmpId: Math.random(), id: null, status: lp.status||'convidado', origem:'combinada', tipo_divulgacao:'', data_combinada:'', data_divulgacao:'', link:'', curtidas:'', comentarios:'', visualizacoes:'' })
 
   const toDiv = r => ({
     _tmpId: r.id || Math.random(),
     id: r.id,
+    status: r.status || lp.status || 'convidado',
     origem: r.origem || 'combinada',
     tipo_divulgacao: r.tipo_divulgacao || '',
     data_combinada: r.data_combinada || '',
@@ -992,11 +993,11 @@ function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, tipoCampanha, onSave,
                   <thead>
                     <tr>
                       <th style={{width:24,paddingRight:4}}>#</th>
+                      <th>Status</th>
                       <th>Origem</th>
                       <th>Tipo</th>
                       <th>Data combinada</th>
                       <th>Data divulgada</th>
-                      <th>Link</th>
                       <th style={{width:32}}></th>
                     </tr>
                   </thead>
@@ -1008,6 +1009,14 @@ function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, tipoCampanha, onSave,
                       return (
                         <tr key={div._tmpId}>
                           <td style={{color:'var(--text-muted)',fontWeight:600,fontSize:11,paddingRight:4}}>{i+1}.</td>
+                          {/* Status por divulgação */}
+                          <td>
+                            <select className="form-select" style={{padding:'4px 6px',fontSize:11,minWidth:110}}
+                              value={div.status}
+                              onChange={e=>upd(div._tmpId,'status',e.target.value)}>
+                              {STATUS_PARCEIRO.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
+                            </select>
+                          </td>
                           {/* Origem */}
                           <td>
                             <div style={{display:'flex',gap:4}}>
@@ -1184,6 +1193,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
       const ts = TIPOS_DIVULGACAO.find(t=>t.value===d.tipo_divulgacao)
       const tl = ts?.temLink||false
       const payload = {
+        status: d.status||status,
         tipo_divulgacao: d.tipo_divulgacao||null,
         data_combinada: d.data_combinada||null,
         data_divulgacao: d.data_divulgacao||null,
@@ -1411,6 +1421,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                                 <th>Parceiro</th>
                                 <th>Status</th>
                                 <th>Responsável</th>
+                                <th>Origem</th>
                                 <th>Tipo</th>
                                 <th>Data combinada</th>
                                 <th>Data divulgada</th>
@@ -1430,15 +1441,23 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                                       {primeiraDoP ? idx+1 : ''}
                                     </td>
                                     <td className="td-strong">
-                                      {primeiraDoP ? (principal.parceiros?.nome||'—') : ''}
+                                      {primeiraDoP ? (principal.parceiros?.nome||'—') : <span style={{color:'var(--text-muted)',fontSize:11}}>↳</span>}
                                     </td>
                                     <td>
-                                      {primeiraDoP ? <StatusBadge value={principal.status} options={STATUS_PARCEIRO}/> : ''}
+                                      {/* Status: para cada divulgação, usa o status do registro div se disponível */}
+                                      <StatusBadge value={div?.status||principal.status} options={STATUS_PARCEIRO}/>
                                     </td>
                                     <td style={{fontSize:12}}>
                                       {primeiraDoP
                                         ? (resp ? <span style={{fontWeight:600,color:'var(--text)'}}>{resp.nome}</span> : <span className="td-muted">—</span>)
                                         : ''}
+                                    </td>
+                                    <td style={{fontSize:11}}>
+                                      {div?.origem==='organica'
+                                        ? <span style={{color:'#22c55e',fontWeight:600}}>🌱</span>
+                                        : div?.origem
+                                          ? <span style={{color:'var(--accent)',fontWeight:600}}>🤝</span>
+                                          : <span className="td-muted">—</span>}
                                     </td>
                                     <td>
                                       {t
@@ -1446,7 +1465,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                                         : <span className="td-muted">—</span>}
                                     </td>
                                     <td className="td-muted" style={{fontSize:12}}>
-                                      {principal.data_combinada ? fmtDate(principal.data_combinada,'dd/MM/yy',{locale:ptBR}) : '—'}
+                                      {(div?.data_combinada||principal.data_combinada) ? fmtDate(div?.data_combinada||principal.data_combinada,'dd/MM/yy',{locale:ptBR}) : '—'}
                                     </td>
                                     <td className="td-muted" style={{fontSize:12}}>
                                       {div?.data_divulgacao ? fmtDate(div.data_divulgacao,'dd/MM/yy',{locale:ptBR}) : '—'}
