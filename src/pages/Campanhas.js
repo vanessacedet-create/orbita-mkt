@@ -1090,6 +1090,102 @@ function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, tipoCampanha, onSave,
   )
 }
 
+
+// ── MODAL EDIÇÃO RÁPIDA DE DIVULGAÇÃO INDIVIDUAL ──────────
+function ModalEditarDivulgacao({ div, principal, onSave, onClose }) {
+  const [status, setStatus]     = useState(div.status || principal.status || 'convidado')
+  const [origem, setOrigem]     = useState(div.origem || 'combinada')
+  const [tipo, setTipo]         = useState(div.tipo_divulgacao || '')
+  const [dataComb, setDataComb] = useState(div.data_combinada || '')
+  const [dataDiv, setDataDiv]   = useState(div.data_divulgacao || '')
+  const [link, setLink]         = useState(div.link || '')
+  const [saving, setSaving]     = useState(false)
+  const tipoSel = TIPOS_DIVULGACAO.find(t=>t.value===tipo)
+  const temLink = tipoSel?.temLink || false
+
+  async function salvar() {
+    setSaving(true)
+    try {
+      await onSave({
+        status,
+        origem,
+        tipo_divulgacao: tipo||null,
+        data_combinada: dataComb||null,
+        data_divulgacao: dataDiv||null,
+        link: temLink?(link||null):null,
+      })
+    } catch(e){console.error(e)} finally{setSaving(false)}
+  }
+
+  return (
+    <div className="modal-backdrop" style={{zIndex:1200}} onClick={()=>{}}>
+      <div className="modal" style={{maxWidth:460}}>
+        <div className="modal-header" style={{borderBottom:'1px solid var(--border)'}}>
+          <div>
+            <h2 className="modal-title" style={{marginBottom:2}}>Editar divulgação</h2>
+            <div style={{fontSize:12,color:'var(--text-muted)'}}>{principal.parceiros?.nome}</div>
+          </div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
+        </div>
+        <div className="form-grid">
+          {/* Status */}
+          <div className="form-group">
+            <label className="form-label">Status</label>
+            <select className="form-select" value={status} onChange={e=>setStatus(e.target.value)}>
+              {STATUS_PARCEIRO.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
+          </div>
+          {/* Origem */}
+          <div className="form-group">
+            <label className="form-label">Origem</label>
+            <div style={{display:'flex',gap:8}}>
+              {[{v:'combinada',l:'🤝 Combinada'},{v:'organica',l:'🌱 Orgânica'}].map(({v,l})=>(
+                <button key={v} type="button" onClick={()=>setOrigem(v)}
+                  style={{flex:1,padding:'7px 0',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',border:'2px solid',
+                    borderColor:origem===v?'var(--accent)':'var(--border)',
+                    background:origem===v?'var(--accent-glow)':'transparent',
+                    color:origem===v?'var(--accent)':'var(--text-muted)'}}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Tipo */}
+          <div className="form-group">
+            <label className="form-label">Tipo de divulgação</label>
+            <select className="form-select" value={tipo} onChange={e=>setTipo(e.target.value)}>
+              <option value="">Selecionar...</option>
+              {TIPOS_DIVULGACAO.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">⭐ Data combinada</label>
+              <input className="form-input" type="date" value={dataComb} onChange={e=>setDataComb(e.target.value)}/>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Data divulgada</label>
+              <input className="form-input" type="date" value={dataDiv} onChange={e=>setDataDiv(e.target.value)}/>
+            </div>
+          </div>
+          {temLink && (
+            <div className="form-group">
+              <label className="form-label">Link da publicação</label>
+              <input className="form-input" value={link} onChange={e=>setLink(e.target.value)} placeholder="https://..."/>
+            </div>
+          )}
+        </div>
+        <div className="form-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={salvar} disabled={saving}>
+            {saving?'Salvando...':'Salvar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── DETALHE LANÇAMENTO ─────────────────────────────────────
 function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLancamentoLivros, parceiros, usuarios = [], reload, showToast }) {
   const [livroSearch, setLivroSearch]   = useState('')
@@ -1100,6 +1196,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
   const [addParceiroOpen, setAddParceiroOpen]     = useState({})
   const [modalParceiro, setModalParceiro]         = useState(null) // lp obj
   const [modalDivLib, setModalDivLib]             = useState(false)
+  const [modalDivEdit, setModalDivEdit]           = useState(null) // {div, principal, ll_id}
   const [filtroTexto, setFiltroTexto]             = useState('')
   const [filtroResp, setFiltroResp]               = useState('')
   const [divulgacoesLib, setDivulgacoesLib]       = useState([])
@@ -1448,9 +1545,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                                       <StatusBadge value={div?.status||principal.status} options={STATUS_PARCEIRO}/>
                                     </td>
                                     <td style={{fontSize:12}}>
-                                      {primeiraDoP
-                                        ? (resp ? <span style={{fontWeight:600,color:'var(--text)'}}>{resp.nome}</span> : <span className="td-muted">—</span>)
-                                        : ''}
+                                      {resp ? <span style={{fontWeight:600,color:'var(--text)'}}>{resp.nome}</span> : <span className="td-muted">—</span>}
                                     </td>
                                     <td style={{fontSize:11}}>
                                       {div?.origem==='organica'
@@ -1471,18 +1566,38 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                                       {div?.data_divulgacao ? fmtDate(div.data_divulgacao,'dd/MM/yy',{locale:ptBR}) : '—'}
                                     </td>
                                     <td>
-                                      {primeiraDoP && (
-                                        <div className="actions-cell">
-                                          <button className="btn btn-ghost btn-icon btn-sm"
-                                            onClick={()=>setModalParceiro({ lp: principal, irmaos, ll_id: ll.id, tipoCampanha })}>
-                                            <Pencil size={12}/>
-                                          </button>
-                                          <button className="btn btn-danger btn-icon btn-sm"
-                                            onClick={()=>handleRemoveParceiro(ll.id, principal.parceiro_id)}>
-                                            <Trash2 size={12}/>
-                                          </button>
-                                        </div>
-                                      )}
+                                      <div className="actions-cell">
+                                        {div
+                                          ? <>
+                                              {/* Editar/excluir divulgação individual */}
+                                              <button className="btn btn-ghost btn-icon btn-sm" title="Editar divulgação"
+                                                onClick={()=>setModalDivEdit({div, principal, ll_id:ll.id})}>
+                                                <Pencil size={12}/>
+                                              </button>
+                                              <button className="btn btn-danger btn-icon btn-sm" title="Excluir divulgação"
+                                                onClick={async()=>{
+                                                  if(!window.confirm('Excluir esta divulgação?'))return
+                                                  await removeLancamentoParceiro(div.id)
+                                                  const refreshed = await getLancamentoLivros(campanhaId)
+                                                  setLancamentoLivros(refreshed)
+                                                  showToast('Divulgação removida!')
+                                                }}>
+                                                <Trash2 size={12}/>
+                                              </button>
+                                            </>
+                                          : <>
+                                              {/* Editar parceiro (abre modal completo) */}
+                                              <button className="btn btn-ghost btn-icon btn-sm" title="Editar parceiro"
+                                                onClick={()=>setModalParceiro({ lp: principal, irmaos, ll_id: ll.id, tipoCampanha })}>
+                                                <Pencil size={12}/>
+                                              </button>
+                                              <button className="btn btn-danger btn-icon btn-sm" title="Remover parceiro"
+                                                onClick={()=>handleRemoveParceiro(ll.id, principal.parceiro_id)}>
+                                                <Trash2 size={12}/>
+                                              </button>
+                                            </>
+                                        }
+                                      </div>
                                     </td>
                                   </tr>
                                 )
@@ -1552,6 +1667,26 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
           }
         </div>
       )}
+
+      {/* Modal edição rápida de divulgação individual */}
+      {modalDivEdit && (() => {
+        const { div, principal, ll_id } = modalDivEdit
+        const [editDiv, setEditDiv] = [div, () => {}] // readonly ref — usamos state no componente filho
+        return (
+          <ModalEditarDivulgacao
+            div={div}
+            principal={principal}
+            onSave={async(updates) => {
+              await updateLancamentoParceiro(div.id, updates)
+              const refreshed = await getLancamentoLivros(campanhaId)
+              setLancamentoLivros(refreshed)
+              setModalDivEdit(null)
+              showToast('Divulgação atualizada!')
+            }}
+            onClose={()=>setModalDivEdit(null)}
+          />
+        )
+      })()}
 
       {modalParceiro && (
         <ModalLancamentoParceiro
