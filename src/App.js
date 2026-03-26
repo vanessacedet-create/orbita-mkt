@@ -29,6 +29,7 @@ const MENU = [
   { path: '/monitoramento', label: 'Monitoramento', icon: Eye,           modulo: 'monitoramento' },
   { path: '/lancamentos', label: 'Lançamentos', icon: CalendarDays,   modulo: 'lancamentos' },
   { path: '/tarefas',     label: 'Tarefas',     icon: CheckSquare,    modulo: 'tarefas'     },
+  { path: '/rh',         label: 'RH',          icon: HeartHandshake,  modulo: 'rh'          },
   { path: '/usuarios',   label: 'Usuários',   icon: Users,           modulo: 'usuarios'  },
 ]
 
