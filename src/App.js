@@ -12,10 +12,11 @@ import Parceiros from './pages/Parceiros'
 import Monitoramento from './pages/Monitoramento'
 import CRM from './pages/CRM'
 import Calculadora from './pages/Calculadora'
+import RH from './pages/RH'
 import './App.css'
 import {
   LayoutDashboard, BookOpen, Users, LogOut,
-  Orbit, ShieldAlert, Megaphone, CalendarDays, CheckSquare, UserRound, Eye, Network, Calculator
+  Orbit, ShieldAlert, Megaphone, CalendarDays, CheckSquare, UserRound, Eye, Network, Calculator, HeartHandshake
 } from 'lucide-react'
 
 const MENU = [
@@ -125,6 +126,7 @@ function Shell() {
           <Route path="/monitoramento" element={<RequireAuth modulo="monitoramento"><Monitoramento /></RequireAuth>} />
           <Route path="/crm" element={<RequireAuth modulo="crm"><CRM /></RequireAuth>} />
           <Route path="/calculadora" element={<RequireAuth modulo="calculadora"><Calculadora /></RequireAuth>} />
+          <Route path="/rh" element={<RequireAuth modulo="rh"><RH /></RequireAuth>} />
           <Route path="/lancamentos" element={<RequireAuth modulo="lancamentos"><Lancamentos /></RequireAuth>} />
           <Route path="/tarefas" element={<RequireAuth modulo="tarefas"><Tarefas /></RequireAuth>} />
         </Routes>
