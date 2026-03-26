@@ -882,13 +882,14 @@ function ModalDivulgacao({ divulgacao, onSave, onClose }) {
 // lp        = registro "principal" (status + obs ficam aqui)
 // irmãos    = outros registros com mesmo ll_id + parceiro_id
 function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, tipoCampanha, onSave, onClose }) {
-  const EMPTY_DIV = () => ({ _tmpId: Math.random(), id: null, origem:'combinada', tipo_divulgacao:'', data_divulgacao:'', link:'', curtidas:'', comentarios:'', visualizacoes:'' })
+  const EMPTY_DIV = () => ({ _tmpId: Math.random(), id: null, origem:'combinada', tipo_divulgacao:'', data_combinada:'', data_divulgacao:'', link:'', curtidas:'', comentarios:'', visualizacoes:'' })
 
   const toDiv = r => ({
     _tmpId: r.id || Math.random(),
     id: r.id,
     origem: r.origem || 'combinada',
     tipo_divulgacao: r.tipo_divulgacao || '',
+    data_combinada: r.data_combinada || '',
     data_divulgacao: r.data_divulgacao || '',
     link: r.link || '',
     curtidas: r.curtidas ?? '',
@@ -970,7 +971,7 @@ function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, tipoCampanha, onSave,
           </div>
         </div>
 
-        {/* Divulgações — tabela, uma linha por divulgação */}
+        {/* Divulgações — uma linha completa por divulgação */}
         <div style={{borderTop:'1px solid var(--border)', marginTop:16, paddingTop:16}}>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
             <span style={{fontSize:13,fontWeight:700,color:'var(--text)'}}>
@@ -984,74 +985,89 @@ function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, tipoCampanha, onSave,
 
           {divs.length === 0
             ? <p style={{fontSize:13,color:'var(--text-muted)',paddingBottom:8}}>
-                Nenhuma divulgação registrada ainda. Clique em "+ Adicionar divulgação" para começar.
+                Nenhuma divulgação registrada. Clique em "+ Adicionar divulgação" para começar.
               </p>
-            : <table style={{fontSize:12}}>
-                <thead>
-                  <tr>
-                    <th style={{width:90}}>Origem</th>
-                    <th>Tipo</th>
-                    <th style={{width:130}}>Data divulgada</th>
-                    <th>Link</th>
-                    <th style={{width:32}}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {divs.map((div, i) => {
-                    const tipoSel = TIPOS_DIVULGACAO.find(t=>t.value===div.tipo_divulgacao)
-                    const temLink = tipoSel?.temLink || false
-                    const origem = div.origem || 'combinada'
-                    return (
-                      <tr key={div._tmpId}>
-                        {/* Origem */}
-                        <td>
-                          <div style={{display:'flex',gap:4}}>
-                            {[{v:'combinada',l:'🤝'},{v:'organica',l:'🌱'}].map(({v,l})=>(
-                              <button key={v} type="button" onClick={()=>upd(div._tmpId,'origem',v)}
-                                title={v==='combinada'?'Combinada':'Orgânica'}
-                                style={{width:28,height:28,borderRadius:6,fontSize:13,cursor:'pointer',border:'2px solid',
-                                  borderColor:origem===v?'var(--accent)':'var(--border)',
-                                  background:origem===v?'var(--accent-glow)':'transparent',
-                                  display:'flex',alignItems:'center',justifyContent:'center'}}>
-                                {l}
-                              </button>
-                            ))}
-                          </div>
-                        </td>
-                        {/* Tipo */}
-                        <td>
-                          <select className="form-select" style={{padding:'4px 8px',fontSize:11,minWidth:140}}
-                            value={div.tipo_divulgacao}
-                            onChange={e=>upd(div._tmpId,'tipo_divulgacao',e.target.value)}>
-                            <option value="">Selecionar...</option>
-                            {TIPOS_DIVULGACAO.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
-                          </select>
-                        </td>
-                        {/* Data */}
-                        <td>
-                          <input className="form-input" type="date" style={{padding:'4px 8px',fontSize:11}}
-                            value={div.data_divulgacao}
-                            onChange={e=>upd(div._tmpId,'data_divulgacao',e.target.value)}/>
-                        </td>
-                        {/* Link + métricas inline */}
-                        <td>
-                          <input className="form-input" style={{padding:'4px 8px',fontSize:11,minWidth:140}}
-                            value={div.link} placeholder={temLink?"https://...":"—"}
-                            disabled={!temLink}
-                            onChange={e=>upd(div._tmpId,'link',e.target.value)}/>
-                        </td>
-                        {/* Remover */}
-                        <td>
-                          <button onClick={()=>removeDiv(div._tmpId)}
-                            style={{background:'none',border:'none',cursor:'pointer',color:'var(--red)',display:'flex',padding:4}}>
-                            <Trash2 size={13}/>
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+            : <div style={{overflowX:'auto'}}>
+                <table style={{fontSize:12,tableLayout:'auto',width:'100%'}}>
+                  <thead>
+                    <tr>
+                      <th style={{width:24,paddingRight:4}}>#</th>
+                      <th>Origem</th>
+                      <th>Tipo</th>
+                      <th>Data combinada</th>
+                      <th>Data divulgada</th>
+                      <th>Link</th>
+                      <th style={{width:32}}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {divs.map((div, i) => {
+                      const tipoSel = TIPOS_DIVULGACAO.find(t=>t.value===div.tipo_divulgacao)
+                      const temLink = tipoSel?.temLink || false
+                      const origem = div.origem || 'combinada'
+                      return (
+                        <tr key={div._tmpId}>
+                          <td style={{color:'var(--text-muted)',fontWeight:600,fontSize:11,paddingRight:4}}>{i+1}.</td>
+                          {/* Origem */}
+                          <td>
+                            <div style={{display:'flex',gap:4}}>
+                              {[{v:'combinada',l:'🤝'},{v:'organica',l:'🌱'}].map(({v,l})=>(
+                                <button key={v} type="button" onClick={()=>upd(div._tmpId,'origem',v)}
+                                  title={v==='combinada'?'Combinada':'Orgânica'}
+                                  style={{width:26,height:26,borderRadius:6,fontSize:12,cursor:'pointer',border:'2px solid',
+                                    borderColor:origem===v?'var(--accent)':'var(--border)',
+                                    background:origem===v?'var(--accent-glow)':'transparent',
+                                    display:'flex',alignItems:'center',justifyContent:'center'}}>
+                                  {l}
+                                </button>
+                              ))}
+                            </div>
+                          </td>
+                          {/* Tipo */}
+                          <td>
+                            <select className="form-select" style={{padding:'4px 6px',fontSize:11,minWidth:130}}
+                              value={div.tipo_divulgacao}
+                              onChange={e=>upd(div._tmpId,'tipo_divulgacao',e.target.value)}>
+                              <option value="">Selecionar...</option>
+                              {TIPOS_DIVULGACAO.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
+                            </select>
+                          </td>
+                          {/* Data combinada */}
+                          <td>
+                            <input className="form-input" type="date"
+                              style={{padding:'4px 6px',fontSize:11,minWidth:120}}
+                              value={div.data_combinada||''}
+                              onChange={e=>upd(div._tmpId,'data_combinada',e.target.value)}/>
+                          </td>
+                          {/* Data divulgada */}
+                          <td>
+                            <input className="form-input" type="date"
+                              style={{padding:'4px 6px',fontSize:11,minWidth:120}}
+                              value={div.data_divulgacao}
+                              onChange={e=>upd(div._tmpId,'data_divulgacao',e.target.value)}/>
+                          </td>
+                          {/* Link */}
+                          <td>
+                            <input className="form-input"
+                              style={{padding:'4px 6px',fontSize:11,minWidth:120}}
+                              value={div.link}
+                              placeholder={temLink?"https://...":"—"}
+                              disabled={!temLink}
+                              onChange={e=>upd(div._tmpId,'link',e.target.value)}/>
+                          </td>
+                          {/* Remover */}
+                          <td>
+                            <button onClick={()=>removeDiv(div._tmpId)}
+                              style={{background:'none',border:'none',cursor:'pointer',color:'var(--red)',display:'flex',padding:4}}>
+                              <Trash2 size={13}/>
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
           }
         </div>
         <div className="form-actions">
@@ -1169,6 +1185,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
       const tl = ts?.temLink||false
       const payload = {
         tipo_divulgacao: d.tipo_divulgacao||null,
+        data_combinada: d.data_combinada||null,
         data_divulgacao: d.data_divulgacao||null,
         origem: d.origem||'combinada',
         link: tl?(d.link||null):null,
@@ -1357,8 +1374,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                         // Agrupa: um grupo por parceiro_id. O primeiro registro é o "principal" (mais antigo)
                         const grupos = []
                         const seen = {}
-                        // Monta: 1 linha para o registro principal (status/obs) + 1 linha por divulgação
-                        // Agrupa por parceiro para botões de editar/remover
+                        // Uma linha numerada por divulgação, com todos os campos
                         for (const lp of lps) {
                           if (!seen[lp.parceiro_id]) {
                             seen[lp.parceiro_id] = true
@@ -1368,18 +1384,22 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                         }
                         if (grupos.length === 0) return <p style={{fontSize:13,color:'var(--text-muted)',paddingLeft:4}}>Nenhum parceiro vinculado ainda.</p>
 
-                        // Monta linhas: 1 linha de parceiro (sem divulgação) + 1 linha por divulgação registrada
+                        // Monta linhas: 1 linha completa por divulgação registrada
+                        // Se parceiro não tem divulgação, aparece 1 linha só com parceiro/status/responsável
                         const linhas = []
                         for (const { principal, irmaos } of grupos) {
                           const resp = principal.parceiros?.responsavel_interno_id
                             ? usuarios.find(u=>u.id===principal.parceiros.responsavel_interno_id)
                             : null
-                          // Linha do parceiro (status, responsável, ação)
-                          linhas.push({ tipo:'parceiro', principal, irmaos, resp })
-                          // Linhas de divulgações (irmãos = registros com tipo_divulgacao)
                           const divulgacoes = [principal, ...irmaos].filter(lp => lp.tipo_divulgacao)
-                          for (const div of divulgacoes) {
-                            linhas.push({ tipo:'divulgacao', div, principal })
+                          if (divulgacoes.length === 0) {
+                            // Sem divulgação ainda — 1 linha só com parceiro/status
+                            linhas.push({ principal, irmaos, resp, div: null })
+                          } else {
+                            // 1 linha por divulgação, todas com parceiro/status/responsável
+                            divulgacoes.forEach(div => {
+                              linhas.push({ principal, irmaos, resp, div })
+                            })
                           }
                         }
 
@@ -1387,6 +1407,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                           <table>
                             <thead>
                               <tr>
+                                <th style={{width:28,color:'var(--text-muted)',fontWeight:400}}>#</th>
                                 <th>Parceiro</th>
                                 <th>Status</th>
                                 <th>Responsável</th>
@@ -1398,21 +1419,40 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                             </thead>
                             <tbody>
                               {linhas.map((linha, idx) => {
-                                if (linha.tipo === 'parceiro') {
-                                  const { principal, irmaos, resp } = linha
-                                  return (
-                                    <tr key={`p-${principal.id}`} style={{borderTop: idx>0 ? '2px solid var(--border)' : undefined}}>
-                                      <td className="td-strong">{principal.parceiros?.nome||'—'}</td>
-                                      <td><StatusBadge value={principal.status} options={STATUS_PARCEIRO}/></td>
-                                      <td style={{fontSize:12}}>
-                                        {resp ? <span style={{fontWeight:600,color:'var(--text)'}}>{resp.nome}</span> : <span className="td-muted">—</span>}
-                                      </td>
-                                      <td className="td-muted">—</td>
-                                      <td className="td-muted" style={{fontSize:12}}>
-                                        {principal.data_combinada ? fmtDate(principal.data_combinada,'dd/MM/yy',{locale:ptBR}) : '—'}
-                                      </td>
-                                      <td className="td-muted">—</td>
-                                      <td>
+                                const { principal, irmaos, resp, div } = linha
+                                const t = div ? TIPOS_DIVULGACAO.find(x=>x.value===div.tipo_divulgacao) : null
+                                // Mostra nome só na primeira linha do parceiro
+                                const primeiraDoP = idx===0 || linhas[idx-1].principal.parceiro_id !== principal.parceiro_id
+                                return (
+                                  <tr key={div ? `d-${div.id}` : `p-${principal.id}`}
+                                    style={{borderTop: primeiraDoP && idx>0 ? '2px solid var(--border)' : undefined}}>
+                                    <td style={{fontSize:11,color:'var(--text-muted)',fontWeight:600,paddingRight:4}}>
+                                      {primeiraDoP ? idx+1 : ''}
+                                    </td>
+                                    <td className="td-strong">
+                                      {primeiraDoP ? (principal.parceiros?.nome||'—') : ''}
+                                    </td>
+                                    <td>
+                                      {primeiraDoP ? <StatusBadge value={principal.status} options={STATUS_PARCEIRO}/> : ''}
+                                    </td>
+                                    <td style={{fontSize:12}}>
+                                      {primeiraDoP
+                                        ? (resp ? <span style={{fontWeight:600,color:'var(--text)'}}>{resp.nome}</span> : <span className="td-muted">—</span>)
+                                        : ''}
+                                    </td>
+                                    <td>
+                                      {t
+                                        ? <span className="badge badge-indigo" style={{fontSize:10}}>{t.label}</span>
+                                        : <span className="td-muted">—</span>}
+                                    </td>
+                                    <td className="td-muted" style={{fontSize:12}}>
+                                      {principal.data_combinada ? fmtDate(principal.data_combinada,'dd/MM/yy',{locale:ptBR}) : '—'}
+                                    </td>
+                                    <td className="td-muted" style={{fontSize:12}}>
+                                      {div?.data_divulgacao ? fmtDate(div.data_divulgacao,'dd/MM/yy',{locale:ptBR}) : '—'}
+                                    </td>
+                                    <td>
+                                      {primeiraDoP && (
                                         <div className="actions-cell">
                                           <button className="btn btn-ghost btn-icon btn-sm"
                                             onClick={()=>setModalParceiro({ lp: principal, irmaos, ll_id: ll.id, tipoCampanha })}>
@@ -1423,35 +1463,14 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                                             <Trash2 size={12}/>
                                           </button>
                                         </div>
-                                      </td>
-                                    </tr>
-                                  )
-                                } else {
-                                  // Linha de divulgação
-                                  const { div } = linha
-                                  const t = TIPOS_DIVULGACAO.find(x=>x.value===div.tipo_divulgacao)
-                                  return (
-                                    <tr key={`d-${div.id}`} style={{background:'var(--surface-2)'}}>
-                                      <td style={{paddingLeft:24,fontSize:12,color:'var(--text-muted)'}}>↳</td>
-                                      <td></td>
-                                      <td></td>
-                                      <td>
-                                        {t ? <span className="badge badge-indigo" style={{fontSize:10}}>{t.label}</span>
-                                           : <span className="td-muted">—</span>}
-                                      </td>
-                                      <td className="td-muted" style={{fontSize:12}}>—</td>
-                                      <td className="td-muted" style={{fontSize:12}}>
-                                        {div.data_divulgacao ? fmtDate(div.data_divulgacao,'dd/MM/yy',{locale:ptBR}) : '—'}
-                                      </td>
-                                      <td></td>
-                                    </tr>
-                                  )
-                                }
+                                      )}
+                                    </td>
+                                  </tr>
+                                )
                               })}
                             </tbody>
                           </table>
-                        )
-                      })()}
+                        )                      })()}
                     </div>
                   )}
                 </div>
