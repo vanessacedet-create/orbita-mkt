@@ -9,7 +9,8 @@ import {
   getLivrosDestaqueParceiro, addLivroDestaqueParceiro, removeLivroDestaqueParceiro, importarLivrosDestaquePlanilha,
   getDivulgacoesLibraria, createDivulgacaoLibraria, updateDivulgacaoLibraria, deleteDivulgacaoLibraria,
   getLancamentoLivros, addLancamentoLivro, removeLancamentoLivro,
-  addLancamentoParceiro, updateLancamentoParceiro, removeLancamentoParceiro,
+  addLancamentoParceiro, updateLancamentoParceiro, removeLancamentoParceiro, getLancamentoParceiro,
+  getLancamentoLivros,
   addLivroCampanha, removeLivroCampanha
 } from '../lib/supabase'
 import {
@@ -1144,26 +1145,32 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
   }
 
   async function handleUpdateParceiro({ lpId, ll_id, parceiro_id, status, data_combinada, observacoes, divs }) {
-    // 1. Atualiza o registro principal com status, obs e data_combinada (sem dados de divulgação)
+    // 1. Atualiza o registro principal (status + obs + data_combinada)
     await updateLancamentoParceiro(lpId, {
       status,
       observacoes,
       data_combinada: data_combinada||null,
-      // Limpa campos de divulgação do principal — cada divulgação é independente
       tipo_divulgacao: null,
       data_divulgacao: null,
+      origem: null,
       link: null, curtidas: null, comentarios: null, visualizacoes: null,
     })
 
-    // 2. Pega todos os irmãos atuais (registros separados para cada divulgação)
+    // 2. Irmãos atuais no estado local
     const ll = lancamentoLivros.find(x=>x.id===ll_id)
     const irmaosAtuais = (ll?.lancamento_parceiros||[])
       .filter(lp => lp.id!==lpId && lp.parceiro_id===parceiro_id)
 
-    // 3. Para cada divulgação no form: atualiza se já existe, cria se é nova
-    const irmaosAtualizados = []
-    for (let i=0; i<divs.length; i++) {
-      const d = divs[i]
+    // 3. Remove irmãos que sumiram do form
+    const idsManutidos = divs.filter(d=>d.id).map(d=>d.id)
+    for (const irmao of irmaosAtuais) {
+      if (!idsManutidos.includes(irmao.id)) {
+        await removeLancamentoParceiro(irmao.id)
+      }
+    }
+
+    // 4. Salva cada divulgação
+    for (const d of divs) {
       const ts = TIPOS_DIVULGACAO.find(t=>t.value===d.tipo_divulgacao)
       const tl = ts?.temLink||false
       const payload = {
@@ -1176,32 +1183,17 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
         visualizacoes: tl&&d.visualizacoes!==''?Number(d.visualizacoes):null,
       }
       if (d.id && irmaosAtuais.find(x=>x.id===d.id)) {
-        // Registro existente — atualiza
-        const upd = await updateLancamentoParceiro(d.id, payload)
-        irmaosAtualizados.push(upd)
+        await updateLancamentoParceiro(d.id, payload)
       } else {
-        // Nova divulgação — cria registro independente
+        // Nova divulgação — cria um irmão com ll_id correto
         const novo = await addLancamentoParceiro(ll_id, parceiro_id)
-        const upd = await updateLancamentoParceiro(novo.id, payload)
-        irmaosAtualizados.push(upd)
+        await updateLancamentoParceiro(novo.id, payload)
       }
     }
 
-    // 4. Remove irmãos que foram deletados no form
-    const idsManutidos = divs.filter(d=>d.id).map(d=>d.id)
-    for (const irmao of irmaosAtuais) {
-      if (!idsManutidos.includes(irmao.id)) {
-        await removeLancamentoParceiro(irmao.id)
-      }
-    }
-
-    // 5. Recarrega estado local
-    const updatedMain = await updateLancamentoParceiro(lpId, {})
-    setLancamentoLivros(prev => prev.map(x => {
-      if (x.id !== ll_id) return x
-      const outros = (x.lancamento_parceiros||[]).filter(lp => lp.id!==lpId && lp.parceiro_id!==parceiro_id)
-      return { ...x, lancamento_parceiros: [...outros, updatedMain, ...irmaosAtualizados] }
-    }))
+    // 5. Recarrega todos os lancamento_livros do banco para garantir consistência
+    const refreshed = await getLancamentoLivros(campanhaId)
+    setLancamentoLivros(refreshed)
     showToast('Atualizado!')
   }
 
