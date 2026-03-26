@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabase'
 import {
   Users, Plus, Pencil, Trash2, X, ChevronDown,
   UserCheck, AlertCircle, Clock, Target, Star,
-  TrendingUp, CheckCircle, BarChart2, Award
+  TrendingUp, CheckCircle, BarChart2, Award,
+  BookOpen, GraduationCap, Link, ExternalLink
 } from 'lucide-react'
 
 // ── UTILITÁRIOS ────────────────────────────────────────────
@@ -181,6 +182,72 @@ async function saveKR(kr) {
 async function deleteKR(id) { await supabase.from('rh_key_results').delete().eq('id',id) }
 async function updateKRProgresso(id, valor_atual) {
   return (await supabase.from('rh_key_results').update({valor_atual:Number(valor_atual)}).eq('id',id).select().single()).data
+}
+
+
+// ── SUPABASE HELPERS — FASE 3 ─────────────────────────────
+async function getTreinamentos() {
+  const { data } = await supabase.from('rh_treinamentos').select('*, rh_grupos(id,nome)').order('titulo')
+  return data || []
+}
+async function saveTreinamento(t) {
+  const p = {titulo:t.titulo,descricao:t.descricao||null,tipo:t.tipo,link:t.link||null,obrigatorio:t.obrigatorio||false,grupo_id:t.grupo_id||null}
+  if (t.id) return (await supabase.from('rh_treinamentos').update(p).eq('id',t.id).select('*,rh_grupos(id,nome)').single()).data
+  return (await supabase.from('rh_treinamentos').insert([p]).select('*,rh_grupos(id,nome)').single()).data
+}
+async function deleteTreinamento(id) { await supabase.from('rh_treinamentos').delete().eq('id',id) }
+
+async function getProgressoColab(colaborador_id) {
+  const { data } = await supabase.from('rh_progresso_treinamento')
+    .select('*, rh_treinamentos(*)')
+    .eq('colaborador_id', colaborador_id)
+  return data || []
+}
+async function getProgressoTreinamento(treinamento_id) {
+  const { data } = await supabase.from('rh_progresso_treinamento')
+    .select('*, rh_colaboradores(id,nome)')
+    .eq('treinamento_id', treinamento_id)
+  return data || []
+}
+async function upsertProgresso(colaborador_id, treinamento_id, status, data_conclusao) {
+  const p = {colaborador_id,treinamento_id,status,data_conclusao:data_conclusao||null}
+  const { data } = await supabase.from('rh_progresso_treinamento')
+    .upsert(p, {onConflict:'colaborador_id,treinamento_id'})
+    .select('*,rh_treinamentos(*)').single()
+  return data
+}
+
+async function getProcessos(colaborador_id) {
+  const { data } = await supabase.from('rh_processos')
+    .select('*, rh_checklist_itens(*)').eq('colaborador_id', colaborador_id).order('created_at',{ascending:false})
+  return data || []
+}
+async function createProcesso(colaborador_id, tipo, responsavel) {
+  const ONBOARDING = ['Cadastro completo no sistema','Acesso aos sistemas concedido','Treinamentos iniciais concluídos','Primeira meta definida','Integração com a equipe realizada']
+  const OFFBOARDING = ['Entrevista de saída realizada','Transferência de responsabilidades concluída','Acessos revogados','Motivo de saída registrado']
+  const itens = tipo==='onboarding' ? ONBOARDING : OFFBOARDING
+  const { data: proc } = await supabase.from('rh_processos')
+    .insert([{colaborador_id,tipo,responsavel:responsavel||null,data_inicio:new Date().toISOString().slice(0,10)}])
+    .select().single()
+  if (itens.length) {
+    await supabase.from('rh_checklist_itens').insert(
+      itens.map((desc,i)=>({processo_id:proc.id,descricao:desc,concluido:false,ordem:i}))
+    )
+  }
+  const { data } = await supabase.from('rh_processos').select('*,rh_checklist_itens(*)').eq('id',proc.id).single()
+  return data
+}
+async function toggleChecklistItem(id, concluido) {
+  const { data } = await supabase.from('rh_checklist_itens').update({concluido}).eq('id',id).select().single()
+  return data
+}
+async function addChecklistItem(processo_id, descricao) {
+  const { data } = await supabase.from('rh_checklist_itens').insert([{processo_id,descricao,concluido:false,ordem:999}]).select().single()
+  return data
+}
+async function deleteChecklistItem(id) { await supabase.from('rh_checklist_itens').delete().eq('id',id) }
+async function concludeProcesso(id) {
+  await supabase.from('rh_processos').update({data_conclusao:new Date().toISOString().slice(0,10)}).eq('id',id)
 }
 
 // ─────────────────────────────────────────────────────────
@@ -507,6 +574,7 @@ function PerfilColaborador({ colab, grupos, colaboradores, onEdit, onBack, showT
   const [feedbacks,   setFeedbacks]   = useState([])
   const [avaliacoes,  setAvaliacoes]  = useState([])
   const [abaColab,    setAbaColab]    = useState('avaliacoes')
+  const [processos,   setProcessos]   = useState([])
   const [modalAus,    setModalAus]    = useState(false)
   const [editAus,     setEditAus]     = useState(null)
   const [modalFeed,   setModalFeed]   = useState(false)
@@ -519,6 +587,7 @@ function PerfilColaborador({ colab, grupos, colaboradores, onEdit, onBack, showT
     getAusencias(colab.id).then(setAusencias)
     getFeedbacks(colab.id).then(setFeedbacks)
     getAvaliacoes(colab.id).then(setAvaliacoes)
+    getProcessos(colab.id).then(setProcessos)
   },[colab.id])
 
   async function handleSaveAus(a) { const s=await saveAusencia(a); if(a.id)setAusencias(p=>p.map(x=>x.id===a.id?s:x)); else setAusencias(p=>[s,...p]); setModalAus(false);setEditAus(null);showToast('Salvo!') }
@@ -550,7 +619,7 @@ function PerfilColaborador({ colab, grupos, colaboradores, onEdit, onBack, showT
 
       {/* Abas perfil */}
       <div style={{display:'flex',borderBottom:'1px solid var(--border)',marginBottom:16}}>
-        {[{k:'avaliacoes',l:`Avaliações (${avaliacoes.length})`},{k:'ausencias',l:`Ausências (${ausencias.length})`},{k:'feedbacks',l:`Feedbacks (${feedbacks.length})`}].map(({k,l})=>(
+        {[{k:'avaliacoes',l:`Avaliações (${avaliacoes.length})`},{k:'ausencias',l:`Ausências (${ausencias.length})`},{k:'feedbacks',l:`Feedbacks (${feedbacks.length})`},{k:'treinamentos',l:'Treinamentos'},{k:'processos',l:`Processos (${processos.length})`}].map(({k,l})=>(
           <button key={k} onClick={()=>setAbaColab(k)} style={{padding:'8px 16px',fontSize:13,fontWeight:abaColab===k?700:400,cursor:'pointer',background:'none',border:'none',borderBottom:abaColab===k?'2px solid var(--accent)':'2px solid transparent',color:abaColab===k?'var(--accent)':'var(--text-muted)'}}>{l}</button>
         ))}
       </div>
@@ -638,6 +707,35 @@ function PerfilColaborador({ colab, grupos, colaboradores, onEdit, onBack, showT
                 </div>
               </div>
             })}</div>
+          }
+        </div>
+      )}
+
+
+      {/* TREINAMENTOS */}
+      {abaColab==='treinamentos'&&(
+        <TreinamentosColaborador colaborador_id={colab.id} showToast={showToast}/>
+      )}
+
+      {/* PROCESSOS */}
+      {abaColab==='processos'&&(
+        <div>
+          <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginBottom:12}}>
+            <button className="btn btn-primary btn-sm" style={{background:'#22c55e',borderColor:'#22c55e'}}
+              onClick={async()=>{ const p=await createProcesso(colab.id,'onboarding'); setProcessos(prev=>[p,...prev]); showToast('Onboarding iniciado!') }}>
+              ✅ Novo Onboarding
+            </button>
+            <button className="btn btn-primary btn-sm" style={{background:'#f97316',borderColor:'#f97316'}}
+              onClick={async()=>{ const p=await createProcesso(colab.id,'offboarding'); setProcessos(prev=>[p,...prev]); showToast('Offboarding iniciado!') }}>
+              🚪 Novo Offboarding
+            </button>
+          </div>
+          {processos.length===0
+            ? <div className="empty-state"><p>Nenhum processo registrado. Inicie um onboarding ou offboarding.</p></div>
+            : processos.map(p=>(
+                <CardProcesso key={p.id} processo={p}
+                  onUpdate={()=>getProcessos(colab.id).then(setProcessos)}/>
+              ))
           }
         </div>
       )}
@@ -856,6 +954,337 @@ function DashboardRH({ colaboradores, grupos, ausenciasAll, avaliacoes, okrs }) 
   )
 }
 
+
+// ── MODAL TREINAMENTO ─────────────────────────────────────
+function ModalTreinamento({ treinamento, grupos, onSave, onClose }) {
+  const [form, setForm] = useState({
+    titulo: treinamento?.titulo||'',
+    descricao: treinamento?.descricao||'',
+    tipo: treinamento?.tipo||'curso',
+    link: treinamento?.link||'',
+    obrigatorio: treinamento?.obrigatorio||false,
+    grupo_id: treinamento?.grupo_id||'',
+  })
+  const [saving, setSaving] = useState(false)
+  const TIPOS_TREI = [{v:'curso',l:'Curso'},{v:'leitura',l:'Leitura'},{v:'pratica',l:'Prática'},{v:'mentoria',l:'Mentoria'}]
+  async function save() {
+    if (!form.titulo.trim()) return
+    setSaving(true)
+    try { await onSave({...form, id:treinamento?.id}) } finally { setSaving(false) }
+  }
+  return (
+    <div className="modal-backdrop" onClick={()=>{}}>
+      <div className="modal" style={{maxWidth:480}}>
+        <div className="modal-header">
+          <h2 className="modal-title">{treinamento?'Editar Treinamento':'Novo Treinamento'}</h2>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
+        </div>
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">Título *</label>
+            <input className="form-input" value={form.titulo} onChange={e=>setForm(f=>({...f,titulo:e.target.value}))} placeholder="Ex: Onboarding de Marketing"/>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Tipo</label>
+              <select className="form-select" value={form.tipo} onChange={e=>setForm(f=>({...f,tipo:e.target.value}))}>
+                {TIPOS_TREI.map(t=><option key={t.v} value={t.v}>{t.l}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Grupo (opcional)</label>
+              <select className="form-select" value={form.grupo_id} onChange={e=>setForm(f=>({...f,grupo_id:e.target.value}))}>
+                <option value="">Todos os grupos</option>
+                {grupos.map(g=><option key={g.id} value={g.id}>{g.nome}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Descrição</label>
+            <textarea className="form-textarea" rows={2} value={form.descricao} onChange={e=>setForm(f=>({...f,descricao:e.target.value}))} placeholder="Objetivo e conteúdo do treinamento..."/>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Link / Material</label>
+            <input className="form-input" value={form.link} onChange={e=>setForm(f=>({...f,link:e.target.value}))} placeholder="https://..."/>
+          </div>
+          <div className="form-group">
+            <label style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',fontSize:13}}>
+              <input type="checkbox" checked={form.obrigatorio} onChange={e=>setForm(f=>({...f,obrigatorio:e.target.checked}))}
+                style={{width:16,height:16,accentColor:'var(--accent)'}}/>
+              <span style={{fontWeight:600,color:'var(--text)'}}>Treinamento obrigatório</span>
+            </label>
+          </div>
+        </div>
+        <div className="form-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving||!form.titulo.trim()}>{saving?'Salvando...':'Salvar'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── ABA TREINAMENTOS (catálogo global) ────────────────────
+function AbaTreinamentos({ grupos, showToast }) {
+  const [treinamentos, setTreinamentos] = useState([])
+  const [loading, setLoading]           = useState(true)
+  const [modal, setModal]               = useState(false)
+  const [editT, setEditT]               = useState(null)
+  const [filtroGrupo, setFiltroGrupo]   = useState('')
+  const [filtroTipo, setFiltroTipo]     = useState('')
+
+  const TIPO_COR = {curso:'#6366f1',leitura:'#22c55e',pratica:'#f97316',mentoria:'#06b6d4'}
+  const TIPOS_TREI = [{v:'curso',l:'Curso'},{v:'leitura',l:'Leitura'},{v:'pratica',l:'Prática'},{v:'mentoria',l:'Mentoria'}]
+
+  useEffect(()=>{ getTreinamentos().then(setTreinamentos).finally(()=>setLoading(false)) },[])
+
+  async function handleSave(t) {
+    const s = await saveTreinamento(t)
+    if (t.id) setTreinamentos(p=>p.map(x=>x.id===t.id?s:x))
+    else setTreinamentos(p=>[...p,s])
+    setModal(false); setEditT(null); showToast('Treinamento salvo!')
+  }
+  async function handleDelete(id) {
+    if (!window.confirm('Excluir treinamento?')) return
+    await deleteTreinamento(id)
+    setTreinamentos(p=>p.filter(x=>x.id!==id))
+    showToast('Removido!')
+  }
+
+  const filtrados = treinamentos.filter(t=>{
+    if (filtroGrupo && t.grupo_id !== filtroGrupo && t.grupo_id !== null) return false
+    if (filtroGrupo === '__sem__' && t.grupo_id !== null) return false
+    if (filtroTipo && t.tipo !== filtroTipo) return false
+    return true
+  })
+
+  if (loading) return <div className="loading"><div className="spinner"/></div>
+
+  return (
+    <div>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+        <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+          <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroTipo} onChange={e=>setFiltroTipo(e.target.value)}>
+            <option value="">Todos os tipos</option>
+            {TIPOS_TREI.map(t=><option key={t.v} value={t.v}>{t.l}</option>)}
+          </select>
+          <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroGrupo} onChange={e=>setFiltroGrupo(e.target.value)}>
+            <option value="">Todos os grupos</option>
+            {grupos.map(g=><option key={g.id} value={g.id}>{g.nome}</option>)}
+          </select>
+        </div>
+        <button className="btn btn-primary" onClick={()=>setModal(true)}><Plus size={14}/> Treinamento</button>
+      </div>
+
+      {filtrados.length===0
+        ? <div className="empty-state"><p>Nenhum treinamento cadastrado.</p></div>
+        : <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:14}}>
+            {filtrados.map(t=>{
+              const cor = TIPO_COR[t.tipo]||'#6b7280'
+              return (
+                <div key={t.id} className="table-card" style={{padding:'14px 18px',borderTop:`3px solid ${cor}`}}>
+                  <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8}}>
+                    <div style={{flex:1}}>
+                      <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
+                        <span style={{fontSize:11,fontWeight:700,color:cor,textTransform:'uppercase'}}>{t.tipo}</span>
+                        {t.obrigatorio && <span style={{fontSize:10,background:'#ef444420',color:'#ef4444',border:'1px solid #ef444440',borderRadius:4,padding:'1px 6px',fontWeight:700}}>OBRIG.</span>}
+                        {t.rh_grupos && <span style={{fontSize:10,color:'var(--text-muted)',background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:4,padding:'1px 6px'}}>{t.rh_grupos.nome}</span>}
+                      </div>
+                      <div style={{fontSize:13,fontWeight:700,color:'var(--text)',marginBottom:t.descricao?4:0}}>{t.titulo}</div>
+                      {t.descricao&&<div style={{fontSize:11,color:'var(--text-muted)',lineHeight:1.4}}>{t.descricao}</div>}
+                      {t.link&&(
+                        <a href={t.link} target="_blank" rel="noreferrer"
+                          style={{display:'inline-flex',alignItems:'center',gap:4,fontSize:11,color:'var(--accent)',marginTop:6,textDecoration:'none'}}>
+                          <ExternalLink size={10}/> Ver material
+                        </a>
+                      )}
+                    </div>
+                    <div className="actions-cell">
+                      <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>{setEditT(t);setModal(true)}}><Pencil size={12}/></button>
+                      <button className="btn btn-danger btn-icon btn-sm" onClick={()=>handleDelete(t.id)}><Trash2 size={12}/></button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+      }
+      {modal && <ModalTreinamento treinamento={editT} grupos={grupos} onSave={handleSave} onClose={()=>{setModal(false);setEditT(null)}}/>}
+    </div>
+  )
+}
+
+// ── CARD PROCESSO (Onboarding/Offboarding) ────────────────
+function CardProcesso({ processo, onUpdate }) {
+  const [itens, setItens]     = useState(processo.rh_checklist_itens||[])
+  const [novoItem, setNovoItem]= useState('')
+  const [addingItem, setAdding]= useState(false)
+  const concluidos = itens.filter(i=>i.concluido).length
+  const total = itens.length
+  const pctProg = total>0 ? Math.round((concluidos/total)*100) : 0
+  const concluido = !!processo.data_conclusao
+
+  async function toggle(item) {
+    const upd = await toggleChecklistItem(item.id, !item.concluido)
+    setItens(p=>p.map(x=>x.id===item.id?upd:x))
+  }
+  async function addItem() {
+    if (!novoItem.trim()) return
+    const novo = await addChecklistItem(processo.id, novoItem.trim())
+    setItens(p=>[...p,novo]); setNovoItem(''); setAdding(false)
+  }
+  async function removeItem(id) {
+    await deleteChecklistItem(id); setItens(p=>p.filter(x=>x.id!==id))
+  }
+  async function conclude() {
+    if (!window.confirm('Marcar processo como concluído?')) return
+    await concludeProcesso(processo.id); onUpdate()
+  }
+
+  const corTipo = processo.tipo==='onboarding' ? '#22c55e' : '#f97316'
+
+  return (
+    <div className="table-card" style={{padding:'16px 20px',marginBottom:12}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <span style={{fontSize:12,fontWeight:700,color:corTipo,textTransform:'uppercase',letterSpacing:'0.05em'}}>
+            {processo.tipo==='onboarding'?'✅ Onboarding':'🚪 Offboarding'}
+          </span>
+          {concluido
+            ? <span className="badge badge-green" style={{fontSize:10}}>Concluído</span>
+            : <span className="badge badge-indigo" style={{fontSize:10}}>Em andamento</span>
+          }
+          {processo.responsavel&&<span style={{fontSize:11,color:'var(--text-muted)'}}>Resp: {processo.responsavel}</span>}
+        </div>
+        <span style={{fontSize:11,color:'var(--text-muted)'}}>Início: {fmtData(processo.data_inicio)}{processo.data_conclusao&&` · Conclusão: ${fmtData(processo.data_conclusao)}`}</span>
+      </div>
+
+      {/* Barra progresso */}
+      <div style={{marginBottom:12}}>
+        <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'var(--text-muted)',marginBottom:4}}>
+          <span>{concluidos}/{total} itens concluídos</span>
+          <span style={{fontWeight:700,color:pctProg===100?'#22c55e':'var(--accent)'}}>{pctProg}%</span>
+        </div>
+        <div style={{height:6,borderRadius:99,background:'var(--surface-2)',overflow:'hidden'}}>
+          <div style={{height:'100%',width:`${pctProg}%`,background:pctProg===100?'#22c55e':'var(--accent)',transition:'width 0.3s'}}/>
+        </div>
+      </div>
+
+      {/* Checklist */}
+      <div style={{display:'flex',flexDirection:'column',gap:6}}>
+        {itens.sort((a,b)=>a.ordem-b.ordem).map(item=>(
+          <div key={item.id} style={{display:'flex',alignItems:'center',gap:8}}>
+            <input type="checkbox" checked={item.concluido} onChange={()=>toggle(item)}
+              style={{width:16,height:16,accentColor:'#22c55e',cursor:'pointer',flexShrink:0}}/>
+            <span style={{fontSize:13,flex:1,color:item.concluido?'var(--text-muted)':'var(--text)',
+              textDecoration:item.concluido?'line-through':'none'}}>
+              {item.descricao}
+            </span>
+            {!concluido&&<button onClick={()=>removeItem(item.id)}
+              style={{background:'none',border:'none',cursor:'pointer',color:'var(--red)',padding:2,opacity:0.5,display:'flex'}}
+              onMouseEnter={e=>e.currentTarget.style.opacity='1'} onMouseLeave={e=>e.currentTarget.style.opacity='0.5'}>
+              <Trash2 size={11}/>
+            </button>}
+          </div>
+        ))}
+
+        {/* Adicionar item */}
+        {!concluido&&(
+          addingItem
+            ? <div style={{display:'flex',gap:6,marginTop:4}}>
+                <input className="form-input" style={{flex:1,padding:'5px 10px',fontSize:12}}
+                  value={novoItem} onChange={e=>setNovoItem(e.target.value)}
+                  placeholder="Novo item do checklist..."
+                  onKeyDown={e=>{if(e.key==='Enter')addItem(); if(e.key==='Escape')setAdding(false)}}
+                  autoFocus/>
+                <button className="btn btn-primary btn-sm" style={{fontSize:11,padding:'4px 10px'}} onClick={addItem}>✓</button>
+                <button className="btn btn-ghost btn-sm" style={{fontSize:11}} onClick={()=>{setAdding(false);setNovoItem('')}}>✕</button>
+              </div>
+            : <button className="btn btn-ghost btn-sm" style={{fontSize:11,alignSelf:'flex-start',marginTop:4,display:'flex',alignItems:'center',gap:4}}
+                onClick={()=>setAdding(true)}>
+                <Plus size={11}/> Adicionar item
+              </button>
+        )}
+      </div>
+
+      {/* Ação concluir */}
+      {!concluido&&pctProg===100&&(
+        <div style={{marginTop:12,paddingTop:12,borderTop:'1px solid var(--border)'}}>
+          <button className="btn btn-primary" style={{width:'100%',justifyContent:'center'}} onClick={conclude}>
+            <CheckCircle size={14}/> Marcar processo como concluído
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── SEÇÃO TREINAMENTOS DO COLABORADOR ─────────────────────
+function TreinamentosColaborador({ colaborador_id, showToast }) {
+  const [progressos, setProgressos]   = useState([])
+  const [treinamentos, setTreinamentos] = useState([])
+  const [loading, setLoading]          = useState(true)
+  const STATUS_TREI = [
+    {v:'nao_iniciado', l:'Não iniciado', cls:'badge-amber'},
+    {v:'em_andamento', l:'Em andamento', cls:'badge-indigo'},
+    {v:'concluido',    l:'Concluído',    cls:'badge-green'},
+  ]
+  const hoje = new Date().toISOString().slice(0,10)
+
+  useEffect(()=>{
+    Promise.all([getProgressoColab(colaborador_id), getTreinamentos()])
+      .then(([p,t])=>{ setProgressos(p); setTreinamentos(t) })
+      .finally(()=>setLoading(false))
+  },[colaborador_id])
+
+  async function handleUpdate(treinamento_id, status) {
+    const dc = status==='concluido' ? hoje : null
+    const s = await upsertProgresso(colaborador_id, treinamento_id, status, dc)
+    setProgressos(p=>{ const ex=p.find(x=>x.treinamento_id===treinamento_id); return ex?p.map(x=>x.treinamento_id===treinamento_id?s:x):[...p,s] })
+    showToast('Progresso atualizado!')
+  }
+
+  if (loading) return <div style={{padding:20}}><div className="spinner"/></div>
+
+  // Treinamentos sem progresso
+  const idsComProgresso = progressos.map(p=>p.treinamento_id)
+  const semProgresso = treinamentos.filter(t=>!idsComProgresso.includes(t.id))
+
+  const todos = [
+    ...progressos.map(p=>({...p.rh_treinamentos, _status:p.status, _prog:p})),
+    ...semProgresso.map(t=>({...t, _status:'nao_iniciado', _prog:null}))
+  ]
+
+  if (todos.length===0) return <p style={{fontSize:13,color:'var(--text-muted)'}}>Nenhum treinamento disponível.</p>
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:8}}>
+      {todos.map(t=>{
+        const s = STATUS_TREI.find(x=>x.v===t._status)||STATUS_TREI[0]
+        return (
+          <div key={t.id} style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,padding:'10px 14px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
+                <span style={{fontSize:13,fontWeight:600,color:'var(--text)'}}>{t.titulo}</span>
+                {t.obrigatorio&&<span style={{fontSize:9,background:'#ef444420',color:'#ef4444',border:'1px solid #ef444440',borderRadius:3,padding:'1px 5px',fontWeight:700}}>OBRIG.</span>}
+              </div>
+              {t.descricao&&<div style={{fontSize:11,color:'var(--text-muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.descricao}</div>}
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+              <select className="form-select" style={{padding:'4px 8px',fontSize:11,width:'auto'}}
+                value={t._status}
+                onChange={e=>handleUpdate(t.id,e.target.value)}>
+                {STATUS_TREI.map(s=><option key={s.v} value={s.v}>{s.l}</option>)}
+              </select>
+              {t.link&&<a href={t.link} target="_blank" rel="noreferrer" style={{color:'var(--accent)',display:'flex'}}><ExternalLink size={13}/></a>}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ── PÁGINA PRINCIPAL ───────────────────────────────────────
 export default function RH() {
   const [aba, setAba]             = useState('dashboard')
@@ -984,7 +1413,8 @@ export default function RH() {
           {k:'equipe',   l:'Equipe',       icon:Users},
           {k:'grupos',   l:'Grupos',       icon:UserCheck},
           {k:'okrs',     l:'OKRs',         icon:Target},
-          {k:'ausencias',l:'Ausências',    icon:Calendar},
+          {k:'ausencias',l:'Ausências',    icon:Clock},
+          {k:'treinamentos',l:'Treinamentos', icon:GraduationCap},
         ].map(({k,l,icon:Icon})=>(
           <button key={k} onClick={()=>setAba(k)}
             style={{display:'flex',alignItems:'center',gap:5,padding:'9px 16px',fontSize:13,fontWeight:aba===k?700:400,cursor:'pointer',background:'none',border:'none',borderBottom:aba===k?'2px solid var(--accent)':'2px solid transparent',color:aba===k?'var(--accent)':'var(--text-muted)'}}>
@@ -1128,6 +1558,11 @@ export default function RH() {
             </table></div>
           }
         </div>
+      )}
+
+      {/* TREINAMENTOS */}
+      {aba==='treinamentos'&&(
+        <AbaTreinamentos grupos={grupos} showToast={showToast}/>
       )}
 
       {/* Modais */}
