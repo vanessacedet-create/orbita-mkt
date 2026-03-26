@@ -970,7 +970,7 @@ function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, tipoCampanha, onSave,
           </div>
         </div>
 
-        {/* Divulgações */}
+        {/* Divulgações — tabela, uma linha por divulgação */}
         <div style={{borderTop:'1px solid var(--border)', marginTop:16, paddingTop:16}}>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
             <span style={{fontSize:13,fontWeight:700,color:'var(--text)'}}>
@@ -982,83 +982,78 @@ function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, tipoCampanha, onSave,
             </button>
           </div>
 
-          {divs.length === 0 && (
-            <p style={{fontSize:13,color:'var(--text-muted)',paddingBottom:8}}>
-              Nenhuma divulgação registrada ainda. Clique em "+ Adicionar divulgação" para começar.
-            </p>
-          )}
-
-          {divs.map((div, i) => {
-            const tipoSel = TIPOS_DIVULGACAO.find(t=>t.value===div.tipo_divulgacao)
-            const temLink = tipoSel?.temLink || false
-            return (
-              <div key={div._tmpId} style={{
-                background:'var(--surface-2)', border:'1px solid var(--border)',
-                borderRadius:8, padding:'12px 14px', marginBottom:10
-              }}>
-                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
-                  <span style={{fontSize:11,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'0.05em'}}>
-                    Divulgação {i+1}
-                  </span>
-                  <button onClick={()=>removeDiv(div._tmpId)}
-                    style={{background:'none',border:'none',cursor:'pointer',color:'var(--red)',display:'flex',padding:4}}>
-                    <Trash2 size={13}/>
-                  </button>
-                </div>
-                {/* Origem */}
-                <div className="form-group" style={{marginBottom:10}}>
-                  <label className="form-label">Origem</label>
-                  <div style={{display:'flex',gap:8}}>
-                    {[{v:'combinada',l:'🤝 Combinada'},{v:'organica',l:'🌱 Orgânica'}].map(({v,l})=>(
-                      <button key={v} type="button" onClick={()=>upd(div._tmpId,'origem',v)}
-                        style={{flex:1,padding:'6px 0',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',border:'2px solid',
-                          borderColor:(div.origem||'combinada')===v?'var(--accent)':'var(--border)',
-                          background:(div.origem||'combinada')===v?'var(--accent-glow)':'transparent',
-                          color:(div.origem||'combinada')===v?'var(--accent)':'var(--text-muted)',transition:'all 0.15s'}}>
-                        {l}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Tipo</label>
-                    <select className="form-select" value={div.tipo_divulgacao}
-                      onChange={e=>upd(div._tmpId,'tipo_divulgacao',e.target.value)}>
-                      <option value="">Selecionar...</option>
-                      {TIPOS_DIVULGACAO.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Data divulgada</label>
-                    <input className="form-input" type="date" value={div.data_divulgacao}
-                      onChange={e=>upd(div._tmpId,'data_divulgacao',e.target.value)}/>
-                  </div>
-                </div>
-                <div className="form-group" style={{marginBottom:10}}>
-                  <label className="form-label">Link</label>
-                  <input className="form-input" value={div.link}
-                    onChange={e=>upd(div._tmpId,'link',e.target.value)} placeholder="https://..."/>
-                </div>
-                {temLink && (
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-                    <div className="form-group">
-                      <label className="form-label">Curtidas</label>
-                      <input className="form-input" type="number" value={div.curtidas}
-                        onChange={e=>upd(div._tmpId,'curtidas',e.target.value)} placeholder="0"/>
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Visualizações</label>
-                      <input className="form-input" type="number" value={div.visualizacoes}
-                        onChange={e=>upd(div._tmpId,'visualizacoes',e.target.value)} placeholder="0"/>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )
-          })}
+          {divs.length === 0
+            ? <p style={{fontSize:13,color:'var(--text-muted)',paddingBottom:8}}>
+                Nenhuma divulgação registrada ainda. Clique em "+ Adicionar divulgação" para começar.
+              </p>
+            : <table style={{fontSize:12}}>
+                <thead>
+                  <tr>
+                    <th style={{width:90}}>Origem</th>
+                    <th>Tipo</th>
+                    <th style={{width:130}}>Data divulgada</th>
+                    <th>Link</th>
+                    <th style={{width:32}}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {divs.map((div, i) => {
+                    const tipoSel = TIPOS_DIVULGACAO.find(t=>t.value===div.tipo_divulgacao)
+                    const temLink = tipoSel?.temLink || false
+                    const origem = div.origem || 'combinada'
+                    return (
+                      <tr key={div._tmpId}>
+                        {/* Origem */}
+                        <td>
+                          <div style={{display:'flex',gap:4}}>
+                            {[{v:'combinada',l:'🤝'},{v:'organica',l:'🌱'}].map(({v,l})=>(
+                              <button key={v} type="button" onClick={()=>upd(div._tmpId,'origem',v)}
+                                title={v==='combinada'?'Combinada':'Orgânica'}
+                                style={{width:28,height:28,borderRadius:6,fontSize:13,cursor:'pointer',border:'2px solid',
+                                  borderColor:origem===v?'var(--accent)':'var(--border)',
+                                  background:origem===v?'var(--accent-glow)':'transparent',
+                                  display:'flex',alignItems:'center',justifyContent:'center'}}>
+                                {l}
+                              </button>
+                            ))}
+                          </div>
+                        </td>
+                        {/* Tipo */}
+                        <td>
+                          <select className="form-select" style={{padding:'4px 8px',fontSize:11,minWidth:140}}
+                            value={div.tipo_divulgacao}
+                            onChange={e=>upd(div._tmpId,'tipo_divulgacao',e.target.value)}>
+                            <option value="">Selecionar...</option>
+                            {TIPOS_DIVULGACAO.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
+                          </select>
+                        </td>
+                        {/* Data */}
+                        <td>
+                          <input className="form-input" type="date" style={{padding:'4px 8px',fontSize:11}}
+                            value={div.data_divulgacao}
+                            onChange={e=>upd(div._tmpId,'data_divulgacao',e.target.value)}/>
+                        </td>
+                        {/* Link + métricas inline */}
+                        <td>
+                          <input className="form-input" style={{padding:'4px 8px',fontSize:11,minWidth:140}}
+                            value={div.link} placeholder={temLink?"https://...":"—"}
+                            disabled={!temLink}
+                            onChange={e=>upd(div._tmpId,'link',e.target.value)}/>
+                        </td>
+                        {/* Remover */}
+                        <td>
+                          <button onClick={()=>removeDiv(div._tmpId)}
+                            style={{background:'none',border:'none',cursor:'pointer',color:'var(--red)',display:'flex',padding:4}}>
+                            <Trash2 size={13}/>
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+          }
         </div>
-
         <div className="form-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
           <button className="btn btn-primary" onClick={save} disabled={saving}>
@@ -1362,6 +1357,8 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                         // Agrupa: um grupo por parceiro_id. O primeiro registro é o "principal" (mais antigo)
                         const grupos = []
                         const seen = {}
+                        // Monta: 1 linha para o registro principal (status/obs) + 1 linha por divulgação
+                        // Agrupa por parceiro para botões de editar/remover
                         for (const lp of lps) {
                           if (!seen[lp.parceiro_id]) {
                             seen[lp.parceiro_id] = true
@@ -1370,6 +1367,22 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                           }
                         }
                         if (grupos.length === 0) return <p style={{fontSize:13,color:'var(--text-muted)',paddingLeft:4}}>Nenhum parceiro vinculado ainda.</p>
+
+                        // Monta linhas: 1 linha de parceiro (sem divulgação) + 1 linha por divulgação registrada
+                        const linhas = []
+                        for (const { principal, irmaos } of grupos) {
+                          const resp = principal.parceiros?.responsavel_interno_id
+                            ? usuarios.find(u=>u.id===principal.parceiros.responsavel_interno_id)
+                            : null
+                          // Linha do parceiro (status, responsável, ação)
+                          linhas.push({ tipo:'parceiro', principal, irmaos, resp })
+                          // Linhas de divulgações (irmãos = registros com tipo_divulgacao)
+                          const divulgacoes = [principal, ...irmaos].filter(lp => lp.tipo_divulgacao)
+                          for (const div of divulgacoes) {
+                            linhas.push({ tipo:'divulgacao', div, principal })
+                          }
+                        }
+
                         return (
                           <table>
                             <thead>
@@ -1378,67 +1391,62 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                                 <th>Status</th>
                                 <th>Responsável</th>
                                 <th>Tipo</th>
-                                <th>Data</th>
-                                <th>Métricas</th>
+                                <th>Data combinada</th>
+                                <th>Data divulgada</th>
                                 <th></th>
                               </tr>
                             </thead>
                             <tbody>
-                              {grupos.map(({ principal, irmaos }) => {
-                                const todos = [principal, ...irmaos]
-                                const tipo0 = TIPOS_DIVULGACAO.find(t=>t.value===principal.tipo_divulgacao)
-                                return (
-                                  <tr key={principal.id}>
-                                    <td className="td-strong" style={{verticalAlign:'top',paddingTop:10}}>
-                                      {principal.parceiros?.nome||'—'}
-                                    </td>
-                                    <td style={{verticalAlign:'top',paddingTop:10}}>
-                                      <StatusBadge value={principal.status} options={STATUS_PARCEIRO}/>
-                                    </td>
-                                    <td style={{verticalAlign:'top',paddingTop:10,fontSize:12,color:'var(--text-muted)'}}>
-                                      {(() => {
-                                        const resp = principal.parceiros?.responsavel_interno_id ? usuarios.find(u=>u.id===principal.parceiros.responsavel_interno_id) : null
-                                        return resp ? <span style={{fontWeight:600,color:'var(--text)'}}>{resp.nome}</span> : <span className="td-muted">—</span>
-                                      })()}
-                                    </td>
-                                    <td style={{verticalAlign:'top',paddingTop:8}}>
-                                      {todos.map((lp,i) => {
-                                        const t = TIPOS_DIVULGACAO.find(x=>x.value===lp.tipo_divulgacao)
-                                        return t
-                                          ? <div key={lp.id} style={{marginBottom:4}}><span className="badge badge-indigo" style={{fontSize:10}}>{t.label}</span></div>
-                                          : <div key={lp.id} style={{marginBottom:4,fontSize:12,color:'var(--text-muted)'}}>—</div>
-                                      })}
-                                    </td>
-                                    <td className="td-muted" style={{fontSize:12,verticalAlign:'top',paddingTop:10}}>
-                                      {todos.map((lp,i) => (
-                                        <div key={lp.id} style={{marginBottom:4}}>
-                                          {lp.data_divulgacao ? fmtDate(lp.data_divulgacao, 'dd/MM/yy', {locale:ptBR}) : '—'}
+                              {linhas.map((linha, idx) => {
+                                if (linha.tipo === 'parceiro') {
+                                  const { principal, irmaos, resp } = linha
+                                  return (
+                                    <tr key={`p-${principal.id}`} style={{borderTop: idx>0 ? '2px solid var(--border)' : undefined}}>
+                                      <td className="td-strong">{principal.parceiros?.nome||'—'}</td>
+                                      <td><StatusBadge value={principal.status} options={STATUS_PARCEIRO}/></td>
+                                      <td style={{fontSize:12}}>
+                                        {resp ? <span style={{fontWeight:600,color:'var(--text)'}}>{resp.nome}</span> : <span className="td-muted">—</span>}
+                                      </td>
+                                      <td className="td-muted">—</td>
+                                      <td className="td-muted" style={{fontSize:12}}>
+                                        {principal.data_combinada ? fmtDate(principal.data_combinada,'dd/MM/yy',{locale:ptBR}) : '—'}
+                                      </td>
+                                      <td className="td-muted">—</td>
+                                      <td>
+                                        <div className="actions-cell">
+                                          <button className="btn btn-ghost btn-icon btn-sm"
+                                            onClick={()=>setModalParceiro({ lp: principal, irmaos, ll_id: ll.id, tipoCampanha })}>
+                                            <Pencil size={12}/>
+                                          </button>
+                                          <button className="btn btn-danger btn-icon btn-sm"
+                                            onClick={()=>handleRemoveParceiro(ll.id, principal.parceiro_id)}>
+                                            <Trash2 size={12}/>
+                                          </button>
                                         </div>
-                                      ))}
-                                    </td>
-                                    <td style={{fontSize:12,color:'var(--text-muted)',verticalAlign:'top',paddingTop:10}}>
-                                      {todos.map((lp,i) => (
-                                        <div key={lp.id} style={{marginBottom:4}}>
-                                          {lp.curtidas||lp.comentarios||lp.visualizacoes
-                                            ? <span>{lp.curtidas??'—'}❤️ {lp.comentarios??'—'}💬 {lp.visualizacoes??'—'}👁</span>
-                                            : '—'}
-                                        </div>
-                                      ))}
-                                    </td>
-                                    <td style={{verticalAlign:'top',paddingTop:8}}>
-                                      <div className="actions-cell">
-                                        <button className="btn btn-ghost btn-icon btn-sm"
-                                          onClick={()=>setModalParceiro({ lp: principal, irmaos, ll_id: ll.id, tipoCampanha })}>
-                                          <Pencil size={12}/>
-                                        </button>
-                                        <button className="btn btn-danger btn-icon btn-sm"
-                                          onClick={()=>handleRemoveParceiro(ll.id, principal.parceiro_id)}>
-                                          <Trash2 size={12}/>
-                                        </button>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                )
+                                      </td>
+                                    </tr>
+                                  )
+                                } else {
+                                  // Linha de divulgação
+                                  const { div } = linha
+                                  const t = TIPOS_DIVULGACAO.find(x=>x.value===div.tipo_divulgacao)
+                                  return (
+                                    <tr key={`d-${div.id}`} style={{background:'var(--surface-2)'}}>
+                                      <td style={{paddingLeft:24,fontSize:12,color:'var(--text-muted)'}}>↳</td>
+                                      <td></td>
+                                      <td></td>
+                                      <td>
+                                        {t ? <span className="badge badge-indigo" style={{fontSize:10}}>{t.label}</span>
+                                           : <span className="td-muted">—</span>}
+                                      </td>
+                                      <td className="td-muted" style={{fontSize:12}}>—</td>
+                                      <td className="td-muted" style={{fontSize:12}}>
+                                        {div.data_divulgacao ? fmtDate(div.data_divulgacao,'dd/MM/yy',{locale:ptBR}) : '—'}
+                                      </td>
+                                      <td></td>
+                                    </tr>
+                                  )
+                                }
                               })}
                             </tbody>
                           </table>
