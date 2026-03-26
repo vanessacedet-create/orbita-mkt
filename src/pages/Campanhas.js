@@ -10,7 +10,6 @@ import {
   getDivulgacoesLibraria, createDivulgacaoLibraria, updateDivulgacaoLibraria, deleteDivulgacaoLibraria,
   getLancamentoLivros, addLancamentoLivro, removeLancamentoLivro,
   addLancamentoParceiro, updateLancamentoParceiro, removeLancamentoParceiro, getLancamentoParceiro,
-  getLancamentoLivros,
   addLivroCampanha, removeLivroCampanha
 } from '../lib/supabase'
 import {
