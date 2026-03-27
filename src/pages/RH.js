@@ -45,15 +45,18 @@ const STATUS_COLAB    = [
   {v:'desligado', l:'Desligado', cls:'badge-red'},
 ]
 const TIPO_AUSENCIA = [
-  {v:'ferias',   l:'Férias'},
-  {v:'folga',    l:'Folga'},
-  {v:'atestado', l:'Atestado'},
-  {v:'licenca',  l:'Licença'},
+  {v:'ferias',     l:'Férias'},
+  {v:'folga',      l:'Folga'},
+  {v:'falta',      l:'Falta'},
+  {v:'home_office',l:'Home Office'},
+  {v:'atestado',   l:'Atestado'},
+  {v:'licenca',    l:'Licença'},
 ]
 const STATUS_AUSENCIA = [
-  {v:'planejado', l:'Planejado', cls:'badge-indigo'},
-  {v:'aprovado',  l:'Aprovado',  cls:'badge-amber'},
-  {v:'concluido', l:'Concluído', cls:'badge-green'},
+  {v:'nao_planejado', l:'Não planejado', cls:'badge-red'},
+  {v:'planejado',    l:'Planejado',     cls:'badge-indigo'},
+  {v:'aprovado',     l:'Aprovado',      cls:'badge-amber'},
+  {v:'concluido',    l:'Concluído',     cls:'badge-green'},
 ]
 const TIPO_FEEDBACK = [
   {v:'positivo',    l:'Positivo',    cor:'#22c55e'},
