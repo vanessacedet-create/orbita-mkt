@@ -38,7 +38,7 @@ function notaCor(n) {
   return '#ef4444'
 }
 
-const TIPO_CONTRATO   = ['CLT','PJ','Freelancer']
+const TIPO_CONTRATO   = ['CLT','PJ','Freelancer','Estágio']
 const STATUS_COLAB    = [
   {v:'ativo',     l:'Ativo',     cls:'badge-green'},
   {v:'inativo',   l:'Inativo',   cls:'badge-amber'},
