@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import {
-  getParceiros, createParceiro, updateParceiro, deleteParceiro, getEditoras, getUsuarios,
+  getParceiros, getParceirosComPontuacao, createParceiro, updateParceiro, deleteParceiro, getEditoras, getUsuarios,
 } from '../lib/supabase'
 import {
   Plus, Pencil, Trash2, X, Upload, Download, Users,
@@ -283,6 +283,7 @@ export default function Parceiros() {
   const [editing, setEditing]     = useState(null)
   const [search, setSearch]           = useState('')
   const [filtroTipo, setFiltroTipo]       = useState('')
+  const [filtroStatus, setFiltroStatus]   = useState('ativo')
   const [filtroCanal, setFiltroCanal]     = useState('')
   const [filtroResp, setFiltroResp]       = useState('')
   const [filtroNivel, setFiltroNivel]     = useState('')
@@ -292,7 +293,7 @@ export default function Parceiros() {
   const [editoraSearch, setEditoraSearch] = useState('')
   const [usuarios, setUsuarios]     = useState([])
 
-  const EMPTY = { nome:'', tipo_parceria:'', cpf:'', livraria:'', canal_comunicacao:'', editoras_divulga:[], temas:'', responsavel_interno_id:'' }
+  const EMPTY = { nome:'', tipo_parceria:'', cpf:'', livraria:'', canal_comunicacao:'', editoras_divulga:[], temas:'', responsavel_interno_id:'', status:'ativo' }
   const [form, setForm] = useState(EMPTY)
 
   async function reload() {
@@ -322,6 +323,7 @@ export default function Parceiros() {
       livraria:          p.livraria||'',
       canal_comunicacao: p.canal_comunicacao||'',
       responsavel_interno_id: p.responsavel_interno_id||'',
+      status: p.status||'ativo',
       editoras_divulga:  p.editoras_divulga ? p.editoras_divulga.split(',').map(e=>e.trim()).filter(Boolean) : [],
       temas:             p.temas||'',
     })
@@ -373,6 +375,7 @@ export default function Parceiros() {
         (p.canal_comunicacao||'').toLowerCase().includes(q) ||
         (p.temas||'').toLowerCase().includes(q)
       )) return false
+      if (filtroStatus && p.status !== filtroStatus) return false
       if (filtroTipo  && p.tipo_parceria !== filtroTipo) return false
       if (filtroCanal && p.canal_comunicacao !== filtroCanal) return false
       if (filtroResp  && p.responsavel_interno_id !== filtroResp) return false
@@ -473,6 +476,7 @@ export default function Parceiros() {
                       }
                     </td>
                     <td>{p.tipo_parceria?<span className="badge badge-indigo">{p.tipo_parceria}</span>:<span className="td-muted">—</span>}</td>
+                    <td><span className={`badge ${p.status==='inativo'?'badge-red':'badge-green'}`} style={{fontSize:10}}>{p.status==='inativo'?'Inativo':'Ativo'}</span></td>
                     <td style={{fontSize:12}}>{p.livraria||<span className="td-muted">—</span>}</td>
                     <td style={{fontSize:12}}>
                       {p.canal_comunicacao
@@ -526,6 +530,15 @@ export default function Parceiros() {
                     {TIPOS_PARCERIA.map(t=><option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
+                <div className="form-group">
+                  <label className="form-label">Status</label>
+                  <select className="form-select" value={form.status||'ativo'} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>
+                    <option value="ativo">Ativo</option>
+                    <option value="inativo">Inativo</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">Livraria</label>
                   <input className="form-input" value={form.livraria} onChange={e=>setForm(f=>({...f,livraria:e.target.value}))} placeholder="Nome da livraria (se aplicável)"/>
