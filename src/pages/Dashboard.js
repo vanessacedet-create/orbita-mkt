@@ -140,7 +140,6 @@ export default function Dashboard() {
         tipoCampanha: !isOrigem && filtroDiv ? filtroDiv : undefined,
       })
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtroDiv])
 
   const hora = new Date().getHours()
