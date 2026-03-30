@@ -3,8 +3,13 @@ import { getDashboardStats } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { LayoutDashboard, X, Users, Megaphone, TrendingUp, ChevronDown } from 'lucide-react'
 
-const STATUS_CAMPANHA_LABEL = { planejamento:'Planejamento', ativo:'Ativo', pausado:'Pausado', encerrado:'Encerrado' }
-const STATUS_PARCEIRO_LABEL = { ativo:'Ativo', inativo:'Inativo', suspenso:'Suspenso' }
+const STATUS_CAMPANHA_LABEL = {
+  planejamento: 'Planejada',
+  em_andamento: 'Em andamento',
+  concluida:    'Concluída',
+  cancelada:    'Cancelada',
+}
+const TIPOS_PARCERIA = ['Livraria de influencer','Booktime','Divulgação editoras próprias']
 
 // ── DROPDOWN FILTRO ────────────────────────────────────────
 function FiltroDropdown({ label, valor, opcoes, onChange }) {
@@ -121,6 +126,9 @@ export default function Dashboard() {
   const [filtroCampStatus, setFiltroCampStatus] = useState('')
   // Filtros divulgações
   const [filtroDiv, setFiltroDiv] = useState('')
+  // Filtro de data global
+  const [dataInicio, setDataInicio] = useState('')
+  const [dataFim, setDataFim]       = useState('')
 
   async function carregar(filtros) {
     setLoading(true)
@@ -128,8 +136,9 @@ export default function Dashboard() {
   }
 
   useEffect(() => {
-    getDashboardStats().then(s=>{ setStatsBase(s); setStats(s) }).finally(()=>setLoading(false))
-  }, [])
+    const filtros = { dataInicio:dataInicio||undefined, dataFim:dataFim||undefined }
+    getDashboardStats(filtros).then(s=>{ setStatsBase(s); setStats(s) }).finally(()=>setLoading(false))
+  }, [dataInicio, dataFim])
 
   // Recarrega divulgações ao filtrar por origem/tipo
   useEffect(() => {
@@ -138,9 +147,11 @@ export default function Dashboard() {
       carregar({
         origem: isOrigem ? filtroDiv : undefined,
         tipoCampanha: !isOrigem && filtroDiv ? filtroDiv : undefined,
+        dataInicio: dataInicio||undefined,
+        dataFim: dataFim||undefined,
       })
     }
-  }, [filtroDiv])
+  }, [filtroDiv, dataInicio, dataFim])
 
   const hora = new Date().getHours()
   const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite'
@@ -161,12 +172,16 @@ export default function Dashboard() {
     return statsBase.totalCampanhas
   })()
 
-  // Opções dropdown parceiros
-  const opcoesParcTipo   = Object.entries(statsBase?.parceirosPorTipo   || {}).map(([v,count])=>({v,l:v,count}))
-  const opcoesParcStatus = Object.entries(statsBase?.parceirosPorStatus || {}).map(([v,count])=>({v,l:STATUS_PARCEIRO_LABEL[v]||v,count}))
+  // Opções dropdown parceiros — tipos fixos, contagem do banco
+  const opcoesParcTipo = TIPOS_PARCERIA.map(t=>({
+    v:t, l:t, count: statsBase?.parceirosPorTipo?.[t] || 0
+  }))
+  const opcoesParcStatus = Object.entries(statsBase?.parceirosPorStatus || {})
+    .map(([v,count])=>({ v, l: v.charAt(0).toUpperCase()+v.slice(1).replace(/_/g,' '), count }))
   // Opções dropdown campanhas
   const opcoesCampTipo   = Object.entries(statsBase?.campanhasPorTipo   || {}).map(([v,count])=>({v,l:v,count}))
-  const opcoesCampStatus = Object.entries(statsBase?.campanhasPorStatus || {}).map(([v,count])=>({v,l:STATUS_CAMPANHA_LABEL[v]||v,count}))
+  const opcoesCampStatus = Object.entries(statsBase?.campanhasPorStatus || {})
+    .map(([v,count])=>({ v, l: STATUS_CAMPANHA_LABEL[v]||v, count }))
   // Opções dropdown divulgações
   const opcoesDivOrigem = [
     {v:'organica',  l:'🌱 Orgânicas',  count:statsBase?.totalOrganicas  || 0},
@@ -192,6 +207,34 @@ export default function Dashboard() {
             <p style={{fontSize:12,color:'var(--text-muted)',margin:0}}>Visão geral do Orbita MKT</p>
           </div>
         </div>
+      </div>
+
+      {/* Filtro de data global */}
+      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:20,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:10,padding:'12px 16px',flexWrap:'wrap'}}>
+        <span style={{fontSize:12,fontWeight:700,color:'var(--text-muted)',whiteSpace:'nowrap'}}>📅 Período</span>
+        <div style={{display:'flex',alignItems:'center',gap:8,flex:1,flexWrap:'wrap'}}>
+          <div style={{display:'flex',alignItems:'center',gap:6}}>
+            <label style={{fontSize:11,color:'var(--text-muted)',whiteSpace:'nowrap'}}>De</label>
+            <input type="date" className="form-input" style={{padding:'5px 10px',fontSize:12,width:140}}
+              value={dataInicio} onChange={e=>setDataInicio(e.target.value)}/>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:6}}>
+            <label style={{fontSize:11,color:'var(--text-muted)',whiteSpace:'nowrap'}}>Até</label>
+            <input type="date" className="form-input" style={{padding:'5px 10px',fontSize:12,width:140}}
+              value={dataFim} onChange={e=>setDataFim(e.target.value)}/>
+          </div>
+          {(dataInicio||dataFim) && (
+            <button onClick={()=>{ setDataInicio(''); setDataFim('') }}
+              style={{fontSize:11,color:'var(--text-muted)',background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:6,padding:'4px 10px',cursor:'pointer'}}>
+              Limpar período
+            </button>
+          )}
+        </div>
+        {(dataInicio||dataFim) && (
+          <span style={{fontSize:11,color:'var(--accent)',fontWeight:600}}>
+            {dataInicio&&dataFim ? `${dataInicio.split('-').reverse().join('/')} → ${dataFim.split('-').reverse().join('/')}` : dataInicio ? `A partir de ${dataInicio.split('-').reverse().join('/')}` : `Até ${dataFim.split('-').reverse().join('/')}`}
+          </span>
+        )}
       </div>
 
       {/* 3 Cards */}
