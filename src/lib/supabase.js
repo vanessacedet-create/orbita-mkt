@@ -1106,60 +1106,85 @@ export async function deleteDivulgacaoLibraria(id) {
 }
 
 // ── DASHBOARD STATS ────────────────────────────────────────
-export async function getDashboardStats() {
-  const [
-    { count: totalParceiros },
-    { count: totalLivros },
-    { count: totalCampanhas },
-    lpData,
-    cpData,
-    dlData,
-  ] = await Promise.all([
-    supabase.from('parceiros').select('*', { count: 'exact', head: true }),
-    supabase.from('livros').select('*', { count: 'exact', head: true }),
-    supabase.from('campanhas').select('*', { count: 'exact', head: true }),
-    // divulgações de lançamento/geral (lancamento_parceiros com data_divulgacao)
-    supabase.from('lancamento_parceiros')
-      .select('id, status, origem, data_divulgacao')
-      .eq('status', 'publicado'),
-    // divulgações de promoção (campanha_parceiros publicados)
-    supabase.from('campanha_parceiros')
-      .select('id, status, origem'),
-    // divulgações da livraria (tabela separada)
-    supabase.from('divulgacoes_livraria')
-      .select('id, origem'),
-  ])
+export async function getDashboardStats({ dataInicio, dataFim, tipoCampanha, origem } = {}) {
+  // Parceiros — filtro por data de cadastro (created_at)
+  let qParceiros = supabase.from('parceiros').select('*', { count: 'exact', head: true })
+  if (dataInicio) qParceiros = qParceiros.gte('created_at', dataInicio)
+  if (dataFim)    qParceiros = qParceiros.lte('created_at', dataFim + 'T23:59:59')
+  const { count: totalParceiros } = await qParceiros
 
-  // Lançamento/Geral: publicados
-  const lpPublicados = lpData.data || []
-  const divLancOrganic  = lpPublicados.filter(lp => lp.origem === 'organica').length
-  const divLancCombinada = lpPublicados.filter(lp => lp.origem !== 'organica').length
+  // Campanhas — filtro por data_inicio da campanha
+  let qCampanhas = supabase.from('campanhas').select('*', { count: 'exact', head: true })
+  if (dataInicio) qCampanhas = qCampanhas.gte('data_inicio', dataInicio)
+  if (dataFim)    qCampanhas = qCampanhas.lte('data_inicio', dataFim)
+  if (tipoCampanha) qCampanhas = qCampanhas.eq('tipo', tipoCampanha)
+  const { count: totalCampanhas } = await qCampanhas
 
-  // Promoção: publicados
-  const cpPublicados = (cpData.data || []).filter(cp => cp.status === 'publicado')
-  const divPromOrg  = cpPublicados.filter(cp => cp.origem === 'organica').length
-  const divPromComb = cpPublicados.filter(cp => cp.origem !== 'organica').length
+  // Divulgações lançamento/geral
+  let qLP = supabase.from('lancamento_parceiros').select('id, status, origem, data_divulgacao').eq('status', 'publicado')
+  if (dataInicio) qLP = qLP.gte('data_divulgacao', dataInicio)
+  if (dataFim)    qLP = qLP.lte('data_divulgacao', dataFim)
+  if (origem)     qLP = origem === 'organica' ? qLP.eq('origem','organica') : qLP.neq('origem','organica')
+  const { data: lpData } = await qLP
 
-  // Livraria
-  const dlAll = dlData.data || []
-  const divLibOrg  = dlAll.filter(d => d.origem === 'organica').length
-  const divLibComb = dlAll.filter(d => d.origem !== 'organica').length
+  // Divulgações promoção
+  let qCP = supabase.from('campanha_parceiros').select('id, status, origem, campanhas(tipo)').eq('status','publicado')
+  if (origem)     qCP = origem === 'organica' ? qCP.eq('origem','organica') : qCP.neq('origem','organica')
+  const { data: cpData } = await qCP
 
-  const totalDivulgacoes = lpPublicados.length + cpPublicados.length + dlAll.length
-  const totalOrganicas   = divLancOrganic + divPromOrg + divLibOrg
-  const totalCombinadas  = divLancCombinada + divPromComb + divLibComb
+  // Divulgações livraria
+  let qDL = supabase.from('divulgacoes_livraria').select('id, origem, data_divulgacao')
+  if (dataInicio) qDL = qDL.gte('data_divulgacao', dataInicio)
+  if (dataFim)    qDL = qDL.lte('data_divulgacao', dataFim)
+  if (origem)     qDL = origem === 'organica' ? qDL.eq('origem','organica') : qDL.neq('origem','organica')
+  const { data: dlData } = await qDL
+
+  const lpPublicados = lpData || []
+  const cpPublicados = cpData || []
+  const dlAll        = dlData || []
+
+  // Aplica filtro de tipoCampanha nas divulgações também
+  const lpFiltrados = tipoCampanha && !['Lançamento','Geral','Book Time'].includes(tipoCampanha) ? [] : lpPublicados
+  const cpFiltrados = tipoCampanha && tipoCampanha !== 'Promoção' ? [] : cpPublicados
+  const dlFiltrados = tipoCampanha && tipoCampanha !== 'Geral' ? [] : dlAll
+
+  const divLancOrg  = lpFiltrados.filter(lp => lp.origem === 'organica').length
+  const divLancComb = lpFiltrados.filter(lp => lp.origem !== 'organica').length
+  const divPromOrg  = cpFiltrados.filter(cp => cp.origem === 'organica').length
+  const divPromComb = cpFiltrados.filter(cp => cp.origem !== 'organica').length
+  const divLibOrg   = dlFiltrados.filter(d  => d.origem  === 'organica').length
+  const divLibComb  = dlFiltrados.filter(d  => d.origem  !== 'organica').length
+
+  const totalDivulgacoes = lpFiltrados.length + cpFiltrados.length + dlFiltrados.length
+  const totalOrganicas   = divLancOrg  + divPromOrg  + divLibOrg
+  const totalCombinadas  = divLancComb + divPromComb + divLibComb
+
+  // Parceiros por tipo e status (para filtros)
+  const { data: parceirosRaw } = await supabase.from('parceiros').select('id, tipo_parceria, status')
+  const parcs = parceirosRaw || []
+  const parceirosPorTipo   = parcs.reduce((a,p)=>{ const t=p.tipo_parceria||'Sem tipo'; a[t]=(a[t]||0)+1; return a },{})
+  const parceirosPorStatus = parcs.reduce((a,p)=>{ const s=p.status||'ativo'; a[s]=(a[s]||0)+1; return a },{})
+
+  // Campanhas por tipo e status (para filtros)
+  const { data: campanhasRaw } = await supabase.from('campanhas').select('id, tipo, status')
+  const camps = campanhasRaw || []
+  const campanhasPorTipo   = camps.reduce((a,c)=>{ const t=c.tipo||'Sem tipo'; a[t]=(a[t]||0)+1; return a },{})
+  const campanhasPorStatus = camps.reduce((a,c)=>{ const s=c.status||'planejamento'; a[s]=(a[s]||0)+1; return a },{})
 
   return {
     totalParceiros: totalParceiros || 0,
-    totalLivros: totalLivros || 0,
     totalCampanhas: totalCampanhas || 0,
     totalDivulgacoes,
     totalOrganicas,
     totalCombinadas,
+    parceirosPorTipo,
+    parceirosPorStatus,
+    campanhasPorTipo,
+    campanhasPorStatus,
     breakdown: {
-      lancamento: { total: lpPublicados.length, organica: divLancOrganic, combinada: divLancCombinada },
-      promocao:   { total: cpPublicados.length, organica: divPromOrg,   combinada: divPromComb   },
-      livraria:   { total: dlAll.length,         organica: divLibOrg,    combinada: divLibComb    },
+      lancamento: { total: lpFiltrados.length, organica: divLancOrg,  combinada: divLancComb },
+      promocao:   { total: cpFiltrados.length, organica: divPromOrg,  combinada: divPromComb },
+      livraria:   { total: dlFiltrados.length, organica: divLibOrg,   combinada: divLibComb  },
     }
   }
 }
