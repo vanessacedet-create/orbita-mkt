@@ -172,10 +172,11 @@ export default function Dashboard() {
     return statsBase.totalCampanhas
   })()
 
-  // Opções dropdown parceiros — tipos fixos, contagem do banco
-  const opcoesParcTipo = TIPOS_PARCERIA.map(t=>({
-    v:t, l:t, count: statsBase?.parceirosPorTipo?.[t] || 0
-  }))
+  // Opções dropdown parceiros — dinâmico a partir dos dados reais do banco
+  const opcoesParcTipo = Object.entries(statsBase?.parceirosPorTipo || {})
+    .filter(([v]) => v && v !== 'Sem tipo')
+    .map(([v, count]) => ({ v, l: v, count }))
+    .sort((a, b) => b.count - a.count)
   const opcoesParcStatus = Object.entries(statsBase?.parceirosPorStatus || {})
     .map(([v,count])=>({ v, l: v.charAt(0).toUpperCase()+v.slice(1).replace(/_/g,' '), count }))
   // Opções dropdown campanhas
