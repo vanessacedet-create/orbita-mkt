@@ -9,7 +9,6 @@ const STATUS_CAMPANHA_LABEL = {
   concluida:    'Concluída',
   cancelada:    'Cancelada',
 }
-const TIPOS_PARCERIA = ['Livraria de influencer','Booktime','Divulgação editoras próprias']
 
 // ── DROPDOWN FILTRO ────────────────────────────────────────
 function FiltroDropdown({ label, valor, opcoes, onChange }) {
@@ -159,7 +158,7 @@ export default function Dashboard() {
   // Parceiros filtrados em memória
   const totalParceiros = (() => {
     if (!statsBase) return 0
-    if (filtroParcTipo)   return statsBase.parceirosPorTipo?.[filtroParcTipo]   ?? 0
+    if (filtroParcTipo)   return statsBase.parceirosPorTipo?.[filtroParcTipo]     ?? 0
     if (filtroParcStatus) return statsBase.parceirosPorStatus?.[filtroParcStatus] ?? 0
     return statsBase.totalParceiros
   })()
@@ -172,13 +171,14 @@ export default function Dashboard() {
     return statsBase.totalCampanhas
   })()
 
-  // Opções dropdown parceiros — dinâmico a partir dos dados reais do banco
-  const opcoesParcTipo = Object.entries(statsBase?.parceirosPorTipo || {})
-    .filter(([v]) => v && v !== 'Sem tipo')
-    .map(([v, count]) => ({ v, l: v, count }))
-    .sort((a, b) => b.count - a.count)
-  const opcoesParcStatus = Object.entries(statsBase?.parceirosPorStatus || {})
-    .map(([v,count])=>({ v, l: v.charAt(0).toUpperCase()+v.slice(1).replace(/_/g,' '), count }))
+  // Opções dropdown parceiros
+  const opcoesParcTipo = [
+    'Livraria de influencer','Booktime','Divulgação editoras próprias'
+  ].map(v => ({ v, l: v, count: statsBase?.parceirosPorTipo?.[v] || 0 }))
+  const opcoesParcStatus = [
+    { v:'ativo',   l:'Ativo'   },
+    { v:'inativo', l:'Inativo' },
+  ].map(({ v, l }) => ({ v, l, count: statsBase?.parceirosPorStatus?.[v] || 0 }))
   // Opções dropdown campanhas
   const opcoesCampTipo   = Object.entries(statsBase?.campanhasPorTipo   || {}).map(([v,count])=>({v,l:v,count}))
   const opcoesCampStatus = Object.entries(statsBase?.campanhasPorStatus || {})
