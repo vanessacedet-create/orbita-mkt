@@ -1159,11 +1159,11 @@ export async function getDashboardStats({ dataInicio, dataFim, tipoCampanha, ori
   const totalOrganicas   = divLancOrg  + divPromOrg  + divLibOrg
   const totalCombinadas  = divLancComb + divPromComb + divLibComb
 
-  // Parceiros por tipo e status (para filtros)
-  const { data: parceirosRaw } = await supabase.from('parceiros').select('id, tipo_parceria, status')
+  // Parceiros por tipo e nível (para filtros)
+  const { data: parceirosRaw } = await supabase.from('parceiros').select('id, tipo_parceria, pontuacao')
   const parcs = parceirosRaw || []
-  const parceirosPorTipo   = parcs.reduce((a,p)=>{ const t=p.tipo_parceria||'Sem tipo'; a[t]=(a[t]||0)+1; return a },{})
-  const parceirosPorStatus = parcs.reduce((a,p)=>{ const s=p.status||'ativo'; a[s]=(a[s]||0)+1; return a },{})
+  const parceirosPorTipo  = parcs.reduce((a,p)=>{ const t=p.tipo_parceria||'Sem tipo'; a[t]=(a[t]||0)+1; return a },{})
+  const parceirosPorNivel = parcs.reduce((a,p)=>{ const n=p.pontuacao?.nivel||'sem_nivel'; a[n]=(a[n]||0)+1; return a },{})
 
   // Campanhas por tipo e status (para filtros)
   const { data: campanhasRaw } = await supabase.from('campanhas').select('id, tipo, status')
@@ -1178,7 +1178,7 @@ export async function getDashboardStats({ dataInicio, dataFim, tipoCampanha, ori
     totalOrganicas,
     totalCombinadas,
     parceirosPorTipo,
-    parceirosPorStatus,
+    parceirosPorNivel,
     campanhasPorTipo,
     campanhasPorStatus,
     breakdown: {
