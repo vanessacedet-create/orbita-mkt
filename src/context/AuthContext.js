@@ -5,18 +5,26 @@ const AuthContext = createContext(null)
 
 // Permissões por módulo e perfil
 // Adicione novos módulos aqui conforme o sistema cresce
+// Perfis disponíveis:
+// administrador, gerente
+// estagiario_proprias, analista_proprias, supervisor_proprias
+// estagiario_influencers, analista_influencers
+// estagiario_marketplaces, analista_marketplaces
+
 export const MODULOS_PERMISSOES = {
-  dashboard:  ['administrador', 'gerente', 'analista', 'assistente'],
-  parceiros:  ['administrador', 'gerente', 'analista'],
-  crm:        ['administrador', 'gerente', 'analista'],
-  calculadora: ['administrador', 'gerente', 'analista', 'assistente'],
-  rh:          ['administrador'],
-  eventos:     ['administrador','gerente','analista'],
-  cortesias:  ['administrador', 'gerente', 'analista'],
-  campanhas:      ['administrador', 'gerente', 'analista'],
-  monitoramento:  ['administrador', 'gerente', 'analista', 'assistente'],
-  lancamentos:  ['administrador', 'gerente', 'analista', 'assistente'],
-  tarefas:      ['administrador', 'gerente', 'analista', 'assistente'],
+  dashboard:    ['administrador', 'gerente', 'analista_influencers', 'estagiario_influencers', 'estagiario_proprias', 'analista_proprias', 'supervisor_proprias', 'estagiario_marketplaces', 'analista_marketplaces'],
+  parceiros:    ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  crm:          ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  calculadora:  ['administrador', 'gerente',
+                 'estagiario_proprias', 'analista_proprias', 'supervisor_proprias',
+                 'estagiario_influencers', 'analista_influencers'],
+  cortesias:    ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  campanhas:    ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  monitoramento:['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  lancamentos:  ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  tarefas:      ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  eventos:      ['administrador', 'gerente', 'estagiario_marketplaces', 'analista_marketplaces'],
+  rh:           ['administrador'],
   usuarios:     ['administrador'],
 }
 
