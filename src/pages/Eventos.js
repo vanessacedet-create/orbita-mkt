@@ -88,6 +88,8 @@ async function saveCDL(evento_id, cdl, id) {
   const payload = {
     evento_id,
     nome_colegio: cdl.nome_colegio,
+    responsavel_colegio: cdl.responsavel_colegio || null,
+    contato_responsavel: cdl.contato_responsavel || null,
     idade_criancas: cdl.idade_criancas || null,
     quantidade_criancas: cdl.quantidade_criancas ? Number(cdl.quantidade_criancas) : null,
     livro_atividade: cdl.livro_atividade || null,
@@ -197,7 +199,7 @@ function ModalEvento({ evento, usuarios, criador_id, onSave, onClose }) {
     nome:'', descricao:'', data_inicio:hoje(), data_fim:hoje(), local:'',
     categoria:'', objetivo:'', forma_participacao:'', expectativa_publico:'',
     status:'planejamento', imagem_url:'', tipo_evento:'padrao',
-    cdl_nome_colegio:'', cdl_idade:'', cdl_quantidade:'', cdl_livro:'', cdl_observacoes:'',
+    cdl_nome_colegio:'', cdl_responsavel:'', cdl_contato_responsavel:'', cdl_idade:'', cdl_quantidade:'', cdl_livro:'', cdl_observacoes:'',
   }
   const [form, setForm] = useState(evento ? {
     nome:evento.nome, descricao:evento.descricao, data_inicio:evento.data_inicio,
@@ -205,7 +207,7 @@ function ModalEvento({ evento, usuarios, criador_id, onSave, onClose }) {
     objetivo:evento.objetivo||'', forma_participacao:evento.forma_participacao||'',
     expectativa_publico:evento.expectativa_publico||'', status:evento.status,
     imagem_url:evento.imagem_url||'', tipo_evento:evento.tipo_evento||'padrao',
-    cdl_nome_colegio:evento._cdl?.nome_colegio||'', cdl_idade:evento._cdl?.idade_criancas||'',
+    cdl_nome_colegio:evento._cdl?.nome_colegio||'', cdl_responsavel:evento._cdl?.responsavel_colegio||'', cdl_contato_responsavel:evento._cdl?.contato_responsavel||'', cdl_idade:evento._cdl?.idade_criancas||'',
     cdl_quantidade:evento._cdl?.quantidade_criancas||'', cdl_livro:evento._cdl?.livro_atividade||'',
     cdl_observacoes:evento._cdl?.observacoes||'',
   } : EMPTY)
@@ -232,6 +234,8 @@ function ModalEvento({ evento, usuarios, criador_id, onSave, onClose }) {
         id: evento?.id,
         _cdl: form.tipo_evento === 'cdl' ? {
           nome_colegio: form.cdl_nome_colegio,
+          responsavel_colegio: form.cdl_responsavel,
+          contato_responsavel: form.cdl_contato_responsavel,
           idade_criancas: form.cdl_idade,
           quantidade_criancas: form.cdl_quantidade,
           livro_atividade: form.cdl_livro,
@@ -341,6 +345,20 @@ function ModalEvento({ evento, usuarios, criador_id, onSave, onClose }) {
                   <input className="form-input" value={form.cdl_nome_colegio}
                     onChange={e=>setForm(f=>({...f,cdl_nome_colegio:e.target.value}))}
                     placeholder="Ex: Colégio Santo Antônio"/>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Responsável do colégio</label>
+                    <input className="form-input" value={form.cdl_responsavel}
+                      onChange={e=>setForm(f=>({...f,cdl_responsavel:e.target.value}))}
+                      placeholder="Nome do responsável"/>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Contato do responsável</label>
+                    <input className="form-input" value={form.cdl_contato_responsavel}
+                      onChange={e=>setForm(f=>({...f,cdl_contato_responsavel:e.target.value}))}
+                      placeholder="Telefone ou e-mail"/>
+                  </div>
                 </div>
                 <div className="form-row">
                   <div className="form-group">
@@ -991,8 +1009,10 @@ function DetalheEvento({ eventoId, onBack, onEdit, isAdmin, showToast }) {
           {cdl
             ? <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
                 {[
-                  {l:'Colégio',               v:cdl.nome_colegio||'—'},
-                  {l:'Idade das crianças',     v:cdl.idade_criancas||'—'},
+                  {l:'Colégio',                    v:cdl.nome_colegio||'—'},
+                  {l:'Responsável do colégio',   v:cdl.responsavel_colegio||'—'},
+                  {l:'Contato do responsável',   v:cdl.contato_responsavel||'—'},
+                  {l:'Idade das crianças',        v:cdl.idade_criancas||'—'},
                   {l:'Quantidade de crianças', v:cdl.quantidade_criancas?.toLocaleString('pt-BR')||'—'},
                   {l:'Livro para atividade',   v:cdl.livro_atividade||'—'},
                 ].map(({l,v})=>(
