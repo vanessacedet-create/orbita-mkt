@@ -17,7 +17,7 @@ import Eventos from './pages/Eventos'
 import './App.css'
 import {
   LayoutDashboard, BookOpen, Users, LogOut,
-  Orbit, ShieldAlert, Megaphone, CalendarDays, CheckSquare, UserRound, Eye, Network, Calculator, HeartHandshake, Ticket
+  Orbit, ShieldAlert, Megaphone, CalendarDays, CheckSquare, UserRound, Eye, Network, Calculator, HeartHandshake, CalendarCheck
 } from 'lucide-react'
 
 const MENU = [
@@ -31,7 +31,7 @@ const MENU = [
   { path: '/lancamentos', label: 'Lançamentos', icon: CalendarDays,   modulo: 'lancamentos' },
   { path: '/tarefas',     label: 'Tarefas',     icon: CheckSquare,    modulo: 'tarefas'     },
   { path: '/rh',         label: 'RH',          icon: HeartHandshake,  modulo: 'rh'          },
-  { path: '/eventos',    label: 'Eventos',     icon: Ticket,          modulo: 'eventos'     },
+  { path: '/eventos',    label: 'Eventos',     icon: CalendarCheck,          modulo: 'eventos'     },
   { path: '/usuarios',   label: 'Usuários',   icon: Users,           modulo: 'usuarios'  },
 ]
 
