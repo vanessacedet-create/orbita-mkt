@@ -40,6 +40,7 @@ const FORMA_LABEL = {
   publicidade:'Publicidade',
   comissao:'Comissão de vendas (CEDET)',
   vendas_diretas:'Vendas diretas (revendas)',
+  evento_interno:'Evento interno',
 }
 const STATUS_PART = [
   { v:'confirmado', l:'Confirmado', cls:'badge-green'  },
@@ -223,7 +224,8 @@ function ModalEvento({ evento, usuarios, criador_id, onSave, onClose }) {
   }
 
   async function save() {
-    if (!form.nome.trim()||!form.descricao.trim()||!form.local.trim()) return
+    const nomeOk = form.tipo_evento==='cdl' ? true : form.nome.trim()
+    if (!nomeOk||!form.descricao.trim()||!form.local.trim()) return
     setSaving(true)
     try {
       await onSave({
@@ -253,7 +255,7 @@ function ModalEvento({ evento, usuarios, criador_id, onSave, onClose }) {
             <label className="form-label">Tipo de evento</label>
             <div style={{display:'flex',gap:8}}>
               {TIPO_EVENTO.map(t=>(
-                <button key={t.v} type="button" onClick={()=>setForm(f=>({...f,tipo_evento:t.v}))}
+                <button key={t.v} type="button" onClick={()=>setForm(f=>({...f,tipo_evento:t.v,forma_participacao:t.v==='cdl'?'evento_interno':f.forma_participacao}))}
                   style={{flex:1,padding:'8px 0',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',border:'2px solid',
                     borderColor:form.tipo_evento===t.v?'var(--accent)':'var(--border)',
                     background:form.tipo_evento===t.v?'var(--accent-glow)':'transparent',
@@ -263,10 +265,12 @@ function ModalEvento({ evento, usuarios, criador_id, onSave, onClose }) {
               ))}
             </div>
           </div>
-          <div className="form-group">
-            <label className="form-label">Nome do evento *</label>
-            <input className="form-input" value={form.nome} onChange={e=>setForm(f=>({...f,nome:e.target.value}))} placeholder="Ex: Feira Católica São Paulo 2026"/>
-          </div>
+          {form.tipo_evento !== 'cdl' && (
+            <div className="form-group">
+              <label className="form-label">Nome do evento *</label>
+              <input className="form-input" value={form.nome} onChange={e=>setForm(f=>({...f,nome:e.target.value}))} placeholder="Ex: Feira Católica São Paulo 2026"/>
+            </div>
+          )}
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Data início *</label>
@@ -306,10 +310,12 @@ function ModalEvento({ evento, usuarios, criador_id, onSave, onClose }) {
                 {Object.entries(FORMA_LABEL).map(([v,l])=><option key={v} value={v}>{l}</option>)}
               </select>
             </div>
-            <div className="form-group">
-              <label className="form-label">Expectativa de público</label>
-              <input className="form-input" type="number" value={form.expectativa_publico} onChange={e=>setForm(f=>({...f,expectativa_publico:e.target.value}))} placeholder="0"/>
-            </div>
+            {form.tipo_evento !== 'cdl' && (
+              <div className="form-group">
+                <label className="form-label">Expectativa de público</label>
+                <input className="form-input" type="number" value={form.expectativa_publico} onChange={e=>setForm(f=>({...f,expectativa_publico:e.target.value}))} placeholder="0"/>
+              </div>
+            )}
           </div>
           <div className="form-group">
             <label className="form-label">Status *</label>
@@ -383,7 +389,7 @@ function ModalEvento({ evento, usuarios, criador_id, onSave, onClose }) {
         </div>
         <div className="form-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={save} disabled={saving||!form.nome.trim()||!form.descricao.trim()||!form.local.trim()||(form.tipo_evento==='cdl'&&!form.cdl_nome_colegio.trim())}>
+          <button className="btn btn-primary" onClick={save} disabled={saving||(form.tipo_evento!=='cdl'&&!form.nome.trim())||!form.descricao.trim()||!form.local.trim()||(form.tipo_evento==='cdl'&&!form.cdl_nome_colegio.trim())}>
             {saving?'Salvando...':'Salvar evento'}
           </button>
         </div>
