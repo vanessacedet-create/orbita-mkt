@@ -11,6 +11,7 @@ export const MODULOS_PERMISSOES = {
   crm:        ['administrador', 'gerente', 'analista'],
   calculadora: ['administrador', 'gerente', 'analista', 'assistente'],
   rh:          ['administrador'],
+  eventos:     ['administrador','gerente','analista'],
   cortesias:  ['administrador', 'gerente', 'analista'],
   campanhas:      ['administrador', 'gerente', 'analista'],
   monitoramento:  ['administrador', 'gerente', 'analista', 'assistente'],
