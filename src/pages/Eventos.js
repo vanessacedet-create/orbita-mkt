@@ -37,10 +37,9 @@ const OBJETIVO_LABEL = {
   lancamento:'Lançamento de produto', outro:'Outro',
 }
 const FORMA_LABEL = {
-  publicidade:'Publicidade',
-  comissao:'Comissão de vendas (CEDET)',
-  vendas_diretas:'Vendas diretas (revendas)',
-  evento_interno:'Evento interno',
+  evento_interno:        'Evento interno',
+  vendas_diretas_cedet:  'Vendas diretas pelo CEDET',
+  vendas_diretas_parceiro:'Vendas diretas pelo parceiro',
 }
 const STATUS_PART = [
   { v:'confirmado', l:'Confirmado', cls:'badge-green'  },
@@ -271,16 +270,23 @@ function ModalEvento({ evento, usuarios, criador_id, onSave, onClose }) {
               <input className="form-input" value={form.nome} onChange={e=>setForm(f=>({...f,nome:e.target.value}))} placeholder="Ex: Feira Católica São Paulo 2026"/>
             </div>
           )}
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Data início *</label>
-              <input className="form-input" type="date" value={form.data_inicio} onChange={e=>setForm(f=>({...f,data_inicio:e.target.value}))}/>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Data fim *</label>
-              <input className="form-input" type="date" value={form.data_fim} onChange={e=>setForm(f=>({...f,data_fim:e.target.value}))}/>
-            </div>
-          </div>
+          {form.tipo_evento === 'cdl'
+            ? <div className="form-group">
+                <label className="form-label">Data do evento *</label>
+                <input className="form-input" type="date" value={form.data_inicio}
+                  onChange={e=>setForm(f=>({...f, data_inicio:e.target.value, data_fim:e.target.value}))}/>
+              </div>
+            : <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Data início *</label>
+                  <input className="form-input" type="date" value={form.data_inicio} onChange={e=>setForm(f=>({...f,data_inicio:e.target.value}))}/>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Data fim *</label>
+                  <input className="form-input" type="date" value={form.data_fim} onChange={e=>setForm(f=>({...f,data_fim:e.target.value}))}/>
+                </div>
+              </div>
+          }
           <div className="form-group">
             <label className="form-label">Local *</label>
             <input className="form-input" value={form.local} onChange={e=>setForm(f=>({...f,local:e.target.value}))} placeholder="Nome e cidade do local"/>
