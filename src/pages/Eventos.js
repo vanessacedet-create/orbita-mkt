@@ -27,6 +27,11 @@ const STATUS_EVENTO = [
   { v:'encerrado',    l:'Encerrado',    cls:'badge-green'  },
   { v:'cancelado',    l:'Cancelado',    cls:'badge-red'    },
 ]
+const TIPO_EVENTO = [
+  { v:'padrao', l:'Evento Padrão' },
+  { v:'cdl',    l:'Caminho do Livro (CDL)' },
+]
+
 const OBJETIVO_LABEL = {
   branding:'Branding', vendas:'Vendas', relacionamento:'Relacionamento',
   lancamento:'Lançamento de produto', outro:'Outro',
@@ -69,16 +74,39 @@ async function getEvento(id) {
       evento_participantes(*),
       evento_autores(*, evento_sessoes(*)),
       evento_produtos(*),
-      evento_brindes(*)`)
+      evento_brindes(*),
+      evento_cdl(*)`)
     .eq('id', id).single()
+  if (data && data.evento_cdl?.length) data._cdl = data.evento_cdl[0]
   return data
 }
+async function getCDL(evento_id) {
+  const { data } = await supabase.from('evento_cdl').select('*').eq('evento_id', evento_id).maybeSingle()
+  return data
+}
+async function saveCDL(evento_id, cdl, id) {
+  const payload = {
+    evento_id,
+    nome_colegio: cdl.nome_colegio,
+    idade_criancas: cdl.idade_criancas || null,
+    quantidade_criancas: cdl.quantidade_criancas ? Number(cdl.quantidade_criancas) : null,
+    livro_atividade: cdl.livro_atividade || null,
+    observacoes: cdl.observacoes || null,
+  }
+  if (id) {
+    const { data } = await supabase.from('evento_cdl').update(payload).eq('id', id).select().single()
+    return data
+  }
+  const { data } = await supabase.from('evento_cdl').insert([payload]).select().single()
+  return data
+}
+
 async function saveEvento(e, criador_id) {
   const p = {
     nome:e.nome, descricao:e.descricao, data_inicio:e.data_inicio, data_fim:e.data_fim,
     local:e.local, categoria:e.categoria||null, objetivo:e.objetivo||null,
     forma_participacao:e.forma_participacao||null, expectativa_publico:e.expectativa_publico?Number(e.expectativa_publico):null,
-    status:e.status, imagem_url:e.imagem_url||null,
+    status:e.status, imagem_url:e.imagem_url||null, tipo_evento:e.tipo_evento||'padrao',
   }
   if (e.id) {
     const { data } = await supabase.from('eventos').update(p).eq('id',e.id).select('*, usuarios(id,nome)').single()
@@ -168,14 +196,18 @@ function ModalEvento({ evento, usuarios, criador_id, onSave, onClose }) {
   const EMPTY = {
     nome:'', descricao:'', data_inicio:hoje(), data_fim:hoje(), local:'',
     categoria:'', objetivo:'', forma_participacao:'', expectativa_publico:'',
-    status:'planejamento', imagem_url:'',
+    status:'planejamento', imagem_url:'', tipo_evento:'padrao',
+    cdl_nome_colegio:'', cdl_idade:'', cdl_quantidade:'', cdl_livro:'', cdl_observacoes:'',
   }
   const [form, setForm] = useState(evento ? {
     nome:evento.nome, descricao:evento.descricao, data_inicio:evento.data_inicio,
     data_fim:evento.data_fim, local:evento.local, categoria:evento.categoria||'',
     objetivo:evento.objetivo||'', forma_participacao:evento.forma_participacao||'',
     expectativa_publico:evento.expectativa_publico||'', status:evento.status,
-    imagem_url:evento.imagem_url||'',
+    imagem_url:evento.imagem_url||'', tipo_evento:evento.tipo_evento||'padrao',
+    cdl_nome_colegio:evento._cdl?.nome_colegio||'', cdl_idade:evento._cdl?.idade_criancas||'',
+    cdl_quantidade:evento._cdl?.quantidade_criancas||'', cdl_livro:evento._cdl?.livro_atividade||'',
+    cdl_observacoes:evento._cdl?.observacoes||'',
   } : EMPTY)
   const [saving, setSaving] = useState(false)
   const [uploadingImg, setUploadingImg] = useState(false)
@@ -193,7 +225,20 @@ function ModalEvento({ evento, usuarios, criador_id, onSave, onClose }) {
   async function save() {
     if (!form.nome.trim()||!form.descricao.trim()||!form.local.trim()) return
     setSaving(true)
-    try { await onSave({...form, id:evento?.id}, criador_id) } finally { setSaving(false) }
+    try {
+      await onSave({
+        ...form,
+        id: evento?.id,
+        _cdl: form.tipo_evento === 'cdl' ? {
+          nome_colegio: form.cdl_nome_colegio,
+          idade_criancas: form.cdl_idade,
+          quantidade_criancas: form.cdl_quantidade,
+          livro_atividade: form.cdl_livro,
+          observacoes: form.cdl_observacoes,
+          id: evento?._cdl?.id,
+        } : null
+      }, criador_id)
+    } finally { setSaving(false) }
   }
 
   return (
@@ -204,6 +249,20 @@ function ModalEvento({ evento, usuarios, criador_id, onSave, onClose }) {
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
         </div>
         <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">Tipo de evento</label>
+            <div style={{display:'flex',gap:8}}>
+              {TIPO_EVENTO.map(t=>(
+                <button key={t.v} type="button" onClick={()=>setForm(f=>({...f,tipo_evento:t.v}))}
+                  style={{flex:1,padding:'8px 0',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',border:'2px solid',
+                    borderColor:form.tipo_evento===t.v?'var(--accent)':'var(--border)',
+                    background:form.tipo_evento===t.v?'var(--accent-glow)':'transparent',
+                    color:form.tipo_evento===t.v?'var(--accent)':'var(--text-muted)'}}>
+                  {t.l}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="form-group">
             <label className="form-label">Nome do evento *</label>
             <input className="form-input" value={form.nome} onChange={e=>setForm(f=>({...f,nome:e.target.value}))} placeholder="Ex: Feira Católica São Paulo 2026"/>
@@ -258,6 +317,48 @@ function ModalEvento({ evento, usuarios, criador_id, onSave, onClose }) {
               {STATUS_EVENTO.map(s=><option key={s.v} value={s.v}>{s.l}</option>)}
             </select>
           </div>
+          {/* Campos específicos CDL */}
+          {form.tipo_evento === 'cdl' && (
+            <div style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:10,padding:'14px 16px'}}>
+              <div style={{fontSize:12,fontWeight:700,color:'var(--accent)',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:12}}>
+                📚 Dados do Caminho do Livro
+              </div>
+              <div className="form-grid" style={{gap:10}}>
+                <div className="form-group">
+                  <label className="form-label">Nome do colégio *</label>
+                  <input className="form-input" value={form.cdl_nome_colegio}
+                    onChange={e=>setForm(f=>({...f,cdl_nome_colegio:e.target.value}))}
+                    placeholder="Ex: Colégio Santo Antônio"/>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Idade das crianças</label>
+                    <input className="form-input" value={form.cdl_idade}
+                      onChange={e=>setForm(f=>({...f,cdl_idade:e.target.value}))}
+                      placeholder="Ex: 7 a 9 anos"/>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Quantidade de crianças</label>
+                    <input className="form-input" type="number" value={form.cdl_quantidade}
+                      onChange={e=>setForm(f=>({...f,cdl_quantidade:e.target.value}))}
+                      placeholder="0"/>
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Livro escolhido para atividade</label>
+                  <input className="form-input" value={form.cdl_livro}
+                    onChange={e=>setForm(f=>({...f,cdl_livro:e.target.value}))}
+                    placeholder="Título do livro"/>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Observações</label>
+                  <textarea className="form-textarea" rows={2} value={form.cdl_observacoes}
+                    onChange={e=>setForm(f=>({...f,cdl_observacoes:e.target.value}))}/>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Imagem */}
           <div className="form-group">
             <label className="form-label">Imagem principal</label>
@@ -282,7 +383,7 @@ function ModalEvento({ evento, usuarios, criador_id, onSave, onClose }) {
         </div>
         <div className="form-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={save} disabled={saving||!form.nome.trim()||!form.descricao.trim()||!form.local.trim()}>
+          <button className="btn btn-primary" onClick={save} disabled={saving||!form.nome.trim()||!form.descricao.trim()||!form.local.trim()||(form.tipo_evento==='cdl'&&!form.cdl_nome_colegio.trim())}>
             {saving?'Salvando...':'Salvar evento'}
           </button>
         </div>
@@ -781,11 +882,13 @@ function DetalheEvento({ eventoId, onBack, onEdit, isAdmin, showToast }) {
   const [materiais, setMateriais]         = useState([])
   const [loading, setLoading]             = useState(true)
   const [aba, setAba]                     = useState('info')
+  const [cdl, setCdl]                     = useState(null)
 
   useEffect(()=>{
     getEvento(eventoId).then(e=>{
       if (!e) return
       setEvento(e)
+      setCdl(e._cdl || null)
       setParticipantes(e.evento_participantes||[])
       setAutores(e.evento_autores||[])
       setProdutos(e.evento_produtos||[])
@@ -838,6 +941,7 @@ function DetalheEvento({ eventoId, onBack, onEdit, isAdmin, showToast }) {
           {k:'autores',l:`Autores (${autores.length})`},
           {k:'produtos',l:`Produtos & Brindes`},
           {k:'materiais',l:`Materiais (${materiais.length})`},
+          ...(evento.tipo_evento==='cdl' ? [{k:'cdl',l:'📚 Caminho do Livro'}] : []),
         ].map(({k,l})=>(
           <button key={k} onClick={()=>setAba(k)}
             style={{padding:'9px 16px',fontSize:13,fontWeight:aba===k?700:400,cursor:'pointer',
@@ -866,6 +970,34 @@ function DetalheEvento({ eventoId, onBack, onEdit, isAdmin, showToast }) {
               <div style={{fontSize:13,fontWeight:600,color:'var(--text)'}}>{v}</div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* CDL específico */}
+      {aba==='cdl' && (
+        <div>
+          {cdl
+            ? <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+                {[
+                  {l:'Colégio',               v:cdl.nome_colegio||'—'},
+                  {l:'Idade das crianças',     v:cdl.idade_criancas||'—'},
+                  {l:'Quantidade de crianças', v:cdl.quantidade_criancas?.toLocaleString('pt-BR')||'—'},
+                  {l:'Livro para atividade',   v:cdl.livro_atividade||'—'},
+                ].map(({l,v})=>(
+                  <div key={l} className="table-card" style={{padding:'14px 18px'}}>
+                    <div style={{fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.06em',color:'var(--text-muted)',marginBottom:6}}>{l}</div>
+                    <div style={{fontSize:14,fontWeight:600,color:'var(--text)'}}>{v}</div>
+                  </div>
+                ))}
+                {cdl.observacoes && (
+                  <div className="table-card" style={{padding:'14px 18px',gridColumn:'1/-1'}}>
+                    <div style={{fontSize:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.06em',color:'var(--text-muted)',marginBottom:6}}>Observações</div>
+                    <p style={{fontSize:13,color:'var(--text)',margin:0,lineHeight:1.5}}>{cdl.observacoes}</p>
+                  </div>
+                )}
+              </div>
+            : <div className="empty-state"><p>Nenhum dado CDL registrado ainda.</p></div>
+          }
         </div>
       )}
 
@@ -914,6 +1046,11 @@ export default function Eventos() {
 
   async function handleSaveEvento(e) {
     const salvo = await saveEvento(e, usuario?.id)
+    // Salva dados CDL se for esse tipo
+    if (e.tipo_evento === 'cdl' && e._cdl) {
+      const cdlSalvo = await saveCDL(salvo.id, e._cdl, e._cdl.id||null)
+      salvo._cdl = cdlSalvo
+    }
     if (e.id) setEventos(p=>p.map(x=>x.id===e.id?salvo:x))
     else setEventos(p=>[salvo,...p])
     setModalEvento(false); setEditEvento(null)
@@ -1011,6 +1148,7 @@ export default function Eventos() {
                     <div style={{padding:'14px 18px'}}>
                       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
                         <span className={`badge ${se.cls}`} style={{fontSize:10}}>{se.l}</span>
+                        {e.tipo_evento==='cdl' && <span style={{fontSize:10,background:'rgba(99,102,241,0.15)',color:'#6366f1',border:'1px solid rgba(99,102,241,0.3)',borderRadius:4,padding:'1px 6px',fontWeight:700}}>📚 CDL</span>}
                         <span style={{fontSize:11,color:'var(--text-muted)'}}>{e.categoria||''}</span>
                       </div>
                       <div style={{fontSize:15,fontWeight:700,color:'var(--text)',marginBottom:6}}>{e.nome}</div>
