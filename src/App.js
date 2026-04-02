@@ -14,6 +14,7 @@ import CRM from './pages/CRM'
 import Calculadora from './pages/Calculadora'
 import RH from './pages/RH'
 import Eventos from './pages/Eventos'
+import ResetPassword from './pages/ResetPassword'
 import './App.css'
 import {
   LayoutDashboard, BookOpen, Users, LogOut,
@@ -36,17 +37,27 @@ const MENU = [
 ]
 
 const PERFIL_LABEL = {
-  administrador: 'Administrador',
-  gerente: 'Gerente',
-  analista: 'Analista',
-  assistente: 'Assistente',
+  administrador:          'Administrador',
+  gerente:                'Gerente',
+  estagiario_proprias:    'Estagiário Próprias',
+  analista_proprias:      'Analista Próprias',
+  supervisor_proprias:    'Supervisor Próprias',
+  estagiario_influencers: 'Estagiário Influencers',
+  analista_influencers:   'Analista Influencers',
+  estagiario_marketplaces:'Estagiário Mkt & Eventos',
+  analista_marketplaces:  'Analista Mkt & Eventos',
 }
 
 const PERFIL_COLOR = {
-  administrador: 'var(--accent)',
-  gerente: 'var(--indigo)',
-  analista: 'var(--green)',
-  assistente: 'var(--text-muted)',
+  administrador:          'var(--accent)',
+  gerente:                'var(--indigo)',
+  estagiario_proprias:    '#06b6d4',
+  analista_proprias:      '#06b6d4',
+  supervisor_proprias:    '#8b5cf6',
+  estagiario_influencers: '#22c55e',
+  analista_influencers:   '#22c55e',
+  estagiario_marketplaces:'#f97316',
+  analista_marketplaces:  '#f97316',
 }
 
 function RequireAuth({ children, modulo }) {
@@ -145,6 +156,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/*" element={<RequireAuth><Shell /></RequireAuth>} />
         </Routes>
       </BrowserRouter>
