@@ -11,6 +11,13 @@ export async function signIn(email, password) {
   if (error) throw error
   return data
 }
+export async function resetPassword(email) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + '/reset-password',
+  })
+  if (error) throw error
+}
+
 export async function signOut() {
   const { error } = await supabase.auth.signOut()
   if (error) throw error
@@ -44,6 +51,28 @@ export async function createUsuarioAdmin({ email, password, nome, perfil }) {
   })
   if (authError) throw authError
   return authData
+}
+
+
+// ── CPF — CRIPTOGRAFIA ────────────────────────────────────
+export async function saveParceiroCPF(parceiroId, cpf) {
+  // Chama a função do banco para criptografar e salvar
+  const { error } = await supabase.rpc('salvar_cpf_parceiro', {
+    p_id: parceiroId,
+    p_cpf: cpf || null,
+  })
+  if (error) throw error
+}
+
+export async function getParceiroCPF(parceiroId) {
+  // Busca o CPF descriptografado (o banco aplica máscara conforme perfil)
+  const { data, error } = await supabase
+    .from('parceiros_com_cpf')
+    .select('cpf_decriptografado')
+    .eq('id', parceiroId)
+    .single()
+  if (error) throw error
+  return data?.cpf_decriptografado || ''
 }
 
 // ── PARCEIROS ──────────────────────────────────────────────
@@ -207,13 +236,23 @@ function calcularPontuacao({ normais = [], lancamentos = [] }) {
 }
 
 export async function createParceiro(p) {
-  const { data, error } = await supabase.from('parceiros').insert([p]).select().single()
+  const { cpf, ...rest } = p
+  const { data, error } = await supabase.from('parceiros').insert([rest]).select().single()
   if (error) throw error
+  // Criptografa o CPF se fornecido
+  if (cpf && cpf.trim()) {
+    await supabase.rpc('salvar_cpf_parceiro', { p_id: data.id, p_cpf: cpf.trim() })
+  }
   return data
 }
 export async function updateParceiro(id, updates) {
-  const { data, error } = await supabase.from('parceiros').update(updates).eq('id', id).select().single()
+  const { cpf, ...rest } = updates
+  const { data, error } = await supabase.from('parceiros').update(rest).eq('id', id).select().single()
   if (error) throw error
+  // Atualiza CPF criptografado se veio no payload
+  if (cpf !== undefined) {
+    await supabase.rpc('salvar_cpf_parceiro', { p_id: id, p_cpf: cpf?.trim() || null })
+  }
   return data
 }
 export async function deleteParceiro(id) {
