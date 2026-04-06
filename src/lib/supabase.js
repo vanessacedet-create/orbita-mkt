@@ -922,18 +922,56 @@ export async function getLancamentosMonitoramento({ ano, mes } = {}) {
   const ini = `${ano}-${String(mes).padStart(2,'0')}-01`
   const ultimoDia = new Date(ano, mes, 0).getDate()
   const fim = `${ano}-${String(mes).padStart(2,'0')}-${String(ultimoDia).padStart(2,'0')}`
-  const { data, error } = await supabase
+
+  // Busca divulgações de Lançamento/Geral (lancamento_parceiros)
+  const { data: lancData, error: lancError } = await supabase
     .from('lancamento_parceiros')
     .select(`
       id, status, data_combinada, tipo_divulgacao, link,
       parceiros(id, nome),
-      lancamento_livros(id, livros(id, titulo), campanhas(id, nome))
+      lancamento_livros(id, livros(id, titulo), campanhas(id, nome, tipo))
     `)
     .not('data_combinada', 'is', null)
     .gte('data_combinada', ini)
     .lte('data_combinada', fim)
-  if (error) throw error
-  return data || []
+  if (lancError) throw lancError
+
+  // Busca divulgações de Promoção (campanha_parceiros com data_inicio agendada)
+  const { data: promData, error: promError } = await supabase
+    .from('campanha_parceiros')
+    .select(`
+      id, status, data_inicio, tipo_divulgacao, link_publicacao,
+      parceiros(id, nome),
+      campanhas(id, nome, tipo)
+    `)
+    .eq('campanhas.tipo', 'Promoção')
+    .not('data_inicio', 'is', null)
+    .gte('data_inicio', ini)
+    .lte('data_inicio', fim)
+  if (promError) throw promError
+
+  // Normaliza promoção para o mesmo formato de lançamento
+  const promNorm = (promData || []).filter(cp => cp.campanhas).map(cp => ({
+    id: cp.id,
+    status: cp.status,
+    data_combinada: cp.data_inicio,
+    tipo_divulgacao: cp.tipo_divulgacao || null,
+    link: cp.link_publicacao || null,
+    parceiros: cp.parceiros,
+    _campanha: cp.campanhas?.nome,
+    _tipo_campanha: cp.campanhas?.tipo || 'Promoção',
+    _origem_campanha: 'promocao',
+  }))
+
+  const lancNorm = (lancData || []).map(lp => ({
+    ...lp,
+    _campanha: lp.lancamento_livros?.campanhas?.nome,
+    _livro: lp.lancamento_livros?.livros?.titulo,
+    _tipo_campanha: lp.lancamento_livros?.campanhas?.tipo || 'Lançamento',
+    _origem_campanha: 'lancamento',
+  }))
+
+  return [...lancNorm, ...promNorm]
 }
 
 // ── IMPORTAR DIVULGAÇÕES PROMOÇÃO POR PLANILHA ─────────────
