@@ -936,32 +936,51 @@ export async function getLancamentosMonitoramento({ ano, mes } = {}) {
     .lte('data_combinada', fim)
   if (lancError) throw lancError
 
-  // Busca divulgações de Promoção (campanha_parceiros com data_inicio agendada)
+  // Busca TODAS as divulgações de Promoção — com qualquer data (combinada ou publicada)
+  // Busca pelo mês da campanha_parceiros para pegar divulgações sem data ainda
   const { data: promData, error: promError } = await supabase
-    .from('campanha_parceiros')
+    .from('campanha_divulgacoes')
     .select(`
-      id, status, data_inicio, tipo_divulgacao, link_publicacao,
-      parceiros(id, nome),
-      campanhas(id, nome, tipo)
+      id, tipo, origem, data_divulgacao, data_combinada, link, status,
+      campanha_parceiros(
+        id, status,
+        parceiros(id, nome),
+        campanhas(id, nome, tipo, data_inicio, data_fim)
+      )
     `)
-    .eq('campanhas.tipo', 'Promoção')
-    .not('data_inicio', 'is', null)
-    .gte('data_inicio', ini)
-    .lte('data_inicio', fim)
   if (promError) throw promError
 
-  // Normaliza promoção para o mesmo formato de lançamento
-  const promNorm = (promData || []).filter(cp => cp.campanhas).map(cp => ({
-    id: cp.id,
-    status: cp.status,
-    data_combinada: cp.data_inicio,
-    tipo_divulgacao: cp.tipo_divulgacao || null,
-    link: cp.link_publicacao || null,
-    parceiros: cp.parceiros,
-    _campanha: cp.campanhas?.nome,
-    _tipo_campanha: cp.campanhas?.tipo || 'Promoção',
-    _origem_campanha: 'promocao',
-  }))
+  // Filtra: só campanhas do tipo Promoção, com pelo menos uma data no mês
+  const promNorm = (promData || [])
+    .filter(d => {
+      const camp = d.campanha_parceiros?.campanhas
+      if (!camp || camp.tipo !== 'Promoção') return false
+      // Usa data_combinada, data_divulgacao ou data_inicio da campanha para posicionar no calendário
+      const dataRef = d.data_combinada || d.data_divulgacao || camp.data_inicio
+      if (!dataRef) return false
+      return dataRef >= ini && dataRef <= fim
+    })
+    .map(d => {
+      const camp = d.campanha_parceiros?.campanhas
+      const dataRef = d.data_combinada || d.data_divulgacao || camp?.data_inicio
+      // Status da divulgação: usa o campo status da divulgação se existir, senão do campanha_parceiro
+      const statusDiv = d.status || d.campanha_parceiros?.status || 'pendente'
+      const statusNorm = statusDiv === 'publicado' ? 'postou'
+        : statusDiv === 'nao_publicou' ? 'nao_postou'
+        : 'pendente'
+      return {
+        id: d.id,
+        status: statusNorm,
+        data_combinada: dataRef,
+        tipo_divulgacao: d.tipo || null,
+        link: d.link || null,
+        parceiros: d.campanha_parceiros?.parceiros,
+        _campanha: camp?.nome,
+        _tipo_campanha: 'Promoção',
+        _origem_campanha: 'promocao',
+        _origem: d.origem || 'combinada',
+      }
+    })
 
   const lancNorm = (lancData || []).map(lp => ({
     ...lp,
