@@ -212,7 +212,9 @@ function ModalDia({dataKey, registros, parceiros, onAdd, onEdit, onDelete, onClo
                   <div>
                     <div style={{fontWeight:700,fontSize:13,color:'var(--text)'}}>{r.parceiros?.nome}</div>
                     {eLanc&&r._campanha&&<div style={{fontSize:11,color:'var(--accent)'}}>{r._campanha}{r._livro?` · ${r._livro}`:''}</div>}
-                    {eLanc&&<span style={{fontSize:10,background:'var(--accent-glow)',color:'var(--accent)',borderRadius:4,padding:'1px 6px',marginTop:2,display:'inline-block'}}>Lançamento</span>}
+                    {eLanc&&<span style={{fontSize:10,background:'var(--accent-glow)',color:'var(--accent)',borderRadius:4,padding:'1px 6px',marginTop:2,display:'inline-block'}}>
+                      {r._tipo_campanha||'Lançamento'}
+                    </span>}
                   </div>
                   <div style={{display:'flex',alignItems:'center',gap:6}}>
                     <span style={{fontSize:11,color:st.cor,fontWeight:600}}>{st.icon} {st.label}</span>
@@ -345,22 +347,23 @@ export default function Monitoramento(){
     if(!porDia[r.data])porDia[r.data]=[]
     porDia[r.data].push({...r, _origem:'manual'})
   }
-  // Adiciona lançamentos agendados pela data_combinada
+  // Adiciona lançamentos/promoções agendados pela data_combinada
   for(const lp of lancamentos){
     if(!lp.data_combinada)continue
     if(!porDia[lp.data_combinada])porDia[lp.data_combinada]=[]
-    // Evita duplicata
     if(!porDia[lp.data_combinada].find(x=>x._lancamentoId===lp.id)){
       porDia[lp.data_combinada].push({
         _lancamentoId: lp.id,
         _origem: 'lancamento',
+        _origem_campanha: lp._origem_campanha||'lancamento',
+        _tipo_campanha: lp._tipo_campanha||'Lançamento',
         parceiros: lp.parceiros,
-        status: lp.status==='agendado'?'pendente': lp.status==='publicado'?'postou': lp.status==='nao_publicou'?'nao_postou':'pendente',
+        status: lp.status==='agendado'||lp.status==='confirmado'?'pendente': lp.status==='publicado'?'postou': lp.status==='nao_publicou'?'nao_postou':'pendente',
         data: lp.data_combinada,
         tipo_postagem: lp.tipo_divulgacao,
         link: lp.link,
-        _campanha: lp.lancamento_livros?.campanhas?.nome,
-        _livro: lp.lancamento_livros?.livros?.titulo,
+        _campanha: lp._campanha||lp.lancamento_livros?.campanhas?.nome,
+        _livro: lp._livro||lp.lancamento_livros?.livros?.titulo,
         _statusOriginal: lp.status,
       })
     }
