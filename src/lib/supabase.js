@@ -1124,6 +1124,8 @@ export async function getCRMParceiros() {
     .select('partner_id, status, changed_at')
     .in('partner_id', ids)
     .order('changed_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(5000)
 
   // Mapeia status atual por parceiro
   const statusMap = {}
