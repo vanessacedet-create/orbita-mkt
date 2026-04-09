@@ -12,14 +12,15 @@ import { ptBR } from 'date-fns/locale'
 
 // ── PIPELINE ───────────────────────────────────────────────
 const PIPELINE = [
-  { value: 'found',       label: 'Encontrado',    cor: '#06b6d4', bg: 'rgba(6,182,212,0.12)'   },
-  { value: 'prospected',  label: 'Prospectado',   cor: '#6b7280', bg: 'rgba(107,114,128,0.12)' },
-  { value: 'qualified',   label: 'Qualificado',   cor: '#6366f1', bg: 'rgba(99,102,241,0.12)'  },
-  { value: 'negotiating', label: 'Negociando',    cor: '#eab308', bg: 'rgba(234,179,8,0.12)'   },
-  { value: 'agreed',      label: 'Acordo fechado',cor: '#f97316', bg: 'rgba(249,115,22,0.12)'  },
-  { value: 'active',      label: 'Ativo',         cor: '#22c55e', bg: 'rgba(34,197,94,0.12)'   },
-  { value: 'paused',      label: 'Pausado',       cor: '#eab308', bg: 'rgba(234,179,8,0.12)'   },
-  { value: 'closed',      label: 'Encerrado',     cor: '#ef4444', bg: 'rgba(239,68,68,0.12)'   },
+  { value: 'found',        label: 'Encontrado',        cor: '#06b6d4', bg: 'rgba(6,182,212,0.12)'   },
+  { value: 'prospected',   label: 'Prospectado',       cor: '#6b7280', bg: 'rgba(107,114,128,0.12)' },
+  { value: 'negotiating',  label: 'Negociando',        cor: '#eab308', bg: 'rgba(234,179,8,0.12)'   },
+  { value: 'agreed',       label: 'Acordo fechado',    cor: '#f97316', bg: 'rgba(249,115,22,0.12)'  },
+  { value: 'active',       label: 'Ativo',             cor: '#22c55e', bg: 'rgba(34,197,94,0.12)'   },
+  { value: 'paused',       label: 'Pausado',           cor: '#eab308', bg: 'rgba(234,179,8,0.12)'   },
+  { value: 'closed',       label: 'Encerrado',         cor: '#ef4444', bg: 'rgba(239,68,68,0.12)'   },
+  { value: 'sem_retorno',  label: 'Sem retorno',       cor: '#94a3b8', bg: 'rgba(148,163,184,0.12)' },
+  { value: 'sem_interesse',label: 'Sem interesse',     cor: '#f43f5e', bg: 'rgba(244,63,94,0.12)'   },
 ]
 
 const PLATAFORMAS = ['Instagram','TikTok','YouTube','Blog','Twitter/X','Pinterest','Kwai']
@@ -117,9 +118,9 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose }) {
       await addStatusHistory(parceiro.id, novoStatus, motivo)
       const hist = await getStatusHistory(parceiro.id)
       setHistory(hist)
-      const upd = await updateParceiroCRM(parceiro.id, { current_status: novoStatus })
-      setParceiro(upd)
-      onSave(upd)
+      const parceiroAtualizado = { ...parceiro, current_status: novoStatus }
+      setParceiro(parceiroAtualizado)
+      onSave(parceiroAtualizado)
       setNovoStatus(''); setMotivo('')
       showToast('Status atualizado!')
     } catch(e) { showToast('Erro','error') } finally { setSavingStatus(false) }
