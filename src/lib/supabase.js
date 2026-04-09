@@ -90,15 +90,14 @@ export async function getParceirosAtivos() {
   const todos = data || []
   if (!todos.length) return []
   try {
-    const { data: history, error: he } = await supabase
-      .from('partner_status_history')
-      .select('partner_id, status, changed_at')
+    const { data: statusData, error: se } = await supabase
+      .from('parceiro_status_atual')
+      .select('partner_id, status')
       .in('partner_id', todos.map(p=>p.id))
-      .order('changed_at', { ascending: false })
-    if (he) return todos
+    if (se) return todos
     const statusMap = {}
-    for (const h of (history||[])) {
-      if (!statusMap[h.partner_id]) statusMap[h.partner_id] = h.status
+    for (const s of (statusData||[])) {
+      statusMap[s.partner_id] = s.status
     }
     const ativos = todos.filter(p => statusMap[p.id] === 'active')
     return ativos.length > 0 ? ativos : todos
@@ -1115,25 +1114,25 @@ export async function getCRMParceiros() {
     .order('nome')
   if (error) throw error
 
-  // Busca o status atual de cada parceiro
   const ids = (data||[]).map(p=>p.id)
   if (!ids.length) return []
 
-  const { data: history } = await supabase
-    .from('partner_status_history')
-    .select('partner_id, status, changed_at')
+  // Usa a view que retorna o status mais recente de cada parceiro sem ambiguidade
+  const { data: statusData } = await supabase
+    .from('parceiro_status_atual')
+    .select('partner_id, status')
     .in('partner_id', ids)
-    .order('changed_at', { ascending: false })
-    .order('id', { ascending: false })
-    .limit(5000)
 
-  // Mapeia status atual por parceiro
   const statusMap = {}
-  for (const h of (history||[])) {
-    if (!statusMap[h.partner_id]) statusMap[h.partner_id] = h.status
+  for (const s of (statusData||[])) {
+    statusMap[s.partner_id] = s.status
   }
 
-  return (data||[]).map(p => ({ ...p, current_status: statusMap[p.id] || null, responsavel_interno_nome: p.responsavel_interno?.nome || null }))
+  return (data||[]).map(p => ({
+    ...p,
+    current_status: statusMap[p.id] || null,
+    responsavel_interno_nome: p.responsavel_interno?.nome || null
+  }))
 }
 
 export async function updateParceiroCRM(id, updates) {
