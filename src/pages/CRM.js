@@ -744,7 +744,7 @@ export default function CRM() {
       (p.username||'').toLowerCase().includes(q) ||
       (p.platforms||[]).some(pl=>pl.toLowerCase().includes(q))
     )) return false
-    if (filtroStatus && (p.current_status||'prospected') !== filtroStatus) return false
+    if (filtroStatus && p.current_status !== filtroStatus) return false
     if (filtroPlat   && !(p.platforms||[]).includes(filtroPlat)) return false
     if (filtroResp   && p.responsavel_interno_id !== filtroResp) return false
     if (filtroOrigem && p.source !== filtroOrigem) return false
@@ -755,7 +755,7 @@ export default function CRM() {
   // Agrupa por status
   const porStatus = {}
   for (const st of PIPELINE) {
-    porStatus[st.value] = filtrados.filter(p => (p.current_status||'prospected') === st.value)
+    porStatus[st.value] = filtrados.filter(p => p.current_status === st.value)
   }
 
   // Parceiros sem status no CRM (ainda não entraram no pipeline)
