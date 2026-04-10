@@ -15,6 +15,7 @@ export const MODULOS_PERMISSOES = {
   dashboard:    ['administrador', 'gerente', 'analista_influencers', 'estagiario_influencers', 'estagiario_proprias', 'analista_proprias', 'supervisor_proprias', 'estagiario_marketplaces', 'analista_marketplaces'],
   parceiros:    ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
   crm:          ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  crm_literario:['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
   calculadora:  ['administrador', 'gerente',
                  'estagiario_proprias', 'analista_proprias', 'supervisor_proprias',
                  'estagiario_influencers', 'analista_influencers'],
