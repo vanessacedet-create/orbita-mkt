@@ -1374,3 +1374,114 @@ export async function removeContatoCampanha(id) {
   const { error } = await supabase.from('campanha_literaria').delete().eq('id', id)
   if (error) throw error
 }
+
+// ── CRM LITERÁRIO — DIVULGADORES ──────────────────────────────
+
+export async function getDivulgadores({ search, tipo } = {}) {
+  let q = supabase.from('divulgadores').select('*').order('nome')
+  if (tipo) q = q.eq('tipo_parceria', tipo)
+  if (search) q = q.or(`nome.ilike.%${search}%,username.ilike.%${search}%`)
+  const { data, error } = await q
+  if (error) throw error
+  return data || []
+}
+
+export async function createDivulgador(payload) {
+  const { data, error } = await supabase
+    .from('divulgadores').insert([payload]).select('*').single()
+  if (error) throw error
+  return data
+}
+
+export async function updateDivulgador(id, updates) {
+  const { data, error } = await supabase
+    .from('divulgadores').update(updates).eq('id', id).select('*').single()
+  if (error) throw error
+  return data
+}
+
+// ── CRM LITERÁRIO — DIVULGAÇÃO POR LIVRO ─────────────────────
+
+export async function getDivulgacaoLivro(livro_id) {
+  const { data, error } = await supabase
+    .from('divulgacao_livro')
+    .select('*, divulgador:divulgadores(*)')
+    .eq('livro_id', livro_id)
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return data || []
+}
+
+export async function addDivulgadoresLivro(livro_id, divulgador_ids) {
+  const rows = divulgador_ids.map(divulgador_id => ({
+    livro_id, divulgador_id, status: 'encontrado'
+  }))
+  const { data, error } = await supabase
+    .from('divulgacao_livro').insert(rows)
+    .select('*, divulgador:divulgadores(*)')
+  if (error) throw error
+  return data || []
+}
+
+export async function updateDivulgacaoStatus(id, status, nota) {
+  const updates = { status }
+  if (nota !== undefined) updates.nota = nota
+  const { data, error } = await supabase
+    .from('divulgacao_livro').update(updates).eq('id', id)
+    .select('*, divulgador:divulgadores(*)').single()
+  if (error) throw error
+  return data
+}
+
+export async function bulkUpdateDivulgacao(ids, status) {
+  const { data, error } = await supabase
+    .from('divulgacao_livro').update({ status }).in('id', ids).select('id, status')
+  if (error) throw error
+  return data || []
+}
+
+export async function removeDivulgacaoLivro(id) {
+  const { error } = await supabase.from('divulgacao_livro').delete().eq('id', id)
+  if (error) throw error
+}
+
+// Busca ou cria parceiro na tabela parceiros baseado no divulgador
+// Evita duplicatas verificando username ou nome
+export async function vincularDivulgadorComoParceiro(divulgador) {
+  // Tenta encontrar parceiro existente por username ou nome
+  let parceiro = null
+  if (divulgador.username) {
+    const { data } = await supabase
+      .from('parceiros').select('*')
+      .ilike('username', divulgador.username).maybeSingle()
+    parceiro = data
+  }
+  if (!parceiro) {
+    const { data } = await supabase
+      .from('parceiros').select('*')
+      .ilike('nome', divulgador.nome).maybeSingle()
+    parceiro = data
+  }
+  // Se não existe, cria
+  if (!parceiro) {
+    const { data, error } = await supabase
+      .from('parceiros').insert([{
+        nome:            divulgador.nome,
+        username:        divulgador.username || null,
+        platforms:       divulgador.platforms || null,
+        followers_count: divulgador.followers_count || null,
+        engagement_rate: divulgador.engagement_rate || null,
+        profile_url:     divulgador.profile_url || null,
+        contact_value:   divulgador.contact_value || null,
+        tipo_parceria:   divulgador.tipo_parceria || null,
+        notes:           divulgador.notes || null,
+      }]).select('*').single()
+    if (error) throw error
+    parceiro = data
+  }
+  // Atualiza divulgador com referência ao parceiro
+  await supabase.from('divulgadores')
+    .update({ parceiro_id: parceiro.id })
+    .eq('id', divulgador.id)
+  return parceiro
+}
