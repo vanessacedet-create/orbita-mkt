@@ -553,11 +553,13 @@ export default function CRMLiterario() {
       const hoje = new Date()
       const mesHoje = MESES_ORDEM[hoje.getMonth()]
       const anoHoje = hoje.getFullYear()
-      const mesesDisp = [...new Set((livrosData||[]).map(l=>extrairMes(l.data_lancamento)).filter(Boolean))]
+      const anosDisp = [...new Set((livrosData||[]).map(l=>extrairAno(l.data_lancamento)).filter(Boolean))].sort((a,b)=>b-a)
+      const anoInicial = anosDisp.includes(anoHoje) ? anoHoje : anosDisp[0]
+      const mesesDisp = [...new Set((livrosData||[]).filter(l=>extrairAno(l.data_lancamento)===anoInicial).map(l=>extrairMes(l.data_lancamento)).filter(Boolean))]
       const mesInicial = mesesDisp.includes(mesHoje) ? mesHoje : mesesDisp[0]
+      setAnoAtivo(anoInicial)
       setMesAtivo(mesInicial)
-      setAnoAtivo(anoHoje)
-      const primeiro = (livrosData||[]).find(l=>extrairMes(l.data_lancamento)===mesInicial)
+      const primeiro = (livrosData||[]).find(l=>extrairMes(l.data_lancamento)===mesInicial&&extrairAno(l.data_lancamento)===anoInicial)
       if (primeiro) setLivroSel(primeiro)
     }).catch(console.error).finally(()=>setLoading(false))
   },[])
@@ -573,13 +575,17 @@ export default function CRMLiterario() {
       .finally(()=>setLoadingEntradas(false))
   },[livroSel])
 
-  const mesesDisponiveis = useMemo(()=>
-    MESES_ORDEM.filter(m=>livros.some(l=>extrairMes(l.data_lancamento)===m)),
+  const anosDisponiveis = useMemo(()=>
+    [...new Set(livros.map(l=>extrairAno(l.data_lancamento)).filter(Boolean))].sort((a,b)=>b-a),
   [livros])
 
+  const mesesDisponiveis = useMemo(()=>
+    MESES_ORDEM.filter(m=>livros.some(l=>extrairMes(l.data_lancamento)===m&&extrairAno(l.data_lancamento)===anoAtivo)),
+  [livros,anoAtivo])
+
   const livrosMes = useMemo(()=>
-    livros.filter(l=>extrairMes(l.data_lancamento)===mesAtivo),
-  [livros,mesAtivo])
+    livros.filter(l=>extrairMes(l.data_lancamento)===mesAtivo&&extrairAno(l.data_lancamento)===anoAtivo),
+  [livros,mesAtivo,anoAtivo])
 
   const entradasFiltradas = useMemo(()=>entradas.filter(e=>{
     if(filtroStatus&&e.status!==filtroStatus) return false
@@ -657,11 +663,30 @@ export default function CRMLiterario() {
             <BookMarked size={16} color="var(--accent)"/>
             <span style={{fontFamily:'Syne, sans-serif',fontWeight:700,fontSize:13,color:'var(--text)'}}>Livros com lançamento</span>
           </div>
+          {/* Seletor de ano */}
+          <div style={{display:'flex',gap:4,marginBottom:8}}>
+            {anosDisponiveis.map(ano=>(
+              <button key={ano} onClick={()=>{
+                setAnoAtivo(ano)
+                const mesesDoAno=[...new Set(livros.filter(l=>extrairAno(l.data_lancamento)===ano).map(l=>extrairMes(l.data_lancamento)).filter(Boolean))]
+                const hoje=new Date()
+                const mesHoje=MESES_ORDEM[hoje.getMonth()]
+                const novoMes=mesesDoAno.includes(mesHoje)?mesHoje:mesesDoAno[0]
+                setMesAtivo(novoMes)
+                const primeiro=livros.find(l=>extrairAno(l.data_lancamento)===ano&&extrairMes(l.data_lancamento)===novoMes)
+                if(primeiro) setLivroSel(primeiro)
+              }}
+                style={{padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:700,cursor:'pointer',border:'1px solid',borderColor:anoAtivo===ano?'var(--accent)':'var(--border)',background:anoAtivo===ano?'var(--accent-glow)':'transparent',color:anoAtivo===ano?'var(--accent)':'var(--text-muted)',transition:'all 0.15s'}}>
+                {ano}
+              </button>
+            ))}
+          </div>
+          {/* Seletor de mês */}
           <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
             {mesesDisponiveis.map(mes=>(
               <button key={mes} onClick={()=>{
                 setMesAtivo(mes)
-                const primeiro=livros.find(l=>extrairMes(l.data_lancamento)===mes)
+                const primeiro=livros.find(l=>extrairMes(l.data_lancamento)===mes&&extrairAno(l.data_lancamento)===anoAtivo)
                 if(primeiro) setLivroSel(primeiro)
               }}
                 style={{padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:700,cursor:'pointer',border:'1px solid',borderColor:mesAtivo===mes?'var(--accent)':'var(--border)',background:mesAtivo===mes?'var(--accent-glow)':'transparent',color:mesAtivo===mes?'var(--accent)':'var(--text-muted)',transition:'all 0.15s'}}>
