@@ -618,6 +618,18 @@ export default function CRMLiterario() {
       .finally(()=>setLoadingEntradas(false))
   },[livroSel])
 
+  const anosDisponiveis = useMemo(()=>
+    [...new Set(livros.map(l=>extrairAno(l.data_lancamento)).filter(Boolean))].sort((a,b)=>b-a),
+  [livros])
+
+  const mesesDisponiveis = useMemo(()=>
+    MESES_ORDEM.filter(m=>livros.some(l=>extrairMes(l.data_lancamento)===m&&extrairAno(l.data_lancamento)===anoAtivo)),
+  [livros,anoAtivo])
+
+  const livrosMes = useMemo(()=>
+    livros.filter(l=>extrairMes(l.data_lancamento)===mesAtivo&&extrairAno(l.data_lancamento)===anoAtivo),
+  [livros,mesAtivo,anoAtivo])
+
   // Carrega entradas de todos os livros do mês (para filtrar modal)
   useEffect(()=>{
     if(!livrosMes.length) return
@@ -630,18 +642,6 @@ export default function CRMLiterario() {
       })
       .catch(console.error)
   },[livrosMes])
-
-  const anosDisponiveis = useMemo(()=>
-    [...new Set(livros.map(l=>extrairAno(l.data_lancamento)).filter(Boolean))].sort((a,b)=>b-a),
-  [livros])
-
-  const mesesDisponiveis = useMemo(()=>
-    MESES_ORDEM.filter(m=>livros.some(l=>extrairMes(l.data_lancamento)===m&&extrairAno(l.data_lancamento)===anoAtivo)),
-  [livros,anoAtivo])
-
-  const livrosMes = useMemo(()=>
-    livros.filter(l=>extrairMes(l.data_lancamento)===mesAtivo&&extrairAno(l.data_lancamento)===anoAtivo),
-  [livros,mesAtivo,anoAtivo])
 
   const entradasFiltradas = useMemo(()=>entradas.filter(e=>{
     if(filtroStatus&&e.status!==filtroStatus) return false
