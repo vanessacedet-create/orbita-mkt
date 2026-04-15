@@ -1580,10 +1580,15 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                                             <Plus size={11}/> Div.
                                           </button>
                                         )}
-                                        {/* Editar divulgação (se linha tem div) */}
-                                        {div && (
+                                        {/* Editar divulgação — se tem div com tipo, abre edição rápida; senão abre modal completo */}
+                                        {div && div.tipo_divulgacao ? (
                                           <button className="btn btn-ghost btn-icon btn-sm" title="Editar esta divulgação"
                                             onClick={()=>setModalDivEdit({div, principal, ll_id:ll.id})}>
+                                            <Pencil size={12}/>
+                                          </button>
+                                        ) : (
+                                          <button className="btn btn-ghost btn-icon btn-sm" title="Editar parceiro"
+                                            onClick={()=>setModalParceiro({lp: principal, irmaos, ll_id:ll.id, tipoCampanha})}>
                                             <Pencil size={12}/>
                                           </button>
                                         )}
