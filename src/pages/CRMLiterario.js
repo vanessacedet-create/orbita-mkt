@@ -193,11 +193,12 @@ function ModalNovoDivulgador({ onSave, onClose }) {
 }
 
 // ── MODAL: ADICIONAR DIVULGADORES AO LIVRO ────────────────────
-function ModalAdicionarDivulgadores({ jaAdicionados, onSave, onClose, onNovo }) {
+function ModalAdicionarDivulgadores({ jaAdicionados, jaNoMes, livrosMesNomes, onSave, onClose, onNovo }) {
   const [todos, setTodos] = useState([])
   const [search, setSearch] = useState('')
   const [filtroTipo, setFiltroTipo] = useState('')
   const [selecionados, setSelecionados] = useState([])
+  const [mostrarOcultos, setMostrarOcultos] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(()=>{
@@ -205,7 +206,9 @@ function ModalAdicionarDivulgadores({ jaAdicionados, onSave, onClose, onNovo }) 
   },[])
 
   const tipos = useMemo(()=>[...new Set(todos.map(p=>p.tipo_parceria).filter(Boolean))],[todos])
-  const disponiveis = useMemo(()=>todos.filter(p=>{
+
+  // Disponíveis = não estão neste livro, passam nos filtros de busca/tipo
+  const filtrados = useMemo(()=>todos.filter(p=>{
     if(jaAdicionados.includes(p.id)) return false
     if(filtroTipo&&p.tipo_parceria!==filtroTipo) return false
     const q=search.toLowerCase()
@@ -213,8 +216,46 @@ function ModalAdicionarDivulgadores({ jaAdicionados, onSave, onClose, onNovo }) 
     return true
   }),[todos,jaAdicionados,filtroTipo,search])
 
+  // Separa em: livres (não estão em nenhum livro do mês) e já no mês (estão em outro livro do mês)
+  const livres = filtrados.filter(p=>!jaNoMes.includes(p.id))
+  const jaNoMesFiltrados = filtrados.filter(p=>jaNoMes.includes(p.id))
+
+  const disponiveis = mostrarOcultos ? filtrados : livres
+
   function toggle(id){ setSelecionados(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]) }
   function toggleAll(){ setSelecionados(selecionados.length===disponiveis.length?[]:disponiveis.map(p=>p.id)) }
+
+  function renderCard(p, oculto=false) {
+    const sel=selecionados.includes(p.id)
+    const aud=fmtAudiencia(p.followers_count)
+    const livrosDoP = oculto ? (livrosMesNomes[p.id] || []) : []
+    return (
+      <div key={p.id} onClick={()=>toggle(p.id)}
+        style={{display:'flex',alignItems:'center',gap:12,padding:'10px 12px',borderRadius:8,cursor:'pointer',
+          background:sel?'var(--accent-glow)':oculto?'var(--surface-2)':'transparent',
+          border:`1px solid ${sel?'var(--accent)40':oculto?'var(--border)':'transparent'}`,
+          marginBottom:4,transition:'all 0.15s',opacity:oculto&&!sel?0.8:1}}
+        onMouseEnter={e=>{if(!sel)e.currentTarget.style.background=oculto?'var(--surface-3)':'var(--surface-2)'}}
+        onMouseLeave={e=>{e.currentTarget.style.background=sel?'var(--accent-glow)':oculto?'var(--surface-2)':'transparent'}}>
+        {sel?<CheckSquare size={16} color="var(--accent)"/>:<Square size={16} color={oculto?"var(--amber)":"var(--text-muted)"}/>}
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontWeight:700,fontSize:13,color:'var(--text)',display:'flex',alignItems:'center',gap:6}}>
+            {p.nome}
+            {oculto&&<span style={{fontSize:9,background:'rgba(245,166,35,0.15)',border:'1px solid rgba(245,166,35,0.3)',borderRadius:4,padding:'1px 5px',color:'var(--amber)',fontWeight:700,flexShrink:0}}>Já no mês</span>}
+          </div>
+          <div style={{fontSize:11,color:'var(--text-muted)'}}>
+            {p.username&&`${p.username} · `}{p.tipo_parceria||'Sem tipo'}{aud?` · ${aud}`:''}
+            {p.platforms?.length>0&&` · ${p.platforms.slice(0,2).join(', ')}`}
+          </div>
+          {oculto&&livrosDoP.length>0&&(
+            <div style={{fontSize:10,color:'var(--amber)',marginTop:2}}>
+              Em: {livrosDoP.join(', ')}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="modal-backdrop">
@@ -248,35 +289,33 @@ function ModalAdicionarDivulgadores({ jaAdicionados, onSave, onClose, onNovo }) 
         <div style={{overflowY:'auto',flex:1,padding:'8px 12px'}}>
           {loading
             ?<div style={{padding:'32px 0',textAlign:'center',color:'var(--text-muted)',fontSize:13}}>Carregando...</div>
-            :disponiveis.length===0
+            :disponiveis.length===0&&jaNoMesFiltrados.length===0
               ?<div style={{padding:'32px 0',textAlign:'center',color:'var(--text-muted)',fontSize:13}}>
                   Nenhum divulgador disponível.{' '}
                   <button onClick={()=>{onClose();onNovo()}} style={{background:'none',border:'none',cursor:'pointer',color:'var(--accent)',fontWeight:700,fontSize:13}}>Cadastrar novo?</button>
                 </div>
               :<>
-                <button onClick={toggleAll} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 8px',marginBottom:4,background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',fontSize:12}}>
-                  {selecionados.length===disponiveis.length&&disponiveis.length>0?<CheckSquare size={14} color="var(--accent)"/>:<Square size={14}/>}
-                  Selecionar todos ({disponiveis.length})
-                </button>
-                {disponiveis.map(p=>{
-                  const sel=selecionados.includes(p.id)
-                  const aud=fmtAudiencia(p.followers_count)
-                  return (
-                    <div key={p.id} onClick={()=>toggle(p.id)}
-                      style={{display:'flex',alignItems:'center',gap:12,padding:'10px 12px',borderRadius:8,cursor:'pointer',background:sel?'var(--accent-glow)':'transparent',border:`1px solid ${sel?'var(--accent)40':'transparent'}`,marginBottom:4,transition:'all 0.15s'}}
-                      onMouseEnter={e=>{if(!sel)e.currentTarget.style.background='var(--surface-2)'}}
-                      onMouseLeave={e=>{e.currentTarget.style.background=sel?'var(--accent-glow)':'transparent'}}>
-                      {sel?<CheckSquare size={16} color="var(--accent)"/>:<Square size={16} color="var(--text-muted)"/>}
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontWeight:700,fontSize:13,color:'var(--text)'}}>{p.nome}</div>
-                        <div style={{fontSize:11,color:'var(--text-muted)'}}>
-                          {p.username&&`${p.username} · `}{p.tipo_parceria||'Sem tipo'}{aud?` · ${aud}`:''}
-                          {p.platforms?.length>0&&` · ${p.platforms.slice(0,2).join(', ')}`}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
+                {disponiveis.length>0&&(
+                  <>
+                    <button onClick={toggleAll} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 8px',marginBottom:4,background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',fontSize:12}}>
+                      {selecionados.filter(id=>disponiveis.some(p=>p.id===id)).length===disponiveis.length&&disponiveis.length>0
+                        ?<CheckSquare size={14} color="var(--accent)"/>:<Square size={14}/>}
+                      Selecionar todos ({disponiveis.length})
+                    </button>
+                    {disponiveis.map(p=>renderCard(p, false))}
+                  </>
+                )}
+
+                {jaNoMesFiltrados.length>0&&(
+                  <div style={{marginTop:8}}>
+                    <button onClick={()=>setMostrarOcultos(o=>!o)}
+                      style={{display:'flex',alignItems:'center',gap:6,padding:'6px 8px',background:'none',border:'none',cursor:'pointer',fontSize:12,fontWeight:700,color:'var(--amber)',width:'100%',marginBottom:4}}>
+                      {mostrarOcultos?<CheckSquare size={13} color="var(--amber)"/>:<Square size={13} color="var(--amber)"/>}
+                      {mostrarOcultos?'Ocultar':'Mostrar'} {jaNoMesFiltrados.length} divulgador{jaNoMesFiltrados.length>1?'es':''} já em outro livro deste mês
+                    </button>
+                    {mostrarOcultos&&jaNoMesFiltrados.map(p=>renderCard(p, true))}
+                  </div>
+                )}
               </>
           }
         </div>
@@ -533,6 +572,7 @@ export default function CRMLiterario() {
   const [anoAtivo, setAnoAtivo] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadingEntradas, setLoadingEntradas] = useState(false)
+  const [entradasMes, setEntradasMes] = useState([]) // todas entradas dos livros do mês
   const [viewMode, setViewMode] = useState('kanban')
   const [search, setSearch] = useState('')
   const [filtroStatus, setFiltroStatus] = useState('')
@@ -571,9 +611,25 @@ export default function CRMLiterario() {
     setSelecionados([])
     getDivulgacaoLivro(livroSel.id)
       .then(data=>setEntradas(data||[]))
-      .catch(console.error)
+      .catch(e=>{
+        console.error('Erro ao buscar divulgações:', e)
+        showToast('Erro ao carregar divulgadores. Verifique o console.','error')
+      })
       .finally(()=>setLoadingEntradas(false))
   },[livroSel])
+
+  // Carrega entradas de todos os livros do mês (para filtrar modal)
+  useEffect(()=>{
+    if(!livrosMes.length) return
+    Promise.all(livrosMes.map(l=>getDivulgacaoLivro(l.id)))
+      .then(resultados=>{
+        const todas = resultados.flatMap((r,i)=>
+          (r||[]).map(e=>({...e, _livroTitulo: livrosMes[i].titulo, _livroId: livrosMes[i].id}))
+        )
+        setEntradasMes(todas)
+      })
+      .catch(console.error)
+  },[livrosMes])
 
   const anosDisponiveis = useMemo(()=>
     [...new Set(livros.map(l=>extrairAno(l.data_lancamento)).filter(Boolean))].sort((a,b)=>b-a),
@@ -650,6 +706,22 @@ export default function CRMLiterario() {
   function toggleTodos(){ setSelecionados(selecionados.length===entradasFiltradas.length?[]:entradasFiltradas.map(e=>e.id)) }
 
   const jaAdicionados = entradas.map(e=>e.divulgador_id).filter(Boolean)
+
+  // Divulgadores já em outro livro do mesmo mês
+  const { jaNoMes, livrosMesNomes } = useMemo(()=>{
+    const ids = new Set()
+    const nomes = {}
+    entradasMes
+      .filter(e=>e._livroId !== livroSel?.id)
+      .forEach(e=>{
+        if(!e.divulgador_id) return
+        ids.add(e.divulgador_id)
+        if(!nomes[e.divulgador_id]) nomes[e.divulgador_id]=[]
+        if(!nomes[e.divulgador_id].includes(e._livroTitulo))
+          nomes[e.divulgador_id].push(e._livroTitulo)
+      })
+    return { jaNoMes:[...ids], livrosMesNomes:nomes }
+  },[entradasMes, livroSel])
 
   if(loading) return <div className="loading"><div className="spinner"/></div>
 
@@ -906,6 +978,8 @@ export default function CRMLiterario() {
       {modalAdicionar&&livroSel&&(
         <ModalAdicionarDivulgadores
           jaAdicionados={jaAdicionados}
+          jaNoMes={jaNoMes}
+          livrosMesNomes={livrosMesNomes}
           onSave={handleAdicionarDivulgadores}
           onClose={()=>setModalAdicionar(false)}
           onNovo={()=>setModalNovo(true)}
