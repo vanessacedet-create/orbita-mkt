@@ -293,7 +293,7 @@ export default function Parceiros() {
   const [editoraSearch, setEditoraSearch] = useState('')
   const [usuarios, setUsuarios]     = useState([])
 
-  const EMPTY = { nome:'', tipo_parceria:'', cpf:'', livraria:'', canal_comunicacao:'', editoras_divulga:[], temas:'', responsavel_interno_id:'', status:'ativo' }
+  const EMPTY = { nome:'', tipo_parceria:'', cpf:'', livraria:'', canal_comunicacao:'', editoras_divulga:[], temas:'', responsavel_interno_id:'', status:'ativo', notes:'' }
   const [form, setForm] = useState(EMPTY)
 
   async function reload() {
@@ -326,6 +326,7 @@ export default function Parceiros() {
       status: p.status||'ativo',
       editoras_divulga:  p.editoras_divulga ? p.editoras_divulga.split(',').map(e=>e.trim()).filter(Boolean) : [],
       temas:             p.temas||'',
+      notes:             p.notes||'',
     })
     setModal(true)
   }
@@ -595,6 +596,10 @@ export default function Parceiros() {
               <div className="form-group">
                 <label className="form-label">Temas que o Parceiro Aborda</label>
                 <textarea className="form-textarea" rows={2} value={form.temas} onChange={e=>setForm(f=>({...f,temas:e.target.value}))} placeholder="Ex: filosofia, teologia, literatura clássica..."/>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Observações</label>
+                <textarea className="form-textarea" rows={3} value={form.notes||''} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} placeholder="Anotações internas sobre este parceiro..."/>
               </div>
             </div>
             <div className="form-actions">
