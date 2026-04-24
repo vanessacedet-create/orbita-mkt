@@ -125,14 +125,14 @@ export async function getParceirosComPontuacao() {
   // Busca campanha_parceiros — sem join complexo
   const { data: cps, error: ce } = await supabase
     .from('campanha_parceiros')
-    .select('id, parceiro_id, status, data_contato, campanha_id')
+    .select('id, parceiro_id, status, campanha_id')
     .in('status', STATUS_VALIDOS)
   if (ce) throw ce
 
   // Busca lancamento_parceiros — sem join complexo
   const { data: lps, error: le } = await supabase
     .from('lancamento_parceiros')
-    .select('id, parceiro_id, status, data_combinada, data_contato, lancamento_livro_id')
+    .select('id, parceiro_id, status, data_combinada, lancamento_livro_id')
     .in('status', STATUS_VALIDOS)
   if (le) throw le
 
