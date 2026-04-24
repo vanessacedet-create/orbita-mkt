@@ -8,7 +8,8 @@ import { useAuth } from '../context/AuthContext'
 import {
   Plus, X, Pencil, Trash2, CheckSquare, Square, MessageSquare,
   Calendar, Flag, User, ChevronDown, List, Columns, Clock,
-  AlertCircle, ArrowUp, Minus, CheckCircle2, Circle, LayoutList
+  AlertCircle, ArrowUp, Minus, CheckCircle2, Circle, LayoutList,
+  CalendarDays, ChevronLeft, ChevronRight
 } from 'lucide-react'
 import { format, isPast, isToday, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -66,8 +67,8 @@ function PrazoBadge({ data_prazo, status }) {
 // ── MODAL TAREFA ───────────────────────────────────────────
 function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
   const { usuario } = useAuth()
-  const EMPTY = { titulo:'', descricao:'', status:'a_fazer', prioridade:'media', responsavel_id:'', data_prazo:'' }
-  const [form, setForm] = useState(tarefa ? {
+  const EMPTY = { titulo:'', descricao:'', status:'a_fazer', prioridade:'media', responsavel_id:'', data_prazo: tarefa?._dataPrazo || '' }
+  const [form, setForm] = useState(tarefa && !tarefa._dataPrazo ? {
     titulo:          tarefa.titulo,
     descricao:       tarefa.descricao || '',
     status:          tarefa.status,
@@ -434,6 +435,9 @@ export default function Tarefas() {
             <button onClick={()=>setView('lista')} style={{ padding:'7px 12px', border:'none', cursor:'pointer', background: view==='lista' ? 'var(--accent)' : 'transparent', color: view==='lista' ? '#fff' : 'var(--text-muted)', transition:'all 0.15s', display:'flex', alignItems:'center', gap:5, fontSize:12 }}>
               <List size={13}/> Lista
             </button>
+            <button onClick={()=>setView('calendario')} style={{ padding:'7px 12px', border:'none', cursor:'pointer', background: view==='calendario' ? 'var(--accent)' : 'transparent', color: view==='calendario' ? '#fff' : 'var(--text-muted)', transition:'all 0.15s', display:'flex', alignItems:'center', gap:5, fontSize:12 }}>
+              <CalendarDays size={13}/> Calendário
+            </button>
           </div>
           <button className="btn btn-primary" onClick={()=>setModal('new')}><Plus size={14}/> Nova tarefa</button>
         </div>
@@ -585,6 +589,15 @@ export default function Tarefas() {
         </div>
       )}
 
+      {/* CALENDÁRIO */}
+      {view === 'calendario' && (
+        <ViewCalendario
+          tarefas={tarefasFiltradas}
+          onClickTarefa={t=>setModal(t)}
+          onNovaTarefa={(data)=>setModal({ _dataPrazo: data })}
+        />
+      )}
+
       {/* Modal */}
       {modal && (
         <ModalTarefa
@@ -597,6 +610,172 @@ export default function Tarefas() {
       )}
 
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
+    </div>
+  )
+}
+
+// ── VIEW CALENDÁRIO ───────────────────────────────────────────
+function ViewCalendario({ tarefas, onClickTarefa, onNovaTarefa }) {
+  const hoje = new Date()
+  const [mesRef, setMesRef] = useState(new Date(hoje.getFullYear(), hoje.getMonth(), 1))
+
+  const ano = mesRef.getFullYear()
+  const mes = mesRef.getMonth()
+  const nomeMes = format(mesRef, 'MMMM yyyy', { locale: ptBR })
+  const primeiroDia = new Date(ano, mes, 1).getDay() // 0=dom
+  const diasNoMes = new Date(ano, mes + 1, 0).getDate()
+
+  // Agrupa tarefas por data_prazo
+  const tarefasPorDia = {}
+  tarefas.forEach(t => {
+    if (!t.data_prazo) return
+    const key = t.data_prazo.slice(0, 10)
+    if (!tarefasPorDia[key]) tarefasPorDia[key] = []
+    tarefasPorDia[key].push(t)
+  })
+
+  // Tarefas sem data
+  const semData = tarefas.filter(t => !t.data_prazo)
+
+  function corStatus(status) {
+    if (status === 'concluido') return { bg:'rgba(34,197,94,0.15)', cor:'#22c55e', border:'rgba(34,197,94,0.3)' }
+    if (status === 'em_andamento') return { bg:'rgba(234,179,8,0.15)', cor:'#eab308', border:'rgba(234,179,8,0.3)' }
+    return { bg:'rgba(99,102,241,0.15)', cor:'#818cf8', border:'rgba(99,102,241,0.3)' }
+  }
+
+  const diasSemana = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
+
+  return (
+    <div>
+      {/* Header do calendário */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+        <button onClick={()=>setMesRef(new Date(ano, mes-1, 1))}
+          style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'6px 10px', cursor:'pointer', display:'flex', alignItems:'center', color:'var(--text-soft)' }}>
+          <ChevronLeft size={16}/>
+        </button>
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+          <h2 style={{ fontFamily:'Syne, sans-serif', fontWeight:700, fontSize:17, color:'var(--text)', margin:0, textTransform:'capitalize' }}>
+            {nomeMes}
+          </h2>
+          <button onClick={()=>setMesRef(new Date(hoje.getFullYear(), hoje.getMonth(), 1))}
+            style={{ fontSize:11, padding:'3px 10px', borderRadius:20, background:'var(--surface-2)', border:'1px solid var(--border)', cursor:'pointer', color:'var(--text-muted)', fontWeight:700 }}>
+            Hoje
+          </button>
+        </div>
+        <button onClick={()=>setMesRef(new Date(ano, mes+1, 1))}
+          style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'6px 10px', cursor:'pointer', display:'flex', alignItems:'center', color:'var(--text-soft)' }}>
+          <ChevronRight size={16}/>
+        </button>
+      </div>
+
+      {/* Grid */}
+      <div style={{ border:'1px solid var(--border)', borderRadius:12, overflow:'hidden' }}>
+        {/* Cabeçalho dias da semana */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', background:'var(--surface-2)', borderBottom:'1px solid var(--border)' }}>
+          {diasSemana.map(d=>(
+            <div key={d} style={{ padding:'10px 0', textAlign:'center', fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>{d}</div>
+          ))}
+        </div>
+
+        {/* Células */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)' }}>
+          {/* Células vazias antes do primeiro dia */}
+          {Array.from({length: primeiroDia}).map((_,i)=>(
+            <div key={`v${i}`} style={{ minHeight:110, background:'var(--surface)', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)', opacity:0.4 }}/>
+          ))}
+
+          {/* Dias do mês */}
+          {Array.from({length: diasNoMes}).map((_,i)=>{
+            const dia = i + 1
+            const dataKey = `${ano}-${String(mes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`
+            const tarefasDia = tarefasPorDia[dataKey] || []
+            const isHoje = hoje.getDate()===dia && hoje.getMonth()===mes && hoje.getFullYear()===ano
+            const col = (primeiroDia + i) % 7
+            const isFimSemana = col === 0 || col === 6
+
+            return (
+              <div key={dia}
+                onClick={()=>onNovaTarefa(dataKey)}
+                style={{
+                  minHeight:110, padding:'6px', cursor:'pointer',
+                  background: isFimSemana ? 'var(--surface-2)' : 'var(--surface)',
+                  borderRight:'1px solid var(--border)',
+                  borderBottom:'1px solid var(--border)',
+                  transition:'background 0.1s',
+                }}
+                onMouseEnter={e=>e.currentTarget.style.background='var(--surface-3)'}
+                onMouseLeave={e=>e.currentTarget.style.background=isFimSemana?'var(--surface-2)':'var(--surface)'}>
+
+                {/* Número do dia */}
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+                  <span style={{
+                    width:24, height:24, display:'flex', alignItems:'center', justifyContent:'center',
+                    borderRadius:'50%', fontSize:12, fontWeight: isHoje ? 700 : 400,
+                    background: isHoje ? 'var(--accent)' : 'transparent',
+                    color: isHoje ? '#fff' : isFimSemana ? 'var(--text-muted)' : 'var(--text-soft)',
+                  }}>{dia}</span>
+                  {tarefasDia.length > 0 && (
+                    <span style={{ fontSize:10, color:'var(--text-muted)', fontWeight:700 }}>{tarefasDia.length}</span>
+                  )}
+                </div>
+
+                {/* Tarefas do dia (máx 3 visíveis) */}
+                {tarefasDia.slice(0,3).map(t=>{
+                  const c = corStatus(t.status)
+                  const atrasada = t.status !== 'concluido' && isPast(new Date(dataKey+'T12:00:00')) && !isHoje
+                  return (
+                    <div key={t.id}
+                      onClick={e=>{e.stopPropagation();onClickTarefa(t)}}
+                      style={{
+                        padding:'2px 6px', borderRadius:4, marginBottom:2, cursor:'pointer',
+                        background: atrasada ? 'rgba(239,68,68,0.12)' : c.bg,
+                        border:`1px solid ${atrasada ? 'rgba(239,68,68,0.3)' : c.border}`,
+                        fontSize:10, fontWeight:600,
+                        color: atrasada ? '#f87171' : c.cor,
+                        overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+                        lineHeight:1.4,
+                      }}>
+                      {t.titulo}
+                    </div>
+                  )
+                })}
+                {tarefasDia.length > 3 && (
+                  <div style={{ fontSize:9, color:'var(--text-muted)', fontWeight:700, paddingLeft:2 }}>
+                    +{tarefasDia.length - 3} mais
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          {/* Células vazias no final */}
+          {Array.from({length: (7 - (primeiroDia + diasNoMes) % 7) % 7}).map((_,i)=>(
+            <div key={`f${i}`} style={{ minHeight:110, background:'var(--surface)', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)', opacity:0.4 }}/>
+          ))}
+        </div>
+      </div>
+
+      {/* Tarefas sem data */}
+      {semData.length > 0 && (
+        <div style={{ marginTop:20 }}>
+          <h3 style={{ fontSize:12, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>
+            Sem data definida ({semData.length})
+          </h3>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+            {semData.map(t=>{
+              const c = corStatus(t.status)
+              return (
+                <div key={t.id} onClick={()=>onClickTarefa(t)}
+                  style={{ padding:'5px 12px', borderRadius:20, cursor:'pointer', background:c.bg, border:`1px solid ${c.border}`, fontSize:12, fontWeight:600, color:c.cor, transition:'opacity 0.1s' }}
+                  onMouseEnter={e=>e.currentTarget.style.opacity='0.7'}
+                  onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
+                  {t.titulo}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
