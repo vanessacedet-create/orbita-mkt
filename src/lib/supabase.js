@@ -165,18 +165,6 @@ export async function getParceirosComPontuacao() {
   }))
 }
 
-function notaStatus(status) {
-  switch (status) {
-    case 'publicado':    return 10
-    case 'agendado':     return 6
-    case 'confirmado':   return 5
-    case 'recusou':      return 1
-    case 'sem_retorno':  return 0
-    case 'nao_publicou': return 0
-    default:             return 0
-  }
-}
-
 function mesAno(dataStr) {
   if (!dataStr) return null
   const d = new Date(dataStr + 'T12:00:00')
@@ -187,53 +175,80 @@ function mesAno(dataStr) {
 function calcularPontuacao({ normais = [], lancamentos = [] }) {
   const STATUS_VALIDOS = ['publicado','nao_publicou','confirmado','recusou','sem_retorno','agendado']
 
-  // Normaliza todas as participações com dataRef e status
+  // Normaliza todas as participações
   const todas = [
     ...normais.filter(cp => STATUS_VALIDOS.includes(cp.status)).map(cp => ({
-      status: cp.status,
-      dataRef: cp._dataRef || null,
+      status: cp.status, dataRef: cp._dataRef || null,
     })),
     ...lancamentos.filter(lp => STATUS_VALIDOS.includes(lp.status)).map(lp => ({
-      status: lp.status,
-      dataRef: lp._dataRef || null,
+      status: lp.status, dataRef: lp._dataRef || null,
     }))
   ]
 
   if (todas.length === 0) return null
 
-  // Agrupa por mês (YYYY-MM)
+  // ── DIMENSÃO 1: CONFIABILIDADE (50%) ──────────────────────
+  // Quando confirmou/agendou/publicou, cumpriu?
+  const comprometidos = todas.filter(p => ['confirmado','agendado','publicado'].includes(p.status)).length
+  const publicados    = todas.filter(p => p.status === 'publicado').length
+  const confiabilidade = comprometidos > 0 ? publicados / comprometidos : 0
+
+  // ── DIMENSÃO 2: COMPROMETIMENTO (30%) ─────────────────────
+  // Quando entrei em contato, deu retorno (mesmo recusando)?
+  const comRetorno = todas.filter(p => p.status !== 'sem_retorno').length
+  const comprometimento = todas.length > 0 ? comRetorno / todas.length : 0
+
+  // ── DIMENSÃO 3: RECORRÊNCIA (20%) ─────────────────────────
+  // Quantos meses distintos publicou / total de meses no histórico
+  const mesesComPublicacao = new Set(
+    todas.filter(p => p.status === 'publicado' && mesAno(p.dataRef))
+         .map(p => mesAno(p.dataRef))
+  )
+  const todosOsMeses = new Set(
+    todas.filter(p => mesAno(p.dataRef)).map(p => mesAno(p.dataRef))
+  )
+  const recorrencia = todosOsMeses.size > 0 ? mesesComPublicacao.size / todosOsMeses.size : 0
+
+  // ── NOTA FINAL ────────────────────────────────────────────
+  const notaBruta = (confiabilidade * 0.5 + comprometimento * 0.3 + recorrencia * 0.2) * 10
+  const notaFinal = Math.round(notaBruta * 10) / 10
+
+  // ── NOTA MENSAL ───────────────────────────────────────────
+  // Mesma lógica das 3 dimensões aplicada só aos dados do mês
   const porMes = {}
   for (const p of todas) {
-    const chave = mesAno(p.dataRef) || 'sem_data'
-    if (!porMes[chave]) porMes[chave] = []
-    porMes[chave].push(p)
+    const m = mesAno(p.dataRef)
+    if (!m) continue
+    if (!porMes[m]) porMes[m] = []
+    porMes[m].push(p)
   }
-
-  // Calcula nota por mês: média das notas do mês ÷ 4
   const notasMensais = {}
-  for (const [mes, parts] of Object.entries(porMes)) {
-    if (mes === 'sem_data') continue
-    const somaNotas = parts.reduce((acc, p) => acc + notaStatus(p.status), 0)
-    const mediaMes = somaNotas / parts.length
-    notasMensais[mes] = Math.round((mediaMes / 4) * 10) / 10
+  for (const [m, parts] of Object.entries(porMes)) {
+    // Confiabilidade do mês (50%): publicou ÷ (confirmados+agendados+publicados)
+    const compMes = parts.filter(p => ['confirmado','agendado','publicado'].includes(p.status)).length
+    const pubMes  = parts.filter(p => p.status === 'publicado').length
+    const confMes = compMes > 0 ? pubMes / compMes : 0
+
+    // Comprometimento do mês (30%): deu retorno ÷ total de contatos no mês
+    const retMes  = parts.filter(p => p.status !== 'sem_retorno').length / parts.length
+
+    // Recorrência do mês (20%): publicou neste mês = 100%, não publicou = 0%
+    const recMes  = pubMes > 0 ? 1 : 0
+
+    const notaMes = (confMes * 0.5 + retMes * 0.3 + recMes * 0.2) * 10
+    notasMensais[m] = Math.round(notaMes * 10) / 10
   }
-
-  const meses = Object.keys(notasMensais).sort()
-  if (meses.length === 0) return null
-
-  // Nota geral = média simples dos meses
-  const somaGeral = meses.reduce((acc, m) => acc + notasMensais[m], 0)
-  const notaGeral = Math.round((somaGeral / meses.length) * 10) / 10
-
-  const totalPublicadas = todas.filter(p => p.status === 'publicado').length
 
   return {
-    nota: notaGeral,
+    nota: notaFinal,
     notasMensais,
     totalCampanhas: todas.length,
     totalLancamentos: lancamentos.length,
-    publicadas: totalPublicadas,
-    nivel: notaGeral >= 8 ? 'ouro' : notaGeral >= 6 ? 'prata' : notaGeral >= 4 ? 'bronze' : 'atencao'
+    publicadas: publicados,
+    confiabilidade: Math.round(confiabilidade * 100),
+    comprometimento: Math.round(comprometimento * 100),
+    recorrencia: Math.round(recorrencia * 100),
+    nivel: notaFinal >= 8 ? 'ouro' : notaFinal >= 6 ? 'prata' : notaFinal >= 4 ? 'bronze' : 'atencao'
   }
 }
 
