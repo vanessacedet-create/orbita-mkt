@@ -642,7 +642,7 @@ export async function getLancamentoLivros(campanha_id) {
     .from('lancamento_livros')
     .select('id, livro_id, livros(id, titulo, autor, isbn, sku, data_lancamento), lancamento_parceiros(id, status, data_combinada, data_divulgacao, tipo_divulgacao, origem, link, curtidas, comentarios, visualizacoes, observacoes, parceiro_id, parceiros(id, nome, tipo_parceria, responsavel_interno_id))')
     .eq('campanha_id', campanha_id)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
   if (error) throw error
   return data || []
 }
