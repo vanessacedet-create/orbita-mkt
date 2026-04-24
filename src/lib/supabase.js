@@ -115,46 +115,48 @@ export async function getTodosParceiros() {
 
 // ── PONTUAÇÃO DE PARCEIROS ─────────────────────────────────
 export async function getParceirosComPontuacao() {
+  const STATUS_VALIDOS = ['publicado','nao_publicou','confirmado','recusou','sem_retorno','agendado']
+
   // Busca todos os parceiros
   const { data: parceiros, error: pe } = await supabase
     .from('parceiros').select('*').order('nome')
   if (pe) throw pe
 
-  // Busca campanha_parceiros (campanhas normais)
+  // Busca campanha_parceiros — sem join complexo
   const { data: cps, error: ce } = await supabase
     .from('campanha_parceiros')
-    .select(`id, parceiro_id, status, data_contato, contato_realizado, campanhas(id, nome, data_inicio, status)`)
-    .in('status', ['publicado','nao_publicou','confirmado','recusou','sem_retorno','agendado'])
+    .select('id, parceiro_id, status, data_contato, campanha_id')
+    .in('status', STATUS_VALIDOS)
   if (ce) throw ce
 
-  // Busca lancamento_parceiros (campanhas de lançamento) — registros com status relevante
+  // Busca lancamento_parceiros — sem join complexo
   const { data: lps, error: le } = await supabase
     .from('lancamento_parceiros')
-    .select(`
-      id, parceiro_id, status, data_combinada, data_contato,
-      lancamento_livro:lancamento_livros!lancamento_livro_id(id, campanha:campanhas(id, nome, data_inicio))
-    `)
-    .in('status', ['publicado','nao_publicou','confirmado','recusou','sem_retorno','agendado'])
+    .select('id, parceiro_id, status, data_combinada, data_contato, lancamento_livro_id')
+    .in('status', STATUS_VALIDOS)
   if (le) throw le
 
-  // Agrupa por parceiro — combina campanhas normais + lançamentos
+  // Agrupa por parceiro
   const porParceiro = {}
-  for (const cp of cps) {
+
+  for (const cp of (cps || [])) {
+    if (!cp.parceiro_id) continue
     if (!porParceiro[cp.parceiro_id]) porParceiro[cp.parceiro_id] = { normais: [], lancamentos: [] }
     porParceiro[cp.parceiro_id].normais.push(cp)
   }
-  for (const lp of lps) {
+
+  // Para lancamentos, agrupa por parceiro evitando duplicar a mesma campanha
+  const llVisto = {}
+  for (const lp of (lps || [])) {
+    if (!lp.parceiro_id) continue
     if (!porParceiro[lp.parceiro_id]) porParceiro[lp.parceiro_id] = { normais: [], lancamentos: [] }
-    // Evita duplicar o mesmo parceiro em múltiplos livros do mesmo lançamento
-    const campanhaId = lp.lancamento_livro?.campanha?.id
-    const jatem = porParceiro[lp.parceiro_id].lancamentos.find(x => x._campanhaId === campanhaId && campanhaId)
-    if (!jatem) {
-      porParceiro[lp.parceiro_id].lancamentos.push({
-        ...lp,
-        _campanhaId: campanhaId,
-        _dataRef: lp.data_combinada || lp.lancamento_livro?.campanha?.data_inicio || null,
-      })
-    }
+    const chave = `${lp.parceiro_id}_${lp.lancamento_livro_id}`
+    if (llVisto[chave]) continue
+    llVisto[chave] = true
+    porParceiro[lp.parceiro_id].lancamentos.push({
+      ...lp,
+      _dataRef: lp.data_combinada || null,
+    })
   }
 
   return parceiros.map(p => ({
