@@ -538,6 +538,8 @@ function ModalParceiro({ cp, campanha, onSave, onClose }) {
                             <span className="badge badge-indigo" style={{fontSize:11}}>{tipo?.label||d.tipo}</span>
                             {d.origem==='organica'
                               ? <span style={{fontSize:10,background:'rgba(34,197,94,0.12)',color:'#22c55e',borderRadius:4,padding:'1px 6px',fontWeight:600}}>🌱 Orgânica</span>
+                              : d.origem==='propria'
+                              ? <span style={{fontSize:10,background:'rgba(245,158,11,0.12)',color:'#f59e0b',borderRadius:4,padding:'1px 6px',fontWeight:600}}>⭐ Própria</span>
                               : <span style={{fontSize:10,background:'rgba(249,115,22,0.12)',color:'var(--accent)',borderRadius:4,padding:'1px 6px',fontWeight:600}}>🤝 Combinada</span>
                             }
                             {d.data_divulgacao && <span style={{fontSize:11,color:'var(--text-muted)'}}>{fmtDate(d.data_divulgacao, 'dd/MM/yyyy', {locale:ptBR})}</span>}
@@ -793,7 +795,7 @@ function ModalDivulgacao({ divulgacao, onSave, onClose }) {
           <div className="form-group">
             <label className="form-label">Origem da divulgação</label>
             <div style={{display:'flex',gap:8}}>
-              {[{v:'combinada',l:'🤝 Combinada'},{v:'organica',l:'🌱 Orgânica'}].map(({v,l})=>(
+              {[{v:'combinada',l:'🤝 Combinada'},{v:'organica',l:'🌱 Orgânica'},{v:'propria',l:'⭐ Própria'}].map(({v,l})=>(
                 <button key={v} type="button" onClick={()=>setOrigem(v)}
                   style={{flex:1,padding:'8px 0',borderRadius:8,fontSize:13,fontWeight:600,cursor:'pointer',border:'2px solid',
                     borderColor: origem===v?'var(--accent)':'var(--border)',
@@ -1022,7 +1024,7 @@ function ModalLancamentoParceiro({ lp, irmaos = [], ll_id, tipoCampanha, onSave,
                           {/* Origem */}
                           <td>
                             <div style={{display:'flex',gap:4}}>
-                              {[{v:'combinada',l:'🤝'},{v:'organica',l:'🌱'}].map(({v,l})=>(
+                              {[{v:'combinada',l:'🤝'},{v:'organica',l:'🌱'},{v:'propria',l:'⭐'}].map(({v,l})=>(
                                 <button key={v} type="button" onClick={()=>upd(div._tmpId,'origem',v)}
                                   title={v==='combinada'?'Combinada':'Orgânica'}
                                   style={{width:26,height:26,borderRadius:6,fontSize:12,cursor:'pointer',border:'2px solid',
@@ -1141,7 +1143,7 @@ function ModalEditarDivulgacao({ div, principal, onSave, onClose }) {
           <div className="form-group">
             <label className="form-label">Origem</label>
             <div style={{display:'flex',gap:8}}>
-              {[{v:'combinada',l:'🤝 Combinada'},{v:'organica',l:'🌱 Orgânica'}].map(({v,l})=>(
+              {[{v:'combinada',l:'🤝 Combinada'},{v:'organica',l:'🌱 Orgânica'},{v:'propria',l:'⭐ Própria'}].map(({v,l})=>(
                 <button key={v} type="button" onClick={()=>setOrigem(v)}
                   style={{flex:1,padding:'7px 0',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',border:'2px solid',
                     borderColor:origem===v?'var(--accent)':'var(--border)',
@@ -2093,7 +2095,7 @@ function ModalDivulgacaoLibraria({ campanhaId, parceiros, onSave, onClose }) {
           <div className="form-group">
             <label className="form-label">Origem da divulgação</label>
             <div style={{display:'flex',gap:8}}>
-              {[{v:'combinada',l:'🤝 Combinada'},{v:'organica',l:'🌱 Orgânica'}].map(({v,l})=>(
+              {[{v:'combinada',l:'🤝 Combinada'},{v:'organica',l:'🌱 Orgânica'},{v:'propria',l:'⭐ Própria'}].map(({v,l})=>(
                 <button key={v} type="button" onClick={()=>setOrigem(v)}
                   style={{flex:1,padding:'8px 0',borderRadius:8,fontSize:13,fontWeight:600,cursor:'pointer',border:'2px solid',
                     borderColor:origem===v?'var(--accent)':'var(--border)',
