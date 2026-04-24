@@ -301,7 +301,8 @@ export default function Parceiros() {
       const data = await getParceirosComPontuacao()
       setParceiros(data)
     } catch(e) {
-      console.error('getParceirosComPontuacao falhou, usando fallback:', e)
+      console.error('ERRO getParceirosComPontuacao:', JSON.stringify(e), e?.message, e?.details, e?.hint)
+      showToast('Erro ao calcular pontuação: ' + (e?.message || JSON.stringify(e)), 'error')
       const data = await getParceiros()
       setParceiros(data)
     }
