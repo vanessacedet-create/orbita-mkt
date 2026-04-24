@@ -132,7 +132,7 @@ export async function getParceirosComPontuacao() {
     .from('lancamento_parceiros')
     .select(`
       id, parceiro_id, status, data_combinada, data_contato,
-      lancamento_livros(id, campanhas(id, nome, data_inicio))
+      lancamento_livro:lancamento_livros!lancamento_livro_id(id, campanha:campanhas(id, nome, data_inicio))
     `)
     .in('status', ['publicado','nao_publicou','confirmado','recusou','sem_retorno','agendado'])
   if (le) throw le
@@ -146,13 +146,13 @@ export async function getParceirosComPontuacao() {
   for (const lp of lps) {
     if (!porParceiro[lp.parceiro_id]) porParceiro[lp.parceiro_id] = { normais: [], lancamentos: [] }
     // Evita duplicar o mesmo parceiro em múltiplos livros do mesmo lançamento
-    const campanhaId = lp.lancamento_livros?.campanhas?.id
+    const campanhaId = lp.lancamento_livro?.campanha?.id
     const jatem = porParceiro[lp.parceiro_id].lancamentos.find(x => x._campanhaId === campanhaId && campanhaId)
     if (!jatem) {
       porParceiro[lp.parceiro_id].lancamentos.push({
         ...lp,
         _campanhaId: campanhaId,
-        _dataRef: lp.data_combinada || lp.lancamento_livros?.campanhas?.data_inicio || null,
+        _dataRef: lp.data_combinada || lp.lancamento_livro?.campanha?.data_inicio || null,
       })
     }
   }
