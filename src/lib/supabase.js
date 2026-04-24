@@ -189,8 +189,8 @@ function calcularPontuacao({ normais = [], lancamentos = [] }) {
       case 'publicado':    nota = 10; break
       case 'agendado':     nota = 6;  break  // Agendado = comprometeu-se, vale mais que confirmado simples
       case 'confirmado':   nota = 5;  break
-      case 'sem_retorno':  nota = 3;  break
-      case 'recusou':      nota = 2;  break
+      case 'sem_retorno':  nota = 0;  break
+      case 'recusou':      nota = 1;  break
       case 'nao_publicou': nota = 0;  break
       default:             nota = 0
     }
