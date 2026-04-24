@@ -1232,7 +1232,9 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
     }
     try {
       const novo = await addLancamentoLivro(campanhaId, livro.id)
-      setLancamentoLivros(prev => [novo, ...prev])
+      // Enriquece com os dados completos do livro já disponíveis localmente
+      const novoCompleto = { ...novo, livros: { ...novo.livros, ...livro }, lancamento_parceiros: [] }
+      setLancamentoLivros(prev => [novoCompleto, ...prev])
       setLivroSearch('')
       setLivroResults([])
       setLivroOpen(false)
