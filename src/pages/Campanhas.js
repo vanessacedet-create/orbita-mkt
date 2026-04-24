@@ -1232,7 +1232,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
     }
     try {
       const novo = await addLancamentoLivro(campanhaId, livro.id)
-      setLancamentoLivros(prev => [...prev, novo])
+      setLancamentoLivros(prev => [novo, ...prev])
       setLivroSearch('')
       setLivroResults([])
       setLivroOpen(false)
@@ -1256,7 +1256,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
     try {
       const novo = await addLancamentoParceiro(ll_id, parceiro.id)
       setLancamentoLivros(prev => prev.map(x => x.id === ll_id
-        ? { ...x, lancamento_parceiros: [...(x.lancamento_parceiros||[]), novo] }
+        ? { ...x, lancamento_parceiros: [novo, ...(x.lancamento_parceiros||[])] }
         : x
       ))
       setAddParceiroSearch(prev => ({ ...prev, [ll_id]: '' }))
