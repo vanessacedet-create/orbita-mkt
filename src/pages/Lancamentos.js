@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { getLivrosLancamento, importarLancamentos, updateLivro, deleteLivro } from '../lib/supabase'
-import { ChevronLeft, ChevronRight, Upload, X, Calendar, Pencil, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Upload, X, Calendar, Pencil, Trash2, Download } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 // ── UTILITÁRIOS DE DATA ────────────────────────────────────
@@ -191,6 +191,20 @@ function ModalImportar({ onImport, onClose }) {
     return ''
   }
 
+  function downloadModelo() {
+    const dados = [
+      { 'titulo': 'A Metamorfose', 'autor': 'Franz Kafka', 'editora': 'Sétimo Selo', 'data de lançamento': '15/05/2025', 'isbn': '9788500000001', 'sku': 'SET-001' },
+      { 'titulo': 'O Padrão Bitcoin', 'autor': 'Saifedean Ammous', 'editora': 'Axia', 'data de lançamento': '22/05/2025', 'isbn': '9788500000002', 'sku': 'AXI-002' },
+      { 'titulo': 'Frankenstein', 'autor': 'Mary Shelley', 'editora': 'Papillon', 'data de lançamento': '10/06/2025', 'isbn': '', 'sku': '' },
+    ]
+    const ws = XLSX.utils.json_to_sheet(dados)
+    const colWidths = [{ wch: 40 }, { wch: 25 }, { wch: 20 }, { wch: 22 }, { wch: 16 }, { wch: 12 }]
+    ws['!cols'] = colWidths
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Lançamentos')
+    XLSX.writeFile(wb, 'modelo-lancamentos.xlsx')
+  }
+
   function handleFile(file) {
     if (!file) return
     setArquivo(file); setErros([]); setResultado(null)
@@ -246,6 +260,14 @@ function ModalImportar({ onImport, onClose }) {
             <Upload size={24} color="var(--accent)" style={{marginBottom:8}}/>
             <div style={{fontSize:14,fontWeight:600,color:'var(--text)'}}>{arquivo?arquivo.name:'Clique para selecionar a planilha'}</div>
             <div style={{fontSize:12,color:'var(--text-muted)',marginTop:4}}>Formatos aceitos: .xlsx, .xls, .csv</div>
+          </div>
+          <div style={{textAlign:'center',marginBottom:16}}>
+            <button onClick={downloadModelo}
+              style={{display:'inline-flex',alignItems:'center',gap:6,background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,padding:'7px 14px',cursor:'pointer',fontSize:12,fontWeight:600,color:'var(--text-muted)',transition:'all 0.15s'}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.color='var(--accent)'}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.color='var(--text-muted)'}}>
+              <Download size={13}/> Baixar planilha modelo
+            </button>
           </div>
           {erros.length>0&&(<div style={{background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',borderRadius:8,padding:'10px 14px',fontSize:12,color:'var(--red)',marginBottom:12}}>{erros.map((e,i)=><div key={i}>{e}</div>)}</div>)}
           {preview.length>0&&(
