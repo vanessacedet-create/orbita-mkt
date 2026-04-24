@@ -322,7 +322,7 @@ export default function Parceiros() {
       tipo_parceria:     p.tipo_parceria||'',
       cpf:               p.cpf||'',
       livraria:          p.livraria||'',
-      canal_comunicacao: p.canal_comunicacao||'',
+      canal_comunicacao: p.canal||p.canal_comunicacao||'',
       responsavel_interno_id: p.responsavel_interno_id||'',
       status: p.status||'ativo',
       editoras_divulga:  p.editoras_divulga ? p.editoras_divulga.split(',').map(e=>e.trim()).filter(Boolean) : [],
@@ -337,7 +337,12 @@ export default function Parceiros() {
     if (!form.nome.trim()) return
     setSaving(true)
     try {
-      const payload = { ...form, editoras_divulga: form.editoras_divulga.join(',') }
+      const { canal_comunicacao, ...rest } = form
+      const payload = { 
+        ...rest, 
+        canal: canal_comunicacao,
+        editoras_divulga: form.editoras_divulga.join(',') 
+      }
       if (editing) { await updateParceiro(editing.id, payload); showToast('Atualizado!') }
       else { await createParceiro(payload); showToast('Cadastrado!') }
       await reload()
@@ -379,7 +384,7 @@ export default function Parceiros() {
       )) return false
       if (filtroStatus && p.status !== filtroStatus) return false
       if (filtroTipo  && p.tipo_parceria !== filtroTipo) return false
-      if (filtroCanal && p.canal_comunicacao !== filtroCanal) return false
+      if (filtroCanal && (p.canal||p.canal_comunicacao) !== filtroCanal) return false
       if (filtroResp  && p.responsavel_interno_id !== filtroResp) return false
       if (filtroNivel && p.pontuacao?.nivel !== filtroNivel) return false
       return true
@@ -482,7 +487,7 @@ export default function Parceiros() {
                     <td style={{fontSize:12}}>{p.livraria||<span className="td-muted">—</span>}</td>
                     <td style={{fontSize:12}}>
                       {p.canal_comunicacao
-                        ? <span className="badge badge-amber" style={{fontSize:10}}>{p.canal_comunicacao}</span>
+                        ? <span className="badge badge-amber" style={{fontSize:10}}>{p.canal||p.canal_comunicacao}</span>
                         : <span className="td-muted">—</span>}
                     </td>
                     <td style={{fontSize:12,color:'var(--text-muted)'}}>
