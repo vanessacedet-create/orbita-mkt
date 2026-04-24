@@ -165,74 +165,75 @@ export async function getParceirosComPontuacao() {
   }))
 }
 
+function notaStatus(status) {
+  switch (status) {
+    case 'publicado':    return 10
+    case 'agendado':     return 6
+    case 'confirmado':   return 5
+    case 'recusou':      return 1
+    case 'sem_retorno':  return 0
+    case 'nao_publicou': return 0
+    default:             return 0
+  }
+}
+
+function mesAno(dataStr) {
+  if (!dataStr) return null
+  const d = new Date(dataStr + 'T12:00:00')
+  if (isNaN(d)) return null
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
+}
+
 function calcularPontuacao({ normais = [], lancamentos = [] }) {
   const STATUS_VALIDOS = ['publicado','nao_publicou','confirmado','recusou','sem_retorno','agendado']
 
-  // Normaliza ambas as fontes em formato uniforme: { status, dataRef, data_contato, dataInicioRef }
-  function normalizar(cp, tipo) {
-    const dataRef = tipo === 'normal'
-      ? (cp.campanhas?.data_inicio || null)
-      : (cp._dataRef || null)
-    return { status: cp.status, dataRef, data_contato: cp.data_contato || null, tipo }
-  }
-
-  const todasNormais    = normais.filter(cp => STATUS_VALIDOS.includes(cp.status)).map(cp => normalizar(cp, 'normal'))
-  const todasLancamentos = lancamentos.filter(lp => STATUS_VALIDOS.includes(lp.status)).map(lp => normalizar(lp, 'lancamento'))
-  const todas = [...todasNormais, ...todasLancamentos]
+  // Normaliza todas as participações com dataRef e status
+  const todas = [
+    ...normais.filter(cp => STATUS_VALIDOS.includes(cp.status)).map(cp => ({
+      status: cp.status,
+      dataRef: cp._dataRef || null,
+    })),
+    ...lancamentos.filter(lp => STATUS_VALIDOS.includes(lp.status)).map(lp => ({
+      status: lp.status,
+      dataRef: lp._dataRef || null,
+    }))
+  ]
 
   if (todas.length === 0) return null
 
-  // Nota individual por participação
-  function notaParticipacao(p) {
-    let nota = 0
-    switch (p.status) {
-      case 'publicado':    nota = 10; break
-      case 'agendado':     nota = 6;  break  // Agendado = comprometeu-se, vale mais que confirmado simples
-      case 'confirmado':   nota = 5;  break
-      case 'sem_retorno':  nota = 0;  break
-      case 'recusou':      nota = 1;  break
-      case 'nao_publicou': nota = 0;  break
-      default:             nota = 0
-    }
-    // Bônus de rapidez (+1): confirmou/agendou em até 3 dias da data de referência
-    if (['publicado','confirmado','agendado'].includes(p.status) && p.data_contato && p.dataRef) {
-      const dias = Math.abs((new Date(p.data_contato) - new Date(p.dataRef)) / 86400000)
-      if (dias <= 3) nota = Math.min(10, nota + 1)
-    }
-    return nota
+  // Agrupa por mês (YYYY-MM)
+  const porMes = {}
+  for (const p of todas) {
+    const chave = mesAno(p.dataRef) || 'sem_data'
+    if (!porMes[chave]) porMes[chave] = []
+    porMes[chave].push(p)
   }
 
-  // Ordena por dataRef (mais recente primeiro)
-  const ordenadas = [...todas].sort((a, b) => {
-    const da = a.dataRef || '0000-00-00'
-    const db = b.dataRef || '0000-00-00'
-    return db.localeCompare(da)
-  })
+  // Calcula nota por mês: média das notas do mês ÷ 4
+  const notasMensais = {}
+  for (const [mes, parts] of Object.entries(porMes)) {
+    if (mes === 'sem_data') continue
+    const somaNotas = parts.reduce((acc, p) => acc + notaStatus(p.status), 0)
+    const mediaMes = somaNotas / parts.length
+    notasMensais[mes] = Math.round((mediaMes / 4) * 10) / 10
+  }
 
-  // Pesos: 1ª = 2x, 2ª = 1.5x, demais = 1x (campanhas recentes pesam mais)
-  const pesos = ordenadas.map((_, i) => i === 0 ? 2 : i === 1 ? 1.5 : 1)
-  const somaPesos = pesos.reduce((a, b) => a + b, 0)
-  const somaNotas = ordenadas.reduce((acc, p, i) => acc + notaParticipacao(p) * pesos[i], 0)
+  const meses = Object.keys(notasMensais).sort()
+  if (meses.length === 0) return null
 
-  const media = somaNotas / somaPesos
+  // Nota geral = média simples dos meses
+  const somaGeral = meses.reduce((acc, m) => acc + notasMensais[m], 0)
+  const notaGeral = Math.round((somaGeral / meses.length) * 10) / 10
 
-  // Bônus de constância (+0.5): publicou em 3+ participações (normais ou lançamentos)
   const totalPublicadas = todas.filter(p => p.status === 'publicado').length
-  const comBonus = totalPublicadas >= 3 ? Math.min(10, media + 0.5) : media
-
-  const notaFinal = Math.round(comBonus * 10) / 10
-  const totalCampanhas = todas.length
-  const publicadasNormais = todasNormais.filter(p => p.status === 'publicado').length
-  const publicadasLanc    = todasLancamentos.filter(p => p.status === 'publicado').length
 
   return {
-    nota: notaFinal,
-    totalCampanhas,
-    totalLancamentos: todasLancamentos.length,
+    nota: notaGeral,
+    notasMensais,
+    totalCampanhas: todas.length,
+    totalLancamentos: lancamentos.length,
     publicadas: totalPublicadas,
-    publicadasNormais,
-    publicadasLancamentos: publicadasLanc,
-    nivel: notaFinal >= 8 ? 'ouro' : notaFinal >= 6 ? 'prata' : notaFinal >= 4 ? 'bronze' : 'atencao'
+    nivel: notaGeral >= 8 ? 'ouro' : notaGeral >= 6 ? 'prata' : notaGeral >= 4 ? 'bronze' : 'atencao'
   }
 }
 
