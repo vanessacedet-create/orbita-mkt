@@ -1429,7 +1429,12 @@ export default function RH() {
   const [busca, setBusca]             = useState('')
   const [filtroOKRTipo, setFiltroOKRTipo] = useState('')
   const [filtroOKRStatus, setFiltroOKRStatus] = useState('ativo')
-  const [mesAusencia, setMesAusencia] = useState(()=>new Date().toISOString().slice(0,7))
+  const [modoAusencia, setModoAusencia] = useState('ciclo') // 'ciclo' | 'mes' | 'custom'
+  const [mesRefAusencia, setMesRefAusencia] = useState(()=>new Date().toISOString().slice(0,7))
+  const [dataIniCustom, setDataIniCustom] = useState(()=>{
+    const d = new Date(); d.setDate(d.getDate()-30); return d.toISOString().slice(0,10)
+  })
+  const [dataFimCustom, setDataFimCustom] = useState(()=>new Date().toISOString().slice(0,10))
   const [filtroAusenciaTipo, setFiltroAusenciaTipo] = useState('')
   const [toast, showToast]            = useToast()
 
@@ -1486,16 +1491,47 @@ export default function RH() {
   }
 
   // ── EXPORTAÇÕES ─────────────────────────────────────────
-  function handleExportAusencias(formato) {
-    const aus = ausenciasAll.filter(a=>{
-      // filtro por mês: ausência intersecta o mês selecionado
-      if (mesAusencia) {
-        const [a_ano,a_mes] = mesAusencia.split('-')
-        const inicioMes = `${a_ano}-${a_mes}-01`
-        const ultimoDia = new Date(Number(a_ano), Number(a_mes), 0).getDate()
-        const fimMes = `${a_ano}-${a_mes}-${String(ultimoDia).padStart(2,'0')}`
-        if (a.data_fim < inicioMes || a.data_inicio > fimMes) return false
+  // Calcula o intervalo de datas para a aba de Ausências conforme o modo.
+  function calcularPeriodoAusencia() {
+    if (modoAusencia === 'custom') {
+      const labelIni = dataIniCustom ? fmtData(dataIniCustom) : '—'
+      const labelFim = dataFimCustom ? fmtData(dataFimCustom) : '—'
+      return {
+        inicio: dataIniCustom || '0000-01-01',
+        fim: dataFimCustom || '9999-12-31',
+        label: `${labelIni} até ${labelFim}`,
+        sufixoArquivo: `${dataIniCustom||'inicio'}_a_${dataFimCustom||'fim'}`
       }
+    }
+    const [a_ano, a_mes] = mesRefAusencia.split('-')
+    const ano = Number(a_ano), mes = Number(a_mes)
+    if (modoAusencia === 'ciclo') {
+      // Ciclo de ponto: dia 26 do mês anterior até dia 25 do mês de referência.
+      const mesAnt = mes === 1 ? 12 : mes - 1
+      const anoAnt = mes === 1 ? ano - 1 : ano
+      const inicio = `${anoAnt}-${String(mesAnt).padStart(2,'0')}-26`
+      const fim    = `${ano}-${String(mes).padStart(2,'0')}-25`
+      return {
+        inicio, fim,
+        label: `Ciclo de ponto: ${fmtData(inicio)} a ${fmtData(fim)} (referente a ${NOMES_MES[mes-1]} de ${ano})`,
+        sufixoArquivo: `ciclo_${a_ano}-${a_mes}`
+      }
+    }
+    // 'mes' — mês cheio
+    const ultimoDia = new Date(ano, mes, 0).getDate()
+    return {
+      inicio: `${a_ano}-${a_mes}-01`,
+      fim:    `${a_ano}-${a_mes}-${String(ultimoDia).padStart(2,'0')}`,
+      label: `${NOMES_MES[mes-1]} de ${ano}`,
+      sufixoArquivo: `${a_ano}-${a_mes}`
+    }
+  }
+
+  function handleExportAusencias(formato) {
+    const periodo = calcularPeriodoAusencia()
+    const aus = ausenciasAll.filter(a=>{
+      // ausência intersecta o período selecionado
+      if (a.data_fim < periodo.inicio || a.data_inicio > periodo.fim) return false
       if (filtroAusenciaTipo && a.tipo !== filtroAusenciaTipo) return false
       return true
     }).sort((a,b)=>a.data_inicio.localeCompare(b.data_inicio))
@@ -1523,13 +1559,10 @@ export default function RH() {
       ]
     })]
 
-    const [a_ano,a_mes] = mesAusencia.split('-')
-    const tituloMes = `${NOMES_MES[Number(a_mes)-1]} de ${a_ano}`
     exportar(formato, linhas, {
       titulo: 'Relatório de Ausências',
-      subtitulo: `Período: ${tituloMes} · ${aus.length} registro${aus.length!==1?'s':''}`,
-      nomeBase: 'ausencias',
-      mes: mesAusencia,
+      subtitulo: `${periodo.label} · ${aus.length} registro${aus.length!==1?'s':''}`,
+      nomeBase: `ausencias_${periodo.sufixoArquivo}`,
       colWidths: [28,22,18,14,12,12,8,16,40],
       abaXlsx: 'Ausências'
     })
@@ -1783,39 +1816,73 @@ export default function RH() {
 
       {/* AUSÊNCIAS GERAL */}
       {aba==='ausencias'&&(()=>{
-        const [a_ano,a_mes] = mesAusencia ? mesAusencia.split('-') : ['','']
-        const inicioMes = mesAusencia ? `${a_ano}-${a_mes}-01` : ''
-        const ultimoDia = mesAusencia ? new Date(Number(a_ano), Number(a_mes), 0).getDate() : 0
-        const fimMes = mesAusencia ? `${a_ano}-${a_mes}-${String(ultimoDia).padStart(2,'0')}` : ''
-        const ausDoMes = ausenciasAll.filter(a=>{
-          if (mesAusencia && (a.data_fim < inicioMes || a.data_inicio > fimMes)) return false
+        const periodo = calcularPeriodoAusencia()
+        const ausDoPeriodo = ausenciasAll.filter(a=>{
+          if (a.data_fim < periodo.inicio || a.data_inicio > periodo.fim) return false
           if (filtroAusenciaTipo && a.tipo !== filtroAusenciaTipo) return false
           return true
         }).sort((a,b)=>a.data_inicio.localeCompare(b.data_inicio))
-        const tituloMes = mesAusencia ? `${NOMES_MES[Number(a_mes)-1]} de ${a_ano}` : 'Todos'
+
+        const MODOS = [
+          {v:'ciclo',  l:'Ciclo de ponto (26→25)'},
+          {v:'mes',    l:'Mês cheio'},
+          {v:'custom', l:'Personalizado'},
+        ]
 
         return (
           <div>
+            {/* Seletor de modo */}
+            <div style={{display:'flex',gap:0,marginBottom:12,background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:6,padding:3,width:'fit-content'}}>
+              {MODOS.map(m=>(
+                <button key={m.v} onClick={()=>setModoAusencia(m.v)}
+                  style={{
+                    padding:'6px 14px',fontSize:12,fontWeight:modoAusencia===m.v?700:500,cursor:'pointer',
+                    background:modoAusencia===m.v?'var(--surface)':'transparent',
+                    color:modoAusencia===m.v?'var(--text)':'var(--text-muted)',
+                    border:'none',borderRadius:4
+                  }}>{m.l}</button>
+              ))}
+            </div>
+
+            {/* Filtros do modo escolhido */}
             <div style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'center',marginBottom:16}}>
-              <div style={{display:'flex',alignItems:'center',gap:6}}>
-                <span style={{fontSize:12,color:'var(--text-muted)'}}>Mês:</span>
-                <input type="month" className="form-input" style={{width:'auto',fontSize:12,padding:'6px 10px'}}
-                  value={mesAusencia} onChange={e=>setMesAusencia(e.target.value)}/>
-              </div>
+              {modoAusencia !== 'custom' && (
+                <div style={{display:'flex',alignItems:'center',gap:6}}>
+                  <span style={{fontSize:12,color:'var(--text-muted)'}}>Mês de referência:</span>
+                  <input type="month" className="form-input" style={{width:'auto',fontSize:12,padding:'6px 10px'}}
+                    value={mesRefAusencia} onChange={e=>setMesRefAusencia(e.target.value)}/>
+                </div>
+              )}
+              {modoAusencia === 'custom' && (
+                <>
+                  <div style={{display:'flex',alignItems:'center',gap:6}}>
+                    <span style={{fontSize:12,color:'var(--text-muted)'}}>De:</span>
+                    <input type="date" className="form-input" style={{width:'auto',fontSize:12,padding:'6px 10px'}}
+                      value={dataIniCustom} onChange={e=>setDataIniCustom(e.target.value)}/>
+                  </div>
+                  <div style={{display:'flex',alignItems:'center',gap:6}}>
+                    <span style={{fontSize:12,color:'var(--text-muted)'}}>Até:</span>
+                    <input type="date" className="form-input" style={{width:'auto',fontSize:12,padding:'6px 10px'}}
+                      value={dataFimCustom} onChange={e=>setDataFimCustom(e.target.value)}/>
+                  </div>
+                </>
+              )}
               <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}}
                 value={filtroAusenciaTipo} onChange={e=>setFiltroAusenciaTipo(e.target.value)}>
                 <option value="">Todos os tipos</option>
                 {TIPO_AUSENCIA.map(t=><option key={t.v} value={t.v}>{t.l}</option>)}
               </select>
-              <div style={{marginLeft:'auto',fontSize:12,color:'var(--text-muted)'}}>
-                {tituloMes} · <strong style={{color:'var(--text)'}}>{ausDoMes.length}</strong> registro{ausDoMes.length!==1?'s':''}
+              <div style={{marginLeft:'auto',fontSize:12,color:'var(--text-muted)',textAlign:'right'}}>
+                {periodo.label}<br/>
+                <strong style={{color:'var(--text)'}}>{ausDoPeriodo.length}</strong> registro{ausDoPeriodo.length!==1?'s':''}
               </div>
             </div>
-            {ausDoMes.length===0
+
+            {ausDoPeriodo.length===0
               ?<div className="empty-state"><p>Nenhuma ausência no período selecionado.</p></div>
               :<div className="table-card"><table>
                 <thead><tr><th>Colaborador</th><th>Grupo</th><th>Tipo</th><th>Status</th><th>Início</th><th>Fim</th><th>Dias</th></tr></thead>
-                <tbody>{ausDoMes.map(a=>{
+                <tbody>{ausDoPeriodo.map(a=>{
                   const ta=TIPO_AUSENCIA.find(t=>t.v===a.tipo); const sa=STATUS_AUSENCIA.find(s=>s.v===a.status)||STATUS_AUSENCIA[0]
                   return <tr key={a.id}>
                     <td className="td-strong" style={{cursor:'pointer'}} onClick={()=>setPerfil(colaboradores.find(c=>c.id===a.colaborador_id))}>{a.rh_colaboradores?.nome||'—'}</td>
