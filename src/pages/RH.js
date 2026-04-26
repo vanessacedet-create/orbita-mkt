@@ -1,10 +1,12 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import * as XLSX from 'xlsx'
 import {
   Users, Plus, Pencil, Trash2, X, ChevronDown,
   UserCheck, AlertCircle, Clock, Target, Star,
   TrendingUp, CheckCircle, BarChart2, Award,
-  BookOpen, GraduationCap, Link, ExternalLink
+  BookOpen, GraduationCap, Link, ExternalLink,
+  Download, FileSpreadsheet, FileText
 } from 'lucide-react'
 
 // ── UTILITÁRIOS ────────────────────────────────────────────
@@ -251,6 +253,123 @@ async function addChecklistItem(processo_id, descricao) {
 async function deleteChecklistItem(id) { await supabase.from('rh_checklist_itens').delete().eq('id',id) }
 async function concludeProcesso(id) {
   await supabase.from('rh_processos').update({data_conclusao:new Date().toISOString().slice(0,10)}).eq('id',id)
+}
+
+// ── BUSCA AGREGADA DE PROGRESSO DE TREINAMENTOS ──────────
+async function getTodosProgressosTreinamento() {
+  const { data } = await supabase.from('rh_progresso_treinamento')
+    .select('*, rh_colaboradores(id,nome,cargo,rh_grupos(nome)), rh_treinamentos(id,titulo,tipo,obrigatorio)')
+    .order('data_conclusao',{ascending:false})
+  return data || []
+}
+
+// ── HELPERS DE EXPORTAÇÃO ────────────────────────────────
+const NOMES_MES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+
+function nomeArquivo(base, mes) {
+  const hoje = new Date()
+  if (mes) {
+    const [a,m] = mes.split('-')
+    return `${base}_${a}-${m}`
+  }
+  return `${base}_${hoje.toISOString().slice(0,10)}`
+}
+
+function downloadCSV(linhas, nome) {
+  const csv = linhas.map(linha =>
+    linha.map(celula => {
+      const v = celula == null ? '' : String(celula)
+      return /[",;\n]/.test(v) ? `"${v.replace(/"/g,'""')}"` : v
+    }).join(';')
+  ).join('\n')
+  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8'})
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = `${nome}.csv`; a.click()
+  URL.revokeObjectURL(url)
+}
+
+function downloadXLSX(linhas, nome, aba='Relatório', colWidths) {
+  const ws = XLSX.utils.aoa_to_sheet(linhas)
+  if (colWidths) ws['!cols'] = colWidths.map(w=>({wch:w}))
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, aba.slice(0,31))
+  XLSX.writeFile(wb, `${nome}.xlsx`)
+}
+
+function imprimirPDF(titulo, subtitulo, linhas) {
+  const [cabecalho, ...corpo] = linhas
+  const tbHead = `<thead><tr>${cabecalho.map(c=>`<th>${c}</th>`).join('')}</tr></thead>`
+  const tbBody = `<tbody>${corpo.map(l=>`<tr>${l.map(c=>`<td>${c==null?'':String(c).replace(/&/g,'&amp;').replace(/</g,'&lt;')}</td>`).join('')}</tr>`).join('')}</tbody>`
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${titulo}</title>
+    <style>
+      body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#111;padding:24px;font-size:11px}
+      h1{font-size:18px;margin:0 0 4px}
+      .sub{color:#666;font-size:11px;margin-bottom:16px}
+      table{width:100%;border-collapse:collapse;font-size:10px}
+      th{background:#f3f4f6;text-align:left;padding:6px 8px;border-bottom:2px solid #d1d5db;font-weight:600}
+      td{padding:5px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top}
+      tr:nth-child(even) td{background:#fafafa}
+      @media print { body{padding:0} }
+    </style></head><body>
+    <h1>${titulo}</h1>
+    <div class="sub">${subtitulo} · Gerado em ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</div>
+    <table>${tbHead}${tbBody}</table>
+    <script>window.onload=()=>{window.print();setTimeout(()=>window.close(),300)}</script>
+    </body></html>`
+  const w = window.open('', '_blank')
+  if (!w) { alert('Permita pop-ups para gerar o PDF.'); return }
+  w.document.write(html); w.document.close()
+}
+
+function exportar(formato, dados, config) {
+  const { titulo, subtitulo, nomeBase, mes, colWidths, abaXlsx } = config
+  const nome = nomeArquivo(nomeBase, mes)
+  if (formato === 'csv')   return downloadCSV(dados, nome)
+  if (formato === 'xlsx')  return downloadXLSX(dados, nome, abaXlsx || 'Relatório', colWidths)
+  if (formato === 'pdf')   return imprimirPDF(titulo, subtitulo, dados)
+}
+
+// ── BOTÃO DE EXPORTAÇÃO COM DROPDOWN ─────────────────────
+function BotaoExportar({ onExportar, disabled }) {
+  const [aberto, setAberto] = useState(false)
+  const ref = useRef(null)
+  useEffect(()=>{
+    function fechar(e) { if (ref.current && !ref.current.contains(e.target)) setAberto(false) }
+    if (aberto) document.addEventListener('mousedown', fechar)
+    return () => document.removeEventListener('mousedown', fechar)
+  },[aberto])
+
+  function escolher(formato) {
+    setAberto(false)
+    onExportar(formato)
+  }
+
+  return (
+    <div ref={ref} style={{position:'relative'}}>
+      <button className="btn btn-ghost" disabled={disabled} onClick={()=>setAberto(a=>!a)}
+        style={{display:'inline-flex',alignItems:'center',gap:6,fontSize:12,opacity:disabled?0.5:1}}>
+        <Download size={14}/> Exportar <ChevronDown size={12}/>
+      </button>
+      {aberto && (
+        <div style={{position:'absolute',top:'calc(100% + 4px)',right:0,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:6,boxShadow:'0 4px 12px rgba(0,0,0,0.15)',zIndex:10,minWidth:160,overflow:'hidden'}}>
+          <button onClick={()=>escolher('xlsx')} className="dropdown-item" style={dropItem}>
+            <FileSpreadsheet size={13}/> Excel (.xlsx)
+          </button>
+          <button onClick={()=>escolher('csv')} className="dropdown-item" style={dropItem}>
+            <FileText size={13}/> CSV
+          </button>
+          <button onClick={()=>escolher('pdf')} className="dropdown-item" style={dropItem}>
+            <FileText size={13}/> PDF (impressão)
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+const dropItem = {
+  display:'flex',alignItems:'center',gap:8,width:'100%',padding:'8px 12px',
+  fontSize:12,background:'none',border:'none',cursor:'pointer',color:'var(--text)',textAlign:'left'
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1310,6 +1429,8 @@ export default function RH() {
   const [busca, setBusca]             = useState('')
   const [filtroOKRTipo, setFiltroOKRTipo] = useState('')
   const [filtroOKRStatus, setFiltroOKRStatus] = useState('ativo')
+  const [mesAusencia, setMesAusencia] = useState(()=>new Date().toISOString().slice(0,7))
+  const [filtroAusenciaTipo, setFiltroAusenciaTipo] = useState('')
   const [toast, showToast]            = useToast()
 
   async function carregar() {
@@ -1364,6 +1485,123 @@ export default function RH() {
     showToast('Progresso atualizado!')
   }
 
+  // ── EXPORTAÇÕES ─────────────────────────────────────────
+  function handleExportAusencias(formato) {
+    const aus = ausenciasAll.filter(a=>{
+      // filtro por mês: ausência intersecta o mês selecionado
+      if (mesAusencia) {
+        const [a_ano,a_mes] = mesAusencia.split('-')
+        const inicioMes = `${a_ano}-${a_mes}-01`
+        const ultimoDia = new Date(Number(a_ano), Number(a_mes), 0).getDate()
+        const fimMes = `${a_ano}-${a_mes}-${String(ultimoDia).padStart(2,'0')}`
+        if (a.data_fim < inicioMes || a.data_inicio > fimMes) return false
+      }
+      if (filtroAusenciaTipo && a.tipo !== filtroAusenciaTipo) return false
+      return true
+    }).sort((a,b)=>a.data_inicio.localeCompare(b.data_inicio))
+
+    if (aus.length === 0) {
+      showToast('Nenhuma ausência no período selecionado.', 'error')
+      return
+    }
+
+    const cabecalho = ['Colaborador','Cargo','Grupo','Tipo','Data início','Data fim','Dias','Status','Observações']
+    const linhas = [cabecalho, ...aus.map(a=>{
+      const colab = colaboradores.find(c=>c.id===a.colaborador_id)
+      const ta = TIPO_AUSENCIA.find(t=>t.v===a.tipo)
+      const sa = STATUS_AUSENCIA.find(s=>s.v===a.status)
+      return [
+        a.rh_colaboradores?.nome || colab?.nome || '—',
+        colab?.cargo || '—',
+        a.rh_colaboradores?.rh_grupos?.nome || '—',
+        ta?.l || a.tipo,
+        fmtData(a.data_inicio),
+        fmtData(a.data_fim),
+        diffDias(a.data_inicio, a.data_fim),
+        sa?.l || a.status,
+        a.observacoes || ''
+      ]
+    })]
+
+    const [a_ano,a_mes] = mesAusencia.split('-')
+    const tituloMes = `${NOMES_MES[Number(a_mes)-1]} de ${a_ano}`
+    exportar(formato, linhas, {
+      titulo: 'Relatório de Ausências',
+      subtitulo: `Período: ${tituloMes} · ${aus.length} registro${aus.length!==1?'s':''}`,
+      nomeBase: 'ausencias',
+      mes: mesAusencia,
+      colWidths: [28,22,18,14,12,12,8,16,40],
+      abaXlsx: 'Ausências'
+    })
+    showToast(`${aus.length} ausência${aus.length!==1?'s':''} exportada${aus.length!==1?'s':''}.`)
+  }
+
+  function handleExportOKRs(formato) {
+    if (okrsFiltrados.length === 0) {
+      showToast('Nenhum OKR para exportar com os filtros atuais.', 'error')
+      return
+    }
+    const cabecalho = ['Título','Tipo','Responsável / Grupo','Período','Status','Progresso geral','Key Results']
+    const linhas = [cabecalho, ...okrsFiltrados.map(okr=>{
+      const krs = okr.rh_key_results || []
+      const progressoGeral = krs.length
+        ? Math.round(krs.reduce((s,kr)=>s+pct(kr.valor_atual, kr.valor_inicial, kr.valor_alvo), 0) / krs.length)
+        : 0
+      const responsavel = okr.tipo === 'individual'
+        ? (okr.rh_colaboradores?.nome || '—')
+        : (okr.rh_grupos?.nome || '—')
+      const krResumo = krs.length
+        ? krs.map(kr=>`${kr.descricao}: ${kr.valor_atual}/${kr.valor_alvo}${kr.unidade||''} (${pct(kr.valor_atual,kr.valor_inicial,kr.valor_alvo)}%)`).join(' | ')
+        : '—'
+      const sa = STATUS_OKR.find(s=>s.v===okr.status)
+      return [
+        okr.titulo,
+        okr.tipo === 'individual' ? 'Individual' : 'Grupo',
+        responsavel,
+        okr.periodo || '—',
+        sa?.l || okr.status,
+        `${progressoGeral}%`,
+        krResumo
+      ]
+    })]
+    exportar(formato, linhas, {
+      titulo: 'Relatório de OKRs',
+      subtitulo: `${okrsFiltrados.length} OKR${okrsFiltrados.length!==1?'s':''}`,
+      nomeBase: 'okrs',
+      colWidths: [40,12,24,16,14,14,80],
+      abaXlsx: 'OKRs'
+    })
+    showToast(`${okrsFiltrados.length} OKR${okrsFiltrados.length!==1?'s':''} exportado${okrsFiltrados.length!==1?'s':''}.`)
+  }
+
+  async function handleExportTreinamentos(formato) {
+    const progressos = await getTodosProgressosTreinamento()
+    if (progressos.length === 0) {
+      showToast('Nenhum registro de treinamento.', 'error')
+      return
+    }
+    const STATUS_TRE_LBL = {nao_iniciado:'Não iniciado', em_andamento:'Em andamento', concluido:'Concluído'}
+    const cabecalho = ['Colaborador','Cargo','Grupo','Treinamento','Tipo','Obrigatório','Status','Data conclusão']
+    const linhas = [cabecalho, ...progressos.map(p=>[
+      p.rh_colaboradores?.nome || '—',
+      p.rh_colaboradores?.cargo || '—',
+      p.rh_colaboradores?.rh_grupos?.nome || '—',
+      p.rh_treinamentos?.titulo || '—',
+      p.rh_treinamentos?.tipo || '—',
+      p.rh_treinamentos?.obrigatorio ? 'Sim' : 'Não',
+      STATUS_TRE_LBL[p.status] || p.status,
+      p.data_conclusao ? fmtData(p.data_conclusao) : '—'
+    ])]
+    exportar(formato, linhas, {
+      titulo: 'Relatório de Treinamentos',
+      subtitulo: `${progressos.length} registro${progressos.length!==1?'s':''} de progresso`,
+      nomeBase: 'treinamentos',
+      colWidths: [28,22,18,32,12,12,16,14],
+      abaXlsx: 'Treinamentos'
+    })
+    showToast(`${progressos.length} registro${progressos.length!==1?'s':''} exportado${progressos.length!==1?'s':''}.`)
+  }
+
   if (loading) return <div className="loading"><div className="spinner"/></div>
 
   if (perfil) return (
@@ -1405,7 +1643,12 @@ export default function RH() {
         <div style={{display:'flex',gap:8}}>
           {aba==='equipe'&&<button className="btn btn-primary" onClick={()=>setModalColab(true)}><Plus size={14}/> Colaborador</button>}
           {aba==='grupos'&&<button className="btn btn-primary" onClick={()=>setModalGrupo(true)}><Plus size={14}/> Grupo</button>}
-          {aba==='okrs'&&<button className="btn btn-primary" onClick={()=>setModalOKR(true)}><Plus size={14}/> Novo OKR</button>}
+          {aba==='okrs'&&<>
+            <BotaoExportar onExportar={handleExportOKRs} disabled={okrsFiltrados.length===0}/>
+            <button className="btn btn-primary" onClick={()=>setModalOKR(true)}><Plus size={14}/> Novo OKR</button>
+          </>}
+          {aba==='ausencias'&&<BotaoExportar onExportar={handleExportAusencias}/>}
+          {aba==='treinamentos'&&<BotaoExportar onExportar={handleExportTreinamentos}/>}
         </div>
       </div>
 
@@ -1539,29 +1782,56 @@ export default function RH() {
       )}
 
       {/* AUSÊNCIAS GERAL */}
-      {aba==='ausencias'&&(
-        <div>
-          <div style={{fontSize:13,fontWeight:600,color:'var(--text)',marginBottom:12}}>Ausências futuras planejadas/aprovadas</div>
-          {ausenciasAll.filter(a=>a.data_fim>=hoje&&['planejado','aprovado'].includes(a.status)).length===0
-            ?<div className="empty-state"><p>Nenhuma ausência futura.</p></div>
-            :<div className="table-card"><table>
-              <thead><tr><th>Colaborador</th><th>Grupo</th><th>Tipo</th><th>Status</th><th>Início</th><th>Fim</th><th>Dias</th></tr></thead>
-              <tbody>{ausenciasAll.filter(a=>a.data_fim>=hoje&&['planejado','aprovado'].includes(a.status)).map(a=>{
-                const ta=TIPO_AUSENCIA.find(t=>t.v===a.tipo); const sa=STATUS_AUSENCIA.find(s=>s.v===a.status)||STATUS_AUSENCIA[0]
-                return <tr key={a.id}>
-                  <td className="td-strong" style={{cursor:'pointer'}} onClick={()=>setPerfil(colaboradores.find(c=>c.id===a.colaborador_id))}>{a.rh_colaboradores?.nome||'—'}</td>
-                  <td style={{fontSize:12,color:'var(--text-muted)'}}>{a.rh_colaboradores?.rh_grupos?.nome||'—'}</td>
-                  <td style={{fontSize:12}}>{ta?.l||a.tipo}</td>
-                  <td><span className={`badge ${sa.cls}`} style={{fontSize:10}}>{sa.l}</span></td>
-                  <td className="td-muted" style={{fontSize:12}}>{fmtData(a.data_inicio)}</td>
-                  <td className="td-muted" style={{fontSize:12}}>{fmtData(a.data_fim)}</td>
-                  <td style={{fontSize:12,color:'var(--accent)',fontWeight:700}}>{diffDias(a.data_inicio,a.data_fim)}</td>
-                </tr>
-              })}</tbody>
-            </table></div>
-          }
-        </div>
-      )}
+      {aba==='ausencias'&&(()=>{
+        const [a_ano,a_mes] = mesAusencia ? mesAusencia.split('-') : ['','']
+        const inicioMes = mesAusencia ? `${a_ano}-${a_mes}-01` : ''
+        const ultimoDia = mesAusencia ? new Date(Number(a_ano), Number(a_mes), 0).getDate() : 0
+        const fimMes = mesAusencia ? `${a_ano}-${a_mes}-${String(ultimoDia).padStart(2,'0')}` : ''
+        const ausDoMes = ausenciasAll.filter(a=>{
+          if (mesAusencia && (a.data_fim < inicioMes || a.data_inicio > fimMes)) return false
+          if (filtroAusenciaTipo && a.tipo !== filtroAusenciaTipo) return false
+          return true
+        }).sort((a,b)=>a.data_inicio.localeCompare(b.data_inicio))
+        const tituloMes = mesAusencia ? `${NOMES_MES[Number(a_mes)-1]} de ${a_ano}` : 'Todos'
+
+        return (
+          <div>
+            <div style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'center',marginBottom:16}}>
+              <div style={{display:'flex',alignItems:'center',gap:6}}>
+                <span style={{fontSize:12,color:'var(--text-muted)'}}>Mês:</span>
+                <input type="month" className="form-input" style={{width:'auto',fontSize:12,padding:'6px 10px'}}
+                  value={mesAusencia} onChange={e=>setMesAusencia(e.target.value)}/>
+              </div>
+              <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}}
+                value={filtroAusenciaTipo} onChange={e=>setFiltroAusenciaTipo(e.target.value)}>
+                <option value="">Todos os tipos</option>
+                {TIPO_AUSENCIA.map(t=><option key={t.v} value={t.v}>{t.l}</option>)}
+              </select>
+              <div style={{marginLeft:'auto',fontSize:12,color:'var(--text-muted)'}}>
+                {tituloMes} · <strong style={{color:'var(--text)'}}>{ausDoMes.length}</strong> registro{ausDoMes.length!==1?'s':''}
+              </div>
+            </div>
+            {ausDoMes.length===0
+              ?<div className="empty-state"><p>Nenhuma ausência no período selecionado.</p></div>
+              :<div className="table-card"><table>
+                <thead><tr><th>Colaborador</th><th>Grupo</th><th>Tipo</th><th>Status</th><th>Início</th><th>Fim</th><th>Dias</th></tr></thead>
+                <tbody>{ausDoMes.map(a=>{
+                  const ta=TIPO_AUSENCIA.find(t=>t.v===a.tipo); const sa=STATUS_AUSENCIA.find(s=>s.v===a.status)||STATUS_AUSENCIA[0]
+                  return <tr key={a.id}>
+                    <td className="td-strong" style={{cursor:'pointer'}} onClick={()=>setPerfil(colaboradores.find(c=>c.id===a.colaborador_id))}>{a.rh_colaboradores?.nome||'—'}</td>
+                    <td style={{fontSize:12,color:'var(--text-muted)'}}>{a.rh_colaboradores?.rh_grupos?.nome||'—'}</td>
+                    <td style={{fontSize:12}}>{ta?.l||a.tipo}</td>
+                    <td><span className={`badge ${sa.cls}`} style={{fontSize:10}}>{sa.l}</span></td>
+                    <td className="td-muted" style={{fontSize:12}}>{fmtData(a.data_inicio)}</td>
+                    <td className="td-muted" style={{fontSize:12}}>{fmtData(a.data_fim)}</td>
+                    <td style={{fontSize:12,color:'var(--accent)',fontWeight:700}}>{diffDias(a.data_inicio,a.data_fim)}</td>
+                  </tr>
+                })}</tbody>
+              </table></div>
+            }
+          </div>
+        )
+      })()}
 
       {/* TREINAMENTOS */}
       {aba==='treinamentos'&&(
