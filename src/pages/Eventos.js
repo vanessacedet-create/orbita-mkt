@@ -61,9 +61,18 @@ const TIPO_PRODUTO = ['livro','colecao','kit','outro']
 const TIPO_PRODUTO_LABEL = { livro:'Livro', colecao:'Coleção', kit:'Kit', outro:'Outro' }
 
 // ── SUPABASE HELPERS ───────────────────────────────────────
-async function getEventos() {
+async function getEventos(incluirEncerrados = false) {
+  let q = supabase.from('eventos')
+    .select('*, usuarios(id,nome)')
+    .order('data_inicio', { ascending: false })
+  if (!incluirEncerrados) q = q.neq('status', 'encerrado')
+  const { data } = await q
+  return data || []
+}
+async function getEventosEncerrados() {
   const { data } = await supabase.from('eventos')
     .select('*, usuarios(id,nome)')
+    .eq('status', 'encerrado')
     .order('data_inicio', { ascending: false })
   return data || []
 }
@@ -1059,51 +1068,75 @@ export default function Eventos() {
   const { usuario } = useAuth()
   const isAdmin = usuario?.perfil === 'administrador' || usuario?.perfil === 'gerente'
 
-  const [eventos, setEventos]       = useState([])
-  const [loading, setLoading]       = useState(true)
-  const [detalhe, setDetalhe]       = useState(null)
-  const [modalEvento, setModalEvento] = useState(false)
-  const [editEvento, setEditEvento]   = useState(null)
-  const [busca, setBusca]             = useState('')
-  const [filtroStatus, setFiltroStatus] = useState('')
-  const [filtroDataIni, setFiltroDataIni] = useState('')
-  const [filtroDataFim, setFiltroDataFim] = useState('')
-  const [toast, showToast]            = useToast()
+  const [eventos, setEventos]                     = useState([])
+  const [eventosEncerrados, setEventosEncerrados] = useState([])
+  const [loading, setLoading]                     = useState(true)
+  const [detalhe, setDetalhe]                     = useState(null)
+  const [modalEvento, setModalEvento]             = useState(false)
+  const [editEvento, setEditEvento]               = useState(null)
+  const [busca, setBusca]                         = useState('')
+  const [filtroStatus, setFiltroStatus]           = useState('')
+  const [filtroDataIni, setFiltroDataIni]         = useState('')
+  const [filtroDataFim, setFiltroDataFim]         = useState('')
+  const [abaView, setAbaView]                     = useState('ativos')
+  const [toast, showToast]                        = useToast()
 
   async function carregar() {
     setLoading(true)
-    try { setEventos(await getEventos()) } finally { setLoading(false) }
+    try {
+      const [ativos, encerrados] = await Promise.all([
+        getEventos(false),
+        getEventosEncerrados(),
+      ])
+      setEventos(ativos)
+      setEventosEncerrados(encerrados)
+    } finally { setLoading(false) }
   }
   useEffect(()=>{ carregar() },[])
 
+  // Ao editar CDL direto do card (sem detalhe aberto), busca _cdl completo
+  async function handleEditFromCard(e) {
+    if (e.tipo_evento === 'cdl' && !e._cdl) {
+      const cdl = await getCDL(e.id)
+      setEditEvento({...e, _cdl: cdl})
+    } else {
+      setEditEvento(e)
+    }
+    setModalEvento(true)
+  }
+
   async function handleSaveEvento(e) {
     const salvo = await saveEvento(e, usuario?.id)
-    // Salva dados CDL se for esse tipo
     if (e.tipo_evento === 'cdl' && e._cdl) {
       const cdlSalvo = await saveCDL(salvo.id, e._cdl, e._cdl.id||null)
       salvo._cdl = cdlSalvo
     }
-    if (e.id) setEventos(p=>p.map(x=>x.id===e.id?salvo:x))
-    else setEventos(p=>[salvo,...p])
+    if (salvo.status === 'encerrado') {
+      setEventos(p => p.filter(x => x.id !== salvo.id))
+      setEventosEncerrados(p => [salvo, ...p.filter(x => x.id !== salvo.id)])
+    } else {
+      setEventosEncerrados(p => p.filter(x => x.id !== salvo.id))
+      if (e.id) setEventos(p => p.map(x => x.id===e.id ? salvo : x))
+      else setEventos(p => [salvo, ...p])
+    }
     setModalEvento(false); setEditEvento(null)
     showToast(e.id?'Evento atualizado!':'Evento criado!')
   }
 
   async function handleDelete(e) {
-    const temParticipantes = (e._count_participantes||0) > 0
-    const msg = temParticipantes
-      ? `Este evento pode ter participantes cadastrados. Excluir mesmo assim?`
-      : `Excluir "${e.nome}"?`
-    if (!window.confirm(msg)) return
+    if (!window.confirm(`Excluir "${e.nome}"?`)) return
     await deleteEvento(e.id)
     setEventos(p=>p.filter(x=>x.id!==e.id))
+    setEventosEncerrados(p=>p.filter(x=>x.id!==e.id))
     showToast('Evento excluído!')
   }
 
   const canDelete = (e) => isAdmin || e.criador_id === usuario?.id
   const canEdit   = (e) => isAdmin || e.criador_id === usuario?.id
 
-  const filtrados = eventos.filter(e=>{
+  const listaAtual = abaView === 'ativos' ? eventos : eventosEncerrados
+
+  const filtrados = listaAtual.filter(e=>{
     if (filtroStatus && e.status !== filtroStatus) return false
     if (filtroDataIni && e.data_inicio < filtroDataIni) return false
     if (filtroDataFim && e.data_fim > filtroDataFim) return false
@@ -1132,7 +1165,7 @@ export default function Eventos() {
   return (
     <div>
       {/* Header */}
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:24}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
         <div style={{display:'flex',alignItems:'center',gap:14}}>
           <Calendar size={22} color="var(--accent)"/>
           <div>
@@ -1142,9 +1175,26 @@ export default function Eventos() {
             </p>
           </div>
         </div>
-        <button className="btn btn-primary" onClick={()=>{ setEditEvento(null); setModalEvento(true) }}>
-          <Plus size={14}/> Criar evento
-        </button>
+        {abaView === 'ativos' && (
+          <button className="btn btn-primary" onClick={()=>{ setEditEvento(null); setModalEvento(true) }}>
+            <Plus size={14}/> Criar evento
+          </button>
+        )}
+      </div>
+
+      {/* Abas Ativos / Encerrados */}
+      <div style={{display:'flex',borderBottom:'1px solid var(--border)',marginBottom:20,gap:0}}>
+        {[
+          {k:'ativos',    l:`Ativos (${eventos.length})`},
+          {k:'encerrados',l:`Encerrados (${eventosEncerrados.length})`},
+        ].map(({k,l})=>(
+          <button key={k} onClick={()=>{ setAbaView(k); setFiltroStatus(''); setBusca('') }}
+            style={{padding:'9px 18px',fontSize:13,fontWeight:abaView===k?700:400,cursor:'pointer',
+              background:'none',border:'none',borderBottom:abaView===k?'2px solid var(--accent)''2px solid transparent',
+              color:abaView===k?'var(--accent)''var(--text-muted)'}}>
+            {l}
+          </button>
+        ))}
       </div>
 
       {/* Filtros */}
@@ -1154,7 +1204,10 @@ export default function Eventos() {
         <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}}
           value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
           <option value="">Todos os status</option>
-          {STATUS_EVENTO.map(s=><option key={s.v} value={s.v}>{s.l}</option>)}
+          {(abaView==='ativos'
+            ? STATUS_EVENTO.filter(s=>s.v!=='encerrado')
+            : STATUS_EVENTO.filter(s=>s.v==='encerrado')
+          ).map(s=><option key={s.v} value={s.v}>{s.l}</option>)}
         </select>
         <input type="date" className="form-input" style={{width:'auto',fontSize:12,padding:'6px 10px'}}
           value={filtroDataIni} onChange={e=>setFiltroDataIni(e.target.value)} title="Data início"/>
@@ -1166,16 +1219,16 @@ export default function Eventos() {
       {loading
         ? <div className="loading"><div className="spinner"/></div>
         : filtrados.length===0
-          ? <div className="empty-state"><p>Nenhum evento encontrado.</p></div>
+          ? <div className="empty-state"><p>Nenhum evento {abaView==='encerrados'?'encerrado ':''}encontrado.</p></div>
           : <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(340px,1fr))',gap:16}}>
               {filtrados.map(e=>{
                 const se = STATUS_EVENTO.find(s=>s.v===e.status)||STATUS_EVENTO[0]
                 return (
-                  <div key={e.id} className="table-card" style={{padding:0,overflow:'hidden',cursor:'pointer'}}
+                  <div key={e.id} className="table-card" style={{padding:0,overflow:'hidden',cursor:'pointer',opacity:abaView==='encerrados'?0.85:1}}
                     onClick={()=>setDetalhe(e.id)}>
                     {e.imagem_url
                       ? <img src={e.imagem_url} alt={e.nome} style={{width:'100%',height:140,objectFit:'cover'}}/>
-                      : <div style={{height:8,background:`var(--accent)`}}/>
+                      : <div style={{height:8,background:abaView==='encerrados'?'var(--border)''var(--accent)'}}/>
                     }
                     <div style={{padding:'14px 18px'}}>
                       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
@@ -1192,7 +1245,7 @@ export default function Eventos() {
                       <div style={{display:'flex',alignItems:'center',justifyContent:'flex-end',gap:6,marginTop:12,paddingTop:10,borderTop:'1px solid var(--border)'}}
                         onClick={ev=>ev.stopPropagation()}>
                         <button className="btn btn-ghost btn-sm" style={{fontSize:11}} onClick={()=>setDetalhe(e.id)}>Ver detalhes</button>
-                        {canEdit(e)&&<button className="btn btn-ghost btn-icon btn-sm" onClick={()=>{ setEditEvento(e); setModalEvento(true) }}><Pencil size={13}/></button>}
+                        {canEdit(e)&&<button className="btn btn-ghost btn-icon btn-sm" onClick={()=>handleEditFromCard(e)}><Pencil size={13}/></button>}
                         {canDelete(e)&&<button className="btn btn-danger btn-icon btn-sm" onClick={()=>handleDelete(e)}><Trash2 size={13}/></button>}
                       </div>
                     </div>
