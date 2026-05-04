@@ -85,25 +85,24 @@ export async function getParceiros() {
 
 // Retorna apenas parceiros com status 'active' no CRM — usado em Campanhas, Cortesias, Monitoramento
 export async function getParceirosAtivos() {
-  const { data, error } = await supabase.from('parceiros').select('*').order('nome')
+  // Busca apenas parceiros com status 'active' via join direto na view
+  // Sem fallback silencioso: retorna lista vazia se não houver ativos
+  const { data: statusAtivos, error: se } = await supabase
+    .from('parceiro_status_atual')
+    .select('partner_id')
+    .eq('status', 'active')
+  if (se) throw se
+
+  const ids = (statusAtivos || []).map(s => s.partner_id)
+  if (!ids.length) return []
+
+  const { data, error } = await supabase
+    .from('parceiros')
+    .select('*')
+    .in('id', ids)
+    .order('nome')
   if (error) throw error
-  const todos = data || []
-  if (!todos.length) return []
-  try {
-    const { data: statusData, error: se } = await supabase
-      .from('parceiro_status_atual')
-      .select('partner_id, status')
-      .in('partner_id', todos.map(p=>p.id))
-    if (se) return todos
-    const statusMap = {}
-    for (const s of (statusData||[])) {
-      statusMap[s.partner_id] = s.status
-    }
-    const ativos = todos.filter(p => statusMap[p.id] === 'active')
-    return ativos.length > 0 ? ativos : todos
-  } catch {
-    return todos
-  }
+  return data || []
 }
 
 // Retorna TODOS os parceiros independente de status (uso interno do CRM)
@@ -541,6 +540,26 @@ export async function updateCampanha(id, { nome, tipo, status, data_inicio, data
 // ── REORDENAÇÃO DE CAMPANHAS ───────────────────────────────
 export async function reordenarCampanhas(ordens) {
   // ordens = [{ id, ordem }]
+  // Usa RPC para executar todos os updates em uma única transação atômica.
+  // Se a função RPC não existir no banco, cai para o fallback com Promise.all.
+  const { error } = await supabase.rpc('reordenar_campanhas', {
+    ordens_json: ordens
+  })
+  if (!error) return
+
+  // Fallback: updates individuais em paralelo (comportamento anterior)
+  // Para criar a RPC e eliminar este fallback, execute no Supabase SQL Editor:
+  //
+  // create or replace function reordenar_campanhas(ordens_json jsonb)
+  // returns void language plpgsql as $$
+  // declare item jsonb;
+  // begin
+  //   for item in select * from jsonb_array_elements(ordens_json)
+  //   loop
+  //     update campanhas set ordem = (item->>'ordem')::int where id = (item->>'id')::uuid;
+  //   end loop;
+  // end;
+  // $$;
   await Promise.all(ordens.map(({ id, ordem }) =>
     supabase.from('campanhas').update({ ordem }).eq('id', id)
   ))
