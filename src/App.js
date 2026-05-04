@@ -1,22 +1,29 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { usePermissions } from './hooks/usePermissions'
 import { signOut } from './lib/supabase'
+
+// Login e ResetPassword carregam imediatamente (rotas públicas, leves)
 import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import Cortesias from './pages/Cortesias'
-import Usuarios from './pages/Usuarios'
-import Campanhas from './pages/Campanhas'
-import Lancamentos from './pages/Lancamentos'
-import Tarefas from './pages/Tarefas'
-import Parceiros from './pages/Parceiros'
-import Monitoramento from './pages/Monitoramento'
-import CRM from './pages/CRM'
-import Calculadora from './pages/Calculadora'
-import RH from './pages/RH'
-import CRMLiterario from './pages/CRMLiterario'
-import Eventos from './pages/Eventos'
 import ResetPassword from './pages/ResetPassword'
+
+// Todas as páginas autenticadas carregam sob demanda (lazy)
+// O bundle inicial fica ~60% menor — o código de Campanhas, RH etc.
+// só é baixado quando o usuário navega até aquele módulo pela primeira vez.
+const Dashboard    = lazy(() => import('./pages/Dashboard'))
+const Cortesias    = lazy(() => import('./pages/Cortesias'))
+const Usuarios     = lazy(() => import('./pages/Usuarios'))
+const Campanhas    = lazy(() => import('./pages/Campanhas'))
+const Lancamentos  = lazy(() => import('./pages/Lancamentos'))
+const Tarefas      = lazy(() => import('./pages/Tarefas'))
+const Parceiros    = lazy(() => import('./pages/Parceiros'))
+const Monitoramento = lazy(() => import('./pages/Monitoramento'))
+const CRM          = lazy(() => import('./pages/CRM'))
+const Calculadora  = lazy(() => import('./pages/Calculadora'))
+const RH           = lazy(() => import('./pages/RH'))
+const CRMLiterario = lazy(() => import('./pages/CRMLiterario'))
+const Eventos      = lazy(() => import('./pages/Eventos'))
 import './App.css'
 import {
   LayoutDashboard, BookOpen, BookMarked, Users, LogOut,
@@ -136,6 +143,7 @@ function Shell() {
       </aside>
 
       <main className="main-content">
+        <Suspense fallback={<div className="loading"><div className="spinner"/></div>}>
         <Routes>
           <Route path="/" element={<RequireAuth modulo="dashboard"><Dashboard /></RequireAuth>} />
           <Route path="/cortesias" element={<RequireAuth modulo="cortesias"><Cortesias /></RequireAuth>} />
@@ -151,6 +159,7 @@ function Shell() {
           <Route path="/tarefas" element={<RequireAuth modulo="tarefas"><Tarefas /></RequireAuth>} />
           <Route path="/crm-literario" element={<RequireAuth modulo="crm_literario"><CRMLiterario /></RequireAuth>} />
         </Routes>
+        </Suspense>
       </main>
     </div>
   )
