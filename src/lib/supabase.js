@@ -805,7 +805,8 @@ export async function getTarefas() {
     .from('tarefas')
     .select(`*, responsavel:responsavel_id(id, nome), criador:created_by(id, nome),
       tarefa_checklist(id, texto, concluido, ordem),
-      tarefa_comentarios(id, texto, created_at, usuario:usuario_id(id, nome))`)
+      tarefa_comentarios(id, texto, created_at, usuario:usuario_id(id, nome)),
+      tarefa_livros(id, livros(id, titulo, autor, isbn))`)
     .order('created_at', { ascending: false })
   if (error) throw error
   return data || []
@@ -817,7 +818,8 @@ export async function createTarefa(payload) {
     .insert([payload])
     .select(`*, responsavel:responsavel_id(id, nome), criador:created_by(id, nome),
       tarefa_checklist(id, texto, concluido, ordem),
-      tarefa_comentarios(id, texto, created_at, usuario:usuario_id(id, nome))`)
+      tarefa_comentarios(id, texto, created_at, usuario:usuario_id(id, nome)),
+      tarefa_livros(id, livros(id, titulo, autor, isbn))`)
     .single()
   if (error) throw error
   return data
@@ -830,7 +832,8 @@ export async function updateTarefa(id, updates) {
     .eq('id', id)
     .select(`*, responsavel:responsavel_id(id, nome), criador:created_by(id, nome),
       tarefa_checklist(id, texto, concluido, ordem),
-      tarefa_comentarios(id, texto, created_at, usuario:usuario_id(id, nome))`)
+      tarefa_comentarios(id, texto, created_at, usuario:usuario_id(id, nome)),
+      tarefa_livros(id, livros(id, titulo, autor, isbn))`)
     .single()
   if (error) throw error
   return data
@@ -861,6 +864,41 @@ export async function updateChecklistItem(id, updates) {
 export async function deleteChecklistItem(id) {
   const { error } = await supabase.from('tarefa_checklist').delete().eq('id', id)
   if (error) throw error
+}
+
+// ── TAREFA ↔ LIVROS ────────────────────────────────────────
+export async function addLivroTarefa(tarefa_id, livro_id) {
+  // Evita duplicata silenciosamente
+  const { data: existing } = await supabase
+    .from('tarefa_livros')
+    .select('id, livros(id, titulo, autor, isbn)')
+    .eq('tarefa_id', tarefa_id)
+    .eq('livro_id', livro_id)
+    .maybeSingle()
+  if (existing) return existing
+  const { data, error } = await supabase
+    .from('tarefa_livros')
+    .insert([{ tarefa_id, livro_id }])
+    .select('id, livros(id, titulo, autor, isbn)')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function removeLivroTarefa(id) {
+  const { error } = await supabase.from('tarefa_livros').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function buscarLivroPorISBN(isbn) {
+  const isbnLimpo = String(isbn || '').replace(/[^0-9]/g, '').trim()
+  if (!isbnLimpo) return null
+  const { data } = await supabase
+    .from('livros')
+    .select('id, titulo, autor, isbn')
+    .eq('isbn', isbnLimpo)
+    .maybeSingle()
+  return data
 }
 
 export async function addComentario(tarefa_id, usuario_id, texto) {
