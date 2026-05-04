@@ -901,6 +901,144 @@ export async function buscarLivroPorISBN(isbn) {
   return data
 }
 
+// ── IMPORTAÇÃO DE TAREFAS VIA PLANILHA ─────────────────────
+// Importa tarefas em lote, registrando o lote em import_batches.
+// Retorna { batchId, criadas, livrosVinculados }
+export async function importarTarefasLote({ tarefas, ignoradas, filename, userId }) {
+  if (!userId) throw new Error('Usuário não autenticado')
+  if (!tarefas || tarefas.length === 0) throw new Error('Nenhuma tarefa válida para importar')
+
+  // 1. Cria o registro do lote primeiro (precisamos do batch_id para vincular nas tarefas)
+  const { data: batch, error: batchError } = await supabase
+    .from('import_batches')
+    .insert([{
+      imported_by: userId,
+      source_filename: filename,
+      total_rows: tarefas.length + (ignoradas?.length || 0),
+      successful_rows: tarefas.length,
+      ignored_rows: ignoradas?.length || 0,
+      ignored_rows_data: ignoradas || [],
+    }])
+    .select('id')
+    .single()
+  if (batchError) throw batchError
+
+  const batchId = batch.id
+  const agora = new Date().toISOString()
+
+  // 2. Prepara as tarefas para insert (sem livros, esses serão vinculados depois)
+  const tarefasParaInserir = tarefas.map(t => ({
+    titulo:           t.titulo,
+    descricao:        t.descricao || null,
+    status:           t.status || 'a_fazer',
+    prioridade:       t.prioridade || 'media',
+    responsavel_id:   t.responsavel_id || null,
+    data_prazo:       t.data_prazo || null,
+    created_by:       userId,
+    created_via:      'planilha_xlsx',
+    imported_by:      userId,
+    imported_at:      agora,
+    import_batch_id:  batchId,
+    source_filename:  filename,
+  }))
+
+  // 3. Insere todas as tarefas em uma chamada
+  const { data: tarefasCriadas, error: insertError } = await supabase
+    .from('tarefas')
+    .insert(tarefasParaInserir)
+    .select('id')
+  if (insertError) throw insertError
+
+  // 4. Vincula livros (se houver) — uma linha por (tarefa, livro)
+  let livrosVinculados = 0
+  const linhasTarefaLivros = []
+  tarefas.forEach((t, idx) => {
+    const tarefaId = tarefasCriadas[idx]?.id
+    if (!tarefaId) return
+    if (t.livro_ids && t.livro_ids.length > 0) {
+      t.livro_ids.forEach(livro_id => {
+        linhasTarefaLivros.push({ tarefa_id: tarefaId, livro_id })
+      })
+    }
+  })
+
+  if (linhasTarefaLivros.length > 0) {
+    const { error: tlError } = await supabase
+      .from('tarefa_livros')
+      .insert(linhasTarefaLivros)
+    if (tlError) {
+      // Não falha a importação inteira por causa de livros — só registra
+      console.error('Erro ao vincular livros:', tlError)
+    } else {
+      livrosVinculados = linhasTarefaLivros.length
+    }
+  }
+
+  return {
+    batchId,
+    criadas: tarefasCriadas.length,
+    livrosVinculados,
+    ignoradas: ignoradas?.length || 0,
+  }
+}
+
+// Desfaz uma importação: apaga todas as tarefas do lote (em até 24h).
+// Apenas quem importou pode desfazer.
+export async function desfazerImportacao(batchId) {
+  // 1. Busca o lote
+  const { data: batch, error: batchError } = await supabase
+    .from('import_batches')
+    .select('*')
+    .eq('id', batchId)
+    .single()
+  if (batchError) throw batchError
+  if (!batch) throw new Error('Lote não encontrado')
+
+  // 2. Verifica janela de 24h
+  const importadoEm = new Date(batch.imported_at)
+  const agora = new Date()
+  const horasPassadas = (agora - importadoEm) / (1000 * 60 * 60)
+  if (horasPassadas > 24) {
+    throw new Error('Janela de 24 horas para desfazer já expirou')
+  }
+
+  if (batch.undone_at) {
+    throw new Error('Este lote já foi desfeito')
+  }
+
+  // 3. Apaga todas as tarefas do lote (CASCADE remove tarefa_livros automaticamente)
+  const { error: deleteError } = await supabase
+    .from('tarefas')
+    .delete()
+    .eq('import_batch_id', batchId)
+  if (deleteError) throw deleteError
+
+  // 4. Marca o lote como desfeito
+  const { error: updateError } = await supabase
+    .from('import_batches')
+    .update({
+      undone_at: new Date().toISOString(),
+    })
+    .eq('id', batchId)
+  if (updateError) throw updateError
+
+  return { ok: true }
+}
+
+// Busca os lotes de importação recentes do usuário (últimas 24h)
+// Útil para mostrar o botão "Desfazer importação" enquanto a janela ainda está aberta
+export async function getLotesRecentes() {
+  const vinteQuatroHorasAtras = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const { data, error } = await supabase
+    .from('import_batches')
+    .select('*')
+    .gte('imported_at', vinteQuatroHorasAtras)
+    .is('undone_at', null)
+    .order('imported_at', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
 export async function addComentario(tarefa_id, usuario_id, texto) {
   const { data, error } = await supabase
     .from('tarefa_comentarios')
