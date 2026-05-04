@@ -1184,7 +1184,7 @@ function DivulgacoesTab({ envios, setEnvios }) {
         await updateEnvioStatus(modal.envio.id, 'divulgado')
       }
       const novosEnvios = await getEnvios()
-      setEnvios(novosEnvios)
+      setEnvios(novosEnvios.data || [])
       const qtd = Object.values(checked).filter(Boolean).length
       showToast(qtd > 0 ? `${qtd} divulgação${qtd>1?'s':''} registrada${qtd>1?'s':''}!` : 'Nenhuma alteração.')
       setModal(null)
@@ -1603,7 +1603,7 @@ export default function Cortesias() {
   useEffect(() => {
     getParceirosAtivos().then(setParceiros).catch(console.error)
     getLivros({ page:0, pageSize:5000 }).then(r => setLivros(r.data || [])).catch(console.error)
-    getEnvios().then(setEnvios).catch(console.error)
+    getEnvios().then(r => setEnvios(r.data || [])).catch(console.error)
   }, [])
 
   return (
