@@ -1190,8 +1190,8 @@ export default function Eventos() {
         ].map(({k,l})=>(
           <button key={k} onClick={()=>{ setAbaView(k); setFiltroStatus(''); setBusca('') }}
             style={{padding:'9px 18px',fontSize:13,fontWeight:abaView===k?700:400,cursor:'pointer',
-              background:'none',border:'none',borderBottom:abaView===k?'2px solid var(--accent)''2px solid transparent',
-              color:abaView===k?'var(--accent)''var(--text-muted)'}}>
+              background:'none',border:'none',borderBottom:abaView===k?'2px solid var(--accent)':'2px solid transparent',
+              color:abaView===k?'var(--accent)':'var(--text-muted)'}}>
             {l}
           </button>
         ))}
@@ -1228,7 +1228,7 @@ export default function Eventos() {
                     onClick={()=>setDetalhe(e.id)}>
                     {e.imagem_url
                       ? <img src={e.imagem_url} alt={e.nome} style={{width:'100%',height:140,objectFit:'cover'}}/>
-                      : <div style={{height:8,background:abaView==='encerrados'?'var(--border)''var(--accent)'}}/>
+                      : <div style={{height:8,background:abaView==='encerrados'?'var(--border)':'var(--accent)'}}/>
                     }
                     <div style={{padding:'14px 18px'}}>
                       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
