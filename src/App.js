@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom'
-import { AuthProvider, useAuth, canAccess } from './context/AuthContext'
+import { AuthProvider, useAuth } from './context/AuthContext'
+import { usePermissions } from './hooks/usePermissions'
 import { signOut } from './lib/supabase'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -63,10 +64,11 @@ const PERFIL_COLOR = {
 }
 
 function RequireAuth({ children, modulo }) {
-  const { session, usuario, loading } = useAuth()
+  const { session, loading } = useAuth()
+  const { can } = usePermissions()
   if (loading) return <div className="loading"><div className="spinner" /></div>
   if (!session) return <Navigate to="/login" replace />
-  if (modulo && !canAccess(usuario?.perfil, modulo)) return <SemAcesso />
+  if (modulo && !can(modulo)) return <SemAcesso />
   return children
 }
 
@@ -82,12 +84,13 @@ function SemAcesso() {
 
 function Shell() {
   const { usuario } = useAuth()
+  const { can } = usePermissions()
 
   async function handleLogout() {
     await signOut()
   }
 
-  const menuVisivel = MENU.filter(m => canAccess(usuario?.perfil, m.modulo))
+  const menuVisivel = MENU.filter(m => can(m.modulo))
 
   return (
     <div className="app-shell">
