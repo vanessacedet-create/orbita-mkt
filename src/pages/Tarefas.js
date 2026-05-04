@@ -3,17 +3,20 @@ import {
   getTarefas, createTarefa, updateTarefa, deleteTarefa,
   addChecklistItem, updateChecklistItem, deleteChecklistItem,
   addComentario, getUsuarios,
-  addLivroTarefa, removeLivroTarefa, getLivros
+  addLivroTarefa, removeLivroTarefa, getLivros,
+  importarTarefasLote, buscarLivroPorISBN
 } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import {
   Plus, X, Pencil, Trash2, CheckSquare, Square, MessageSquare,
   Calendar, Flag, User, ChevronDown, List, Columns, Clock,
   AlertCircle, ArrowUp, Minus, CheckCircle2, Circle, LayoutList,
-  CalendarDays, ChevronLeft, ChevronRight, Book, Search
+  CalendarDays, ChevronLeft, ChevronRight, Book, Search,
+  Upload, Download, FileSpreadsheet, ChevronUp
 } from 'lucide-react'
 import { format, isPast, isToday, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import * as XLSX from 'xlsx'
 
 // ── CONSTANTES ─────────────────────────────────────────────
 const STATUS = [
@@ -28,6 +31,20 @@ const PRIORIDADE = [
   { value: 'media',   label: 'Média',   color: '#eab308', icon: Minus },
   { value: 'baixa',   label: 'Baixa',   color: '#6b7280', icon: ChevronDown },
 ]
+
+// Mapeamento de valores da planilha (case-insensitive) para valores do banco
+const STATUS_MAP = {
+  'a fazer': 'a_fazer', 'a_fazer': 'a_fazer',
+  'em andamento': 'em_andamento', 'em_andamento': 'em_andamento',
+  'concluído': 'concluido', 'concluido': 'concluido',
+}
+
+const PRIORIDADE_MAP = {
+  'urgente': 'urgente',
+  'alta': 'alta',
+  'média': 'media', 'media': 'media',
+  'baixa': 'baixa',
+}
 
 function useToast() {
   const [toast, setToast] = useState(null)
@@ -73,10 +90,8 @@ function SeletorLivros({ tarefaId, livrosVinculados, onChange }) {
   const [showResults, setShowResults] = useState(false)
   const buscaTimeout = useRef(null)
 
-  // IDs dos livros já vinculados (para filtrar resultados)
   const idsVinculados = (livrosVinculados || []).map(tl => tl.livros?.id).filter(Boolean)
 
-  // Busca livros conforme digita (com debounce de 300ms)
   useEffect(() => {
     if (buscaTimeout.current) clearTimeout(buscaTimeout.current)
     if (!busca.trim() || busca.trim().length < 2) {
@@ -96,10 +111,7 @@ function SeletorLivros({ tarefaId, livrosVinculados, onChange }) {
 
   async function adicionarLivro(livro) {
     if (idsVinculados.includes(livro.id)) return
-    if (!tarefaId) {
-      // Tarefa ainda não foi criada - não permite adicionar livros
-      return
-    }
+    if (!tarefaId) return
     try {
       const novo = await addLivroTarefa(tarefaId, livro.id)
       onChange([...(livrosVinculados || []), novo])
@@ -116,7 +128,6 @@ function SeletorLivros({ tarefaId, livrosVinculados, onChange }) {
     } catch (e) { console.error(e) }
   }
 
-  // Resultados filtrados (excluindo já vinculados)
   const resultadosFiltrados = resultados.filter(r => !idsVinculados.includes(r.id))
 
   if (!tarefaId) {
@@ -129,7 +140,6 @@ function SeletorLivros({ tarefaId, livrosVinculados, onChange }) {
 
   return (
     <div>
-      {/* Pills dos livros vinculados */}
       {(livrosVinculados || []).length > 0 && (
         <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:8 }}>
           {livrosVinculados.map(tl => (
@@ -154,7 +164,6 @@ function SeletorLivros({ tarefaId, livrosVinculados, onChange }) {
         </div>
       )}
 
-      {/* Caixa de busca */}
       <div style={{ position:'relative' }}>
         <div style={{ position:'relative' }}>
           <Search size={14} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)' }}/>
@@ -169,7 +178,6 @@ function SeletorLivros({ tarefaId, livrosVinculados, onChange }) {
           />
         </div>
 
-        {/* Dropdown de resultados */}
         {showResults && busca.trim().length >= 2 && (
           <div style={{
             position:'absolute', top:'calc(100% + 4px)', left:0, right:0,
@@ -229,7 +237,7 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
   const [novoItem, setNovoItem]     = useState('')
   const [novoComent, setNovoComent] = useState('')
   const [saving, setSaving]         = useState(false)
-  const [tab, setTab]               = useState('detalhes') // detalhes | checklist | comentarios
+  const [tab, setTab]               = useState('detalhes')
   const checkInputRef = useRef()
 
   async function salvar() {
@@ -286,7 +294,6 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
           </div>
         </div>
 
-        {/* Tabs — só mostrar se editando tarefa existente */}
         {tarefa && (
           <div style={{ display:'flex', gap:0, borderBottom:'1px solid var(--border)', marginBottom:16 }}>
             {[
@@ -303,7 +310,6 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
           </div>
         )}
 
-        {/* TAB DETALHES */}
         {tab === 'detalhes' && (
           <div className="form-grid">
             <div className="form-group">
@@ -352,7 +358,6 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
           </div>
         )}
 
-        {/* TAB CHECKLIST */}
         {tab === 'checklist' && (
           <div>
             {checkTotal > 0 && (
@@ -385,7 +390,6 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
           </div>
         )}
 
-        {/* TAB COMENTÁRIOS */}
         {tab === 'comentarios' && (
           <div>
             <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:16 }}>
@@ -421,6 +425,378 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
             {saving ? 'Salvando...' : tarefa ? 'Salvar' : 'Criar tarefa'}
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ── MODAL DE IMPORTAÇÃO ────────────────────────────────────
+function ModalImportar({ usuarios, onClose, onImported }) {
+  const { usuario } = useAuth()
+  const [etapa, setEtapa] = useState('upload')
+  const [arquivo, setArquivo] = useState(null)
+  const [linhas, setLinhas] = useState([])
+  const [importando, setImportando] = useState(false)
+  const [resultado, setResultado] = useState(null)
+  const fileInputRef = useRef()
+
+  function baixarTemplate() {
+    const wb = XLSX.utils.book_new()
+
+    const headers = [
+      'Título', 'Descrição', 'Responsável',
+      'Livros (ISBN, separados por vírgula)',
+      'Prazo (DD/MM/AAAA)', 'Prioridade', 'Status'
+    ]
+    const exemplos = [
+      ['Produzir 4 roteiros de Reels - semana 19', 'Foco em hooks de abertura. Entregar até quinta.', 'Sarah', '9788580330000, 9788580330001', '09/05/2026', 'Alta', 'A fazer'],
+      ['Atualizar ficha técnica de 3 títulos', 'Corrigir peso e dimensões no Mercado Livre.', 'Fernanda', '9788580330002', '12/05/2026', 'Média', 'A fazer'],
+      ['Briefing de carrossel - campanha Quaresma', 'Tom litúrgico, 7 slides.', 'Vanessa', '9788580330003, 9788580330004', '15/05/2026', 'Baixa', 'A fazer'],
+    ]
+    const ws1 = XLSX.utils.aoa_to_sheet([headers, ...exemplos])
+    ws1['!cols'] = [{ wch: 38 }, { wch: 45 }, { wch: 18 }, { wch: 32 }, { wch: 20 }, { wch: 14 }, { wch: 14 }]
+    XLSX.utils.book_append_sheet(wb, ws1, 'Tarefas')
+
+    const instr = [
+      ['Como usar este template'],
+      [''],
+      ['1. Apague as 3 linhas de exemplo da aba Tarefas antes de preencher com suas tarefas reais.'],
+      ['2. Preencha uma linha por tarefa. Não deixe linhas em branco no meio.'],
+      ['3. Salve em formato .xlsx (não .csv ou .xls).'],
+      ['4. Volte para o Orbita e faça o upload.'],
+      [''],
+      ['Regras de cada campo:'],
+      ['Título: obrigatório, máximo 200 caracteres.'],
+      ['Descrição: opcional, briefing detalhado.'],
+      ['Responsável: obrigatório. Use exatamente um dos nomes da aba Referências.'],
+      ['Livros: opcional. ISBN com 13 dígitos. Para múltiplos livros, separe por vírgula.'],
+      ['Prazo: obrigatório. Formato DD/MM/AAAA.'],
+      ['Prioridade: obrigatório. Aceita: Urgente, Alta, Média, Baixa.'],
+      ['Status: opcional. Padrão A fazer. Aceita: A fazer, Em andamento, Concluído.'],
+      [''],
+      ['Observações:'],
+      ['- Linhas com erro são ignoradas. As válidas são importadas normalmente.'],
+      ['- O sistema valida cada ISBN contra o catálogo antes de importar.'],
+      ['- Cada tarefa criada registra quem importou e quando.'],
+    ]
+    const ws2 = XLSX.utils.aoa_to_sheet(instr)
+    ws2['!cols'] = [{ wch: 90 }]
+    XLSX.utils.book_append_sheet(wb, ws2, 'Instruções')
+
+    const refs = [['Responsáveis', 'Prioridades', 'Status']]
+    const responsaveis = (usuarios || []).map(u => u.nome).sort()
+    const prioridades = ['Urgente', 'Alta', 'Média', 'Baixa']
+    const statuses = ['A fazer', 'Em andamento', 'Concluído']
+    const maxLen = Math.max(responsaveis.length, prioridades.length, statuses.length)
+    for (let i = 0; i < maxLen; i++) {
+      refs.push([responsaveis[i] || '', prioridades[i] || '', statuses[i] || ''])
+    }
+    const ws3 = XLSX.utils.aoa_to_sheet(refs)
+    ws3['!cols'] = [{ wch: 22 }, { wch: 14 }, { wch: 18 }]
+    XLSX.utils.book_append_sheet(wb, ws3, 'Referências')
+
+    XLSX.writeFile(wb, 'template_tarefas_orbita.xlsx')
+  }
+
+  async function processarArquivo(file) {
+    if (!file) return
+    if (!file.name.toLowerCase().endsWith('.xlsx')) {
+      alert('Apenas arquivos .xlsx são aceitos.')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Arquivo maior que 5 MB.')
+      return
+    }
+    setArquivo(file)
+
+    try {
+      const data = await file.arrayBuffer()
+      const wb = XLSX.read(data, { type: 'array' })
+      const ws = wb.Sheets['Tarefas'] || wb.Sheets[wb.SheetNames[0]]
+      if (!ws) {
+        alert('Aba "Tarefas" não encontrada na planilha.')
+        return
+      }
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+      const dados = rows.slice(1).filter(r => r.some(c => String(c).trim() !== ''))
+
+      const linhasProcessadas = await Promise.all(dados.map(async (row, idx) => {
+        const linha = idx + 2
+        const [titulo, descricao, responsavelNome, isbnsStr, prazoStr, prioridadeStr, statusStr] = row.map(c => String(c).trim())
+        const erros = []
+
+        if (!titulo) erros.push('Título vazio')
+        else if (titulo.length > 200) erros.push('Título com mais de 200 caracteres')
+
+        let responsavel_id = null
+        if (!responsavelNome) {
+          erros.push('Responsável vazio')
+        } else {
+          const u = (usuarios || []).find(u => u.nome.toLowerCase() === responsavelNome.toLowerCase())
+          if (!u) {
+            const sugestao = (usuarios || []).find(u => u.nome.toLowerCase().startsWith(responsavelNome.toLowerCase().slice(0, 3)))
+            erros.push(`Responsável "${responsavelNome}" não encontrado${sugestao ? ` — talvez "${sugestao.nome}"?` : ''}`)
+          } else {
+            responsavel_id = u.id
+          }
+        }
+
+        let data_prazo = null
+        if (!prazoStr) {
+          erros.push('Prazo vazio')
+        } else {
+          const m = prazoStr.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+          if (m) {
+            data_prazo = `${m[3]}-${m[2]}-${m[1]}`
+            const d = new Date(data_prazo + 'T12:00:00')
+            if (isNaN(d)) erros.push(`Prazo inválido: "${prazoStr}"`)
+          } else {
+            erros.push(`Prazo deve estar em DD/MM/AAAA, recebido: "${prazoStr}"`)
+          }
+        }
+
+        let prioridade = 'media'
+        if (!prioridadeStr) {
+          erros.push('Prioridade vazia')
+        } else {
+          const p = PRIORIDADE_MAP[prioridadeStr.toLowerCase()]
+          if (!p) erros.push(`Prioridade inválida: "${prioridadeStr}". Aceita: Urgente, Alta, Média, Baixa`)
+          else prioridade = p
+        }
+
+        let status = 'a_fazer'
+        if (statusStr) {
+          const s = STATUS_MAP[statusStr.toLowerCase()]
+          if (!s) erros.push(`Status inválido: "${statusStr}". Aceita: A fazer, Em andamento, Concluído`)
+          else status = s
+        }
+
+        let livro_ids = []
+        const isbnsRaw = isbnsStr ? isbnsStr.split(',').map(s => s.trim()).filter(Boolean) : []
+        for (const isbn of isbnsRaw) {
+          const livro = await buscarLivroPorISBN(isbn)
+          if (livro) livro_ids.push(livro.id)
+          else erros.push(`ISBN "${isbn}" não encontrado no catálogo`)
+        }
+
+        return {
+          linha,
+          titulo, descricao, responsavelNome,
+          responsavel_id, data_prazo, prioridade, status,
+          livro_ids,
+          isbns_originais: isbnsRaw,
+          erros,
+          valida: erros.length === 0,
+        }
+      }))
+
+      setLinhas(linhasProcessadas)
+      setEtapa('revisao')
+    } catch (e) {
+      console.error(e)
+      alert('Erro ao processar a planilha: ' + (e?.message || 'desconhecido'))
+    }
+  }
+
+  async function confirmarImportacao() {
+    setImportando(true)
+    try {
+      const validas = linhas.filter(l => l.valida).map(l => ({
+        titulo: l.titulo,
+        descricao: l.descricao || null,
+        status: l.status,
+        prioridade: l.prioridade,
+        responsavel_id: l.responsavel_id,
+        data_prazo: l.data_prazo,
+        livro_ids: l.livro_ids,
+      }))
+      const ignoradas = linhas.filter(l => !l.valida).map(l => ({
+        linha: l.linha,
+        titulo: l.titulo,
+        responsavel: l.responsavelNome,
+        erros: l.erros,
+      }))
+
+      const r = await importarTarefasLote({
+        tarefas: validas,
+        ignoradas,
+        filename: arquivo.name,
+        userId: usuario?.id,
+      })
+      setResultado(r)
+      setEtapa('sucesso')
+    } catch (e) {
+      console.error(e)
+      alert('Erro ao importar: ' + (e?.message || 'desconhecido'))
+    } finally {
+      setImportando(false)
+    }
+  }
+
+  function baixarRelatorioErros() {
+    const ignoradas = linhas.filter(l => !l.valida)
+    if (ignoradas.length === 0) return
+    const wb = XLSX.utils.book_new()
+    const headers = ['Linha', 'Título', 'Responsável', 'Motivo do erro']
+    const dados = ignoradas.map(l => [
+      l.linha, l.titulo || '', l.responsavelNome || '', l.erros.join(' · ')
+    ])
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...dados])
+    ws['!cols'] = [{ wch: 8 }, { wch: 40 }, { wch: 18 }, { wch: 60 }]
+    XLSX.utils.book_append_sheet(wb, ws, 'Linhas com erro')
+    XLSX.writeFile(wb, 'tarefas_ignoradas.xlsx')
+  }
+
+  const validas = linhas.filter(l => l.valida).length
+  const comErro = linhas.filter(l => !l.valida).length
+
+  return (
+    <div className="modal-backdrop" onClick={()=>{}}>
+      <div className="modal" style={{ maxWidth: 700, maxHeight: '90vh', overflowY: 'auto' }}>
+        <div className="modal-header" style={{ position:'sticky', top:0, background:'var(--surface)', zIndex:10 }}>
+          <h2 className="modal-title">Importar tarefas via planilha</h2>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
+        </div>
+
+        {etapa === 'upload' && (
+          <div>
+            <p style={{ fontSize:13, color:'var(--text-soft)', marginBottom:16 }}>
+              Baixe o template, preencha com suas tarefas e faça o upload abaixo.
+            </p>
+
+            <button
+              onClick={baixarTemplate}
+              className="btn btn-ghost"
+              style={{ width:'100%', marginBottom:16, padding:'12px', justifyContent:'center', gap:8 }}
+            >
+              <Download size={14}/> Baixar template .xlsx
+            </button>
+
+            <div
+              onClick={()=>fileInputRef.current?.click()}
+              onDragOver={e=>{ e.preventDefault(); e.currentTarget.style.borderColor = 'var(--accent)' }}
+              onDragLeave={e=>{ e.currentTarget.style.borderColor = 'var(--border)' }}
+              onDrop={e=>{
+                e.preventDefault()
+                e.currentTarget.style.borderColor = 'var(--border)'
+                const file = e.dataTransfer.files?.[0]
+                if (file) processarArquivo(file)
+              }}
+              style={{
+                border:'2px dashed var(--border)', borderRadius:12, padding:'40px 20px',
+                textAlign:'center', cursor:'pointer', transition:'border 0.15s',
+                background:'var(--surface-2)'
+              }}
+            >
+              <Upload size={32} style={{ color:'var(--text-muted)', marginBottom:8 }}/>
+              <div style={{ fontSize:13, color:'var(--text-soft)', marginBottom:4 }}>
+                Clique ou arraste o arquivo aqui
+              </div>
+              <div style={{ fontSize:11, color:'var(--text-muted)' }}>
+                Apenas .xlsx · máximo 5 MB
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx"
+                style={{ display:'none' }}
+                onChange={e=>{
+                  const file = e.target.files?.[0]
+                  if (file) processarArquivo(file)
+                  e.target.value = ''
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {etapa === 'revisao' && (
+          <div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:16 }}>
+              <div style={{ background:'var(--surface-2)', borderRadius:8, padding:'12px' }}>
+                <div style={{ fontSize:11, color:'var(--text-muted)' }}>Linhas detectadas</div>
+                <div style={{ fontSize:22, fontWeight:700 }}>{linhas.length}</div>
+              </div>
+              <div style={{ background:'rgba(34,197,94,0.1)', borderRadius:8, padding:'12px' }}>
+                <div style={{ fontSize:11, color:'var(--green)' }}>Válidas</div>
+                <div style={{ fontSize:22, fontWeight:700, color:'var(--green)' }}>{validas}</div>
+              </div>
+              <div style={{ background:'rgba(239,68,68,0.1)', borderRadius:8, padding:'12px' }}>
+                <div style={{ fontSize:11, color:'var(--red)' }}>Com erro</div>
+                <div style={{ fontSize:22, fontWeight:700, color:'var(--red)' }}>{comErro}</div>
+              </div>
+            </div>
+
+            <div style={{ border:'1px solid var(--border)', borderRadius:8, overflow:'hidden', marginBottom:16, maxHeight:300, overflowY:'auto' }}>
+              <table style={{ width:'100%', fontSize:11, borderCollapse:'collapse' }}>
+                <thead style={{ background:'var(--surface-2)', position:'sticky', top:0 }}>
+                  <tr>
+                    <th style={{ padding:'8px 10px', textAlign:'left', color:'var(--text-muted)' }}>#</th>
+                    <th style={{ padding:'8px 10px', textAlign:'left', color:'var(--text-muted)' }}>Título</th>
+                    <th style={{ padding:'8px 10px', textAlign:'left', color:'var(--text-muted)' }}>Status / Erro</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {linhas.map(l => (
+                    <tr key={l.linha} style={{ background: l.valida ? 'transparent' : 'rgba(239,68,68,0.06)', borderTop:'1px solid var(--border)' }}>
+                      <td style={{ padding:'8px 10px', color:'var(--text-muted)' }}>{l.linha}</td>
+                      <td style={{ padding:'8px 10px', color: l.valida ? 'var(--text)' : 'var(--red)' }}>
+                        {l.titulo || <span style={{ fontStyle:'italic', opacity:0.6 }}>(sem título)</span>}
+                      </td>
+                      <td style={{ padding:'8px 10px', color: l.valida ? 'var(--green)' : 'var(--red)' }}>
+                        {l.valida ? '✓ Pronta' : l.erros.join(' · ')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {comErro > 0 && (
+              <div style={{ background:'rgba(234,179,8,0.1)', border:'1px solid rgba(234,179,8,0.3)', borderRadius:8, padding:'10px 12px', marginBottom:12, fontSize:12, color:'var(--amber)' }}>
+                {comErro} linha{comErro!==1?'s':''} com erro será{comErro!==1?'ão':''} ignorada{comErro!==1?'s':''}.
+                Você pode <button onClick={baixarRelatorioErros} style={{ background:'none', border:'none', color:'var(--amber)', textDecoration:'underline', cursor:'pointer', padding:0, fontSize:12, fontWeight:700 }}>baixar o relatório de erros</button> para corrigir e re-importar depois.
+              </div>
+            )}
+
+            <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+              <button className="btn btn-ghost" onClick={()=>{ setEtapa('upload'); setLinhas([]); setArquivo(null) }}>
+                Voltar
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={confirmarImportacao}
+                disabled={importando || validas === 0}
+              >
+                {importando ? 'Importando...' : `Importar ${validas} válida${validas!==1?'s':''}${comErro > 0 ? ` · ${comErro} ignorada${comErro!==1?'s':''}` : ''}`}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {etapa === 'sucesso' && resultado && (
+          <div style={{ textAlign:'center', padding:'20px 0' }}>
+            <CheckCircle2 size={48} color="var(--green)" style={{ marginBottom:12 }}/>
+            <h3 style={{ fontSize:16, fontWeight:700, marginBottom:8 }}>Importação concluída!</h3>
+            <p style={{ fontSize:13, color:'var(--text-soft)', marginBottom:6 }}>
+              {resultado.criadas} tarefa{resultado.criadas!==1?'s':''} criada{resultado.criadas!==1?'s':''} com sucesso.
+            </p>
+            {resultado.livrosVinculados > 0 && (
+              <p style={{ fontSize:12, color:'var(--text-muted)', marginBottom:6 }}>
+                {resultado.livrosVinculados} vínculo{resultado.livrosVinculados!==1?'s':''} de livro criado{resultado.livrosVinculados!==1?'s':''}.
+              </p>
+            )}
+            {resultado.ignoradas > 0 && (
+              <p style={{ fontSize:12, color:'var(--text-muted)', marginBottom:16 }}>
+                {resultado.ignoradas} linha{resultado.ignoradas!==1?'s':''} com erro foi/foram ignorada{resultado.ignoradas!==1?'s':''}.
+              </p>
+            )}
+            <button className="btn btn-primary" onClick={()=>{ onImported(); onClose() }} style={{ marginTop:8 }}>
+              Ver tarefas
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -475,7 +851,6 @@ function CardKanban({ tarefa, onClick, onDragStart, onDragEnd, isDragging }) {
           <PrazoBadge data_prazo={tarefa.data_prazo} status={tarefa.status}/>
         </div>
       </div>
-      {/* Responsável — nome completo na parte inferior */}
       {tarefa.responsavel?.nome && (
         <div style={{ marginTop:8, paddingTop:8, borderTop:'1px solid var(--border)', display:'flex', alignItems:'center', gap:6 }}>
           <div style={{ width:18, height:18, borderRadius:'50%', background:'var(--accent-glow)', border:'1px solid var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, fontWeight:700, color:'var(--accent)', flexShrink:0 }}>
@@ -490,20 +865,32 @@ function CardKanban({ tarefa, onClick, onDragStart, onDragEnd, isDragging }) {
   )
 }
 
+function menuItemStyle() {
+  return {
+    width:'100%', padding:'8px 12px', textAlign:'left',
+    background:'transparent', border:'none', cursor:'pointer',
+    display:'flex', alignItems:'center', gap:10, fontSize:13,
+    color:'var(--text)', borderRadius:6, transition:'background 0.1s'
+  }
+}
+
 // ── PÁGINA PRINCIPAL ───────────────────────────────────────
 export default function Tarefas() {
   const { usuario } = useAuth()
   const [tarefas, setTarefas]       = useState([])
   const [usuarios, setUsuarios]     = useState([])
   const [loading, setLoading]       = useState(true)
-  const [modal, setModal]           = useState(null) // null | 'new' | tarefa obj
-  const [view, setView]             = useState('kanban') // kanban | lista
+  const [modal, setModal]           = useState(null)
+  const [showImportar, setShowImportar] = useState(false)
+  const [showMenuNova, setShowMenuNova] = useState(false)
+  const [view, setView]             = useState('kanban')
   const [filtroStatus, setFiltroStatus]       = useState('todos')
   const [filtroPrioridade, setFiltroPrioridade] = useState('todas')
   const [filtroResponsavel, setFiltroResponsavel] = useState('todos')
   const [toast, showToast]          = useToast()
   const [dragId, setDragId]           = useState(null)
   const [dragOverCol, setDragOverCol] = useState(null)
+  const menuRef = useRef()
 
   async function carregar() {
     setLoading(true)
@@ -516,6 +903,16 @@ export default function Tarefas() {
   }
 
   useEffect(() => { carregar() }, [])
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setShowMenuNova(false)
+      }
+    }
+    if (showMenuNova) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [showMenuNova])
 
   async function handleSave(form, id) {
     if (id) {
@@ -554,7 +951,6 @@ export default function Tarefas() {
     }
   }
 
-  // Filtros
   const tarefasFiltradas = tarefas.filter(t => {
     if (filtroStatus !== 'todos' && t.status !== filtroStatus) return false
     if (filtroPrioridade !== 'todas' && t.prioridade !== filtroPrioridade) return false
@@ -572,7 +968,6 @@ export default function Tarefas() {
 
   const totalAtrasadas = tarefas.filter(t => t.data_prazo && t.status !== 'concluido' && isPast(new Date(t.data_prazo + 'T12:00:00')) && !isToday(new Date(t.data_prazo + 'T12:00:00'))).length
 
-  // Verifica se alguma tarefa filtrada tem livros vinculados (para mostrar coluna condicional na lista)
   const algumaTemLivros = tarefasFiltradas.some(t => (t.tarefa_livros?.length || 0) > 0)
 
   if (loading) return <div className="loading"><div className="spinner"/></div>
@@ -592,7 +987,6 @@ export default function Tarefas() {
           </div>
         </div>
         <div style={{ display:'flex', gap:8 }}>
-          {/* Toggle view */}
           <div style={{ display:'flex', background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, overflow:'hidden' }}>
             <button onClick={()=>setView('kanban')} style={{ padding:'7px 12px', border:'none', cursor:'pointer', background: view==='kanban' ? 'var(--accent)' : 'transparent', color: view==='kanban' ? '#fff' : 'var(--text-muted)', transition:'all 0.15s', display:'flex', alignItems:'center', gap:5, fontSize:12 }}>
               <Columns size={13}/> Kanban
@@ -604,7 +998,51 @@ export default function Tarefas() {
               <CalendarDays size={13}/> Calendário
             </button>
           </div>
-          <button className="btn btn-primary" onClick={()=>setModal('new')}><Plus size={14}/> Nova tarefa</button>
+
+          {/* Split button: Nova tarefa + dropdown */}
+          <div ref={menuRef} style={{ position:'relative', display:'flex' }}>
+            <button
+              className="btn btn-primary"
+              onClick={()=>setModal('new')}
+              style={{ borderTopRightRadius:0, borderBottomRightRadius:0, borderRight:'1px solid rgba(255,255,255,0.2)' }}
+            >
+              <Plus size={14}/> Nova tarefa
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={()=>setShowMenuNova(s=>!s)}
+              style={{ borderTopLeftRadius:0, borderBottomLeftRadius:0, padding:'0 8px' }}
+              aria-label="Mais opções"
+            >
+              {showMenuNova ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+            </button>
+
+            {showMenuNova && (
+              <div style={{
+                position:'absolute', top:'calc(100% + 4px)', right:0,
+                background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8,
+                boxShadow:'0 4px 16px rgba(0,0,0,0.2)', zIndex:20,
+                minWidth:220, padding:6
+              }}>
+                <button
+                  onClick={()=>{ setShowMenuNova(false); setModal('new') }}
+                  style={menuItemStyle()}
+                  onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'}
+                  onMouseLeave={e=>e.currentTarget.style.background='transparent'}
+                >
+                  <Plus size={13}/> Criar manualmente
+                </button>
+                <button
+                  onClick={()=>{ setShowMenuNova(false); setShowImportar(true) }}
+                  style={menuItemStyle()}
+                  onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'}
+                  onMouseLeave={e=>e.currentTarget.style.background='transparent'}
+                >
+                  <FileSpreadsheet size={13}/> Importar planilha
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -652,7 +1090,6 @@ export default function Tarefas() {
                   border: isOver ? `2px solid ${corCol}` : '1px solid var(--border)',
                   transition:'border 0.15s, background 0.15s',
                 }}>
-                {/* Header coluna */}
                 <div style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                   <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                     <Icon size={14} color={corCol}/>
@@ -660,7 +1097,6 @@ export default function Tarefas() {
                   </div>
                   <span style={{ fontSize:11, fontWeight:700, color:'var(--text-muted)', background:'var(--surface-3)', borderRadius:20, padding:'2px 8px' }}>{lista.length}</span>
                 </div>
-                {/* Cards */}
                 <div style={{ padding:'10px', display:'flex', flexDirection:'column', gap:8, minHeight:120 }}>
                   {lista.length === 0
                     ? <div style={{ fontSize:12, color: isOver ? corCol : 'var(--text-muted)', textAlign:'center', padding:'20px 0', opacity: isOver ? 1 : 0.5, fontWeight: isOver ? 600 : 400, transition:'all 0.15s' }}>
@@ -774,7 +1210,7 @@ export default function Tarefas() {
         />
       )}
 
-      {/* Modal */}
+      {/* Modal de tarefa */}
       {modal && (
         <ModalTarefa
           tarefa={modal === 'new' ? null : modal}
@@ -782,6 +1218,15 @@ export default function Tarefas() {
           onSave={handleSave}
           onDelete={handleDelete}
           onClose={()=>{ setModal(null); carregar() }}
+        />
+      )}
+
+      {/* Modal de importação */}
+      {showImportar && (
+        <ModalImportar
+          usuarios={usuarios}
+          onClose={()=>setShowImportar(false)}
+          onImported={()=>{ carregar(); showToast('Tarefas importadas!') }}
         />
       )}
 
@@ -798,10 +1243,9 @@ function ViewCalendario({ tarefas, onClickTarefa, onNovaTarefa }) {
   const ano = mesRef.getFullYear()
   const mes = mesRef.getMonth()
   const nomeMes = format(mesRef, 'MMMM yyyy', { locale: ptBR })
-  const primeiroDia = new Date(ano, mes, 1).getDay() // 0=dom
+  const primeiroDia = new Date(ano, mes, 1).getDay()
   const diasNoMes = new Date(ano, mes + 1, 0).getDate()
 
-  // Agrupa tarefas por data_prazo
   const tarefasPorDia = {}
   tarefas.forEach(t => {
     if (!t.data_prazo) return
@@ -810,7 +1254,6 @@ function ViewCalendario({ tarefas, onClickTarefa, onNovaTarefa }) {
     tarefasPorDia[key].push(t)
   })
 
-  // Tarefas sem data
   const semData = tarefas.filter(t => !t.data_prazo)
 
   function corStatus(status) {
@@ -823,7 +1266,6 @@ function ViewCalendario({ tarefas, onClickTarefa, onNovaTarefa }) {
 
   return (
     <div>
-      {/* Header do calendário */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
         <button onClick={()=>setMesRef(new Date(ano, mes-1, 1))}
           style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'6px 10px', cursor:'pointer', display:'flex', alignItems:'center', color:'var(--text-soft)' }}>
@@ -844,23 +1286,18 @@ function ViewCalendario({ tarefas, onClickTarefa, onNovaTarefa }) {
         </button>
       </div>
 
-      {/* Grid */}
       <div style={{ border:'1px solid var(--border)', borderRadius:12, overflow:'hidden' }}>
-        {/* Cabeçalho dias da semana */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', background:'var(--surface-2)', borderBottom:'1px solid var(--border)' }}>
           {diasSemana.map(d=>(
             <div key={d} style={{ padding:'10px 0', textAlign:'center', fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>{d}</div>
           ))}
         </div>
 
-        {/* Células */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)' }}>
-          {/* Células vazias antes do primeiro dia */}
           {Array.from({length: primeiroDia}).map((_,i)=>(
             <div key={`v${i}`} style={{ minHeight:110, background:'var(--surface)', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)', opacity:0.4 }}/>
           ))}
 
-          {/* Dias do mês */}
           {Array.from({length: diasNoMes}).map((_,i)=>{
             const dia = i + 1
             const dataKey = `${ano}-${String(mes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`
@@ -882,7 +1319,6 @@ function ViewCalendario({ tarefas, onClickTarefa, onNovaTarefa }) {
                 onMouseEnter={e=>e.currentTarget.style.background='var(--surface-3)'}
                 onMouseLeave={e=>e.currentTarget.style.background=isFimSemana?'var(--surface-2)':'var(--surface)'}>
 
-                {/* Número do dia */}
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
                   <span style={{
                     width:24, height:24, display:'flex', alignItems:'center', justifyContent:'center',
@@ -895,7 +1331,6 @@ function ViewCalendario({ tarefas, onClickTarefa, onNovaTarefa }) {
                   )}
                 </div>
 
-                {/* Tarefas do dia (máx 3 visíveis) */}
                 {tarefasDia.slice(0,3).map(t=>{
                   const c = corStatus(t.status)
                   const atrasada = t.status !== 'concluido' && isPast(new Date(dataKey+'T12:00:00')) && !isHoje
@@ -924,14 +1359,12 @@ function ViewCalendario({ tarefas, onClickTarefa, onNovaTarefa }) {
             )
           })}
 
-          {/* Células vazias no final */}
           {Array.from({length: (7 - (primeiroDia + diasNoMes) % 7) % 7}).map((_,i)=>(
             <div key={`f${i}`} style={{ minHeight:110, background:'var(--surface)', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)', opacity:0.4 }}/>
           ))}
         </div>
       </div>
 
-      {/* Tarefas sem data */}
       {semData.length > 0 && (
         <div style={{ marginTop:20 }}>
           <h3 style={{ fontSize:12, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>
