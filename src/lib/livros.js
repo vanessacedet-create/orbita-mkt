@@ -43,7 +43,17 @@ export async function buscarLivroPorISBN(isbn) {
   return data
 }
 
-export async function getEditoras() {
+// Cache em memória para editoras — dado estático que não muda durante a sessão.
+// Evita múltiplas queries paginadas toda vez que a página de livros abre.
+let _editorasCache = null
+let _editorasCacheAt = 0
+const EDITORAS_TTL = 5 * 60 * 1000 // 5 minutos
+
+export async function getEditoras({ forceRefresh = false } = {}) {
+  const agora = Date.now()
+  if (!forceRefresh && _editorasCache && (agora - _editorasCacheAt) < EDITORAS_TTL) {
+    return _editorasCache
+  }
   let todas = []
   let page = 0
   const pageSize = 1000
@@ -60,25 +70,30 @@ export async function getEditoras() {
     if (data.length < pageSize) break
     page++
   }
-  return [...new Set(todas)].sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  _editorasCache = [...new Set(todas)].sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  _editorasCacheAt = agora
+  return _editorasCache
 }
 
 // ── ENVIOS (Cortesias) ─────────────────────────────────────
-export async function getEnvios() {
-  const { data: envios, error } = await supabase
+// Paginação real — sem limites arbitrários que silenciosamente cortam dados.
+export async function getEnvios({ page = 0, pageSize = 50 } = {}) {
+  const from = page * pageSize
+  const to   = from + pageSize - 1
+
+  const { data: envios, error, count } = await supabase
     .from('envios')
-    .select('*, parceiros(id, nome, tipo_parceria)')
+    .select('*, parceiros(id, nome, tipo_parceria)', { count: 'exact' })
     .order('created_at', { ascending: false })
-    .limit(500)
+    .range(from, to)
   if (error) throw error
-  if (!envios || envios.length === 0) return []
+  if (!envios || envios.length === 0) return { data: [], count: 0 }
 
   const envioIds = envios.map(e => e.id)
   const { data: todosLivros, error: livrosError } = await supabase
     .from('envio_livros')
     .select('id, envio_id, divulgado, data_divulgacao, livros(id, titulo, autor, isbn, sku)')
     .in('envio_id', envioIds)
-    .limit(5000)
   if (livrosError) throw livrosError
 
   const livrosPorEnvio = {}
@@ -87,7 +102,8 @@ export async function getEnvios() {
     livrosPorEnvio[el.envio_id].push(el)
   }
 
-  return envios.map(e => ({ ...e, envio_livros: livrosPorEnvio[e.id] || [] }))
+  const data = envios.map(e => ({ ...e, envio_livros: livrosPorEnvio[e.id] || [] }))
+  return { data, count: count || 0 }
 }
 
 export async function getEnvioCompleto(id) {
@@ -216,6 +232,7 @@ export async function getLivrosLancamento({ ano, mes } = {}) {
 }
 
 export async function importarLancamentos(livros) {
+  // Normaliza todos os dados antes de qualquer query
   const rows = livros.map(l => ({
     titulo:          l.titulo,
     autor:           l.autor || null,
@@ -227,47 +244,63 @@ export async function importarLancamentos(livros) {
 
   const results = { atualizados: 0, criados: 0, erros: [] }
 
+  // ── Busca em batch — 1 query por campo em vez de N queries por livro ──
+  const isbns  = [...new Set(rows.map(r => r.isbn).filter(Boolean))]
+  const skus   = [...new Set(rows.map(r => r.sku).filter(Boolean))]
+  const titulos = [...new Set(rows.map(r => r.titulo).filter(Boolean))]
+
+  const [byIsbn, bySku, byTitulo] = await Promise.all([
+    isbns.length
+      ? supabase.from('livros').select('id, isbn, sku, titulo, data_lancamento').in('isbn', isbns)
+      : Promise.resolve({ data: [] }),
+    skus.length
+      ? supabase.from('livros').select('id, isbn, sku, titulo, data_lancamento').in('sku', skus)
+      : Promise.resolve({ data: [] }),
+    titulos.length
+      ? supabase.from('livros').select('id, isbn, sku, titulo, data_lancamento').in('titulo', titulos)
+      : Promise.resolve({ data: [] }),
+  ])
+
+  // Mapas para lookup O(1)
+  const mapIsbn   = Object.fromEntries((byIsbn.data  || []).map(l => [l.isbn,   l]))
+  const mapSku    = Object.fromEntries((bySku.data   || []).map(l => [l.sku,    l]))
+  const mapTitulo = Object.fromEntries((byTitulo.data || []).map(l => [l.titulo, l]))
+
+  // Separa os que vão ser atualizados dos que vão ser inseridos
+  const paraAtualizar = [] // [{ id, row }]
+  const paraInserir   = [] // [row]
+
   for (const row of rows) {
     try {
-      const isbnStr = row.isbn ? String(row.isbn).replace(/\.0$/, '').trim() : null
-      const skuStr  = row.sku  ? String(row.sku).replace(/\.0$/, '').trim()  : null
-      row.isbn = isbnStr
-      row.sku  = skuStr
+      const existing =
+        (row.isbn && mapIsbn[row.isbn])   ||
+        (row.sku  && mapSku[row.sku])     ||
+        (row.titulo && mapTitulo[row.titulo])
 
-      let existing = null
-      if (isbnStr) {
-        const { data } = await supabase.from('livros').select('id').eq('isbn', isbnStr).maybeSingle()
-        existing = data
-      }
-      if (!existing && skuStr) {
-        const { data } = await supabase.from('livros').select('id').eq('sku', skuStr).maybeSingle()
-        existing = data
-      }
-      if (!existing && row.titulo && row.data_lancamento) {
-        const { data } = await supabase.from('livros').select('id')
-          .ilike('titulo', row.titulo.trim())
-          .eq('data_lancamento', row.data_lancamento)
-          .maybeSingle()
-        existing = data
-      }
-      if (!existing && row.titulo) {
-        const { data } = await supabase.from('livros').select('id')
-          .ilike('titulo', row.titulo.trim())
-          .maybeSingle()
-        existing = data
-      }
-      if (existing) {
-        const { error: updErr } = await supabase.from('livros').update(row).eq('id', existing.id)
-        if (updErr) throw updErr
-        results.atualizados++
-      } else {
-        const { error: insErr } = await supabase.from('livros').insert([row])
-        if (insErr) throw insErr
-        results.criados++
-      }
+      if (existing) paraAtualizar.push({ id: existing.id, row })
+      else          paraInserir.push(row)
     } catch(e) {
       results.erros.push(`${row.titulo || 'desconhecido'}: ${e?.message || e}`)
     }
   }
+
+  // Atualiza em paralelo (cada update é leve, sem risco de conflito)
+  const updateResults = await Promise.allSettled(
+    paraAtualizar.map(({ id, row }) =>
+      supabase.from('livros').update(row).eq('id', id)
+    )
+  )
+  for (const r of updateResults) {
+    if (r.status === 'fulfilled') results.atualizados++
+    else results.erros.push(r.reason?.message || 'Erro ao atualizar')
+  }
+
+  // Insere em batch — 1 query para todos os novos
+  if (paraInserir.length > 0) {
+    const { error: insErr } = await supabase.from('livros').insert(paraInserir)
+    if (insErr) results.erros.push(`Erro ao inserir: ${insErr.message}`)
+    else results.criados += paraInserir.length
+  }
+
   return results
 }
