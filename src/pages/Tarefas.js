@@ -2,14 +2,15 @@ import { useEffect, useState, useRef } from 'react'
 import {
   getTarefas, createTarefa, updateTarefa, deleteTarefa,
   addChecklistItem, updateChecklistItem, deleteChecklistItem,
-  addComentario, getUsuarios
+  addComentario, getUsuarios,
+  addLivroTarefa, removeLivroTarefa, getLivros
 } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import {
   Plus, X, Pencil, Trash2, CheckSquare, Square, MessageSquare,
   Calendar, Flag, User, ChevronDown, List, Columns, Clock,
   AlertCircle, ArrowUp, Minus, CheckCircle2, Circle, LayoutList,
-  CalendarDays, ChevronLeft, ChevronRight
+  CalendarDays, ChevronLeft, ChevronRight, Book, Search
 } from 'lucide-react'
 import { format, isPast, isToday, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -64,6 +65,152 @@ function PrazoBadge({ data_prazo, status }) {
   )
 }
 
+// ── SELETOR DE LIVROS ──────────────────────────────────────
+function SeletorLivros({ tarefaId, livrosVinculados, onChange }) {
+  const [busca, setBusca] = useState('')
+  const [resultados, setResultados] = useState([])
+  const [buscando, setBuscando] = useState(false)
+  const [showResults, setShowResults] = useState(false)
+  const buscaTimeout = useRef(null)
+
+  // IDs dos livros já vinculados (para filtrar resultados)
+  const idsVinculados = (livrosVinculados || []).map(tl => tl.livros?.id).filter(Boolean)
+
+  // Busca livros conforme digita (com debounce de 300ms)
+  useEffect(() => {
+    if (buscaTimeout.current) clearTimeout(buscaTimeout.current)
+    if (!busca.trim() || busca.trim().length < 2) {
+      setResultados([])
+      return
+    }
+    buscaTimeout.current = setTimeout(async () => {
+      setBuscando(true)
+      try {
+        const { data } = await getLivros({ page: 0, pageSize: 10, search: busca.trim() })
+        setResultados(data || [])
+      } catch (e) { console.error(e) }
+      finally { setBuscando(false) }
+    }, 300)
+    return () => clearTimeout(buscaTimeout.current)
+  }, [busca])
+
+  async function adicionarLivro(livro) {
+    if (idsVinculados.includes(livro.id)) return
+    if (!tarefaId) {
+      // Tarefa ainda não foi criada - não permite adicionar livros
+      return
+    }
+    try {
+      const novo = await addLivroTarefa(tarefaId, livro.id)
+      onChange([...(livrosVinculados || []), novo])
+      setBusca('')
+      setResultados([])
+      setShowResults(false)
+    } catch (e) { console.error(e) }
+  }
+
+  async function removerLivro(tarefaLivroId) {
+    try {
+      await removeLivroTarefa(tarefaLivroId)
+      onChange((livrosVinculados || []).filter(tl => tl.id !== tarefaLivroId))
+    } catch (e) { console.error(e) }
+  }
+
+  // Resultados filtrados (excluindo já vinculados)
+  const resultadosFiltrados = resultados.filter(r => !idsVinculados.includes(r.id))
+
+  if (!tarefaId) {
+    return (
+      <div style={{ fontSize:11, color:'var(--text-muted)', fontStyle:'italic', padding:'6px 0' }}>
+        Salve a tarefa primeiro para vincular livros.
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      {/* Pills dos livros vinculados */}
+      {(livrosVinculados || []).length > 0 && (
+        <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:8 }}>
+          {livrosVinculados.map(tl => (
+            <div key={tl.id} style={{
+              display:'inline-flex', alignItems:'center', gap:6,
+              padding:'4px 10px', borderRadius:99,
+              background:'var(--accent-glow)', border:'1px solid var(--accent)',
+              fontSize:11, color:'var(--accent)', fontWeight:600
+            }}>
+              <Book size={11}/>
+              <span style={{ maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                {tl.livros?.titulo || 'Livro'}
+              </span>
+              <button onClick={()=>removerLivro(tl.id)} style={{
+                background:'none', border:'none', cursor:'pointer', padding:0,
+                display:'flex', alignItems:'center', color:'var(--accent)', opacity:0.7
+              }}>
+                <X size={11}/>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Caixa de busca */}
+      <div style={{ position:'relative' }}>
+        <div style={{ position:'relative' }}>
+          <Search size={14} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)' }}/>
+          <input
+            className="form-input"
+            value={busca}
+            onChange={e=>{ setBusca(e.target.value); setShowResults(true) }}
+            onFocus={()=>setShowResults(true)}
+            onBlur={()=>setTimeout(()=>setShowResults(false), 200)}
+            placeholder="Buscar livro por título, autor ou ISBN..."
+            style={{ paddingLeft:32, fontSize:12 }}
+          />
+        </div>
+
+        {/* Dropdown de resultados */}
+        {showResults && busca.trim().length >= 2 && (
+          <div style={{
+            position:'absolute', top:'calc(100% + 4px)', left:0, right:0,
+            background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8,
+            boxShadow:'0 4px 16px rgba(0,0,0,0.15)', zIndex:10,
+            maxHeight:240, overflowY:'auto'
+          }}>
+            {buscando && (
+              <div style={{ padding:'12px 14px', fontSize:12, color:'var(--text-muted)' }}>Buscando...</div>
+            )}
+            {!buscando && resultadosFiltrados.length === 0 && (
+              <div style={{ padding:'12px 14px', fontSize:12, color:'var(--text-muted)' }}>
+                {resultados.length > 0 ? 'Todos os livros encontrados já foram vinculados.' : 'Nenhum livro encontrado.'}
+              </div>
+            )}
+            {!buscando && resultadosFiltrados.map(livro => (
+              <button
+                key={livro.id}
+                onClick={()=>adicionarLivro(livro)}
+                style={{
+                  width:'100%', padding:'8px 12px', textAlign:'left',
+                  background:'transparent', border:'none', cursor:'pointer',
+                  display:'flex', flexDirection:'column', gap:2,
+                  borderBottom:'1px solid var(--border)'
+                }}
+                onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'}
+                onMouseLeave={e=>e.currentTarget.style.background='transparent'}
+              >
+                <span style={{ fontSize:12, fontWeight:600, color:'var(--text)' }}>{livro.titulo}</span>
+                <span style={{ fontSize:10, color:'var(--text-muted)' }}>
+                  {livro.autor || 'Sem autor'} {livro.isbn ? `· ISBN ${livro.isbn}` : ''}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── MODAL TAREFA ───────────────────────────────────────────
 function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
   const { usuario } = useAuth()
@@ -78,6 +225,7 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
   } : EMPTY)
   const [checklist, setChecklist]   = useState(tarefa?.tarefa_checklist || [])
   const [comentarios, setComentarios] = useState(tarefa?.tarefa_comentarios || [])
+  const [livrosVinculados, setLivrosVinculados] = useState(tarefa?.tarefa_livros || [])
   const [novoItem, setNovoItem]     = useState('')
   const [novoComent, setNovoComent] = useState('')
   const [saving, setSaving]         = useState(false)
@@ -193,6 +341,14 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
                 <input className="form-input" type="date" value={form.data_prazo} onChange={e=>setForm(f=>({...f,data_prazo:e.target.value}))}/>
               </div>
             </div>
+            <div className="form-group">
+              <label className="form-label">Livros relacionados (opcional)</label>
+              <SeletorLivros
+                tarefaId={tarefa?.id}
+                livrosVinculados={livrosVinculados}
+                onChange={setLivrosVinculados}
+              />
+            </div>
           </div>
         )}
 
@@ -274,6 +430,7 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
 function CardKanban({ tarefa, onClick, onDragStart, onDragEnd, isDragging }) {
   const checkTotal = tarefa.tarefa_checklist?.length || 0
   const checkDone  = tarefa.tarefa_checklist?.filter(x=>x.concluido).length || 0
+  const livrosCount = tarefa.tarefa_livros?.length || 0
   const p = PRIORIDADE.find(x => x.value === tarefa.prioridade)
 
   return (
@@ -306,6 +463,11 @@ function CardKanban({ tarefa, onClick, onDragStart, onDragEnd, isDragging }) {
           {(tarefa.tarefa_comentarios?.length||0) > 0 && (
             <span style={{ fontSize:11, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:3 }}>
               <MessageSquare size={11}/> {tarefa.tarefa_comentarios.length}
+            </span>
+          )}
+          {livrosCount > 0 && (
+            <span style={{ fontSize:11, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:3 }}>
+              <Book size={11}/> {livrosCount}
             </span>
           )}
         </div>
@@ -409,6 +571,9 @@ export default function Tarefas() {
   }, {})
 
   const totalAtrasadas = tarefas.filter(t => t.data_prazo && t.status !== 'concluido' && isPast(new Date(t.data_prazo + 'T12:00:00')) && !isToday(new Date(t.data_prazo + 'T12:00:00'))).length
+
+  // Verifica se alguma tarefa filtrada tem livros vinculados (para mostrar coluna condicional na lista)
+  const algumaTemLivros = tarefasFiltradas.some(t => (t.tarefa_livros?.length || 0) > 0)
 
   if (loading) return <div className="loading"><div className="spinner"/></div>
 
@@ -542,6 +707,7 @@ export default function Tarefas() {
                     <th>Prioridade</th>
                     <th>Responsável</th>
                     <th>Prazo</th>
+                    {algumaTemLivros && <th>Livros</th>}
                     <th>Progresso</th>
                     <th></th>
                   </tr>
@@ -550,6 +716,7 @@ export default function Tarefas() {
                   {tarefasFiltradas.map(t => {
                     const checkTotal = t.tarefa_checklist?.length || 0
                     const checkDone  = t.tarefa_checklist?.filter(x=>x.concluido).length || 0
+                    const livrosCount = t.tarefa_livros?.length || 0
                     return (
                       <tr key={t.id} style={{ cursor:'pointer' }} onClick={()=>setModal(t)}>
                         <td>
@@ -560,6 +727,15 @@ export default function Tarefas() {
                         <td><PrioridadeBadge value={t.prioridade}/></td>
                         <td style={{ fontSize:12, color:'var(--text-muted)' }}>{t.responsavel?.nome || '—'}</td>
                         <td><PrazoBadge data_prazo={t.data_prazo} status={t.status}/></td>
+                        {algumaTemLivros && (
+                          <td style={{ fontSize:12, color:'var(--text-muted)' }}>
+                            {livrosCount > 0 ? (
+                              <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}>
+                                <Book size={11}/> {livrosCount}
+                              </span>
+                            ) : '—'}
+                          </td>
+                        )}
                         <td style={{ minWidth:80 }}>
                           {checkTotal > 0 ? (
                             <div>
@@ -605,7 +781,7 @@ export default function Tarefas() {
           usuarios={usuarios}
           onSave={handleSave}
           onDelete={handleDelete}
-          onClose={()=>setModal(null)}
+          onClose={()=>{ setModal(null); carregar() }}
         />
       )}
 
