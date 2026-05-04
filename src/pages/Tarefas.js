@@ -470,7 +470,7 @@ function ModalImportar({ usuarios, onClose, onImported }) {
       ['Descrição: opcional, briefing detalhado.'],
       ['Responsável: obrigatório. Use exatamente um dos nomes da aba Referências.'],
       ['Livros: opcional. ISBN com 13 dígitos. Para múltiplos livros, separe por vírgula.'],
-      ['Prazo: obrigatório. Formato DD/MM/AAAA.'],
+      ['Prazo: obrigatório. Formato DD/MM/AAAA (ou data formatada como Data no Excel).'],
       ['Prioridade: obrigatório. Aceita: Urgente, Alta, Média, Baixa.'],
       ['Status: opcional. Padrão A fazer. Aceita: A fazer, Em andamento, Concluído.'],
       [''],
@@ -523,12 +523,22 @@ function ModalImportar({ usuarios, onClose, onImported }) {
 
       const linhasProcessadas = await Promise.all(dados.map(async (row, idx) => {
         const linha = idx + 2
-        const [titulo, descricao, responsavelNome, isbnsStr, prazoStr, prioridadeStr, statusStr] = row.map(c => String(c).trim())
+        // Prazo (índice 4) preserva o tipo original — pode vir como número do Excel
+        const prazoRaw = row[4]
+        const titulo          = String(row[0] ?? '').trim()
+        const descricao       = String(row[1] ?? '').trim()
+        const responsavelNome = String(row[2] ?? '').trim()
+        const isbnsStr        = String(row[3] ?? '').trim()
+        const prioridadeStr   = String(row[5] ?? '').trim()
+        const statusStr       = String(row[6] ?? '').trim()
+
         const erros = []
 
+        // Título
         if (!titulo) erros.push('Título vazio')
         else if (titulo.length > 200) erros.push('Título com mais de 200 caracteres')
 
+        // Responsável
         let responsavel_id = null
         if (!responsavelNome) {
           erros.push('Responsável vazio')
@@ -542,20 +552,35 @@ function ModalImportar({ usuarios, onClose, onImported }) {
           }
         }
 
+        // Prazo: aceita número do Excel ou string DD/MM/AAAA
         let data_prazo = null
-        if (!prazoStr) {
+        if (prazoRaw === '' || prazoRaw === null || prazoRaw === undefined) {
           erros.push('Prazo vazio')
+        } else if (typeof prazoRaw === 'number') {
+          // Excel guarda datas como número de dias desde 30/12/1899
+          const excelEpoch = new Date(Date.UTC(1899, 11, 30))
+          const d = new Date(excelEpoch.getTime() + prazoRaw * 86400000)
+          if (isNaN(d.getTime())) {
+            erros.push(`Prazo inválido (número Excel): "${prazoRaw}"`)
+          } else {
+            const yyyy = d.getUTCFullYear()
+            const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+            const dd = String(d.getUTCDate()).padStart(2, '0')
+            data_prazo = `${yyyy}-${mm}-${dd}`
+          }
         } else {
+          const prazoStr = String(prazoRaw).trim()
           const m = prazoStr.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
           if (m) {
             data_prazo = `${m[3]}-${m[2]}-${m[1]}`
             const d = new Date(data_prazo + 'T12:00:00')
-            if (isNaN(d)) erros.push(`Prazo inválido: "${prazoStr}"`)
+            if (isNaN(d.getTime())) erros.push(`Prazo inválido: "${prazoStr}"`)
           } else {
             erros.push(`Prazo deve estar em DD/MM/AAAA, recebido: "${prazoStr}"`)
           }
         }
 
+        // Prioridade
         let prioridade = 'media'
         if (!prioridadeStr) {
           erros.push('Prioridade vazia')
@@ -565,6 +590,7 @@ function ModalImportar({ usuarios, onClose, onImported }) {
           else prioridade = p
         }
 
+        // Status
         let status = 'a_fazer'
         if (statusStr) {
           const s = STATUS_MAP[statusStr.toLowerCase()]
@@ -572,6 +598,7 @@ function ModalImportar({ usuarios, onClose, onImported }) {
           else status = s
         }
 
+        // Livros (ISBNs)
         let livro_ids = []
         const isbnsRaw = isbnsStr ? isbnsStr.split(',').map(s => s.trim()).filter(Boolean) : []
         for (const isbn of isbnsRaw) {
