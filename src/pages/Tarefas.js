@@ -470,7 +470,7 @@ function ModalImportar({ usuarios, onClose, onImported }) {
       ['Descrição: opcional, briefing detalhado.'],
       ['Responsável: obrigatório. Use exatamente um dos nomes da aba Referências.'],
       ['Livros: opcional. ISBN com 13 dígitos. Para múltiplos livros, separe por vírgula.'],
-      ['Prazo: obrigatório. Formato DD/MM/AAAA (ou data formatada como Data no Excel).'],
+      ['Prazo: obrigatório. Formato DD/MM/AAAA.'],
       ['Prioridade: obrigatório. Aceita: Urgente, Alta, Média, Baixa.'],
       ['Status: opcional. Padrão A fazer. Aceita: A fazer, Em andamento, Concluído.'],
       [''],
@@ -523,22 +523,12 @@ function ModalImportar({ usuarios, onClose, onImported }) {
 
       const linhasProcessadas = await Promise.all(dados.map(async (row, idx) => {
         const linha = idx + 2
-        // Prazo (índice 4) preserva o tipo original — pode vir como número do Excel
-        const prazoRaw = row[4]
-        const titulo          = String(row[0] ?? '').trim()
-        const descricao       = String(row[1] ?? '').trim()
-        const responsavelNome = String(row[2] ?? '').trim()
-        const isbnsStr        = String(row[3] ?? '').trim()
-        const prioridadeStr   = String(row[5] ?? '').trim()
-        const statusStr       = String(row[6] ?? '').trim()
-
+        const [titulo, descricao, responsavelNome, isbnsStr, prazoStr, prioridadeStr, statusStr] = row.map(c => String(c).trim())
         const erros = []
 
-        // Título
         if (!titulo) erros.push('Título vazio')
         else if (titulo.length > 200) erros.push('Título com mais de 200 caracteres')
 
-        // Responsável
         let responsavel_id = null
         if (!responsavelNome) {
           erros.push('Responsável vazio')
@@ -552,35 +542,20 @@ function ModalImportar({ usuarios, onClose, onImported }) {
           }
         }
 
-        // Prazo: aceita número do Excel ou string DD/MM/AAAA
         let data_prazo = null
-        if (prazoRaw === '' || prazoRaw === null || prazoRaw === undefined) {
+        if (!prazoStr) {
           erros.push('Prazo vazio')
-        } else if (typeof prazoRaw === 'number') {
-          // Excel guarda datas como número de dias desde 30/12/1899
-          const excelEpoch = new Date(Date.UTC(1899, 11, 30))
-          const d = new Date(excelEpoch.getTime() + prazoRaw * 86400000)
-          if (isNaN(d.getTime())) {
-            erros.push(`Prazo inválido (número Excel): "${prazoRaw}"`)
-          } else {
-            const yyyy = d.getUTCFullYear()
-            const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
-            const dd = String(d.getUTCDate()).padStart(2, '0')
-            data_prazo = `${yyyy}-${mm}-${dd}`
-          }
         } else {
-          const prazoStr = String(prazoRaw).trim()
           const m = prazoStr.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
           if (m) {
             data_prazo = `${m[3]}-${m[2]}-${m[1]}`
             const d = new Date(data_prazo + 'T12:00:00')
-            if (isNaN(d.getTime())) erros.push(`Prazo inválido: "${prazoStr}"`)
+            if (isNaN(d)) erros.push(`Prazo inválido: "${prazoStr}"`)
           } else {
             erros.push(`Prazo deve estar em DD/MM/AAAA, recebido: "${prazoStr}"`)
           }
         }
 
-        // Prioridade
         let prioridade = 'media'
         if (!prioridadeStr) {
           erros.push('Prioridade vazia')
@@ -590,7 +565,6 @@ function ModalImportar({ usuarios, onClose, onImported }) {
           else prioridade = p
         }
 
-        // Status
         let status = 'a_fazer'
         if (statusStr) {
           const s = STATUS_MAP[statusStr.toLowerCase()]
@@ -598,7 +572,6 @@ function ModalImportar({ usuarios, onClose, onImported }) {
           else status = s
         }
 
-        // Livros (ISBNs)
         let livro_ids = []
         const isbnsRaw = isbnsStr ? isbnsStr.split(',').map(s => s.trim()).filter(Boolean) : []
         for (const isbn of isbnsRaw) {
@@ -917,7 +890,15 @@ export default function Tarefas() {
   const [toast, showToast]          = useToast()
   const [dragId, setDragId]           = useState(null)
   const [dragOverCol, setDragOverCol] = useState(null)
+  const [sortCol, setSortCol]         = useState('data_prazo')
+  const [sortDir, setSortDir]         = useState('asc')
+  const [abaView, setAbaView]         = useState('ativas')
   const menuRef = useRef()
+
+  function toggleSort(col) {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(col); setSortDir('asc') }
+  }
 
   async function carregar() {
     setLoading(true)
@@ -945,7 +926,14 @@ export default function Tarefas() {
     if (id) {
       const upd = await updateTarefa(id, form)
       setTarefas(prev => prev.map(t => t.id === upd.id ? upd : t))
-      showToast('Tarefa atualizada!')
+      // Se concluída, muda para aba de concluídas automaticamente
+      if (upd.status === 'concluido' && abaView === 'ativas') {
+        showToast('Tarefa concluída! 🎉')
+      } else if (upd.status !== 'concluido' && abaView === 'concluidas') {
+        showToast('Tarefa reativada!')
+      } else {
+        showToast('Tarefa atualizada!')
+      }
     } else {
       const nova = await createTarefa(form)
       setTarefas(prev => [nova, ...prev])
@@ -978,7 +966,12 @@ export default function Tarefas() {
     }
   }
 
-  const tarefasFiltradas = tarefas.filter(t => {
+  // Separa ativas (a_fazer + em_andamento) de concluídas
+  const tarefasAtivas     = tarefas.filter(t => t.status !== 'concluido')
+  const tarefasConcluidas = tarefas.filter(t => t.status === 'concluido')
+  const listaBase = abaView === 'ativas' ? tarefasAtivas : tarefasConcluidas
+
+  const tarefasFiltradas = listaBase.filter(t => {
     if (filtroStatus !== 'todos' && t.status !== filtroStatus) return false
     if (filtroPrioridade !== 'todas' && t.prioridade !== filtroPrioridade) return false
     if (filtroResponsavel !== 'todos') {
@@ -988,12 +981,35 @@ export default function Tarefas() {
     return true
   })
 
+  // Ordenação da view Lista
+  const PRIORIDADE_ORDER = { urgente: 0, alta: 1, media: 2, baixa: 3 }
+  const STATUS_ORDER     = { a_fazer: 0, em_andamento: 1, concluido: 2 }
+  const tarefasOrdenadas = [...tarefasFiltradas].sort((a, b) => {
+    let va, vb
+    if (sortCol === 'titulo') {
+      va = (a.titulo || '').toLowerCase(); vb = (b.titulo || '').toLowerCase()
+    } else if (sortCol === 'status') {
+      va = STATUS_ORDER[a.status] ?? 99; vb = STATUS_ORDER[b.status] ?? 99
+    } else if (sortCol === 'prioridade') {
+      va = PRIORIDADE_ORDER[a.prioridade] ?? 99; vb = PRIORIDADE_ORDER[b.prioridade] ?? 99
+    } else if (sortCol === 'responsavel') {
+      va = (a.responsavel?.nome || '').toLowerCase(); vb = (b.responsavel?.nome || '').toLowerCase()
+    } else if (sortCol === 'data_prazo') {
+      va = a.data_prazo || '9999'; vb = b.data_prazo || '9999'
+    } else {
+      va = ''; vb = ''
+    }
+    if (va < vb) return sortDir === 'asc' ? -1 : 1
+    if (va > vb) return sortDir === 'asc' ?  1 : -1
+    return 0
+  })
+
   const porStatus = STATUS.reduce((acc, s) => {
     acc[s.value] = tarefasFiltradas.filter(t => t.status === s.value)
     return acc
   }, {})
 
-  const totalAtrasadas = tarefas.filter(t => t.data_prazo && t.status !== 'concluido' && isPast(new Date(t.data_prazo + 'T12:00:00')) && !isToday(new Date(t.data_prazo + 'T12:00:00'))).length
+  const totalAtrasadas = tarefasAtivas.filter(t => t.data_prazo && t.status !== 'concluido' && isPast(new Date(t.data_prazo + 'T12:00:00')) && !isToday(new Date(t.data_prazo + 'T12:00:00'))).length
 
   const algumaTemLivros = tarefasFiltradas.some(t => (t.tarefa_livros?.length || 0) > 0)
 
@@ -1008,7 +1024,7 @@ export default function Tarefas() {
           <div>
             <h1 className="page-title" style={{ margin:0 }}>Tarefas</h1>
             <p style={{ fontSize:12, color:'var(--text-muted)', margin:0 }}>
-              {tarefas.filter(t=>t.status!=='concluido').length} pendentes
+              {tarefasAtivas.length} pendentes
               {totalAtrasadas > 0 && <span style={{ color:'var(--red)', marginLeft:8 }}>· {totalAtrasadas} atrasada{totalAtrasadas!==1?'s':''}</span>}
             </p>
           </div>
@@ -1073,12 +1089,33 @@ export default function Tarefas() {
         </div>
       </div>
 
+      {/* Abas Ativas / Concluídas */}
+      <div style={{ display:'flex', borderBottom:'1px solid var(--border)', marginBottom:20 }}>
+        {[
+          { k:'ativas',     l:`Ativas (${tarefasAtivas.length})` },
+          { k:'concluidas', l:`Concluídas (${tarefasConcluidas.length})` },
+        ].map(({k,l}) => (
+          <button key={k} onClick={()=>{ setAbaView(k); setFiltroStatus('todos'); setFiltroPrioridade('todas'); setFiltroResponsavel('todos') }}
+            style={{
+              padding:'9px 18px', fontSize:13, fontWeight: abaView===k ? 700 : 400,
+              cursor:'pointer', background:'none', border:'none',
+              borderBottom: abaView===k ? '2px solid var(--accent)' : '2px solid transparent',
+              color: abaView===k ? 'var(--accent)' : 'var(--text-muted)',
+            }}>
+            {l}
+          </button>
+        ))}
+      </div>
+
       {/* Filtros */}
       <div style={{ display:'flex', gap:10, marginBottom:20, flexWrap:'wrap' }}>
         <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 10px' }}
           value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
           <option value="todos">Todos os status</option>
-          {STATUS.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
+          {(abaView === 'ativas'
+            ? STATUS.filter(s => s.value !== 'concluido')
+            : STATUS.filter(s => s.value === 'concluido')
+          ).map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
         <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 10px' }}
           value={filtroPrioridade} onChange={e=>setFiltroPrioridade(e.target.value)}>
@@ -1161,22 +1198,37 @@ export default function Tarefas() {
       {view === 'lista' && (
         <div className="table-card">
           {tarefasFiltradas.length === 0
-            ? <div className="empty-state"><p>Nenhuma tarefa encontrada.</p></div>
+            ? <div className="empty-state"><p>Nenhuma tarefa {abaView === 'concluidas' ? 'concluída ' : ''}encontrada.</p></div>
             : <table>
                 <thead>
                   <tr>
-                    <th>Tarefa</th>
-                    <th>Status</th>
-                    <th>Prioridade</th>
-                    <th>Responsável</th>
-                    <th>Prazo</th>
+                    {[
+                      { col:'titulo',      label:'Tarefa' },
+                      { col:'status',      label:'Status' },
+                      { col:'prioridade',  label:'Prioridade' },
+                      { col:'responsavel', label:'Responsável' },
+                      { col:'data_prazo',  label:'Prazo' },
+                    ].map(({col, label}) => (
+                      <th key={col} onClick={()=>toggleSort(col)}
+                        style={{ cursor:'pointer', userSelect:'none', whiteSpace:'nowrap' }}>
+                        <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}>
+                          {label}
+                          {sortCol === col
+                            ? sortDir === 'asc'
+                              ? <ChevronUp size={12} style={{ color:'var(--accent)' }}/>
+                              : <ChevronDown size={12} style={{ color:'var(--accent)' }}/>
+                            : <span style={{ opacity:0.25 }}><ChevronUp size={12}/></span>
+                          }
+                        </span>
+                      </th>
+                    ))}
                     {algumaTemLivros && <th>Livros</th>}
                     <th>Progresso</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {tarefasFiltradas.map(t => {
+                  {tarefasOrdenadas.map(t => {
                     const checkTotal = t.tarefa_checklist?.length || 0
                     const checkDone  = t.tarefa_checklist?.filter(x=>x.concluido).length || 0
                     const livrosCount = t.tarefa_livros?.length || 0
