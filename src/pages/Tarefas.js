@@ -1210,14 +1210,21 @@ export default function Tarefas() {
                       { col:'data_prazo',  label:'Prazo' },
                     ].map(({col, label}) => (
                       <th key={col} onClick={()=>toggleSort(col)}
-                        style={{ cursor:'pointer', userSelect:'none', whiteSpace:'nowrap' }}>
+                        style={{
+                          cursor:'pointer', userSelect:'none', whiteSpace:'nowrap',
+                          color: sortCol === col ? 'var(--accent)' : 'var(--text-muted)',
+                          fontWeight: sortCol === col ? 700 : 600,
+                          transition:'color 0.15s',
+                        }}
+                        onMouseEnter={e=>e.currentTarget.style.color='var(--accent)'}
+                        onMouseLeave={e=>e.currentTarget.style.color=sortCol===col?'var(--accent)':'var(--text-muted)'}>
                         <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}>
                           {label}
                           {sortCol === col
                             ? sortDir === 'asc'
-                              ? <ChevronUp size={12} style={{ color:'var(--accent)' }}/>
-                              : <ChevronDown size={12} style={{ color:'var(--accent)' }}/>
-                            : <span style={{ opacity:0.25 }}><ChevronUp size={12}/></span>
+                              ? <ChevronUp size={12}/>
+                              : <ChevronDown size={12}/>
+                            : <ChevronUp size={12} style={{ opacity:0.2 }}/>
                           }
                         </span>
                       </th>
