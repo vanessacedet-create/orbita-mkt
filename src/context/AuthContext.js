@@ -23,7 +23,7 @@ export const MODULOS_PERMISSOES = {
   campanhas:    ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
   monitoramento:['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
   lancamentos:  ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
-  tarefas:      ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  tarefas:      ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers', 'analista_marketplaces', 'estagiario_marketplaces'],
   eventos:      ['administrador', 'gerente', 'estagiario_marketplaces', 'analista_marketplaces'],
   rh:           ['administrador'],
   usuarios:     ['administrador'],
