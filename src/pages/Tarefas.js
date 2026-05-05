@@ -12,7 +12,7 @@ import {
   Calendar, Flag, User, ChevronDown, List, Columns, Clock,
   AlertCircle, ArrowUp, Minus, CheckCircle2, Circle, LayoutList,
   CalendarDays, ChevronLeft, ChevronRight, Book, Search,
-  Upload, Download, FileSpreadsheet, ChevronUp
+  Upload, Download, FileSpreadsheet, ChevronUp, Users
 } from 'lucide-react'
 import { format, isPast, isToday, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -1040,6 +1040,9 @@ export default function Tarefas() {
             <button onClick={()=>setView('calendario')} style={{ padding:'7px 12px', border:'none', cursor:'pointer', background: view==='calendario' ? 'var(--accent)' : 'transparent', color: view==='calendario' ? '#fff' : 'var(--text-muted)', transition:'all 0.15s', display:'flex', alignItems:'center', gap:5, fontSize:12 }}>
               <CalendarDays size={13}/> Calendário
             </button>
+            <button onClick={()=>setView('equipe')} style={{ padding:'7px 12px', border:'none', cursor:'pointer', background: view==='equipe' ? 'var(--accent)' : 'transparent', color: view==='equipe' ? '#fff' : 'var(--text-muted)', transition:'all 0.15s', display:'flex', alignItems:'center', gap:5, fontSize:12 }}>
+              <Users size={13}/> Equipe
+            </button>
           </div>
 
           {/* Split button: Nova tarefa + dropdown */}
@@ -1296,6 +1299,16 @@ export default function Tarefas() {
         />
       )}
 
+      {/* EQUIPE */}
+      {view === 'equipe' && (
+        <ViewEquipe
+          tarefas={tarefas}
+          usuarios={usuarios}
+          usuario={usuario}
+          onOpen={t => setModal(t)}
+        />
+      )}
+
       {/* Modal de tarefa */}
       {modal && (
         <ModalTarefa
@@ -1471,6 +1484,172 @@ function ViewCalendario({ tarefas, onClickTarefa, onNovaTarefa }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ── VIEW EQUIPE ─────────────────────────────────────────────
+function ViewEquipe({ tarefas, usuarios, usuario, onOpen }) {
+  const hoje = new Date()
+  hoje.setHours(0,0,0,0)
+
+  const isAdmin = usuario?.perfil === 'administrador'
+
+  const usuariosVisiveis = isAdmin
+    ? usuarios
+    : usuarios.filter(u =>
+        u.id === usuario?.id ||
+        (u.grupo && u.grupo === usuario?.grupo)
+      )
+
+  function iniciais(nome) {
+    if (!nome) return '?'
+    return nome.split(' ').map(n => n[0]).slice(0,2).join('').toUpperCase()
+  }
+
+  const CORES = ['#6366f1','#8b5cf6','#ec4899','#f97316','#14b8a6','#0ea5e9','#84cc16']
+  function corAvatar(nome) {
+    if (!nome) return CORES[0]
+    const i = nome.split('').reduce((a,c) => a + c.charCodeAt(0), 0) % CORES.length
+    return CORES[i]
+  }
+
+  return (
+    <div style={{ overflowX:'auto', paddingBottom:16 }}>
+      <div style={{ display:'flex', gap:16, minWidth:'max-content', alignItems:'flex-start' }}>
+        {usuariosVisiveis.map(u => {
+          const minhas    = tarefas.filter(t => t.responsavel_id === u.id || t.created_by === u.id)
+          const ativas    = minhas.filter(t => t.status !== 'concluido')
+          const concluidas = minhas.filter(t => t.status === 'concluido')
+          const atrasadas = ativas.filter(t => {
+            if (!t.data_prazo) return false
+            return new Date(t.data_prazo + 'T12:00:00') < hoje
+          })
+          const pct = minhas.length > 0 ? Math.round((concluidas.length / minhas.length) * 100) : 0
+
+          const porStatus = [
+            { value:'a_fazer',      label:'A FAZER',      cor:'#6366f1' },
+            { value:'em_andamento', label:'EM ANDAMENTO', cor:'#f59e0b' },
+          ].map(s => ({ ...s, tarefas: ativas.filter(t => t.status === s.value) }))
+           .filter(s => s.tarefas.length > 0)
+
+          const R = 22, CIRC = 2 * Math.PI * R
+          const dash = (pct / 100) * CIRC
+          const corPct = pct >= 70 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#6366f1'
+
+          return (
+            <div key={u.id} style={{
+              width:280, background:'var(--surface)',
+              border:'1px solid var(--border)', borderRadius:12,
+              overflow:'hidden', flexShrink:0,
+            }}>
+              {/* Header */}
+              <div style={{ padding:'14px 16px', borderBottom:'1px solid var(--border)' }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    <div style={{
+                      width:38, height:38, borderRadius:'50%',
+                      background:corAvatar(u.nome),
+                      display:'flex', alignItems:'center', justifyContent:'center',
+                      fontSize:13, fontWeight:700, color:'#fff', flexShrink:0,
+                    }}>
+                      {iniciais(u.nome)}
+                    </div>
+                    <div>
+                      <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{u.nome}</div>
+                      <div style={{ fontSize:11, color:'var(--text-muted)', textTransform:'capitalize' }}>{u.grupo || u.perfil}</div>
+                    </div>
+                  </div>
+                  {/* Gráfico circular */}
+                  <div style={{ position:'relative', width:54, height:54, flexShrink:0 }}>
+                    <svg width="54" height="54" style={{ transform:'rotate(-90deg)' }}>
+                      <circle cx="27" cy="27" r={R} fill="none" stroke="var(--border)" strokeWidth="4"/>
+                      <circle cx="27" cy="27" r={R} fill="none" stroke={corPct} strokeWidth="4"
+                        strokeDasharray={`${dash} ${CIRC}`} strokeLinecap="round"
+                        style={{ transition:'stroke-dasharray 0.5s ease' }}/>
+                    </svg>
+                    <div style={{
+                      position:'absolute', inset:0,
+                      display:'flex', alignItems:'center', justifyContent:'center',
+                      fontSize:11, fontWeight:700, color:'var(--text)',
+                    }}>{pct}%</div>
+                  </div>
+                </div>
+
+                {/* Contadores */}
+                <div style={{ display:'flex', gap:6 }}>
+                  <div style={{ flex:1, textAlign:'center', background:'var(--surface-2)', borderRadius:8, padding:'6px 4px' }}>
+                    <div style={{ fontSize:18, fontWeight:700, color:'var(--text)' }}>{ativas.length}</div>
+                    <div style={{ fontSize:10, color:'var(--text-muted)' }}>Ativas</div>
+                  </div>
+                  <div style={{ flex:1, textAlign:'center', background:'var(--surface-2)', borderRadius:8, padding:'6px 4px' }}>
+                    <div style={{ fontSize:18, fontWeight:700, color:'#22c55e' }}>{concluidas.length}</div>
+                    <div style={{ fontSize:10, color:'var(--text-muted)' }}>Feitas</div>
+                  </div>
+                  {atrasadas.length > 0 && (
+                    <div style={{ flex:1, textAlign:'center', background:'rgba(239,68,68,0.1)', borderRadius:8, padding:'6px 4px', border:'1px solid rgba(239,68,68,0.2)' }}>
+                      <div style={{ fontSize:18, fontWeight:700, color:'#ef4444' }}>{atrasadas.length}</div>
+                      <div style={{ fontSize:10, color:'#ef4444' }}>Atrasadas</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Tarefas por status */}
+              <div style={{ padding:'10px 12px', maxHeight:400, overflowY:'auto' }}>
+                {ativas.length === 0
+                  ? <div style={{ fontSize:12, color:'var(--text-muted)', textAlign:'center', padding:'24px 0', opacity:0.5 }}>
+                      Nenhuma tarefa ativa
+                    </div>
+                  : porStatus.map(s => (
+                      <div key={s.value} style={{ marginBottom:10 }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
+                          <div style={{ width:8, height:8, borderRadius:2, background:s.cor }}/>
+                          <span style={{ fontSize:10, fontWeight:700, color:'var(--text-muted)', letterSpacing:'0.06em' }}>
+                            {s.label} ({s.tarefas.length})
+                          </span>
+                        </div>
+                        {s.tarefas.map(t => {
+                          const atr = t.data_prazo && new Date(t.data_prazo + 'T12:00:00') < hoje
+                          return (
+                            <div key={t.id} onClick={() => onOpen(t)}
+                              style={{
+                                padding:'7px 10px', marginBottom:4, cursor:'pointer',
+                                background: atr ? 'rgba(239,68,68,0.06)' : 'var(--surface-2)',
+                                border: atr ? '1px solid rgba(239,68,68,0.2)' : '1px solid transparent',
+                                borderRadius:8, transition:'all 0.15s',
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.borderColor = atr ? '#ef4444' : 'var(--accent)'}
+                              onMouseLeave={e => e.currentTarget.style.borderColor = atr ? 'rgba(239,68,68,0.2)' : 'transparent'}
+                            >
+                              <div style={{ fontSize:12, color:'var(--text)', fontWeight:500, marginBottom:3,
+                                whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', lineHeight:1.4 }}>
+                                {t.titulo}
+                              </div>
+                              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                                {t.prioridade && <PrioridadeBadge value={t.prioridade}/>}
+                                {t.data_prazo && (
+                                  <span style={{ fontSize:10, display:'flex', alignItems:'center', gap:3,
+                                    color: atr ? '#ef4444' : 'var(--text-muted)', fontWeight: atr ? 700 : 400 }}>
+                                    <Calendar size={10}/>
+                                    {atr
+                                      ? `Atrasada ${Math.abs(differenceInDays(new Date(t.data_prazo + 'T12:00:00'), hoje))}d`
+                                      : format(new Date(t.data_prazo + 'T12:00:00'), 'dd/MM', { locale: ptBR })
+                                    }
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ))
+                }
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
