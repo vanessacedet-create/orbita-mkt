@@ -4,13 +4,9 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { usePermissions } from './hooks/usePermissions'
 import { signOut } from './lib/supabase'
 
-// Login e ResetPassword carregam imediatamente (rotas públicas, leves)
 import Login from './pages/Login'
 import ResetPassword from './pages/ResetPassword'
 
-// Todas as páginas autenticadas carregam sob demanda (lazy)
-// O bundle inicial fica ~60% menor — o código de Campanhas, RH etc.
-// só é baixado quando o usuário navega até aquele módulo pela primeira vez.
 const Dashboard    = lazy(() => import('./pages/Dashboard'))
 const Cortesias    = lazy(() => import('./pages/Cortesias'))
 const Usuarios     = lazy(() => import('./pages/Usuarios'))
@@ -24,26 +20,30 @@ const Calculadora  = lazy(() => import('./pages/Calculadora'))
 const RH           = lazy(() => import('./pages/RH'))
 const CRMLiterario = lazy(() => import('./pages/CRMLiterario'))
 const Eventos      = lazy(() => import('./pages/Eventos'))
+const Treinamentos = lazy(() => import('./pages/Treinamentos'))
+
 import './App.css'
 import {
   LayoutDashboard, BookOpen, BookMarked, Users, LogOut,
-  Orbit, ShieldAlert, Megaphone, CalendarDays, CheckSquare, UserRound, Eye, Network, Calculator, HeartHandshake, CalendarCheck
+  Orbit, ShieldAlert, Megaphone, CalendarDays, CheckSquare, UserRound, Eye,
+  Network, Calculator, HeartHandshake, CalendarCheck, GraduationCap
 } from 'lucide-react'
 
 const MENU = [
-  { path: '/',           label: 'Dashboard',  icon: LayoutDashboard, modulo: 'dashboard' },
-  { path: '/parceiros',  label: 'Parceiros',  icon: UserRound,       modulo: 'parceiros' },
-  { path: '/crm',        label: 'CRM',        icon: Network,       modulo: 'crm'       },
-  { path: '/crm-literario', label: 'CRM Literário', icon: BookMarked,  modulo: 'crm_literario' },
-  { path: '/calculadora', label: 'Calculadora', icon: Calculator,    modulo: 'calculadora' },
-  { path: '/cortesias',  label: 'Cortesias',  icon: BookOpen,        modulo: 'cortesias' },
-  { path: '/campanhas',  label: 'Campanhas',  icon: Megaphone,       modulo: 'campanhas' },
-  { path: '/monitoramento', label: 'Monitoramento', icon: Eye,           modulo: 'monitoramento' },
-  { path: '/lancamentos', label: 'Lançamentos', icon: CalendarDays,   modulo: 'lancamentos' },
-  { path: '/tarefas',     label: 'Tarefas',     icon: CheckSquare,    modulo: 'tarefas'     },
-  { path: '/rh',         label: 'RH',          icon: HeartHandshake,  modulo: 'rh'          },
-  { path: '/eventos',    label: 'Eventos',     icon: CalendarCheck,          modulo: 'eventos'     },
-  { path: '/usuarios',   label: 'Usuários',   icon: Users,           modulo: 'usuarios'  },
+  { path: '/',              label: 'Dashboard',    icon: LayoutDashboard, modulo: 'dashboard' },
+  { path: '/parceiros',     label: 'Parceiros',    icon: UserRound,       modulo: 'parceiros' },
+  { path: '/crm',           label: 'CRM',          icon: Network,         modulo: 'crm' },
+  { path: '/crm-literario', label: 'CRM Literário',icon: BookMarked,      modulo: 'crm_literario' },
+  { path: '/calculadora',   label: 'Calculadora',  icon: Calculator,      modulo: 'calculadora' },
+  { path: '/cortesias',     label: 'Cortesias',    icon: BookOpen,        modulo: 'cortesias' },
+  { path: '/campanhas',     label: 'Campanhas',    icon: Megaphone,       modulo: 'campanhas' },
+  { path: '/monitoramento', label: 'Monitoramento',icon: Eye,             modulo: 'monitoramento' },
+  { path: '/lancamentos',   label: 'Lançamentos',  icon: CalendarDays,    modulo: 'lancamentos' },
+  { path: '/tarefas',       label: 'Tarefas',      icon: CheckSquare,     modulo: 'tarefas' },
+  { path: '/rh',            label: 'RH',           icon: HeartHandshake,  modulo: 'rh' },
+  { path: '/treinamentos',  label: 'Treinamentos', icon: GraduationCap,   modulo: 'treinamentos' },
+  { path: '/eventos',       label: 'Eventos',      icon: CalendarCheck,   modulo: 'eventos' },
+  { path: '/usuarios',      label: 'Usuários',     icon: Users,           modulo: 'usuarios' },
 ]
 
 const PERFIL_LABEL = {
@@ -144,21 +144,22 @@ function Shell() {
 
       <main className="main-content">
         <Suspense fallback={<div className="loading"><div className="spinner"/></div>}>
-        <Routes>
-          <Route path="/" element={<RequireAuth modulo="dashboard"><Dashboard /></RequireAuth>} />
-          <Route path="/cortesias" element={<RequireAuth modulo="cortesias"><Cortesias /></RequireAuth>} />
-          <Route path="/parceiros" element={<RequireAuth modulo="parceiros"><Parceiros /></RequireAuth>} />
-          <Route path="/usuarios" element={<RequireAuth modulo="usuarios"><Usuarios /></RequireAuth>} />
-          <Route path="/campanhas" element={<RequireAuth modulo="campanhas"><Campanhas /></RequireAuth>} />
-          <Route path="/monitoramento" element={<RequireAuth modulo="monitoramento"><Monitoramento /></RequireAuth>} />
-          <Route path="/crm" element={<RequireAuth modulo="crm"><CRM /></RequireAuth>} />
-          <Route path="/calculadora" element={<RequireAuth modulo="calculadora"><Calculadora /></RequireAuth>} />
-          <Route path="/rh" element={<RequireAuth modulo="rh"><RH /></RequireAuth>} />
-          <Route path="/eventos" element={<RequireAuth modulo="eventos"><Eventos /></RequireAuth>} />
-          <Route path="/lancamentos" element={<RequireAuth modulo="lancamentos"><Lancamentos /></RequireAuth>} />
-          <Route path="/tarefas" element={<RequireAuth modulo="tarefas"><Tarefas /></RequireAuth>} />
-          <Route path="/crm-literario" element={<RequireAuth modulo="crm_literario"><CRMLiterario /></RequireAuth>} />
-        </Routes>
+          <Routes>
+            <Route path="/"              element={<RequireAuth modulo="dashboard"><Dashboard /></RequireAuth>} />
+            <Route path="/cortesias"     element={<RequireAuth modulo="cortesias"><Cortesias /></RequireAuth>} />
+            <Route path="/parceiros"     element={<RequireAuth modulo="parceiros"><Parceiros /></RequireAuth>} />
+            <Route path="/usuarios"      element={<RequireAuth modulo="usuarios"><Usuarios /></RequireAuth>} />
+            <Route path="/campanhas"     element={<RequireAuth modulo="campanhas"><Campanhas /></RequireAuth>} />
+            <Route path="/monitoramento" element={<RequireAuth modulo="monitoramento"><Monitoramento /></RequireAuth>} />
+            <Route path="/crm"           element={<RequireAuth modulo="crm"><CRM /></RequireAuth>} />
+            <Route path="/calculadora"   element={<RequireAuth modulo="calculadora"><Calculadora /></RequireAuth>} />
+            <Route path="/rh"            element={<RequireAuth modulo="rh"><RH /></RequireAuth>} />
+            <Route path="/eventos"       element={<RequireAuth modulo="eventos"><Eventos /></RequireAuth>} />
+            <Route path="/lancamentos"   element={<RequireAuth modulo="lancamentos"><Lancamentos /></RequireAuth>} />
+            <Route path="/tarefas"       element={<RequireAuth modulo="tarefas"><Tarefas /></RequireAuth>} />
+            <Route path="/crm-literario" element={<RequireAuth modulo="crm_literario"><CRMLiterario /></RequireAuth>} />
+            <Route path="/treinamentos"  element={<RequireAuth modulo="treinamentos"><Treinamentos /></RequireAuth>} />
+          </Routes>
         </Suspense>
       </main>
     </div>
@@ -170,9 +171,9 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+          <Route path="/login"          element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/*" element={<RequireAuth><Shell /></RequireAuth>} />
+          <Route path="/*"              element={<RequireAuth><Shell /></RequireAuth>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
@@ -185,12 +186,3 @@ function PublicRoute({ children }) {
   if (session) return <Navigate to="/" replace />
   return children
 }
-
-// Junto aos outros lazy imports:
-const Treinamentos = lazy(() => import('./pages/Treinamentos'))
-
-// No array MENU (sugestão: depois de 'rh'):
-{ path: '/treinamentos', label: 'Treinamentos', icon: GraduationCap, modulo: 'treinamentos' },
-
-// Dentro do <Routes>:
-<Route path="/treinamentos" element={<RequireAuth modulo="treinamentos"><Treinamentos /></RequireAuth>} />
