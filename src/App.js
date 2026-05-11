@@ -185,3 +185,12 @@ function PublicRoute({ children }) {
   if (session) return <Navigate to="/" replace />
   return children
 }
+
+// Junto aos outros lazy imports:
+const Treinamentos = lazy(() => import('./pages/Treinamentos'))
+
+// No array MENU (sugestão: depois de 'rh'):
+{ path: '/treinamentos', label: 'Treinamentos', icon: GraduationCap, modulo: 'treinamentos' },
+
+// Dentro do <Routes>:
+<Route path="/treinamentos" element={<RequireAuth modulo="treinamentos"><Treinamentos /></RequireAuth>} />
