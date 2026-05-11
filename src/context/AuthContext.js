@@ -77,3 +77,5 @@ export function AuthProvider({ children }) {
 export function useAuth() {
   return useContext(AuthContext)
 }
+
+treinamentos: ['administrador', 'gerente', 'supervisor_proprias'],
