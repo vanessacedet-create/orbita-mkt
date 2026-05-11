@@ -12,21 +12,22 @@ const AuthContext = createContext(null)
 // estagiario_marketplaces, analista_marketplaces
 
 export const MODULOS_PERMISSOES = {
-  dashboard:    ['administrador', 'gerente', 'analista_influencers', 'estagiario_influencers', 'estagiario_proprias', 'analista_proprias', 'supervisor_proprias', 'estagiario_marketplaces', 'analista_marketplaces'],
-  parceiros:    ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
-  crm:          ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
-  crm_literario:['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
-  calculadora:  ['administrador', 'gerente',
-                 'estagiario_proprias', 'analista_proprias', 'supervisor_proprias',
-                 'estagiario_influencers', 'analista_influencers'],
-  cortesias:    ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
-  campanhas:    ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
-  monitoramento:['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
-  lancamentos:  ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
-  tarefas:      ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers', 'analista_marketplaces', 'estagiario_marketplaces'],
-  eventos:      ['administrador', 'gerente', 'estagiario_marketplaces', 'analista_marketplaces'],
-  rh:           ['administrador'],
-  usuarios:     ['administrador'],
+  dashboard:     ['administrador', 'gerente', 'analista_influencers', 'estagiario_influencers', 'estagiario_proprias', 'analista_proprias', 'supervisor_proprias', 'estagiario_marketplaces', 'analista_marketplaces'],
+  parceiros:     ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  crm:           ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  crm_literario: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  calculadora:   ['administrador', 'gerente',
+                  'estagiario_proprias', 'analista_proprias', 'supervisor_proprias',
+                  'estagiario_influencers', 'analista_influencers'],
+  cortesias:     ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  campanhas:     ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  monitoramento: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  lancamentos:   ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  tarefas:       ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers', 'analista_marketplaces', 'estagiario_marketplaces'],
+  eventos:       ['administrador', 'gerente', 'estagiario_marketplaces', 'analista_marketplaces'],
+  rh:            ['administrador'],
+  treinamentos:  ['administrador', 'gerente', 'supervisor_proprias'],
+  usuarios:      ['administrador'],
 }
 
 export function canAccess(perfil, modulo) {
@@ -77,5 +78,3 @@ export function AuthProvider({ children }) {
 export function useAuth() {
   return useContext(AuthContext)
 }
-
-treinamentos: ['administrador', 'gerente', 'supervisor_proprias'],
