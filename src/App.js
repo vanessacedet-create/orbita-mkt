@@ -3,31 +3,30 @@ import { lazy, Suspense } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { usePermissions } from './hooks/usePermissions'
 import { signOut } from './lib/supabase'
-
-import Login from './pages/Login'
-import ResetPassword from './pages/ResetPassword'
-
-const Dashboard    = lazy(() => import('./pages/Dashboard'))
-const Cortesias    = lazy(() => import('./pages/Cortesias'))
-const Usuarios     = lazy(() => import('./pages/Usuarios'))
-const Campanhas    = lazy(() => import('./pages/Campanhas'))
-const Lancamentos  = lazy(() => import('./pages/Lancamentos'))
-const Tarefas      = lazy(() => import('./pages/Tarefas'))
-const Parceiros    = lazy(() => import('./pages/Parceiros'))
-const Monitoramento = lazy(() => import('./pages/Monitoramento'))
-const CRM          = lazy(() => import('./pages/CRM'))
-const Calculadora  = lazy(() => import('./pages/Calculadora'))
-const RH           = lazy(() => import('./pages/RH'))
-const CRMLiterario = lazy(() => import('./pages/CRMLiterario'))
-const Eventos      = lazy(() => import('./pages/Eventos'))
-const Treinamentos = lazy(() => import('./pages/Treinamentos'))
-
-import './App.css'
 import {
   LayoutDashboard, BookOpen, BookMarked, Users, LogOut,
   Orbit, ShieldAlert, Megaphone, CalendarDays, CheckSquare, UserRound, Eye,
   Network, Calculator, HeartHandshake, CalendarCheck, GraduationCap
 } from 'lucide-react'
+import './App.css'
+
+import Login from './pages/Login'
+import ResetPassword from './pages/ResetPassword'
+
+const Dashboard     = lazy(() => import('./pages/Dashboard'))
+const Cortesias     = lazy(() => import('./pages/Cortesias'))
+const Usuarios      = lazy(() => import('./pages/Usuarios'))
+const Campanhas     = lazy(() => import('./pages/Campanhas'))
+const Lancamentos   = lazy(() => import('./pages/Lancamentos'))
+const Tarefas       = lazy(() => import('./pages/Tarefas'))
+const Parceiros     = lazy(() => import('./pages/Parceiros'))
+const Monitoramento = lazy(() => import('./pages/Monitoramento'))
+const CRM           = lazy(() => import('./pages/CRM'))
+const Calculadora   = lazy(() => import('./pages/Calculadora'))
+const RH            = lazy(() => import('./pages/RH'))
+const CRMLiterario  = lazy(() => import('./pages/CRMLiterario'))
+const Eventos       = lazy(() => import('./pages/Eventos'))
+const Treinamentos  = lazy(() => import('./pages/Treinamentos'))
 
 const MENU = [
   { path: '/',              label: 'Dashboard',    icon: LayoutDashboard, modulo: 'dashboard' },
@@ -47,27 +46,27 @@ const MENU = [
 ]
 
 const PERFIL_LABEL = {
-  administrador:          'Administrador',
-  gerente:                'Gerente',
-  estagiario_proprias:    'Estagiário Próprias',
-  analista_proprias:      'Analista Próprias',
-  supervisor_proprias:    'Supervisor Próprias',
-  estagiario_influencers: 'Estagiário Influencers',
-  analista_influencers:   'Analista Influencers',
-  estagiario_marketplaces:'Estagiário Mkt & Eventos',
-  analista_marketplaces:  'Analista Mkt & Eventos',
+  administrador:           'Administrador',
+  gerente:                 'Gerente',
+  estagiario_proprias:     'Estagiário Próprias',
+  analista_proprias:       'Analista Próprias',
+  supervisor_proprias:     'Supervisor Próprias',
+  estagiario_influencers:  'Estagiário Influencers',
+  analista_influencers:    'Analista Influencers',
+  estagiario_marketplaces: 'Estagiário Mkt & Eventos',
+  analista_marketplaces:   'Analista Mkt & Eventos',
 }
 
 const PERFIL_COLOR = {
-  administrador:          'var(--accent)',
-  gerente:                'var(--indigo)',
-  estagiario_proprias:    '#06b6d4',
-  analista_proprias:      '#06b6d4',
-  supervisor_proprias:    '#8b5cf6',
-  estagiario_influencers: '#22c55e',
-  analista_influencers:   '#22c55e',
-  estagiario_marketplaces:'#f97316',
-  analista_marketplaces:  '#f97316',
+  administrador:           'var(--accent)',
+  gerente:                 'var(--indigo)',
+  estagiario_proprias:     '#06b6d4',
+  analista_proprias:       '#06b6d4',
+  supervisor_proprias:     '#8b5cf6',
+  estagiario_influencers:  '#22c55e',
+  analista_influencers:    '#22c55e',
+  estagiario_marketplaces: '#f97316',
+  analista_marketplaces:   '#f97316',
 }
 
 function RequireAuth({ children, modulo }) {
