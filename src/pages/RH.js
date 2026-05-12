@@ -99,11 +99,41 @@ async function saveColaborador(c) {
   const p = {nome:c.nome,cargo:c.cargo,grupo_id:c.grupo_id||null,data_entrada:c.data_entrada,
     tipo_contrato:c.tipo_contrato,status:c.status,email:c.email||null,telefone:c.telefone||null,
     data_nascimento:c.data_nascimento||null,endereco:c.endereco||null,
-    gestor_direto:c.gestor_direto||null,observacoes:c.observacoes||null}
-  if (c.id) return (await supabase.from('rh_colaboradores').update(p).eq('id',c.id).select('*,rh_grupos(id,nome)').single()).data
-  return (await supabase.from('rh_colaboradores').insert([p]).select('*,rh_grupos(id,nome)').single()).data
+    gestor_direto:c.gestor_direto||null,observacoes:c.observacoes||null,supervisor_id:c.supervisor_id||null}
+  if (c.id) return (await supabase.from('rh_colaboradores').update(p).eq('id',c.id).select('*,rh_grupos(id,nome),supervisor:supervisor_id(id,nome)').single()).data
+  return (await supabase.from('rh_colaboradores').insert([p]).select('*,rh_grupos(id,nome),supervisor:supervisor_id(id,nome)').single()).data
 }
 async function deleteColaborador(id) { await supabase.from('rh_colaboradores').delete().eq('id',id) }
+
+async function getTarefasAvaliacao(colaborador_id) {
+  const { data } = await supabase.from('rh_tarefas_avaliacao')
+    .select('*, supervisor:supervisor_id(id,nome)')
+    .eq('colaborador_id', colaborador_id)
+    .order('created_at', { ascending: false })
+  return data || []
+}
+async function saveTarefaAvaliacao(t) {
+  const p = { colaborador_id:t.colaborador_id, supervisor_id:t.supervisor_id||null,
+    titulo:t.titulo, descricao:t.descricao||null, status:t.status||'pendente',
+    nota:t.nota||null, observacao:t.observacao||null, data_prazo:t.data_prazo||null,
+    updated_at: new Date().toISOString() }
+  if (t.id) return (await supabase.from('rh_tarefas_avaliacao').update(p).eq('id',t.id).select('*,supervisor:supervisor_id(id,nome)').single()).data
+  return (await supabase.from('rh_tarefas_avaliacao').insert([p]).select('*,supervisor:supervisor_id(id,nome)').single()).data
+}
+async function deleteTarefaAvaliacao(id) { await supabase.from('rh_tarefas_avaliacao').delete().eq('id',id) }
+async function importarTarefasAvaliacao(colaborador_id, rows) {
+  const inserts = rows.map(r => ({
+    colaborador_id,
+    supervisor_id: r.supervisor_id || null,
+    titulo: r.titulo,
+    descricao: r.descricao || null,
+    status: 'pendente',
+    data_prazo: r.data_prazo || null,
+  }))
+  const { data, error } = await supabase.from('rh_tarefas_avaliacao').insert(inserts).select('*,supervisor:supervisor_id(id,nome)')
+  if (error) throw error
+  return data || []
+}
 
 async function saveAusencia(a) {
   const p = {colaborador_id:a.colaborador_id,tipo:a.tipo,data_inicio:a.data_inicio,data_fim:a.data_fim,status:a.status,observacoes:a.observacoes||null}
@@ -395,14 +425,15 @@ function ModalGrupo({ grupo, onSave, onClose }) {
   )
 }
 
-function ModalColaborador({ colab, grupos, onSave, onClose }) {
+function ModalColaborador({ colab, grupos, colaboradores, onSave, onClose }) {
   const hoje = new Date().toISOString().slice(0,10)
   const [form, setForm] = useState(colab ? {
     nome:colab.nome,cargo:colab.cargo,grupo_id:colab.grupo_id||'',data_entrada:colab.data_entrada||hoje,
     tipo_contrato:colab.tipo_contrato||'CLT',status:colab.status||'ativo',email:colab.email||'',
     telefone:colab.telefone||'',data_nascimento:colab.data_nascimento||'',endereco:colab.endereco||'',
     gestor_direto:colab.gestor_direto||'',observacoes:colab.observacoes||'',
-  } : {nome:'',cargo:'',grupo_id:'',data_entrada:hoje,tipo_contrato:'CLT',status:'ativo',email:'',telefone:'',data_nascimento:'',endereco:'',gestor_direto:'',observacoes:''})
+    supervisor_id:colab.supervisor_id||'',
+  } : {nome:'',cargo:'',grupo_id:'',data_entrada:hoje,tipo_contrato:'CLT',status:'ativo',email:'',telefone:'',data_nascimento:'',endereco:'',gestor_direto:'',observacoes:'',supervisor_id:''})
   const [saving, setSaving] = useState(false)
   const [aba, setAba] = useState('basico')
   async function save() { if(!form.nome.trim()||!form.cargo.trim())return; setSaving(true); try{await onSave({...form,id:colab?.id})}finally{setSaving(false)} }
@@ -438,6 +469,13 @@ function ModalColaborador({ colab, grupos, onSave, onClose }) {
         {aba==='extra'&&<div className="form-grid">
           <div className="form-group"><label className="form-label">Data de nascimento</label><input className="form-input" type="date" value={form.data_nascimento} onChange={e=>setForm(f=>({...f,data_nascimento:e.target.value}))}/></div>
           <div className="form-group"><label className="form-label">Gestor direto</label><input className="form-input" value={form.gestor_direto} onChange={e=>setForm(f=>({...f,gestor_direto:e.target.value}))}/></div>
+          <div className="form-group">
+            <label className="form-label">Supervisor responsável (avaliações)</label>
+            <select className="form-select" value={form.supervisor_id} onChange={e=>setForm(f=>({...f,supervisor_id:e.target.value}))}>
+              <option value="">Sem supervisor</option>
+              {(colaboradores||[]).filter(c=>c.id!==colab?.id).map(c=><option key={c.id} value={c.id}>{c.nome} — {c.cargo}</option>)}
+            </select>
+          </div>
           <div className="form-group"><label className="form-label">Observações</label><textarea className="form-textarea" rows={3} value={form.observacoes} onChange={e=>setForm(f=>({...f,observacoes:e.target.value}))}/></div>
         </div>}
         <div className="form-actions"><button className="btn btn-ghost" onClick={onClose}>Cancelar</button><button className="btn btn-primary" onClick={save} disabled={saving||!form.nome.trim()||!form.cargo.trim()}>{saving?'Salvando...':'Salvar'}</button></div>
@@ -741,7 +779,7 @@ function PerfilColaborador({ colab, grupos, colaboradores, onEdit, onBack, showT
 
       {/* Abas perfil */}
       <div style={{display:'flex',borderBottom:'1px solid var(--border)',marginBottom:16}}>
-        {[{k:'avaliacoes',l:`Avaliações (${avaliacoes.length})`},{k:'ausencias',l:`Ausências (${ausencias.length})`},{k:'feedbacks',l:`Feedbacks (${feedbacks.length})`},{k:'treinamentos',l:'Treinamentos'},{k:'processos',l:`Processos (${processos.length})`}].map(({k,l})=>(
+        {[{k:'avaliacoes',l:`Avaliações (${avaliacoes.length})`},{k:'ausencias',l:`Ausências (${ausencias.length})`},{k:'feedbacks',l:`Feedbacks (${feedbacks.length})`},{k:'treinamentos',l:'Treinamentos'},{k:'tarefas_avaliacao',l:'Tarefas'},{k:'processos',l:`Processos (${processos.length})`}].map(({k,l})=>(
           <button key={k} onClick={()=>setAbaColab(k)} style={{padding:'8px 16px',fontSize:13,fontWeight:abaColab===k?700:400,cursor:'pointer',background:'none',border:'none',borderBottom:abaColab===k?'2px solid var(--accent)':'2px solid transparent',color:abaColab===k?'var(--accent)':'var(--text-muted)'}}>{l}</button>
         ))}
       </div>
@@ -837,6 +875,14 @@ function PerfilColaborador({ colab, grupos, colaboradores, onEdit, onBack, showT
       {/* TREINAMENTOS */}
       {abaColab==='treinamentos'&&(
         <TreinamentosColaborador colaborador_id={colab.id} showToast={showToast}/>
+      )}
+      {abaColab==='tarefas_avaliacao'&&(
+        <TarefasAvaliacaoColaborador
+          colaborador_id={colab.id}
+          supervisor_id={colab.supervisor_id||null}
+          colaboradores={colaboradores}
+          showToast={showToast}
+        />
       )}
 
       {/* PROCESSOS */}
@@ -1407,6 +1453,222 @@ function TreinamentosColaborador({ colaborador_id, showToast }) {
   )
 }
 
+
+// ── TAREFAS DE AVALIAÇÃO DO COLABORADOR ──────────────────────
+function TarefasAvaliacaoColaborador({ colaborador_id, supervisor_id, colaboradores, showToast }) {
+  const [tarefas, setTarefas]     = useState([])
+  const [loading, setLoading]     = useState(true)
+  const [modal, setModal]         = useState(false)
+  const [editT, setEditT]         = useState(null)
+  const [importando, setImportando] = useState(false)
+  const fileRef = useRef()
+
+  const STATUS_AV = [
+    {v:'pendente',     l:'Pendente',     cls:'badge-amber'},
+    {v:'em_avaliacao', l:'Em avaliação', cls:'badge-indigo'},
+    {v:'aprovado',     l:'Aprovado',     cls:'badge-green'},
+    {v:'reprovado',    l:'Reprovado',    cls:'badge-red'},
+  ]
+
+  useEffect(()=>{
+    getTarefasAvaliacao(colaborador_id)
+      .then(setTarefas)
+      .finally(()=>setLoading(false))
+  },[colaborador_id])
+
+  async function handleSave(form) {
+    const s = await saveTarefaAvaliacao({...form, colaborador_id, supervisor_id: form.supervisor_id||supervisor_id||null})
+    if (form.id) setTarefas(p=>p.map(x=>x.id===form.id?s:x))
+    else setTarefas(p=>[s,...p])
+    setModal(false); setEditT(null); showToast('Tarefa salva!')
+  }
+
+  async function handleDelete(id) {
+    if (!window.confirm('Excluir tarefa?')) return
+    await deleteTarefaAvaliacao(id)
+    setTarefas(p=>p.filter(x=>x.id!==id))
+    showToast('Removida!')
+  }
+
+  async function handleImport(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImportando(true)
+    try {
+      const XLSX = await import('xlsx')
+      const buf  = await file.arrayBuffer()
+      const wb   = XLSX.read(buf)
+      const ws   = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(ws, { defval:'' })
+
+      const parsed = rows.map(r => ({
+        titulo:     String(r['Título'] || r['titulo'] || r['TÍTULO'] || '').trim(),
+        descricao:  String(r['Descrição'] || r['descricao'] || '').trim() || null,
+        data_prazo: r['Prazo'] || r['data_prazo'] || null,
+        supervisor_id: supervisor_id || null,
+      })).filter(r => r.titulo)
+
+      if (parsed.length === 0) { showToast('Nenhuma tarefa encontrada na planilha.', 'error'); return }
+
+      const novas = await importarTarefasAvaliacao(colaborador_id, parsed)
+      setTarefas(p => [...novas, ...p])
+      showToast(`${novas.length} tarefa${novas.length!==1?'s':''} importada${novas.length!==1?'s':''}!`)
+    } catch(err) {
+      showToast('Erro ao importar: ' + (err?.message||err), 'error')
+    } finally {
+      setImportando(false)
+      e.target.value = ''
+    }
+  }
+
+  if (loading) return <div style={{padding:20}}><div className="spinner"/></div>
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+        <span style={{fontSize:13,color:'var(--text-muted)'}}>
+          {tarefas.length} tarefa{tarefas.length!==1?'s':''} de avaliação
+        </span>
+        <div style={{display:'flex',gap:8}}>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{display:'none'}} onChange={handleImport}/>
+          <button className="btn btn-ghost btn-sm" style={{fontSize:11,display:'flex',alignItems:'center',gap:4}}
+            onClick={()=>fileRef.current?.click()} disabled={importando}>
+            <FileSpreadsheet size={12}/> {importando?'Importando...':'Importar planilha'}
+          </button>
+          <button className="btn btn-primary btn-sm" style={{fontSize:11,display:'flex',alignItems:'center',gap:4}}
+            onClick={()=>{ setEditT(null); setModal(true) }}>
+            <Plus size={12}/> Nova tarefa
+          </button>
+        </div>
+      </div>
+
+      {/* Dica de formato */}
+      <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:12,background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:6,padding:'6px 10px'}}>
+        📋 Formato da planilha: colunas <strong>Título</strong> (obrigatório), <strong>Descrição</strong> e <strong>Prazo</strong> (AAAA-MM-DD)
+      </div>
+
+      {tarefas.length === 0
+        ? <div className="empty-state"><p>Nenhuma tarefa de avaliação cadastrada.</p></div>
+        : <div style={{display:'flex',flexDirection:'column',gap:6}}>
+            {tarefas.map(t => {
+              const st = STATUS_AV.find(s=>s.v===t.status)||STATUS_AV[0]
+              return (
+                <div key={t.id} style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,padding:'10px 14px'}}>
+                  <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:8}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:2,flexWrap:'wrap'}}>
+                        <span style={{fontSize:13,fontWeight:600,color:'var(--text)'}}>{t.titulo}</span>
+                        <span className={`badge ${st.cls}`} style={{fontSize:10}}>{st.l}</span>
+                        {t.nota!=null && <span style={{fontSize:11,fontWeight:700,color:'#22c55e'}}>Nota: {t.nota}</span>}
+                      </div>
+                      {t.descricao && <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:3}}>{t.descricao}</div>}
+                      <div style={{display:'flex',gap:12,fontSize:11,color:'var(--text-muted)'}}>
+                        {t.data_prazo && <span>📅 {fmtData(t.data_prazo)}</span>}
+                        {t.supervisor && <span>👤 {t.supervisor.nome}</span>}
+                        {t.observacao && <span style={{fontStyle:'italic'}}>"{t.observacao}"</span>}
+                      </div>
+                    </div>
+                    <div className="actions-cell">
+                      <button className="btn btn-ghost btn-icon btn-sm" onClick={()=>{setEditT(t);setModal(true)}}><Pencil size={12}/></button>
+                      <button className="btn btn-danger btn-icon btn-sm" onClick={()=>handleDelete(t.id)}><Trash2 size={12}/></button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+      }
+
+      {/* Modal */}
+      {modal && (
+        <ModalTarefaAvaliacao
+          tarefa={editT}
+          colaboradores={colaboradores}
+          supervisorPadrao={supervisor_id}
+          onSave={handleSave}
+          onClose={()=>{setModal(false);setEditT(null)}}
+        />
+      )}
+    </div>
+  )
+}
+
+function ModalTarefaAvaliacao({ tarefa, colaboradores, supervisorPadrao, onSave, onClose }) {
+  const [form, setForm] = useState({
+    titulo:       tarefa?.titulo || '',
+    descricao:    tarefa?.descricao || '',
+    status:       tarefa?.status || 'pendente',
+    nota:         tarefa?.nota != null ? tarefa.nota : '',
+    observacao:   tarefa?.observacao || '',
+    data_prazo:   tarefa?.data_prazo || '',
+    supervisor_id: tarefa?.supervisor_id || supervisorPadrao || '',
+    id:           tarefa?.id,
+  })
+  const [saving, setSaving] = useState(false)
+  const STATUS_AV = [
+    {v:'pendente',l:'Pendente'},{v:'em_avaliacao',l:'Em avaliação'},{v:'aprovado',l:'Aprovado'},{v:'reprovado',l:'Reprovado'}
+  ]
+  async function save() {
+    if (!form.titulo.trim()) return
+    setSaving(true)
+    try { await onSave({...form, nota: form.nota!=='' ? Number(form.nota) : null}) }
+    finally { setSaving(false) }
+  }
+  return (
+    <div className="modal-backdrop">
+      <div className="modal" style={{maxWidth:480}}>
+        <div className="modal-header">
+          <h2 className="modal-title">{tarefa?'Editar Tarefa':'Nova Tarefa de Avaliação'}</h2>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
+        </div>
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">Título *</label>
+            <input className="form-input" value={form.titulo} onChange={e=>setForm(f=>({...f,titulo:e.target.value}))} placeholder="O que precisa ser avaliado?"/>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Descrição</label>
+            <textarea className="form-textarea" rows={2} value={form.descricao} onChange={e=>setForm(f=>({...f,descricao:e.target.value}))} placeholder="Detalhes e critérios..."/>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Status</label>
+              <select className="form-select" value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>
+                {STATUS_AV.map(s=><option key={s.v} value={s.v}>{s.l}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Nota (0–10)</label>
+              <input className="form-input" type="number" min="0" max="10" step="0.1" value={form.nota} onChange={e=>setForm(f=>({...f,nota:e.target.value}))} placeholder="—"/>
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Prazo</label>
+              <input className="form-input" type="date" value={form.data_prazo} onChange={e=>setForm(f=>({...f,data_prazo:e.target.value}))}/>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Supervisor</label>
+              <select className="form-select" value={form.supervisor_id} onChange={e=>setForm(f=>({...f,supervisor_id:e.target.value}))}>
+                <option value="">Sem supervisor</option>
+                {(colaboradores||[]).map(c=><option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Observação do supervisor</label>
+            <textarea className="form-textarea" rows={2} value={form.observacao} onChange={e=>setForm(f=>({...f,observacao:e.target.value}))} placeholder="Feedback, comentários..."/>
+          </div>
+        </div>
+        <div className="form-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving||!form.titulo.trim()}>{saving?'Salvando...':'Salvar'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
 // ── PÁGINA PRINCIPAL ───────────────────────────────────────
 export default function RH() {
   const [aba, setAba]             = useState('dashboard')
@@ -2049,7 +2311,7 @@ export default function RH() {
       )}
 
       {/* Modais */}
-      {modalColab&&<ModalColaborador colab={editColab} grupos={grupos} onSave={handleSaveColab} onClose={()=>{setModalColab(false);setEditColab(null)}}/>}
+      {modalColab&&<ModalColaborador colab={editColab} grupos={grupos} colaboradores={colaboradores} onSave={handleSaveColab} onClose={()=>{setModalColab(false);setEditColab(null)}}/>}
       {modalGrupo&&<ModalGrupo grupo={editGrupo} onSave={handleSaveGrupo} onClose={()=>{setModalGrupo(false);setEditGrupo(null)}}/>}
       {modalOKR&&<ModalOKR okr={editOKR} colaboradores={colaboradores} grupos={grupos} onSave={handleSaveOKR} onClose={()=>{setModalOKR(false);setEditOKR(null)}}/>}
       {modalKR&&<ModalKR kr={modalKR.kr} okr_id={modalKR.okr_id} onSave={handleSaveKR} onClose={()=>setModalKR(null)}/>}
