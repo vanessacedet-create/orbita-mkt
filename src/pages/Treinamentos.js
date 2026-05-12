@@ -1,10 +1,11 @@
 // src/pages/Treinamentos.js
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import {
   GraduationCap, Plus, ChevronDown, X, Trash2, Bell,
-  CheckCircle, MessageSquare, Clock, Users, ArrowLeft
+  CheckCircle, MessageSquare, Clock, Users, ArrowLeft,
+  Pencil, FileSpreadsheet
 } from 'lucide-react'
 
 // ── UTILITÁRIOS ────────────────────────────────────────────
@@ -120,6 +121,23 @@ async function atualizarTarefa(id, fields) {
 
 async function deletarTarefa(id) {
   await supabase.from('planos_tarefas').delete().eq('id', id)
+}
+
+async function atualizarSupervisor(plano_id, supervisor_nome) {
+  const { data } = await supabase
+    .from('planos_treinamento')
+    .update({ supervisor_nome })
+    .eq('id', plano_id)
+    .select()
+    .single()
+  return data
+}
+
+async function importarTarefasPlanilha(secao_id, tarefas) {
+  const ordemBase = tarefas.length
+  const rows = tarefas.map((texto, i) => ({ secao_id, texto, progresso: 0, ordem: ordemBase + i }))
+  const { data } = await supabase.from('planos_tarefas').insert(rows).select()
+  return data || []
 }
 
 async function registrarHistorico(plano_id, tipo, descricao, secao_titulo, tarefa_texto, supervisor_nome) {
@@ -274,7 +292,7 @@ function CardPlano({ plano, onClick, onDelete }) {
 
 // ── DETALHE DO PLANO ───────────────────────────────────────
 
-function DetalhePlano({ planoId, supervisorNome, onBack, showToast }) {
+function DetalhePlano({ planoId, supervisorNome, onSupervisorChange, onBack, showToast }) {
   const [plano, setPlano] = useState(null)
   const [loading, setLoading] = useState(true)
   const [secExpanded, setSecExpanded] = useState({})
@@ -286,6 +304,10 @@ function DetalhePlano({ planoId, supervisorNome, onBack, showToast }) {
   const [novaTarefa, setNovaTarefa] = useState({})
   const [noteOpen, setNoteOpen] = useState({})
   const [noteText, setNoteText] = useState({})
+  const [editingSupervisor, setEditingSupervisor] = useState(false)
+  const [newSupervisor, setNewSupervisor] = useState('')
+  const [importingSecao, setImportingSecao] = useState(null)
+  const importFileRef = useRef()
 
   useEffect(() => {
     getPlanoCompleto(planoId).then(p => {
@@ -380,6 +402,49 @@ function DetalhePlano({ planoId, supervisorNome, onBack, showToast }) {
     showToast('Seção adicionada!')
   }
 
+  async function handleChangeSupervisor() {
+    if (!newSupervisor.trim()) return
+    await atualizarSupervisor(plano.id, newSupervisor.trim())
+    onSupervisorChange?.(plano.id, newSupervisor.trim())
+    const h = await registrarHistorico(plano.id, 'adjust',
+      `Supervisor alterado para "${newSupervisor.trim()}"`, '', '', newSupervisor.trim())
+    setPlano(p => ({ ...p, supervisor_nome: newSupervisor.trim(), planos_historico: [h, ...(p.planos_historico || [])] }))
+    setEditingSupervisor(false)
+    setNewSupervisor('')
+    showToast('Supervisor atualizado!')
+  }
+
+  async function handleImportFile(e) {
+    const file = e.target.files?.[0]
+    if (!file || !importingSecao) return
+    try {
+      const XLSX = await import('xlsx')
+      const buf  = await file.arrayBuffer()
+      const wb   = XLSX.read(buf)
+      const ws   = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+      const textos = rows
+        .map(r => String(r[0] || '').trim())
+        .filter(t => t && t.toLowerCase() !== 'tarefa' && t.toLowerCase() !== 'título' && t.toLowerCase() !== 'titulo')
+      if (!textos.length) { showToast('Nenhuma tarefa encontrada na planilha.', 'error'); return }
+      const sec = plano.planos_secoes.find(s => s.id === importingSecao)
+      const ordemBase = sec?.planos_tarefas?.length || 0
+      const novas = await importarTarefasPlanilha(importingSecao, textos)
+      setPlano(p => ({
+        ...p,
+        planos_secoes: p.planos_secoes.map(s => s.id !== importingSecao ? s : {
+          ...s, planos_tarefas: [...(s.planos_tarefas || []), ...novas]
+        })
+      }))
+      showToast(`${novas.length} tarefa${novas.length !== 1 ? 's' : ''} importada${novas.length !== 1 ? 's' : ''}!`)
+    } catch(err) {
+      showToast('Erro ao importar: ' + (err?.message || err), 'error')
+    } finally {
+      setImportingSecao(null)
+      e.target.value = ''
+    }
+  }
+
   async function handleDeleteSecao(sec) {
     if (!window.confirm(`Excluir a seção "${sec.titulo}" e todas as suas tarefas?`)) return
     await deletarSecao(sec.id)
@@ -457,10 +522,29 @@ function DetalhePlano({ planoId, supervisorNome, onBack, showToast }) {
       {/* Barra do supervisor */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, marginBottom: 12 }}>
         <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--amber-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'var(--amber)', flexShrink: 0 }}>
-          {supervisorNome.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()}
+          {(plano.supervisor_nome || supervisorNome).split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()}
         </div>
         <div style={{ flex: 1 }}>
-          <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{supervisorNome}</p>
+          {editingSupervisor ? (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input className="form-input" style={{ padding: '4px 8px', fontSize: 12, width: 200 }}
+                value={newSupervisor} onChange={e => setNewSupervisor(e.target.value)}
+                placeholder="Nome do supervisor..."
+                onKeyDown={e => { if (e.key === 'Enter') handleChangeSupervisor(); if (e.key === 'Escape') setEditingSupervisor(false) }}
+                autoFocus />
+              <button className="btn btn-primary btn-sm" style={{ fontSize: 11 }} onClick={handleChangeSupervisor}>Salvar</button>
+              <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} onClick={() => setEditingSupervisor(false)}>Cancelar</button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{plano.supervisor_nome || supervisorNome}</p>
+              <button className="btn btn-ghost btn-icon" style={{ width: 20, height: 20, padding: 0 }}
+                title="Alterar supervisor"
+                onClick={() => { setNewSupervisor(plano.supervisor_nome || supervisorNome); setEditingSupervisor(true) }}>
+                <Pencil size={11} color="var(--text-muted)" />
+              </button>
+            </div>
+          )}
           <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>Supervisor — validando progresso do treinamento</p>
         </div>
         <span className="badge badge-amber" style={{ fontSize: 10, marginRight: 6 }}>Supervisor</span>
@@ -839,6 +923,7 @@ export default function Treinamentos() {
     <DetalhePlano
       planoId={planoAtivo}
       supervisorNome={supervisorNome}
+      onSupervisorChange={(id, nome) => setPlanos(ps => ps.map(p => p.id === id ? { ...p, supervisor_nome: nome } : p))}
       onBack={() => setPlanoAtivo(null)}
       showToast={showToast}
     />
