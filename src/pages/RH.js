@@ -6,7 +6,7 @@ import {
   UserCheck, AlertCircle, Clock, Target, Star,
   TrendingUp, CheckCircle, BarChart2, Award,
   BookOpen, GraduationCap, Link, ExternalLink,
-  Download, FileSpreadsheet, FileText
+  Download, FileSpreadsheet, FileText, List, CalendarDays, ChevronLeft, ChevronRight
 } from 'lucide-react'
 
 // ── UTILITÁRIOS ────────────────────────────────────────────
@@ -1430,6 +1430,8 @@ export default function RH() {
   const [filtroOKRTipo, setFiltroOKRTipo] = useState('')
   const [filtroOKRStatus, setFiltroOKRStatus] = useState('ativo')
   const [modoAusencia, setModoAusencia] = useState('ciclo') // 'ciclo' | 'mes' | 'custom'
+  const [viewAusencia, setViewAusencia]   = useState('lista') // 'lista' | 'calendario'
+  const [calAnoMes, setCalAnoMes]         = useState(() => { const n=new Date(); return {ano:n.getFullYear(),mes:n.getMonth()} })
   const [mesRefAusencia, setMesRefAusencia] = useState(()=>new Date().toISOString().slice(0,7))
   const [dataIniCustom, setDataIniCustom] = useState(()=>{
     const d = new Date(); d.setDate(d.getDate()-30); return d.toISOString().slice(0,10)
@@ -1829,31 +1831,79 @@ export default function RH() {
           {v:'custom', l:'Personalizado'},
         ]
 
+        // ── Calendário ──
+        const DIAS_SEMANA = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
+        const NOMES_MES_CAL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+        const COR_TIPO = {ferias:'#6366f1',folga:'#22c55e',falta:'#ef4444',home_office:'#0ea5e9',atestado:'#f97316',licenca:'#8b5cf6'}
+
+        function ausenciasNoDia(ano, mes, dia) {
+          const dataStr = `${ano}-${String(mes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`
+          return ausenciasAll.filter(a => {
+            if (filtroAusenciaTipo && a.tipo !== filtroAusenciaTipo) return false
+            return dataStr >= a.data_inicio && dataStr <= a.data_fim
+          })
+        }
+
+        function diasNoMes(ano, mes) {
+          return new Date(ano, mes+1, 0).getDate()
+        }
+
+        function primeiroDiaSemana(ano, mes) {
+          return new Date(ano, mes, 1).getDay()
+        }
+
+        const hoje = new Date()
+        const totalDias = diasNoMes(calAnoMes.ano, calAnoMes.mes)
+        const offset = primeiroDiaSemana(calAnoMes.ano, calAnoMes.mes)
+        const celulas = Array.from({length: offset + totalDias}, (_, i) => i < offset ? null : i - offset + 1)
+        // pad to full weeks
+        while (celulas.length % 7 !== 0) celulas.push(null)
+
         return (
           <div>
-            {/* Seletor de modo */}
-            <div style={{display:'flex',gap:0,marginBottom:12,background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:6,padding:3,width:'fit-content'}}>
-              {MODOS.map(m=>(
-                <button key={m.v} onClick={()=>setModoAusencia(m.v)}
-                  style={{
-                    padding:'6px 14px',fontSize:12,fontWeight:modoAusencia===m.v?700:500,cursor:'pointer',
-                    background:modoAusencia===m.v?'var(--surface)':'transparent',
-                    color:modoAusencia===m.v?'var(--text)':'var(--text-muted)',
-                    border:'none',borderRadius:4
-                  }}>{m.l}</button>
-              ))}
+            {/* Header: seletor de modo + toggle de view */}
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12,flexWrap:'wrap',gap:8}}>
+              <div style={{display:'flex',gap:0,background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:6,padding:3}}>
+                {MODOS.map(m=>(
+                  <button key={m.v} onClick={()=>setModoAusencia(m.v)}
+                    style={{
+                      padding:'6px 14px',fontSize:12,fontWeight:modoAusencia===m.v?700:500,cursor:'pointer',
+                      background:modoAusencia===m.v?'var(--surface)':'transparent',
+                      color:modoAusencia===m.v?'var(--text)':'var(--text-muted)',
+                      border:'none',borderRadius:4
+                    }}>{m.l}</button>
+                ))}
+              </div>
+
+              {/* Toggle Lista / Calendário */}
+              <div style={{display:'flex',background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:6,padding:3}}>
+                <button onClick={()=>setViewAusencia('lista')}
+                  style={{padding:'6px 12px',fontSize:12,border:'none',cursor:'pointer',borderRadius:4,
+                    display:'flex',alignItems:'center',gap:5,
+                    background:viewAusencia==='lista'?'var(--accent)':'transparent',
+                    color:viewAusencia==='lista'?'#fff':'var(--text-muted)'}}>
+                  <List size={13}/> Lista
+                </button>
+                <button onClick={()=>setViewAusencia('calendario')}
+                  style={{padding:'6px 12px',fontSize:12,border:'none',cursor:'pointer',borderRadius:4,
+                    display:'flex',alignItems:'center',gap:5,
+                    background:viewAusencia==='calendario'?'var(--accent)':'transparent',
+                    color:viewAusencia==='calendario'?'#fff':'var(--text-muted)'}}>
+                  <CalendarDays size={13}/> Calendário
+                </button>
+              </div>
             </div>
 
-            {/* Filtros do modo escolhido */}
+            {/* Filtros */}
             <div style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'center',marginBottom:16}}>
-              {modoAusencia !== 'custom' && (
+              {modoAusencia !== 'custom' && viewAusencia === 'lista' && (
                 <div style={{display:'flex',alignItems:'center',gap:6}}>
                   <span style={{fontSize:12,color:'var(--text-muted)'}}>Mês de referência:</span>
                   <input type="month" className="form-input" style={{width:'auto',fontSize:12,padding:'6px 10px'}}
                     value={mesRefAusencia} onChange={e=>setMesRefAusencia(e.target.value)}/>
                 </div>
               )}
-              {modoAusencia === 'custom' && (
+              {modoAusencia === 'custom' && viewAusencia === 'lista' && (
                 <>
                   <div style={{display:'flex',alignItems:'center',gap:6}}>
                     <span style={{fontSize:12,color:'var(--text-muted)'}}>De:</span>
@@ -1872,30 +1922,123 @@ export default function RH() {
                 <option value="">Todos os tipos</option>
                 {TIPO_AUSENCIA.map(t=><option key={t.v} value={t.v}>{t.l}</option>)}
               </select>
-              <div style={{marginLeft:'auto',fontSize:12,color:'var(--text-muted)',textAlign:'right'}}>
-                {periodo.label}<br/>
-                <strong style={{color:'var(--text)'}}>{ausDoPeriodo.length}</strong> registro{ausDoPeriodo.length!==1?'s':''}
-              </div>
+              {viewAusencia === 'lista' && (
+                <div style={{marginLeft:'auto',fontSize:12,color:'var(--text-muted)',textAlign:'right'}}>
+                  {periodo.label}<br/>
+                  <strong style={{color:'var(--text)'}}>{ausDoPeriodo.length}</strong> registro{ausDoPeriodo.length!==1?'s':''}
+                </div>
+              )}
             </div>
 
-            {ausDoPeriodo.length===0
-              ?<div className="empty-state"><p>Nenhuma ausência no período selecionado.</p></div>
-              :<div className="table-card"><table>
-                <thead><tr><th>Colaborador</th><th>Grupo</th><th>Tipo</th><th>Status</th><th>Início</th><th>Fim</th><th>Dias</th></tr></thead>
-                <tbody>{ausDoPeriodo.map(a=>{
-                  const ta=TIPO_AUSENCIA.find(t=>t.v===a.tipo); const sa=STATUS_AUSENCIA.find(s=>s.v===a.status)||STATUS_AUSENCIA[0]
-                  return <tr key={a.id}>
-                    <td className="td-strong" style={{cursor:'pointer'}} onClick={()=>setPerfil(colaboradores.find(c=>c.id===a.colaborador_id))}>{a.rh_colaboradores?.nome||'—'}</td>
-                    <td style={{fontSize:12,color:'var(--text-muted)'}}>{a.rh_colaboradores?.rh_grupos?.nome||'—'}</td>
-                    <td style={{fontSize:12}}>{ta?.l||a.tipo}</td>
-                    <td><span className={`badge ${sa.cls}`} style={{fontSize:10}}>{sa.l}</span></td>
-                    <td className="td-muted" style={{fontSize:12}}>{fmtData(a.data_inicio)}</td>
-                    <td className="td-muted" style={{fontSize:12}}>{fmtData(a.data_fim)}</td>
-                    <td style={{fontSize:12,color:'var(--accent)',fontWeight:700}}>{diffDias(a.data_inicio,a.data_fim)}</td>
-                  </tr>
-                })}</tbody>
-              </table></div>
-            }
+            {/* ── VIEW LISTA ── */}
+            {viewAusencia === 'lista' && (
+              ausDoPeriodo.length===0
+                ?<div className="empty-state"><p>Nenhuma ausência no período selecionado.</p></div>
+                :<div className="table-card"><table>
+                  <thead><tr><th>Colaborador</th><th>Grupo</th><th>Tipo</th><th>Status</th><th>Início</th><th>Fim</th><th>Dias</th></tr></thead>
+                  <tbody>{ausDoPeriodo.map(a=>{
+                    const ta=TIPO_AUSENCIA.find(t=>t.v===a.tipo); const sa=STATUS_AUSENCIA.find(s=>s.v===a.status)||STATUS_AUSENCIA[0]
+                    return <tr key={a.id}>
+                      <td className="td-strong" style={{cursor:'pointer'}} onClick={()=>setPerfil(colaboradores.find(c=>c.id===a.colaborador_id))}>{a.rh_colaboradores?.nome||'—'}</td>
+                      <td style={{fontSize:12,color:'var(--text-muted)'}}>{a.rh_colaboradores?.rh_grupos?.nome||'—'}</td>
+                      <td style={{fontSize:12}}>{ta?.l||a.tipo}</td>
+                      <td><span className={`badge ${sa.cls}`} style={{fontSize:10}}>{sa.l}</span></td>
+                      <td className="td-muted" style={{fontSize:12}}>{fmtData(a.data_inicio)}</td>
+                      <td className="td-muted" style={{fontSize:12}}>{fmtData(a.data_fim)}</td>
+                      <td style={{fontSize:12,color:'var(--accent)',fontWeight:700}}>{diffDias(a.data_inicio,a.data_fim)}</td>
+                    </tr>
+                  })}</tbody>
+                </table></div>
+            )}
+
+            {/* ── VIEW CALENDÁRIO ── */}
+            {viewAusencia === 'calendario' && (
+              <div>
+                {/* Navegação do mês */}
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+                  <button onClick={()=>setCalAnoMes(p=>{
+                    const d=new Date(p.ano,p.mes-1,1); return {ano:d.getFullYear(),mes:d.getMonth()}
+                  })} style={{background:'none',border:'1px solid var(--border)',borderRadius:6,padding:'5px 10px',cursor:'pointer',color:'var(--text)'}}>
+                    <ChevronLeft size={14}/>
+                  </button>
+                  <span style={{fontSize:15,fontWeight:700,color:'var(--text)'}}>
+                    {NOMES_MES_CAL[calAnoMes.mes]} {calAnoMes.ano}
+                  </span>
+                  <button onClick={()=>setCalAnoMes(p=>{
+                    const d=new Date(p.ano,p.mes+1,1); return {ano:d.getFullYear(),mes:d.getMonth()}
+                  })} style={{background:'none',border:'1px solid var(--border)',borderRadius:6,padding:'5px 10px',cursor:'pointer',color:'var(--text)'}}>
+                    <ChevronRight size={14}/>
+                  </button>
+                </div>
+
+                {/* Legenda */}
+                <div style={{display:'flex',gap:12,flexWrap:'wrap',marginBottom:12}}>
+                  {TIPO_AUSENCIA.map(t=>(
+                    <span key={t.v} style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:'var(--text-muted)'}}>
+                      <span style={{width:10,height:10,borderRadius:3,background:COR_TIPO[t.v]||'var(--accent)',display:'inline-block'}}/>
+                      {t.l}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Grid do calendário */}
+                <div style={{border:'1px solid var(--border)',borderRadius:10,overflow:'hidden'}}>
+                  {/* Cabeçalho dias da semana */}
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',background:'var(--surface-2)'}}>
+                    {DIAS_SEMANA.map(d=>(
+                      <div key={d} style={{padding:'8px 0',textAlign:'center',fontSize:11,fontWeight:700,color:'var(--text-muted)'}}>
+                        {d}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Células dos dias */}
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)'}}>
+                    {celulas.map((dia,i)=>{
+                      if (!dia) return <div key={`empty-${i}`} style={{minHeight:80,background:'var(--surface)',borderTop:'1px solid var(--border)',borderRight: (i+1)%7!==0?'1px solid var(--border)':'none'}}/>
+                      const eHoje = dia===hoje.getDate() && calAnoMes.mes===hoje.getMonth() && calAnoMes.ano===hoje.getFullYear()
+                      const ausencias = ausenciasNoDia(calAnoMes.ano, calAnoMes.mes, dia)
+                      return (
+                        <div key={dia} style={{
+                          minHeight:80, padding:'6px 4px',
+                          background: eHoje ? 'rgba(99,102,241,0.06)' : 'var(--surface)',
+                          borderTop:'1px solid var(--border)',
+                          borderRight: (i+1)%7!==0?'1px solid var(--border)':'none',
+                        }}>
+                          <div style={{
+                            fontSize:12, fontWeight: eHoje?700:400,
+                            color: eHoje?'var(--accent)':'var(--text-muted)',
+                            marginBottom:4, textAlign:'right', paddingRight:4,
+                          }}>{dia}</div>
+                          {ausencias.slice(0,3).map(a=>{
+                            const nome = a.rh_colaboradores?.nome?.split(' ')[0] || '—'
+                            const cor  = COR_TIPO[a.tipo] || 'var(--accent)'
+                            return (
+                              <div key={a.id} title={`${a.rh_colaboradores?.nome} — ${TIPO_AUSENCIA.find(t=>t.v===a.tipo)?.l}`}
+                                style={{
+                                  fontSize:10, fontWeight:500,
+                                  background: cor+'22',
+                                  color: cor,
+                                  border:`1px solid ${cor}44`,
+                                  borderRadius:4, padding:'1px 5px',
+                                  marginBottom:2, whiteSpace:'nowrap',
+                                  overflow:'hidden', textOverflow:'ellipsis',
+                                  cursor:'default',
+                                }}>
+                                {nome}
+                              </div>
+                            )
+                          })}
+                          {ausencias.length > 3 && (
+                            <div style={{fontSize:10,color:'var(--text-muted)',paddingLeft:4}}>+{ausencias.length-3}</div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )
       })()}
