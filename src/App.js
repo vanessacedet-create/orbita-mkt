@@ -6,7 +6,7 @@ import { signOut } from './lib/supabase'
 import {
   LayoutDashboard, BookOpen, BookMarked, Users, LogOut,
   Orbit, ShieldAlert, Megaphone, CalendarDays, CheckSquare, UserRound, Eye,
-  Network, Calculator, HeartHandshake, CalendarCheck, GraduationCap, Compass
+  Network, Calculator, HeartHandshake, CalendarCheck, GraduationCap, Compass, Sparkles
 } from 'lucide-react'
 import './App.css'
 
@@ -28,11 +28,13 @@ const CRMLiterario  = lazy(() => import('./pages/CRMLiterario'))
 const Eventos       = lazy(() => import('./pages/Eventos'))
 const Treinamentos  = lazy(() => import('./pages/Treinamentos'))
 const Descoberta    = lazy(() => import('./pages/Descoberta'))
+const Prospeccao    = lazy(() => import('./pages/Prospeccao'))
 
 const MENU = [
   { path: '/',              label: 'Dashboard',    icon: LayoutDashboard, modulo: 'dashboard' },
   { path: '/parceiros',     label: 'Parceiros',    icon: UserRound,       modulo: 'parceiros' },
   { path: '/descoberta',    label: 'Descoberta',   icon: Compass,         modulo: 'parceiros' },
+  { path: '/prospeccao',    label: 'Prospecção',   icon: Sparkles,        modulo: 'parceiros' },
   { path: '/crm',           label: 'CRM',          icon: Network,         modulo: 'crm' },
   { path: '/crm-literario', label: 'CRM Literário',icon: BookMarked,      modulo: 'crm_literario' },
   { path: '/calculadora',   label: 'Calculadora',  icon: Calculator,      modulo: 'calculadora' },
@@ -161,6 +163,7 @@ function Shell() {
             <Route path="/crm-literario" element={<RequireAuth modulo="crm_literario"><CRMLiterario /></RequireAuth>} />
             <Route path="/treinamentos"  element={<RequireAuth modulo="treinamentos"><Treinamentos /></RequireAuth>} />
             <Route path="/descoberta"    element={<RequireAuth modulo="parceiros"><Descoberta /></RequireAuth>} />
+            <Route path="/prospeccao"    element={<RequireAuth modulo="parceiros"><Prospeccao /></RequireAuth>} />
           </Routes>
         </Suspense>
       </main>
