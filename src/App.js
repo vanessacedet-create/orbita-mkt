@@ -6,7 +6,7 @@ import { signOut } from './lib/supabase'
 import {
   LayoutDashboard, BookOpen, BookMarked, Users, LogOut,
   Orbit, ShieldAlert, Megaphone, CalendarDays, CheckSquare, UserRound, Eye,
-  Network, Calculator, HeartHandshake, CalendarCheck, GraduationCap, Telescope
+  Network, Calculator, HeartHandshake, CalendarCheck, GraduationCap, Compass
 } from 'lucide-react'
 import './App.css'
 
@@ -32,7 +32,7 @@ const Descoberta    = lazy(() => import('./pages/Descoberta'))
 const MENU = [
   { path: '/',              label: 'Dashboard',    icon: LayoutDashboard, modulo: 'dashboard' },
   { path: '/parceiros',     label: 'Parceiros',    icon: UserRound,       modulo: 'parceiros' },
-  { path: '/descoberta',    label: 'Descoberta',   icon: Telescope,       modulo: 'parceiros' },
+  { path: '/descoberta',    label: 'Descoberta',   icon: Compass,         modulo: 'parceiros' },
   { path: '/crm',           label: 'CRM',          icon: Network,         modulo: 'crm' },
   { path: '/crm-literario', label: 'CRM Literário',icon: BookMarked,      modulo: 'crm_literario' },
   { path: '/calculadora',   label: 'Calculadora',  icon: Calculator,      modulo: 'calculadora' },
