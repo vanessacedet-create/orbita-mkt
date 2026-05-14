@@ -13,6 +13,9 @@ const PERFIS = [
   { v:'estagiario_influencers', l:'Estagiário Influencers',   grupo:'Influencers' },
   { v:'analista_marketplaces',  l:'Analista Mkt & Eventos',   grupo:'Mkt & Eventos' },
   { v:'estagiario_marketplaces',l:'Estagiário Mkt & Eventos', grupo:'Mkt & Eventos' },
+  { v:'supervisor_parceiras',   l:'Supervisor Parceiras',     grupo:'Parceiras' },
+  { v:'analista_parceiras',     l:'Analista Parceiras',       grupo:'Parceiras' },
+  { v:'estagiario_parceiras',   l:'Estagiário Parceiras',     grupo:'Parceiras' },
 ]
 
 const PERFIL_COR = {
@@ -25,6 +28,9 @@ const PERFIL_COR = {
   estagiario_influencers: '#22c55e',
   analista_marketplaces:  '#f97316',
   estagiario_marketplaces:'#f97316',
+  supervisor_parceiras:   '#e11d48',
+  analista_parceiras:     '#f43f5e',
+  estagiario_parceiras:   '#f43f5e',
 }
 
 function useToast() {
@@ -192,7 +198,6 @@ export default function Usuarios() {
         </button>
       </div>
 
-      {/* Filtros */}
       <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:20}}>
         <input
           className="search-input"
