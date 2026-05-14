@@ -10,7 +10,7 @@ import {
   BookMarked, Search, Plus, X, ChevronDown, Check,
   Users, LayoutGrid, List, ArrowRight, Trash2,
   CheckSquare, Square, Inbox, TrendingUp, AlertCircle,
-  Tag, BookOpen, Zap, Instagram, Youtube, Globe
+  Tag, BookOpen, Zap, Instagram, Youtube, Globe, Pencil
 } from 'lucide-react'
 
 // ── CONSTANTES ────────────────────────────────────────────────
@@ -84,12 +84,19 @@ function StatusSelect({ value, onChange }) {
   )
 }
 
-// ── MODAL: CADASTRAR DIVULGADOR ───────────────────────────────
-function ModalNovoDivulgador({ onSave, onClose }) {
+// ── MODAL: CADASTRAR / EDITAR DIVULGADOR ──────────────────────
+function ModalDivulgador({ divulgador, onSave, onClose }) {
+  const editando = !!divulgador
   const [form, setForm] = useState({
-    nome:'', username:'', platforms:[], followers_count:'',
-    engagement_rate:'', profile_url:'', contact_value:'',
-    tipo_parceria:'', notes:''
+    nome:            divulgador?.nome || '',
+    username:        divulgador?.username || '',
+    platforms:       divulgador?.platforms || [],
+    followers_count: divulgador?.followers_count ? JSON.stringify(divulgador.followers_count) : '',
+    engagement_rate: divulgador?.engagement_rate || '',
+    profile_url:     divulgador?.profile_url || '',
+    contact_value:   divulgador?.contact_value || '',
+    tipo_parceria:   divulgador?.tipo_parceria || '',
+    notes:           divulgador?.notes || '',
   })
   const [saving, setSaving] = useState(false)
 
@@ -107,17 +114,22 @@ function ModalNovoDivulgador({ onSave, onClose }) {
       }
       const payload = {
         nome:            form.nome.trim(),
-        username:        form.username||null,
+        username:        form.username || null,
         platforms:       form.platforms.length ? form.platforms : null,
         followers_count: followers_count,
         engagement_rate: form.engagement_rate ? Number(form.engagement_rate) : null,
-        profile_url:     form.profile_url||null,
-        contact_value:   form.contact_value||null,
-        tipo_parceria:   form.tipo_parceria||null,
-        notes:           form.notes||null,
+        profile_url:     form.profile_url || null,
+        contact_value:   form.contact_value || null,
+        tipo_parceria:   form.tipo_parceria || null,
+        notes:           form.notes || null,
       }
-      const novo = await createDivulgador(payload)
-      onSave(novo)
+      let resultado
+      if (editando) {
+        resultado = await updateDivulgador(divulgador.id, payload)
+      } else {
+        resultado = await createDivulgador(payload)
+      }
+      onSave(resultado)
       onClose()
     } catch(e){ console.error(e) } finally { setSaving(false) }
   }
@@ -126,7 +138,7 @@ function ModalNovoDivulgador({ onSave, onClose }) {
     <div className="modal-backdrop">
       <div className="modal" style={{maxWidth:520,maxHeight:'90vh',overflowY:'auto'}}>
         <div className="modal-header" style={{position:'sticky',top:0,background:'var(--surface)',zIndex:10,borderBottom:'1px solid var(--border)'}}>
-          <h2 className="modal-title">Novo divulgador</h2>
+          <h2 className="modal-title">{editando ? 'Editar divulgador' : 'Novo divulgador'}</h2>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
         </div>
         <div className="form-grid" style={{padding:'16px 20px'}}>
@@ -184,7 +196,7 @@ function ModalNovoDivulgador({ onSave, onClose }) {
         <div className="form-actions" style={{padding:'12px 20px',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'flex-end',gap:8}}>
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
           <button className="btn btn-primary" onClick={salvar} disabled={saving||!form.nome.trim()}>
-            {saving?'Salvando...':'Criar divulgador'}
+            {saving ? 'Salvando...' : editando ? 'Salvar alterações' : 'Criar divulgador'}
           </button>
         </div>
       </div>
@@ -207,7 +219,6 @@ function ModalAdicionarDivulgadores({ jaAdicionados, jaNoMes, livrosMesNomes, on
 
   const tipos = useMemo(()=>[...new Set(todos.map(p=>p.tipo_parceria).filter(Boolean))],[todos])
 
-  // Disponíveis = não estão neste livro, passam nos filtros de busca/tipo
   const filtrados = useMemo(()=>todos.filter(p=>{
     if(jaAdicionados.includes(p.id)) return false
     if(filtroTipo&&p.tipo_parceria!==filtroTipo) return false
@@ -216,10 +227,8 @@ function ModalAdicionarDivulgadores({ jaAdicionados, jaNoMes, livrosMesNomes, on
     return true
   }),[todos,jaAdicionados,filtroTipo,search])
 
-  // Separa em: livres (não estão em nenhum livro do mês) e já no mês (estão em outro livro do mês)
   const livres = filtrados.filter(p=>!jaNoMes.includes(p.id))
   const jaNoMesFiltrados = filtrados.filter(p=>jaNoMes.includes(p.id))
-
   const disponiveis = mostrarOcultos ? filtrados : livres
 
   function toggle(id){ setSelecionados(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]) }
@@ -353,9 +362,7 @@ function ModalEnviarCampanha({ divulgador, campanhas, onConfirmar, onClose }) {
     if (!campanhaSel||!livroSel) return
     setSaving(true)
     try {
-      // 1. Busca ou cria parceiro na tabela parceiros
       const parceiro = await vincularDivulgadorComoParceiro(divulgador)
-      // 2. Adiciona o parceiro na campanha de lançamento selecionada como "confirmado"
       await addLancamentoParceiro(livroSel, parceiro.id)
       onConfirmar()
       onClose()
@@ -415,7 +422,7 @@ function ModalEnviarCampanha({ divulgador, campanhas, onConfirmar, onClose }) {
 }
 
 // ── MODAL: DETALHE DO DIVULGADOR ──────────────────────────────
-function ModalDetalhe({ entrada, campanhas, onStatusChange, onRemover, onClose, showToast }) {
+function ModalDetalhe({ entrada, campanhas, onStatusChange, onRemover, onClose, onEditarDivulgador, showToast }) {
   const d = entrada.divulgador
   const [nota, setNota] = useState(entrada.nota||'')
   const [statusLocal, setStatusLocal] = useState(entrada.status)
@@ -509,11 +516,16 @@ function ModalDetalhe({ entrada, campanhas, onStatusChange, onRemover, onClose, 
             )}
           </div>
 
-          <div style={{padding:'12px 20px',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between'}}>
+          <div style={{padding:'12px 20px',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <button className="btn btn-danger btn-sm" onClick={()=>{onRemover(entrada.id);onClose()}}>
               <Trash2 size={13}/> Remover do livro
             </button>
-            <button className="btn btn-primary btn-sm" onClick={onClose}>Fechar</button>
+            <div style={{display:'flex',gap:8}}>
+              <button className="btn btn-ghost btn-sm" onClick={()=>onEditarDivulgador(d)} style={{display:'flex',alignItems:'center',gap:5}}>
+                <Pencil size={13}/> Editar dados
+              </button>
+              <button className="btn btn-primary btn-sm" onClick={onClose}>Fechar</button>
+            </div>
           </div>
         </div>
       </div>
@@ -572,14 +584,14 @@ export default function CRMLiterario() {
   const [anoAtivo, setAnoAtivo] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadingEntradas, setLoadingEntradas] = useState(false)
-  const [entradasMes, setEntradasMes] = useState([]) // todas entradas dos livros do mês
+  const [entradasMes, setEntradasMes] = useState([])
   const [viewMode, setViewMode] = useState('kanban')
   const [search, setSearch] = useState('')
   const [filtroStatus, setFiltroStatus] = useState('')
   const [selecionados, setSelecionados] = useState([])
   const [bulkStatus, setBulkStatus] = useState('')
   const [modalAdicionar, setModalAdicionar] = useState(false)
-  const [modalNovo, setModalNovo] = useState(false)
+  const [modalDivulgador, setModalDivulgador] = useState(null) // null | 'novo' | { divulgador object para editar }
   const [modalDetalhe, setModalDetalhe] = useState(null)
   const [toast, showToast] = useToast()
 
@@ -630,7 +642,6 @@ export default function CRMLiterario() {
     livros.filter(l=>extrairMes(l.data_lancamento)===mesAtivo&&extrairAno(l.data_lancamento)===anoAtivo),
   [livros,mesAtivo,anoAtivo])
 
-  // Carrega entradas de todos os livros do mês (para filtrar modal)
   useEffect(()=>{
     if(!livrosMes.length) return
     Promise.all(livrosMes.map(l=>getDivulgacaoLivro(l.id)))
@@ -671,9 +682,24 @@ export default function CRMLiterario() {
     } catch(e){ showToast('Erro ao adicionar','error') }
   }
 
-  function handleNovoDivulgador(novo) {
-    showToast(`${novo.nome} cadastrado! Agora adicione-o ao livro.`)
-    setModalAdicionar(true)
+  // Chamado quando salva divulgador (novo ou editado)
+  function handleSalvarDivulgador(divulgadorAtualizado) {
+    if (modalDivulgador && modalDivulgador !== 'novo') {
+      // Editando — atualiza nas entradas em memória
+      setEntradas(prev => prev.map(e =>
+        e.divulgador?.id === divulgadorAtualizado.id
+          ? { ...e, divulgador: divulgadorAtualizado }
+          : e
+      ))
+      // Se o modal de detalhe estava aberto para este divulgador, atualiza também
+      if (modalDetalhe?.divulgador?.id === divulgadorAtualizado.id) {
+        setModalDetalhe(prev => ({ ...prev, divulgador: divulgadorAtualizado }))
+      }
+      showToast(`${divulgadorAtualizado.nome} atualizado!`)
+    } else {
+      showToast(`${divulgadorAtualizado.nome} cadastrado! Agora adicione-o ao livro.`)
+      setModalAdicionar(true)
+    }
   }
 
   async function handleStatusChange(entradaId, novoStatus, nota) {
@@ -707,7 +733,6 @@ export default function CRMLiterario() {
 
   const jaAdicionados = entradas.map(e=>e.divulgador_id).filter(Boolean)
 
-  // Divulgadores já em outro livro do mesmo mês
   const { jaNoMes, livrosMesNomes } = useMemo(()=>{
     const ids = new Set()
     const nomes = {}
@@ -813,7 +838,7 @@ export default function CRMLiterario() {
             </div>
             {livroSel&&(
               <div style={{display:'flex',gap:8,flexShrink:0}}>
-                <button className="btn btn-ghost btn-sm" onClick={()=>setModalNovo(true)} style={{display:'flex',alignItems:'center',gap:5}}>
+                <button className="btn btn-ghost btn-sm" onClick={()=>setModalDivulgador('novo')} style={{display:'flex',alignItems:'center',gap:5}}>
                   <Plus size={13}/> Novo divulgador
                 </button>
                 <button className="btn btn-primary btn-sm" onClick={()=>setModalAdicionar(true)} style={{display:'flex',alignItems:'center',gap:5}}>
@@ -968,10 +993,11 @@ export default function CRMLiterario() {
       </div>
 
       {/* ── MODAIS ── */}
-      {modalNovo&&(
-        <ModalNovoDivulgador
-          onSave={handleNovoDivulgador}
-          onClose={()=>setModalNovo(false)}
+      {modalDivulgador&&(
+        <ModalDivulgador
+          divulgador={modalDivulgador === 'novo' ? null : modalDivulgador}
+          onSave={handleSalvarDivulgador}
+          onClose={()=>setModalDivulgador(null)}
         />
       )}
 
@@ -982,7 +1008,7 @@ export default function CRMLiterario() {
           livrosMesNomes={livrosMesNomes}
           onSave={handleAdicionarDivulgadores}
           onClose={()=>setModalAdicionar(false)}
-          onNovo={()=>setModalNovo(true)}
+          onNovo={()=>setModalDivulgador('novo')}
         />
       )}
 
@@ -993,6 +1019,7 @@ export default function CRMLiterario() {
           onStatusChange={handleStatusChange}
           onRemover={handleRemover}
           onClose={()=>setModalDetalhe(null)}
+          onEditarDivulgador={(d)=>{ setModalDivulgador(d); setModalDetalhe(null) }}
           showToast={showToast}
         />
       )}
