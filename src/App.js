@@ -88,6 +88,17 @@ function RequireAuth({ children, modulo }) {
   return children
 }
 
+function HomeRedirect() {
+  const { session, loading } = useAuth()
+  const { can } = usePermissions()
+  if (loading) return <div className="loading"><div className="spinner" /></div>
+  if (!session) return <Navigate to="/login" replace />
+  if (can('dashboard')) return <Dashboard />
+  const firstRoute = MENU.find(m => m.path !== '/' && can(m.modulo))
+  if (firstRoute) return <Navigate to={firstRoute.path} replace />
+  return <SemAcesso />
+}
+
 function SemAcesso() {
   return (
     <div className="sem-acesso">
@@ -154,7 +165,7 @@ function Shell() {
       <main className="main-content">
         <Suspense fallback={<div className="loading"><div className="spinner"/></div>}>
           <Routes>
-            <Route path="/"              element={<RequireAuth modulo="dashboard"><Dashboard /></RequireAuth>} />
+            <Route path="/"              element={<HomeRedirect />} />
             <Route path="/cortesias"     element={<RequireAuth modulo="cortesias"><Cortesias /></RequireAuth>} />
             <Route path="/parceiros"     element={<RequireAuth modulo="parceiros"><Parceiros /></RequireAuth>} />
             <Route path="/usuarios"      element={<RequireAuth modulo="usuarios"><Usuarios /></RequireAuth>} />
