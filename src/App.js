@@ -59,6 +59,9 @@ const PERFIL_LABEL = {
   analista_influencers:    'Analista Influencers',
   estagiario_marketplaces: 'Estagiário Mkt & Eventos',
   analista_marketplaces:   'Analista Mkt & Eventos',
+  estagiario_parceiras:    'Estagiário Parceiras',
+  analista_parceiras:      'Analista Parceiras',
+  supervisor_parceiras:    'Supervisor Parceiras',
 }
 
 const PERFIL_COLOR = {
@@ -71,6 +74,9 @@ const PERFIL_COLOR = {
   analista_influencers:    '#22c55e',
   estagiario_marketplaces: '#f97316',
   analista_marketplaces:   '#f97316',
+  estagiario_parceiras:    '#f43f5e',
+  analista_parceiras:      '#f43f5e',
+  supervisor_parceiras:    '#e11d48',
 }
 
 function RequireAuth({ children, modulo }) {
