@@ -7,6 +7,7 @@ import {
   importarTarefasLote, buscarLivroPorISBN
 } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { PERFIL_GRUPO } from '../context/AuthContext'
 import {
   Plus, X, Pencil, Trash2, CheckSquare, Square, MessageSquare,
   Calendar, Flag, User, ChevronDown, List, Columns, Clock,
@@ -32,7 +33,6 @@ const PRIORIDADE = [
   { value: 'baixa',   label: 'Baixa',   color: '#6b7280', icon: ChevronDown },
 ]
 
-// Mapeamento de valores da planilha (case-insensitive) para valores do banco
 const STATUS_MAP = {
   'a fazer': 'a_fazer', 'a_fazer': 'a_fazer',
   'em andamento': 'em_andamento', 'em_andamento': 'em_andamento',
@@ -231,13 +231,13 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
     responsavel_id:  tarefa.responsavel_id || '',
     data_prazo:      tarefa.data_prazo || '',
   } : EMPTY)
-  const [checklist, setChecklist]   = useState(tarefa?.tarefa_checklist || [])
+  const [checklist, setChecklist]     = useState(tarefa?.tarefa_checklist || [])
   const [comentarios, setComentarios] = useState(tarefa?.tarefa_comentarios || [])
   const [livrosVinculados, setLivrosVinculados] = useState(tarefa?.tarefa_livros || [])
-  const [novoItem, setNovoItem]     = useState('')
-  const [novoComent, setNovoComent] = useState('')
-  const [saving, setSaving]         = useState(false)
-  const [tab, setTab]               = useState('detalhes')
+  const [novoItem, setNovoItem]       = useState('')
+  const [novoComent, setNovoComent]   = useState('')
+  const [saving, setSaving]           = useState(false)
+  const [tab, setTab]                 = useState('detalhes')
   const checkInputRef = useRef()
 
   async function salvar() {
@@ -297,8 +297,8 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
         {tarefa && (
           <div style={{ display:'flex', gap:0, borderBottom:'1px solid var(--border)', marginBottom:16 }}>
             {[
-              { id:'detalhes',   label:'Detalhes' },
-              { id:'checklist',  label:`Checklist ${checkTotal > 0 ? `(${checkDone}/${checkTotal})` : ''}` },
+              { id:'detalhes',    label:'Detalhes' },
+              { id:'checklist',   label:`Checklist ${checkTotal > 0 ? `(${checkDone}/${checkTotal})` : ''}` },
               { id:'comentarios', label:`Comentários (${comentarios.length})` },
             ].map(t => (
               <button key={t.id} onClick={()=>setTab(t.id)} style={{
@@ -442,12 +442,7 @@ function ModalImportar({ usuarios, onClose, onImported }) {
 
   function baixarTemplate() {
     const wb = XLSX.utils.book_new()
-
-    const headers = [
-      'Título', 'Descrição', 'Responsável',
-      'Livros (ISBN, separados por vírgula)',
-      'Prazo (DD/MM/AAAA)', 'Prioridade', 'Status'
-    ]
+    const headers = ['Título', 'Descrição', 'Responsável', 'Livros (ISBN, separados por vírgula)', 'Prazo (DD/MM/AAAA)', 'Prioridade', 'Status']
     const exemplos = [
       ['Produzir 4 roteiros de Reels - semana 19', 'Foco em hooks de abertura. Entregar até quinta.', 'Sarah', '9788580330000, 9788580330001', '09/05/2026', 'Alta', 'A fazer'],
       ['Atualizar ficha técnica de 3 títulos', 'Corrigir peso e dimensões no Mercado Livre.', 'Fernanda', '9788580330002', '12/05/2026', 'Média', 'A fazer'],
@@ -458,13 +453,11 @@ function ModalImportar({ usuarios, onClose, onImported }) {
     XLSX.utils.book_append_sheet(wb, ws1, 'Tarefas')
 
     const instr = [
-      ['Como usar este template'],
-      [''],
+      ['Como usar este template'], [''],
       ['1. Apague as 3 linhas de exemplo da aba Tarefas antes de preencher com suas tarefas reais.'],
       ['2. Preencha uma linha por tarefa. Não deixe linhas em branco no meio.'],
       ['3. Salve em formato .xlsx (não .csv ou .xls).'],
-      ['4. Volte para o Orbita e faça o upload.'],
-      [''],
+      ['4. Volte para o Orbita e faça o upload.'], [''],
       ['Regras de cada campo:'],
       ['Título: obrigatório, máximo 200 caracteres.'],
       ['Descrição: opcional, briefing detalhado.'],
@@ -472,8 +465,7 @@ function ModalImportar({ usuarios, onClose, onImported }) {
       ['Livros: opcional. ISBN com 13 dígitos. Para múltiplos livros, separe por vírgula.'],
       ['Prazo: obrigatório. Formato DD/MM/AAAA.'],
       ['Prioridade: obrigatório. Aceita: Urgente, Alta, Média, Baixa.'],
-      ['Status: opcional. Padrão A fazer. Aceita: A fazer, Em andamento, Concluído.'],
-      [''],
+      ['Status: opcional. Padrão A fazer. Aceita: A fazer, Em andamento, Concluído.'], [''],
       ['Observações:'],
       ['- Linhas com erro são ignoradas. As válidas são importadas normalmente.'],
       ['- O sistema valida cada ISBN contra o catálogo antes de importar.'],
@@ -500,24 +492,14 @@ function ModalImportar({ usuarios, onClose, onImported }) {
 
   async function processarArquivo(file) {
     if (!file) return
-    if (!file.name.toLowerCase().endsWith('.xlsx')) {
-      alert('Apenas arquivos .xlsx são aceitos.')
-      return
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Arquivo maior que 5 MB.')
-      return
-    }
+    if (!file.name.toLowerCase().endsWith('.xlsx')) { alert('Apenas arquivos .xlsx são aceitos.'); return }
+    if (file.size > 5 * 1024 * 1024) { alert('Arquivo maior que 5 MB.'); return }
     setArquivo(file)
-
     try {
       const data = await file.arrayBuffer()
       const wb = XLSX.read(data, { type: 'array' })
       const ws = wb.Sheets['Tarefas'] || wb.Sheets[wb.SheetNames[0]]
-      if (!ws) {
-        alert('Aba "Tarefas" não encontrada na planilha.')
-        return
-      }
+      if (!ws) { alert('Aba "Tarefas" não encontrada na planilha.'); return }
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
       const dados = rows.slice(1).filter(r => r.some(c => String(c).trim() !== ''))
 
@@ -537,9 +519,7 @@ function ModalImportar({ usuarios, onClose, onImported }) {
           if (!u) {
             const sugestao = (usuarios || []).find(u => u.nome.toLowerCase().startsWith(responsavelNome.toLowerCase().slice(0, 3)))
             erros.push(`Responsável "${responsavelNome}" não encontrado${sugestao ? ` — talvez "${sugestao.nome}"?` : ''}`)
-          } else {
-            responsavel_id = u.id
-          }
+          } else { responsavel_id = u.id }
         }
 
         let data_prazo = null
@@ -551,9 +531,7 @@ function ModalImportar({ usuarios, onClose, onImported }) {
             data_prazo = `${m[3]}-${m[2]}-${m[1]}`
             const d = new Date(data_prazo + 'T12:00:00')
             if (isNaN(d)) erros.push(`Prazo inválido: "${prazoStr}"`)
-          } else {
-            erros.push(`Prazo deve estar em DD/MM/AAAA, recebido: "${prazoStr}"`)
-          }
+          } else { erros.push(`Prazo deve estar em DD/MM/AAAA, recebido: "${prazoStr}"`) }
         }
 
         let prioridade = 'media'
@@ -580,15 +558,7 @@ function ModalImportar({ usuarios, onClose, onImported }) {
           else erros.push(`ISBN "${isbn}" não encontrado no catálogo`)
         }
 
-        return {
-          linha,
-          titulo, descricao, responsavelNome,
-          responsavel_id, data_prazo, prioridade, status,
-          livro_ids,
-          isbns_originais: isbnsRaw,
-          erros,
-          valida: erros.length === 0,
-        }
+        return { linha, titulo, descricao, responsavelNome, responsavel_id, data_prazo, prioridade, status, livro_ids, isbns_originais: isbnsRaw, erros, valida: erros.length === 0 }
       }))
 
       setLinhas(linhasProcessadas)
@@ -602,36 +572,21 @@ function ModalImportar({ usuarios, onClose, onImported }) {
   async function confirmarImportacao() {
     setImportando(true)
     try {
+      const grupoUsuario = PERFIL_GRUPO[usuario?.perfil] || null
       const validas = linhas.filter(l => l.valida).map(l => ({
-        titulo: l.titulo,
-        descricao: l.descricao || null,
-        status: l.status,
-        prioridade: l.prioridade,
-        responsavel_id: l.responsavel_id,
-        data_prazo: l.data_prazo,
-        livro_ids: l.livro_ids,
+        titulo: l.titulo, descricao: l.descricao || null, status: l.status,
+        prioridade: l.prioridade, responsavel_id: l.responsavel_id,
+        data_prazo: l.data_prazo, livro_ids: l.livro_ids,
+        grupo: grupoUsuario,
       }))
-      const ignoradas = linhas.filter(l => !l.valida).map(l => ({
-        linha: l.linha,
-        titulo: l.titulo,
-        responsavel: l.responsavelNome,
-        erros: l.erros,
-      }))
-
-      const r = await importarTarefasLote({
-        tarefas: validas,
-        ignoradas,
-        filename: arquivo.name,
-        userId: usuario?.id,
-      })
+      const ignoradas = linhas.filter(l => !l.valida).map(l => ({ linha: l.linha, titulo: l.titulo, responsavel: l.responsavelNome, erros: l.erros }))
+      const r = await importarTarefasLote({ tarefas: validas, ignoradas, filename: arquivo.name, userId: usuario?.id })
       setResultado(r)
       setEtapa('sucesso')
     } catch (e) {
       console.error(e)
       alert('Erro ao importar: ' + (e?.message || 'desconhecido'))
-    } finally {
-      setImportando(false)
-    }
+    } finally { setImportando(false) }
   }
 
   function baixarRelatorioErros() {
@@ -639,9 +594,7 @@ function ModalImportar({ usuarios, onClose, onImported }) {
     if (ignoradas.length === 0) return
     const wb = XLSX.utils.book_new()
     const headers = ['Linha', 'Título', 'Responsável', 'Motivo do erro']
-    const dados = ignoradas.map(l => [
-      l.linha, l.titulo || '', l.responsavelNome || '', l.erros.join(' · ')
-    ])
+    const dados = ignoradas.map(l => [l.linha, l.titulo || '', l.responsavelNome || '', l.erros.join(' · ')])
     const ws = XLSX.utils.aoa_to_sheet([headers, ...dados])
     ws['!cols'] = [{ wch: 8 }, { wch: 40 }, { wch: 18 }, { wch: 60 }]
     XLSX.utils.book_append_sheet(wb, ws, 'Linhas com erro')
@@ -661,52 +614,21 @@ function ModalImportar({ usuarios, onClose, onImported }) {
 
         {etapa === 'upload' && (
           <div>
-            <p style={{ fontSize:13, color:'var(--text-soft)', marginBottom:16 }}>
-              Baixe o template, preencha com suas tarefas e faça o upload abaixo.
-            </p>
-
-            <button
-              onClick={baixarTemplate}
-              className="btn btn-ghost"
-              style={{ width:'100%', marginBottom:16, padding:'12px', justifyContent:'center', gap:8 }}
-            >
+            <p style={{ fontSize:13, color:'var(--text-soft)', marginBottom:16 }}>Baixe o template, preencha com suas tarefas e faça o upload abaixo.</p>
+            <button onClick={baixarTemplate} className="btn btn-ghost" style={{ width:'100%', marginBottom:16, padding:'12px', justifyContent:'center', gap:8 }}>
               <Download size={14}/> Baixar template .xlsx
             </button>
-
             <div
               onClick={()=>fileInputRef.current?.click()}
               onDragOver={e=>{ e.preventDefault(); e.currentTarget.style.borderColor = 'var(--accent)' }}
               onDragLeave={e=>{ e.currentTarget.style.borderColor = 'var(--border)' }}
-              onDrop={e=>{
-                e.preventDefault()
-                e.currentTarget.style.borderColor = 'var(--border)'
-                const file = e.dataTransfer.files?.[0]
-                if (file) processarArquivo(file)
-              }}
-              style={{
-                border:'2px dashed var(--border)', borderRadius:12, padding:'40px 20px',
-                textAlign:'center', cursor:'pointer', transition:'border 0.15s',
-                background:'var(--surface-2)'
-              }}
+              onDrop={e=>{ e.preventDefault(); e.currentTarget.style.borderColor = 'var(--border)'; const file = e.dataTransfer.files?.[0]; if (file) processarArquivo(file) }}
+              style={{ border:'2px dashed var(--border)', borderRadius:12, padding:'40px 20px', textAlign:'center', cursor:'pointer', transition:'border 0.15s', background:'var(--surface-2)' }}
             >
               <Upload size={32} style={{ color:'var(--text-muted)', marginBottom:8 }}/>
-              <div style={{ fontSize:13, color:'var(--text-soft)', marginBottom:4 }}>
-                Clique ou arraste o arquivo aqui
-              </div>
-              <div style={{ fontSize:11, color:'var(--text-muted)' }}>
-                Apenas .xlsx · máximo 5 MB
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx"
-                style={{ display:'none' }}
-                onChange={e=>{
-                  const file = e.target.files?.[0]
-                  if (file) processarArquivo(file)
-                  e.target.value = ''
-                }}
-              />
+              <div style={{ fontSize:13, color:'var(--text-soft)', marginBottom:4 }}>Clique ou arraste o arquivo aqui</div>
+              <div style={{ fontSize:11, color:'var(--text-muted)' }}>Apenas .xlsx · máximo 5 MB</div>
+              <input ref={fileInputRef} type="file" accept=".xlsx" style={{ display:'none' }} onChange={e=>{ const file = e.target.files?.[0]; if (file) processarArquivo(file); e.target.value = '' }}/>
             </div>
           </div>
         )}
@@ -714,20 +636,10 @@ function ModalImportar({ usuarios, onClose, onImported }) {
         {etapa === 'revisao' && (
           <div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:16 }}>
-              <div style={{ background:'var(--surface-2)', borderRadius:8, padding:'12px' }}>
-                <div style={{ fontSize:11, color:'var(--text-muted)' }}>Linhas detectadas</div>
-                <div style={{ fontSize:22, fontWeight:700 }}>{linhas.length}</div>
-              </div>
-              <div style={{ background:'rgba(34,197,94,0.1)', borderRadius:8, padding:'12px' }}>
-                <div style={{ fontSize:11, color:'var(--green)' }}>Válidas</div>
-                <div style={{ fontSize:22, fontWeight:700, color:'var(--green)' }}>{validas}</div>
-              </div>
-              <div style={{ background:'rgba(239,68,68,0.1)', borderRadius:8, padding:'12px' }}>
-                <div style={{ fontSize:11, color:'var(--red)' }}>Com erro</div>
-                <div style={{ fontSize:22, fontWeight:700, color:'var(--red)' }}>{comErro}</div>
-              </div>
+              <div style={{ background:'var(--surface-2)', borderRadius:8, padding:'12px' }}><div style={{ fontSize:11, color:'var(--text-muted)' }}>Linhas detectadas</div><div style={{ fontSize:22, fontWeight:700 }}>{linhas.length}</div></div>
+              <div style={{ background:'rgba(34,197,94,0.1)', borderRadius:8, padding:'12px' }}><div style={{ fontSize:11, color:'var(--green)' }}>Válidas</div><div style={{ fontSize:22, fontWeight:700, color:'var(--green)' }}>{validas}</div></div>
+              <div style={{ background:'rgba(239,68,68,0.1)', borderRadius:8, padding:'12px' }}><div style={{ fontSize:11, color:'var(--red)' }}>Com erro</div><div style={{ fontSize:22, fontWeight:700, color:'var(--red)' }}>{comErro}</div></div>
             </div>
-
             <div style={{ border:'1px solid var(--border)', borderRadius:8, overflow:'hidden', marginBottom:16, maxHeight:300, overflowY:'auto' }}>
               <table style={{ width:'100%', fontSize:11, borderCollapse:'collapse' }}>
                 <thead style={{ background:'var(--surface-2)', position:'sticky', top:0 }}>
@@ -741,34 +653,22 @@ function ModalImportar({ usuarios, onClose, onImported }) {
                   {linhas.map(l => (
                     <tr key={l.linha} style={{ background: l.valida ? 'transparent' : 'rgba(239,68,68,0.06)', borderTop:'1px solid var(--border)' }}>
                       <td style={{ padding:'8px 10px', color:'var(--text-muted)' }}>{l.linha}</td>
-                      <td style={{ padding:'8px 10px', color: l.valida ? 'var(--text)' : 'var(--red)' }}>
-                        {l.titulo || <span style={{ fontStyle:'italic', opacity:0.6 }}>(sem título)</span>}
-                      </td>
-                      <td style={{ padding:'8px 10px', color: l.valida ? 'var(--green)' : 'var(--red)' }}>
-                        {l.valida ? '✓ Pronta' : l.erros.join(' · ')}
-                      </td>
+                      <td style={{ padding:'8px 10px', color: l.valida ? 'var(--text)' : 'var(--red)' }}>{l.titulo || <span style={{ fontStyle:'italic', opacity:0.6 }}>(sem título)</span>}</td>
+                      <td style={{ padding:'8px 10px', color: l.valida ? 'var(--green)' : 'var(--red)' }}>{l.valida ? '✓ Pronta' : l.erros.join(' · ')}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-
             {comErro > 0 && (
               <div style={{ background:'rgba(234,179,8,0.1)', border:'1px solid rgba(234,179,8,0.3)', borderRadius:8, padding:'10px 12px', marginBottom:12, fontSize:12, color:'var(--amber)' }}>
                 {comErro} linha{comErro!==1?'s':''} com erro será{comErro!==1?'ão':''} ignorada{comErro!==1?'s':''}.
                 Você pode <button onClick={baixarRelatorioErros} style={{ background:'none', border:'none', color:'var(--amber)', textDecoration:'underline', cursor:'pointer', padding:0, fontSize:12, fontWeight:700 }}>baixar o relatório de erros</button> para corrigir e re-importar depois.
               </div>
             )}
-
             <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
-              <button className="btn btn-ghost" onClick={()=>{ setEtapa('upload'); setLinhas([]); setArquivo(null) }}>
-                Voltar
-              </button>
-              <button
-                className="btn btn-primary"
-                onClick={confirmarImportacao}
-                disabled={importando || validas === 0}
-              >
+              <button className="btn btn-ghost" onClick={()=>{ setEtapa('upload'); setLinhas([]); setArquivo(null) }}>Voltar</button>
+              <button className="btn btn-primary" onClick={confirmarImportacao} disabled={importando || validas === 0}>
                 {importando ? 'Importando...' : `Importar ${validas} válida${validas!==1?'s':''}${comErro > 0 ? ` · ${comErro} ignorada${comErro!==1?'s':''}` : ''}`}
               </button>
             </div>
@@ -779,22 +679,10 @@ function ModalImportar({ usuarios, onClose, onImported }) {
           <div style={{ textAlign:'center', padding:'20px 0' }}>
             <CheckCircle2 size={48} color="var(--green)" style={{ marginBottom:12 }}/>
             <h3 style={{ fontSize:16, fontWeight:700, marginBottom:8 }}>Importação concluída!</h3>
-            <p style={{ fontSize:13, color:'var(--text-soft)', marginBottom:6 }}>
-              {resultado.criadas} tarefa{resultado.criadas!==1?'s':''} criada{resultado.criadas!==1?'s':''} com sucesso.
-            </p>
-            {resultado.livrosVinculados > 0 && (
-              <p style={{ fontSize:12, color:'var(--text-muted)', marginBottom:6 }}>
-                {resultado.livrosVinculados} vínculo{resultado.livrosVinculados!==1?'s':''} de livro criado{resultado.livrosVinculados!==1?'s':''}.
-              </p>
-            )}
-            {resultado.ignoradas > 0 && (
-              <p style={{ fontSize:12, color:'var(--text-muted)', marginBottom:16 }}>
-                {resultado.ignoradas} linha{resultado.ignoradas!==1?'s':''} com erro foi/foram ignorada{resultado.ignoradas!==1?'s':''}.
-              </p>
-            )}
-            <button className="btn btn-primary" onClick={()=>{ onImported(); onClose() }} style={{ marginTop:8 }}>
-              Ver tarefas
-            </button>
+            <p style={{ fontSize:13, color:'var(--text-soft)', marginBottom:6 }}>{resultado.criadas} tarefa{resultado.criadas!==1?'s':''} criada{resultado.criadas!==1?'s':''} com sucesso.</p>
+            {resultado.livrosVinculados > 0 && <p style={{ fontSize:12, color:'var(--text-muted)', marginBottom:6 }}>{resultado.livrosVinculados} vínculo{resultado.livrosVinculados!==1?'s':''} de livro criado{resultado.livrosVinculados!==1?'s':''}.</p>}
+            {resultado.ignoradas > 0 && <p style={{ fontSize:12, color:'var(--text-muted)', marginBottom:16 }}>{resultado.ignoradas} linha{resultado.ignoradas!==1?'s':''} com erro foi/foram ignorada{resultado.ignoradas!==1?'s':''}.</p>}
+            <button className="btn btn-primary" onClick={()=>{ onImported(); onClose() }} style={{ marginTop:8 }}>Ver tarefas</button>
           </div>
         )}
       </div>
@@ -831,21 +719,9 @@ function CardKanban({ tarefa, onClick, onDragStart, onDragEnd, isDragging }) {
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:6, flexWrap:'wrap' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           <PrioridadeBadge value={tarefa.prioridade}/>
-          {checkTotal > 0 && (
-            <span style={{ fontSize:11, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:3 }}>
-              <CheckSquare size={11}/> {checkDone}/{checkTotal}
-            </span>
-          )}
-          {(tarefa.tarefa_comentarios?.length||0) > 0 && (
-            <span style={{ fontSize:11, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:3 }}>
-              <MessageSquare size={11}/> {tarefa.tarefa_comentarios.length}
-            </span>
-          )}
-          {livrosCount > 0 && (
-            <span style={{ fontSize:11, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:3 }}>
-              <Book size={11}/> {livrosCount}
-            </span>
-          )}
+          {checkTotal > 0 && <span style={{ fontSize:11, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:3 }}><CheckSquare size={11}/> {checkDone}/{checkTotal}</span>}
+          {(tarefa.tarefa_comentarios?.length||0) > 0 && <span style={{ fontSize:11, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:3 }}><MessageSquare size={11}/> {tarefa.tarefa_comentarios.length}</span>}
+          {livrosCount > 0 && <span style={{ fontSize:11, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:3 }}><Book size={11}/> {livrosCount}</span>}
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           <PrazoBadge data_prazo={tarefa.data_prazo} status={tarefa.status}/>
@@ -856,9 +732,7 @@ function CardKanban({ tarefa, onClick, onDragStart, onDragEnd, isDragging }) {
           <div style={{ width:18, height:18, borderRadius:'50%', background:'var(--accent-glow)', border:'1px solid var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, fontWeight:700, color:'var(--accent)', flexShrink:0 }}>
             {tarefa.responsavel.nome[0].toUpperCase()}
           </div>
-          <span style={{ fontSize:11, color:'var(--text-muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-            {tarefa.responsavel.nome}
-          </span>
+          <span style={{ fontSize:11, color:'var(--text-muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{tarefa.responsavel.nome}</span>
         </div>
       )}
     </div>
@@ -866,12 +740,7 @@ function CardKanban({ tarefa, onClick, onDragStart, onDragEnd, isDragging }) {
 }
 
 function menuItemStyle() {
-  return {
-    width:'100%', padding:'8px 12px', textAlign:'left',
-    background:'transparent', border:'none', cursor:'pointer',
-    display:'flex', alignItems:'center', gap:10, fontSize:13,
-    color:'var(--text)', borderRadius:6, transition:'background 0.1s'
-  }
+  return { width:'100%', padding:'8px 12px', textAlign:'left', background:'transparent', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:10, fontSize:13, color:'var(--text)', borderRadius:6, transition:'background 0.1s' }
 }
 
 // ── PÁGINA PRINCIPAL ───────────────────────────────────────
@@ -884,15 +753,15 @@ export default function Tarefas() {
   const [showImportar, setShowImportar] = useState(false)
   const [showMenuNova, setShowMenuNova] = useState(false)
   const [view, setView]             = useState('kanban')
-  const [filtroStatus, setFiltroStatus]       = useState('todos')
+  const [filtroStatus, setFiltroStatus]         = useState('todos')
   const [filtroPrioridade, setFiltroPrioridade] = useState('todas')
   const [filtroResponsavel, setFiltroResponsavel] = useState('todos')
   const [toast, showToast]          = useToast()
-  const [dragId, setDragId]           = useState(null)
+  const [dragId, setDragId]         = useState(null)
   const [dragOverCol, setDragOverCol] = useState(null)
-  const [sortCol, setSortCol]         = useState('data_prazo')
-  const [sortDir, setSortDir]         = useState('asc')
-  const [abaView, setAbaView]         = useState('ativas')
+  const [sortCol, setSortCol]       = useState('data_prazo')
+  const [sortDir, setSortDir]       = useState('asc')
+  const [abaView, setAbaView]       = useState('ativas')
   const menuRef = useRef()
 
   function toggleSort(col) {
@@ -904,19 +773,19 @@ export default function Tarefas() {
     setLoading(true)
     try {
       const [t, us] = await Promise.all([getTarefas(), getUsuarios()])
-      setTarefas(t)
+      // Filtra tarefas pelo grupo do usuário (admin/gerente veem tudo)
+      const grupoUsuario = PERFIL_GRUPO[usuario?.perfil]
+      setTarefas(grupoUsuario ? t.filter(tarefa => tarefa.grupo === grupoUsuario || !tarefa.grupo) : t)
       setUsuarios(us || [])
     } catch(e) { console.error(e) }
     finally { setLoading(false) }
   }
 
-  useEffect(() => { carregar() }, [])
+  useEffect(() => { carregar() }, []) // eslint-disable-line
 
   useEffect(() => {
     function handleClick(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        setShowMenuNova(false)
-      }
+      if (menuRef.current && !menuRef.current.contains(e.target)) setShowMenuNova(false)
     }
     if (showMenuNova) document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
@@ -926,16 +795,14 @@ export default function Tarefas() {
     if (id) {
       const upd = await updateTarefa(id, form)
       setTarefas(prev => prev.map(t => t.id === upd.id ? upd : t))
-      // Se concluída, muda para aba de concluídas automaticamente
-      if (upd.status === 'concluido' && abaView === 'ativas') {
-        showToast('Tarefa concluída! 🎉')
-      } else if (upd.status !== 'concluido' && abaView === 'concluidas') {
-        showToast('Tarefa reativada!')
-      } else {
-        showToast('Tarefa atualizada!')
-      }
+      if (upd.status === 'concluido' && abaView === 'ativas') showToast('Tarefa concluída! 🎉')
+      else if (upd.status !== 'concluido' && abaView === 'concluidas') showToast('Tarefa reativada!')
+      else showToast('Tarefa atualizada!')
     } else {
-      const nova = await createTarefa(form)
+      const nova = await createTarefa({
+        ...form,
+        grupo: PERFIL_GRUPO[usuario?.perfil] || null,
+      })
       setTarefas(prev => [nova, ...prev])
       showToast('Tarefa criada!')
     }
@@ -966,7 +833,6 @@ export default function Tarefas() {
     }
   }
 
-  // Separa ativas (a_fazer + em_andamento) de concluídas
   const tarefasAtivas     = tarefas.filter(t => t.status !== 'concluido')
   const tarefasConcluidas = tarefas.filter(t => t.status === 'concluido')
   const listaBase = abaView === 'ativas' ? tarefasAtivas : tarefasConcluidas
@@ -981,24 +847,16 @@ export default function Tarefas() {
     return true
   })
 
-  // Ordenação da view Lista
   const PRIORIDADE_ORDER = { urgente: 0, alta: 1, media: 2, baixa: 3 }
   const STATUS_ORDER     = { a_fazer: 0, em_andamento: 1, concluido: 2 }
   const tarefasOrdenadas = [...tarefasFiltradas].sort((a, b) => {
     let va, vb
-    if (sortCol === 'titulo') {
-      va = (a.titulo || '').toLowerCase(); vb = (b.titulo || '').toLowerCase()
-    } else if (sortCol === 'status') {
-      va = STATUS_ORDER[a.status] ?? 99; vb = STATUS_ORDER[b.status] ?? 99
-    } else if (sortCol === 'prioridade') {
-      va = PRIORIDADE_ORDER[a.prioridade] ?? 99; vb = PRIORIDADE_ORDER[b.prioridade] ?? 99
-    } else if (sortCol === 'responsavel') {
-      va = (a.responsavel?.nome || '').toLowerCase(); vb = (b.responsavel?.nome || '').toLowerCase()
-    } else if (sortCol === 'data_prazo') {
-      va = a.data_prazo || '9999'; vb = b.data_prazo || '9999'
-    } else {
-      va = ''; vb = ''
-    }
+    if (sortCol === 'titulo') { va = (a.titulo || '').toLowerCase(); vb = (b.titulo || '').toLowerCase() }
+    else if (sortCol === 'status') { va = STATUS_ORDER[a.status] ?? 99; vb = STATUS_ORDER[b.status] ?? 99 }
+    else if (sortCol === 'prioridade') { va = PRIORIDADE_ORDER[a.prioridade] ?? 99; vb = PRIORIDADE_ORDER[b.prioridade] ?? 99 }
+    else if (sortCol === 'responsavel') { va = (a.responsavel?.nome || '').toLowerCase(); vb = (b.responsavel?.nome || '').toLowerCase() }
+    else if (sortCol === 'data_prazo') { va = a.data_prazo || '9999'; vb = b.data_prazo || '9999' }
+    else { va = ''; vb = '' }
     if (va < vb) return sortDir === 'asc' ? -1 : 1
     if (va > vb) return sortDir === 'asc' ?  1 : -1
     return 0
@@ -1010,7 +868,6 @@ export default function Tarefas() {
   }, {})
 
   const totalAtrasadas = tarefasAtivas.filter(t => t.data_prazo && t.status !== 'concluido' && isPast(new Date(t.data_prazo + 'T12:00:00')) && !isToday(new Date(t.data_prazo + 'T12:00:00'))).length
-
   const algumaTemLivros = tarefasFiltradas.some(t => (t.tarefa_livros?.length || 0) > 0)
 
   if (loading) return <div className="loading"><div className="spinner"/></div>
@@ -1031,59 +888,31 @@ export default function Tarefas() {
         </div>
         <div style={{ display:'flex', gap:8 }}>
           <div style={{ display:'flex', background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, overflow:'hidden' }}>
-            <button onClick={()=>setView('kanban')} style={{ padding:'7px 12px', border:'none', cursor:'pointer', background: view==='kanban' ? 'var(--accent)' : 'transparent', color: view==='kanban' ? '#fff' : 'var(--text-muted)', transition:'all 0.15s', display:'flex', alignItems:'center', gap:5, fontSize:12 }}>
-              <Columns size={13}/> Kanban
-            </button>
-            <button onClick={()=>setView('lista')} style={{ padding:'7px 12px', border:'none', cursor:'pointer', background: view==='lista' ? 'var(--accent)' : 'transparent', color: view==='lista' ? '#fff' : 'var(--text-muted)', transition:'all 0.15s', display:'flex', alignItems:'center', gap:5, fontSize:12 }}>
-              <List size={13}/> Lista
-            </button>
-            <button onClick={()=>setView('calendario')} style={{ padding:'7px 12px', border:'none', cursor:'pointer', background: view==='calendario' ? 'var(--accent)' : 'transparent', color: view==='calendario' ? '#fff' : 'var(--text-muted)', transition:'all 0.15s', display:'flex', alignItems:'center', gap:5, fontSize:12 }}>
-              <CalendarDays size={13}/> Calendário
-            </button>
-            <button onClick={()=>setView('equipe')} style={{ padding:'7px 12px', border:'none', cursor:'pointer', background: view==='equipe' ? 'var(--accent)' : 'transparent', color: view==='equipe' ? '#fff' : 'var(--text-muted)', transition:'all 0.15s', display:'flex', alignItems:'center', gap:5, fontSize:12 }}>
-              <Users size={13}/> Equipe
-            </button>
+            {[
+              { k:'kanban',    label:'Kanban',    icon: Columns },
+              { k:'lista',     label:'Lista',     icon: List },
+              { k:'calendario',label:'Calendário',icon: CalendarDays },
+              { k:'equipe',    label:'Equipe',    icon: Users },
+            ].map(({ k, label, icon: Icon }) => (
+              <button key={k} onClick={()=>setView(k)} style={{ padding:'7px 12px', border:'none', cursor:'pointer', background: view===k ? 'var(--accent)' : 'transparent', color: view===k ? '#fff' : 'var(--text-muted)', transition:'all 0.15s', display:'flex', alignItems:'center', gap:5, fontSize:12 }}>
+                <Icon size={13}/> {label}
+              </button>
+            ))}
           </div>
 
-          {/* Split button: Nova tarefa + dropdown */}
           <div ref={menuRef} style={{ position:'relative', display:'flex' }}>
-            <button
-              className="btn btn-primary"
-              onClick={()=>setModal('new')}
-              style={{ borderTopRightRadius:0, borderBottomRightRadius:0, borderRight:'1px solid rgba(255,255,255,0.2)' }}
-            >
+            <button className="btn btn-primary" onClick={()=>setModal('new')} style={{ borderTopRightRadius:0, borderBottomRightRadius:0, borderRight:'1px solid rgba(255,255,255,0.2)' }}>
               <Plus size={14}/> Nova tarefa
             </button>
-            <button
-              className="btn btn-primary"
-              onClick={()=>setShowMenuNova(s=>!s)}
-              style={{ borderTopLeftRadius:0, borderBottomLeftRadius:0, padding:'0 8px' }}
-              aria-label="Mais opções"
-            >
+            <button className="btn btn-primary" onClick={()=>setShowMenuNova(s=>!s)} style={{ borderTopLeftRadius:0, borderBottomLeftRadius:0, padding:'0 8px' }} aria-label="Mais opções">
               {showMenuNova ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
             </button>
-
             {showMenuNova && (
-              <div style={{
-                position:'absolute', top:'calc(100% + 4px)', right:0,
-                background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8,
-                boxShadow:'0 4px 16px rgba(0,0,0,0.2)', zIndex:20,
-                minWidth:220, padding:6
-              }}>
-                <button
-                  onClick={()=>{ setShowMenuNova(false); setModal('new') }}
-                  style={menuItemStyle()}
-                  onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'}
-                  onMouseLeave={e=>e.currentTarget.style.background='transparent'}
-                >
+              <div style={{ position:'absolute', top:'calc(100% + 4px)', right:0, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, boxShadow:'0 4px 16px rgba(0,0,0,0.2)', zIndex:20, minWidth:220, padding:6 }}>
+                <button onClick={()=>{ setShowMenuNova(false); setModal('new') }} style={menuItemStyle()} onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                   <Plus size={13}/> Criar manualmente
                 </button>
-                <button
-                  onClick={()=>{ setShowMenuNova(false); setShowImportar(true) }}
-                  style={menuItemStyle()}
-                  onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'}
-                  onMouseLeave={e=>e.currentTarget.style.background='transparent'}
-                >
+                <button onClick={()=>{ setShowMenuNova(false); setShowImportar(true) }} style={menuItemStyle()} onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                   <FileSpreadsheet size={13}/> Importar planilha
                 </button>
               </div>
@@ -1099,12 +928,7 @@ export default function Tarefas() {
           { k:'concluidas', l:`Concluídas (${tarefasConcluidas.length})` },
         ].map(({k,l}) => (
           <button key={k} onClick={()=>{ setAbaView(k); setFiltroStatus('todos'); setFiltroPrioridade('todas'); setFiltroResponsavel('todos') }}
-            style={{
-              padding:'9px 18px', fontSize:13, fontWeight: abaView===k ? 700 : 400,
-              cursor:'pointer', background:'none', border:'none',
-              borderBottom: abaView===k ? '2px solid var(--accent)' : '2px solid transparent',
-              color: abaView===k ? 'var(--accent)' : 'var(--text-muted)',
-            }}>
+            style={{ padding:'9px 18px', fontSize:13, fontWeight: abaView===k ? 700 : 400, cursor:'pointer', background:'none', border:'none', borderBottom: abaView===k ? '2px solid var(--accent)' : '2px solid transparent', color: abaView===k ? 'var(--accent)' : 'var(--text-muted)' }}>
             {l}
           </button>
         ))}
@@ -1112,21 +936,15 @@ export default function Tarefas() {
 
       {/* Filtros */}
       <div style={{ display:'flex', gap:10, marginBottom:20, flexWrap:'wrap' }}>
-        <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 10px' }}
-          value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
+        <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 10px' }} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
           <option value="todos">Todos os status</option>
-          {(abaView === 'ativas'
-            ? STATUS.filter(s => s.value !== 'concluido')
-            : STATUS.filter(s => s.value === 'concluido')
-          ).map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
+          {(abaView === 'ativas' ? STATUS.filter(s => s.value !== 'concluido') : STATUS.filter(s => s.value === 'concluido')).map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
-        <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 10px' }}
-          value={filtroPrioridade} onChange={e=>setFiltroPrioridade(e.target.value)}>
+        <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 10px' }} value={filtroPrioridade} onChange={e=>setFiltroPrioridade(e.target.value)}>
           <option value="todas">Todas as prioridades</option>
           {PRIORIDADE.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}
         </select>
-        <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 10px' }}
-          value={filtroResponsavel} onChange={e=>setFiltroResponsavel(e.target.value)}>
+        <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 10px' }} value={filtroResponsavel} onChange={e=>setFiltroResponsavel(e.target.value)}>
           <option value="todos">Todos os responsáveis</option>
           <option value="minha">Minhas tarefas</option>
           {usuarios.map(u=><option key={u.id} value={u.id}>{u.nome}</option>)}
@@ -1151,12 +969,7 @@ export default function Tarefas() {
                 onDragOver={e=>{ e.preventDefault(); setDragOverCol(s.value) }}
                 onDragLeave={e=>{ if(!e.currentTarget.contains(e.relatedTarget)) setDragOverCol(null) }}
                 onDrop={e=>{ e.preventDefault(); handleDragDrop(s.value) }}
-                style={{
-                  background: isOver ? 'var(--surface-3)' : 'var(--surface-2)',
-                  borderRadius:12, overflow:'hidden',
-                  border: isOver ? `2px solid ${corCol}` : '1px solid var(--border)',
-                  transition:'border 0.15s, background 0.15s',
-                }}>
+                style={{ background: isOver ? 'var(--surface-3)' : 'var(--surface-2)', borderRadius:12, overflow:'hidden', border: isOver ? `2px solid ${corCol}` : '1px solid var(--border)', transition:'border 0.15s, background 0.15s' }}>
                 <div style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                   <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                     <Icon size={14} color={corCol}/>
@@ -1170,24 +983,13 @@ export default function Tarefas() {
                         {isOver ? '↓ Soltar aqui' : 'Nenhuma tarefa'}
                       </div>
                     : lista.map(t => (
-                        <CardKanban key={t.id} tarefa={t}
-                          onClick={()=>setModal(t)}
-                          onDragStart={()=>setDragId(t.id)}
-                          onDragEnd={()=>{ setDragId(null); setDragOverCol(null) }}
-                          isDragging={dragId===t.id}/>
+                        <CardKanban key={t.id} tarefa={t} onClick={()=>setModal(t)} onDragStart={()=>setDragId(t.id)} onDragEnd={()=>{ setDragId(null); setDragOverCol(null) }} isDragging={dragId===t.id}/>
                       ))
                   }
-                  {isOver && lista.length > 0 && (
-                    <div style={{ height:4, borderRadius:99, background:corCol, opacity:0.4, margin:'4px 0' }}/>
-                  )}
-                  <button onClick={()=>setModal('new')} style={{
-                    width:'100%', padding:'8px', border:'1px dashed var(--border)', borderRadius:8,
-                    background:'transparent', cursor:'pointer', fontSize:12, color:'var(--text-muted)',
-                    display:'flex', alignItems:'center', justifyContent:'center', gap:4, marginTop:4,
-                    transition:'all 0.15s'
-                  }}
-                  onMouseEnter={e=>{ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.color='var(--accent)' }}
-                  onMouseLeave={e=>{ e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.color='var(--text-muted)' }}>
+                  {isOver && lista.length > 0 && <div style={{ height:4, borderRadius:99, background:corCol, opacity:0.4, margin:'4px 0' }}/>}
+                  <button onClick={()=>setModal('new')} style={{ width:'100%', padding:'8px', border:'1px dashed var(--border)', borderRadius:8, background:'transparent', cursor:'pointer', fontSize:12, color:'var(--text-muted)', display:'flex', alignItems:'center', justifyContent:'center', gap:4, marginTop:4, transition:'all 0.15s' }}
+                    onMouseEnter={e=>{ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.color='var(--accent)' }}
+                    onMouseLeave={e=>{ e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.color='var(--text-muted)' }}>
                     <Plus size={12}/> Adicionar
                   </button>
                 </div>
@@ -1213,22 +1015,12 @@ export default function Tarefas() {
                       { col:'data_prazo',  label:'Prazo' },
                     ].map(({col, label}) => (
                       <th key={col} onClick={()=>toggleSort(col)}
-                        style={{
-                          cursor:'pointer', userSelect:'none', whiteSpace:'nowrap',
-                          color: sortCol === col ? 'var(--accent)' : 'var(--text-muted)',
-                          fontWeight: sortCol === col ? 700 : 600,
-                          transition:'color 0.15s',
-                        }}
+                        style={{ cursor:'pointer', userSelect:'none', whiteSpace:'nowrap', color: sortCol === col ? 'var(--accent)' : 'var(--text-muted)', fontWeight: sortCol === col ? 700 : 600, transition:'color 0.15s' }}
                         onMouseEnter={e=>e.currentTarget.style.color='var(--accent)'}
                         onMouseLeave={e=>e.currentTarget.style.color=sortCol===col?'var(--accent)':'var(--text-muted)'}>
                         <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}>
                           {label}
-                          {sortCol === col
-                            ? sortDir === 'asc'
-                              ? <ChevronUp size={12}/>
-                              : <ChevronDown size={12}/>
-                            : <ChevronUp size={12} style={{ opacity:0.2 }}/>
-                          }
+                          {sortCol === col ? sortDir === 'asc' ? <ChevronUp size={12}/> : <ChevronDown size={12}/> : <ChevronUp size={12} style={{ opacity:0.2 }}/>}
                         </span>
                       </th>
                     ))}
@@ -1254,11 +1046,7 @@ export default function Tarefas() {
                         <td><PrazoBadge data_prazo={t.data_prazo} status={t.status}/></td>
                         {algumaTemLivros && (
                           <td style={{ fontSize:12, color:'var(--text-muted)' }}>
-                            {livrosCount > 0 ? (
-                              <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}>
-                                <Book size={11}/> {livrosCount}
-                              </span>
-                            ) : '—'}
+                            {livrosCount > 0 ? <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}><Book size={11}/> {livrosCount}</span> : '—'}
                           </td>
                         )}
                         <td style={{ minWidth:80 }}>
@@ -1273,9 +1061,7 @@ export default function Tarefas() {
                         </td>
                         <td onClick={e=>e.stopPropagation()}>
                           <div className="actions-cell">
-                            <select className="form-select" style={{ padding:'4px 8px', fontSize:11, width:'auto' }}
-                              value={t.status}
-                              onChange={e=>handleStatusChange(t, e.target.value)}>
+                            <select className="form-select" style={{ padding:'4px 8px', fontSize:11, width:'auto' }} value={t.status} onChange={e=>handleStatusChange(t, e.target.value)}>
                               {STATUS.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
                             </select>
                             <button className="btn btn-danger btn-icon btn-sm" onClick={()=>handleDelete(t.id)}><Trash2 size={12}/></button>
@@ -1292,41 +1078,20 @@ export default function Tarefas() {
 
       {/* CALENDÁRIO */}
       {view === 'calendario' && (
-        <ViewCalendario
-          tarefas={tarefasFiltradas}
-          onClickTarefa={t=>setModal(t)}
-          onNovaTarefa={(data)=>setModal({ _dataPrazo: data })}
-        />
+        <ViewCalendario tarefas={tarefasFiltradas} onClickTarefa={t=>setModal(t)} onNovaTarefa={(data)=>setModal({ _dataPrazo: data })}/>
       )}
 
       {/* EQUIPE */}
       {view === 'equipe' && (
-        <ViewEquipe
-          tarefas={tarefas}
-          usuarios={usuarios}
-          usuario={usuario}
-          onOpen={t => setModal(t)}
-        />
+        <ViewEquipe tarefas={tarefas} usuarios={usuarios} usuario={usuario} onOpen={t => setModal(t)}/>
       )}
 
-      {/* Modal de tarefa */}
       {modal && (
-        <ModalTarefa
-          tarefa={modal === 'new' ? null : modal}
-          usuarios={usuarios}
-          onSave={handleSave}
-          onDelete={handleDelete}
-          onClose={()=>{ setModal(null); carregar() }}
-        />
+        <ModalTarefa tarefa={modal === 'new' ? null : modal} usuarios={usuarios} onSave={handleSave} onDelete={handleDelete} onClose={()=>{ setModal(null); carregar() }}/>
       )}
 
-      {/* Modal de importação */}
       {showImportar && (
-        <ModalImportar
-          usuarios={usuarios}
-          onClose={()=>setShowImportar(false)}
-          onImported={()=>{ carregar(); showToast('Tarefas importadas!') }}
-        />
+        <ModalImportar usuarios={usuarios} onClose={()=>setShowImportar(false)} onImported={()=>{ carregar(); showToast('Tarefas importadas!') }}/>
       )}
 
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
@@ -1366,37 +1131,20 @@ function ViewCalendario({ tarefas, onClickTarefa, onNovaTarefa }) {
   return (
     <div>
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
-        <button onClick={()=>setMesRef(new Date(ano, mes-1, 1))}
-          style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'6px 10px', cursor:'pointer', display:'flex', alignItems:'center', color:'var(--text-soft)' }}>
-          <ChevronLeft size={16}/>
-        </button>
+        <button onClick={()=>setMesRef(new Date(ano, mes-1, 1))} style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'6px 10px', cursor:'pointer', display:'flex', alignItems:'center', color:'var(--text-soft)' }}><ChevronLeft size={16}/></button>
         <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-          <h2 style={{ fontFamily:'Syne, sans-serif', fontWeight:700, fontSize:17, color:'var(--text)', margin:0, textTransform:'capitalize' }}>
-            {nomeMes}
-          </h2>
-          <button onClick={()=>setMesRef(new Date(hoje.getFullYear(), hoje.getMonth(), 1))}
-            style={{ fontSize:11, padding:'3px 10px', borderRadius:20, background:'var(--surface-2)', border:'1px solid var(--border)', cursor:'pointer', color:'var(--text-muted)', fontWeight:700 }}>
-            Hoje
-          </button>
+          <h2 style={{ fontFamily:'Syne, sans-serif', fontWeight:700, fontSize:17, color:'var(--text)', margin:0, textTransform:'capitalize' }}>{nomeMes}</h2>
+          <button onClick={()=>setMesRef(new Date(hoje.getFullYear(), hoje.getMonth(), 1))} style={{ fontSize:11, padding:'3px 10px', borderRadius:20, background:'var(--surface-2)', border:'1px solid var(--border)', cursor:'pointer', color:'var(--text-muted)', fontWeight:700 }}>Hoje</button>
         </div>
-        <button onClick={()=>setMesRef(new Date(ano, mes+1, 1))}
-          style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'6px 10px', cursor:'pointer', display:'flex', alignItems:'center', color:'var(--text-soft)' }}>
-          <ChevronRight size={16}/>
-        </button>
+        <button onClick={()=>setMesRef(new Date(ano, mes+1, 1))} style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'6px 10px', cursor:'pointer', display:'flex', alignItems:'center', color:'var(--text-soft)' }}><ChevronRight size={16}/></button>
       </div>
 
       <div style={{ border:'1px solid var(--border)', borderRadius:12, overflow:'hidden' }}>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', background:'var(--surface-2)', borderBottom:'1px solid var(--border)' }}>
-          {diasSemana.map(d=>(
-            <div key={d} style={{ padding:'10px 0', textAlign:'center', fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>{d}</div>
-          ))}
+          {diasSemana.map(d=><div key={d} style={{ padding:'10px 0', textAlign:'center', fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>{d}</div>)}
         </div>
-
         <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)' }}>
-          {Array.from({length: primeiroDia}).map((_,i)=>(
-            <div key={`v${i}`} style={{ minHeight:110, background:'var(--surface)', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)', opacity:0.4 }}/>
-          ))}
-
+          {Array.from({length: primeiroDia}).map((_,i)=><div key={`v${i}`} style={{ minHeight:110, background:'var(--surface)', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)', opacity:0.4 }}/>)}
           {Array.from({length: diasNoMes}).map((_,i)=>{
             const dia = i + 1
             const dataKey = `${ano}-${String(mes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`
@@ -1404,82 +1152,40 @@ function ViewCalendario({ tarefas, onClickTarefa, onNovaTarefa }) {
             const isHoje = hoje.getDate()===dia && hoje.getMonth()===mes && hoje.getFullYear()===ano
             const col = (primeiroDia + i) % 7
             const isFimSemana = col === 0 || col === 6
-
             return (
-              <div key={dia}
-                onClick={()=>onNovaTarefa(dataKey)}
-                style={{
-                  minHeight:110, padding:'6px', cursor:'pointer',
-                  background: isFimSemana ? 'var(--surface-2)' : 'var(--surface)',
-                  borderRight:'1px solid var(--border)',
-                  borderBottom:'1px solid var(--border)',
-                  transition:'background 0.1s',
-                }}
+              <div key={dia} onClick={()=>onNovaTarefa(dataKey)}
+                style={{ minHeight:110, padding:'6px', cursor:'pointer', background: isFimSemana ? 'var(--surface-2)' : 'var(--surface)', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)', transition:'background 0.1s' }}
                 onMouseEnter={e=>e.currentTarget.style.background='var(--surface-3)'}
                 onMouseLeave={e=>e.currentTarget.style.background=isFimSemana?'var(--surface-2)':'var(--surface)'}>
-
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
-                  <span style={{
-                    width:24, height:24, display:'flex', alignItems:'center', justifyContent:'center',
-                    borderRadius:'50%', fontSize:12, fontWeight: isHoje ? 700 : 400,
-                    background: isHoje ? 'var(--accent)' : 'transparent',
-                    color: isHoje ? '#fff' : isFimSemana ? 'var(--text-muted)' : 'var(--text-soft)',
-                  }}>{dia}</span>
-                  {tarefasDia.length > 0 && (
-                    <span style={{ fontSize:10, color:'var(--text-muted)', fontWeight:700 }}>{tarefasDia.length}</span>
-                  )}
+                  <span style={{ width:24, height:24, display:'flex', alignItems:'center', justifyContent:'center', borderRadius:'50%', fontSize:12, fontWeight: isHoje ? 700 : 400, background: isHoje ? 'var(--accent)' : 'transparent', color: isHoje ? '#fff' : isFimSemana ? 'var(--text-muted)' : 'var(--text-soft)' }}>{dia}</span>
+                  {tarefasDia.length > 0 && <span style={{ fontSize:10, color:'var(--text-muted)', fontWeight:700 }}>{tarefasDia.length}</span>}
                 </div>
-
                 {tarefasDia.slice(0,3).map(t=>{
                   const c = corStatus(t.status)
                   const atrasada = t.status !== 'concluido' && isPast(new Date(dataKey+'T12:00:00')) && !isHoje
                   return (
-                    <div key={t.id}
-                      onClick={e=>{e.stopPropagation();onClickTarefa(t)}}
-                      style={{
-                        padding:'2px 6px', borderRadius:4, marginBottom:2, cursor:'pointer',
-                        background: atrasada ? 'rgba(239,68,68,0.12)' : c.bg,
-                        border:`1px solid ${atrasada ? 'rgba(239,68,68,0.3)' : c.border}`,
-                        fontSize:10, fontWeight:600,
-                        color: atrasada ? '#f87171' : c.cor,
-                        overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
-                        lineHeight:1.4,
-                      }}>
+                    <div key={t.id} onClick={e=>{e.stopPropagation();onClickTarefa(t)}}
+                      style={{ padding:'2px 6px', borderRadius:4, marginBottom:2, cursor:'pointer', background: atrasada ? 'rgba(239,68,68,0.12)' : c.bg, border:`1px solid ${atrasada ? 'rgba(239,68,68,0.3)' : c.border}`, fontSize:10, fontWeight:600, color: atrasada ? '#f87171' : c.cor, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', lineHeight:1.4 }}>
                       {t.titulo}
                     </div>
                   )
                 })}
-                {tarefasDia.length > 3 && (
-                  <div style={{ fontSize:9, color:'var(--text-muted)', fontWeight:700, paddingLeft:2 }}>
-                    +{tarefasDia.length - 3} mais
-                  </div>
-                )}
+                {tarefasDia.length > 3 && <div style={{ fontSize:9, color:'var(--text-muted)', fontWeight:700, paddingLeft:2 }}>+{tarefasDia.length - 3} mais</div>}
               </div>
             )
           })}
-
-          {Array.from({length: (7 - (primeiroDia + diasNoMes) % 7) % 7}).map((_,i)=>(
-            <div key={`f${i}`} style={{ minHeight:110, background:'var(--surface)', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)', opacity:0.4 }}/>
-          ))}
+          {Array.from({length: (7 - (primeiroDia + diasNoMes) % 7) % 7}).map((_,i)=><div key={`f${i}`} style={{ minHeight:110, background:'var(--surface)', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)', opacity:0.4 }}/>)}
         </div>
       </div>
 
       {semData.length > 0 && (
         <div style={{ marginTop:20 }}>
-          <h3 style={{ fontSize:12, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>
-            Sem data definida ({semData.length})
-          </h3>
+          <h3 style={{ fontSize:12, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:10 }}>Sem data definida ({semData.length})</h3>
           <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
             {semData.map(t=>{
               const c = corStatus(t.status)
-              return (
-                <div key={t.id} onClick={()=>onClickTarefa(t)}
-                  style={{ padding:'5px 12px', borderRadius:20, cursor:'pointer', background:c.bg, border:`1px solid ${c.border}`, fontSize:12, fontWeight:600, color:c.cor, transition:'opacity 0.1s' }}
-                  onMouseEnter={e=>e.currentTarget.style.opacity='0.7'}
-                  onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
-                  {t.titulo}
-                </div>
-              )
+              return <div key={t.id} onClick={()=>onClickTarefa(t)} style={{ padding:'5px 12px', borderRadius:20, cursor:'pointer', background:c.bg, border:`1px solid ${c.border}`, fontSize:12, fontWeight:600, color:c.cor, transition:'opacity 0.1s' }} onMouseEnter={e=>e.currentTarget.style.opacity='0.7'} onMouseLeave={e=>e.currentTarget.style.opacity='1'}>{t.titulo}</div>
             })}
           </div>
         </div>
@@ -1497,10 +1203,7 @@ function ViewEquipe({ tarefas, usuarios, usuario, onOpen }) {
 
   const usuariosVisiveis = isAdmin
     ? usuarios
-    : usuarios.filter(u =>
-        u.id === usuario?.id ||
-        (u.grupo && u.grupo === usuario?.grupo)
-      )
+    : usuarios.filter(u => u.id === usuario?.id || (u.grupo && u.grupo === usuario?.grupo))
 
   function iniciais(nome) {
     if (!nome) return '?'
@@ -1521,121 +1224,67 @@ function ViewEquipe({ tarefas, usuarios, usuario, onOpen }) {
           const minhas    = tarefas.filter(t => t.responsavel_id === u.id || t.created_by === u.id)
           const ativas    = minhas.filter(t => t.status !== 'concluido')
           const concluidas = minhas.filter(t => t.status === 'concluido')
-          const atrasadas = ativas.filter(t => {
-            if (!t.data_prazo) return false
-            return new Date(t.data_prazo + 'T12:00:00') < hoje
-          })
+          const atrasadas = ativas.filter(t => { if (!t.data_prazo) return false; return new Date(t.data_prazo + 'T12:00:00') < hoje })
           const pct = minhas.length > 0 ? Math.round((concluidas.length / minhas.length) * 100) : 0
-
           const porStatus = [
             { value:'a_fazer',      label:'A FAZER',      cor:'#6366f1' },
             { value:'em_andamento', label:'EM ANDAMENTO', cor:'#f59e0b' },
-          ].map(s => ({ ...s, tarefas: ativas.filter(t => t.status === s.value) }))
-           .filter(s => s.tarefas.length > 0)
+          ].map(s => ({ ...s, tarefas: ativas.filter(t => t.status === s.value) })).filter(s => s.tarefas.length > 0)
 
           const R = 22, CIRC = 2 * Math.PI * R
           const dash = (pct / 100) * CIRC
           const corPct = pct >= 70 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#6366f1'
 
           return (
-            <div key={u.id} style={{
-              width:280, background:'var(--surface)',
-              border:'1px solid var(--border)', borderRadius:12,
-              overflow:'hidden', flexShrink:0,
-            }}>
-              {/* Header */}
+            <div key={u.id} style={{ width:280, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:12, overflow:'hidden', flexShrink:0 }}>
               <div style={{ padding:'14px 16px', borderBottom:'1px solid var(--border)' }}>
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
                   <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                    <div style={{
-                      width:38, height:38, borderRadius:'50%',
-                      background:corAvatar(u.nome),
-                      display:'flex', alignItems:'center', justifyContent:'center',
-                      fontSize:13, fontWeight:700, color:'#fff', flexShrink:0,
-                    }}>
-                      {iniciais(u.nome)}
-                    </div>
+                    <div style={{ width:38, height:38, borderRadius:'50%', background:corAvatar(u.nome), display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:700, color:'#fff', flexShrink:0 }}>{iniciais(u.nome)}</div>
                     <div>
                       <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{u.nome}</div>
                       <div style={{ fontSize:11, color:'var(--text-muted)', textTransform:'capitalize' }}>{u.grupo || u.perfil}</div>
                     </div>
                   </div>
-                  {/* Gráfico circular */}
                   <div style={{ position:'relative', width:54, height:54, flexShrink:0 }}>
                     <svg width="54" height="54" style={{ transform:'rotate(-90deg)' }}>
                       <circle cx="27" cy="27" r={R} fill="none" stroke="var(--border)" strokeWidth="4"/>
-                      <circle cx="27" cy="27" r={R} fill="none" stroke={corPct} strokeWidth="4"
-                        strokeDasharray={`${dash} ${CIRC}`} strokeLinecap="round"
-                        style={{ transition:'stroke-dasharray 0.5s ease' }}/>
+                      <circle cx="27" cy="27" r={R} fill="none" stroke={corPct} strokeWidth="4" strokeDasharray={`${dash} ${CIRC}`} strokeLinecap="round" style={{ transition:'stroke-dasharray 0.5s ease' }}/>
                     </svg>
-                    <div style={{
-                      position:'absolute', inset:0,
-                      display:'flex', alignItems:'center', justifyContent:'center',
-                      fontSize:11, fontWeight:700, color:'var(--text)',
-                    }}>{pct}%</div>
+                    <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color:'var(--text)' }}>{pct}%</div>
                   </div>
                 </div>
-
-                {/* Contadores */}
                 <div style={{ display:'flex', gap:6 }}>
-                  <div style={{ flex:1, textAlign:'center', background:'var(--surface-2)', borderRadius:8, padding:'6px 4px' }}>
-                    <div style={{ fontSize:18, fontWeight:700, color:'var(--text)' }}>{ativas.length}</div>
-                    <div style={{ fontSize:10, color:'var(--text-muted)' }}>Ativas</div>
-                  </div>
-                  <div style={{ flex:1, textAlign:'center', background:'var(--surface-2)', borderRadius:8, padding:'6px 4px' }}>
-                    <div style={{ fontSize:18, fontWeight:700, color:'#22c55e' }}>{concluidas.length}</div>
-                    <div style={{ fontSize:10, color:'var(--text-muted)' }}>Feitas</div>
-                  </div>
+                  <div style={{ flex:1, textAlign:'center', background:'var(--surface-2)', borderRadius:8, padding:'6px 4px' }}><div style={{ fontSize:18, fontWeight:700, color:'var(--text)' }}>{ativas.length}</div><div style={{ fontSize:10, color:'var(--text-muted)' }}>Ativas</div></div>
+                  <div style={{ flex:1, textAlign:'center', background:'var(--surface-2)', borderRadius:8, padding:'6px 4px' }}><div style={{ fontSize:18, fontWeight:700, color:'#22c55e' }}>{concluidas.length}</div><div style={{ fontSize:10, color:'var(--text-muted)' }}>Feitas</div></div>
                   {atrasadas.length > 0 && (
-                    <div style={{ flex:1, textAlign:'center', background:'rgba(239,68,68,0.1)', borderRadius:8, padding:'6px 4px', border:'1px solid rgba(239,68,68,0.2)' }}>
-                      <div style={{ fontSize:18, fontWeight:700, color:'#ef4444' }}>{atrasadas.length}</div>
-                      <div style={{ fontSize:10, color:'#ef4444' }}>Atrasadas</div>
-                    </div>
+                    <div style={{ flex:1, textAlign:'center', background:'rgba(239,68,68,0.1)', borderRadius:8, padding:'6px 4px', border:'1px solid rgba(239,68,68,0.2)' }}><div style={{ fontSize:18, fontWeight:700, color:'#ef4444' }}>{atrasadas.length}</div><div style={{ fontSize:10, color:'#ef4444' }}>Atrasadas</div></div>
                   )}
                 </div>
               </div>
-
-              {/* Tarefas por status */}
               <div style={{ padding:'10px 12px', maxHeight:400, overflowY:'auto' }}>
                 {ativas.length === 0
-                  ? <div style={{ fontSize:12, color:'var(--text-muted)', textAlign:'center', padding:'24px 0', opacity:0.5 }}>
-                      Nenhuma tarefa ativa
-                    </div>
+                  ? <div style={{ fontSize:12, color:'var(--text-muted)', textAlign:'center', padding:'24px 0', opacity:0.5 }}>Nenhuma tarefa ativa</div>
                   : porStatus.map(s => (
                       <div key={s.value} style={{ marginBottom:10 }}>
                         <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
                           <div style={{ width:8, height:8, borderRadius:2, background:s.cor }}/>
-                          <span style={{ fontSize:10, fontWeight:700, color:'var(--text-muted)', letterSpacing:'0.06em' }}>
-                            {s.label} ({s.tarefas.length})
-                          </span>
+                          <span style={{ fontSize:10, fontWeight:700, color:'var(--text-muted)', letterSpacing:'0.06em' }}>{s.label} ({s.tarefas.length})</span>
                         </div>
                         {s.tarefas.map(t => {
                           const atr = t.data_prazo && new Date(t.data_prazo + 'T12:00:00') < hoje
                           return (
                             <div key={t.id} onClick={() => onOpen(t)}
-                              style={{
-                                padding:'7px 10px', marginBottom:4, cursor:'pointer',
-                                background: atr ? 'rgba(239,68,68,0.06)' : 'var(--surface-2)',
-                                border: atr ? '1px solid rgba(239,68,68,0.2)' : '1px solid transparent',
-                                borderRadius:8, transition:'all 0.15s',
-                              }}
+                              style={{ padding:'7px 10px', marginBottom:4, cursor:'pointer', background: atr ? 'rgba(239,68,68,0.06)' : 'var(--surface-2)', border: atr ? '1px solid rgba(239,68,68,0.2)' : '1px solid transparent', borderRadius:8, transition:'all 0.15s' }}
                               onMouseEnter={e => e.currentTarget.style.borderColor = atr ? '#ef4444' : 'var(--accent)'}
-                              onMouseLeave={e => e.currentTarget.style.borderColor = atr ? 'rgba(239,68,68,0.2)' : 'transparent'}
-                            >
-                              <div style={{ fontSize:12, color:'var(--text)', fontWeight:500, marginBottom:3,
-                                whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', lineHeight:1.4 }}>
-                                {t.titulo}
-                              </div>
+                              onMouseLeave={e => e.currentTarget.style.borderColor = atr ? 'rgba(239,68,68,0.2)' : 'transparent'}>
+                              <div style={{ fontSize:12, color:'var(--text)', fontWeight:500, marginBottom:3, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', lineHeight:1.4 }}>{t.titulo}</div>
                               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                                 {t.prioridade && <PrioridadeBadge value={t.prioridade}/>}
                                 {t.data_prazo && (
-                                  <span style={{ fontSize:10, display:'flex', alignItems:'center', gap:3,
-                                    color: atr ? '#ef4444' : 'var(--text-muted)', fontWeight: atr ? 700 : 400 }}>
+                                  <span style={{ fontSize:10, display:'flex', alignItems:'center', gap:3, color: atr ? '#ef4444' : 'var(--text-muted)', fontWeight: atr ? 700 : 400 }}>
                                     <Calendar size={10}/>
-                                    {atr
-                                      ? `Atrasada ${Math.abs(differenceInDays(new Date(t.data_prazo + 'T12:00:00'), hoje))}d`
-                                      : format(new Date(t.data_prazo + 'T12:00:00'), 'dd/MM', { locale: ptBR })
-                                    }
+                                    {atr ? `Atrasada ${Math.abs(differenceInDays(new Date(t.data_prazo + 'T12:00:00'), hoje))}d` : format(new Date(t.data_prazo + 'T12:00:00'), 'dd/MM', { locale: ptBR })}
                                   </span>
                                 )}
                               </div>
