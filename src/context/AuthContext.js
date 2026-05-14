@@ -4,12 +4,12 @@ import { supabase, getUsuarioPerfil } from '../lib/supabase'
 const AuthContext = createContext(null)
 
 // Permissões por módulo e perfil
-// Adicione novos módulos aqui conforme o sistema cresce
 // Perfis disponíveis:
 // administrador, gerente
 // estagiario_proprias, analista_proprias, supervisor_proprias
 // estagiario_influencers, analista_influencers
 // estagiario_marketplaces, analista_marketplaces
+// estagiario_parceiras, analista_parceiras, supervisor_parceiras
 
 export const MODULOS_PERMISSOES = {
   dashboard:     ['administrador', 'gerente', 'analista_influencers', 'estagiario_influencers', 'estagiario_proprias', 'analista_proprias', 'supervisor_proprias', 'estagiario_marketplaces', 'analista_marketplaces'],
@@ -23,11 +23,29 @@ export const MODULOS_PERMISSOES = {
   campanhas:     ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
   monitoramento: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
   lancamentos:   ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
-  tarefas:       ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers', 'analista_marketplaces', 'estagiario_marketplaces'],
+  tarefas:       ['administrador', 'gerente',
+                  'estagiario_influencers', 'analista_influencers',
+                  'analista_marketplaces', 'estagiario_marketplaces',
+                  'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
   eventos:       ['administrador', 'gerente', 'estagiario_marketplaces', 'analista_marketplaces'],
   rh:            ['administrador'],
   treinamentos:  ['administrador', 'gerente', 'supervisor_proprias'],
   usuarios:      ['administrador'],
+}
+
+// Mapeamento de perfil para grupo (usado para isolamento de tarefas)
+export const PERFIL_GRUPO = {
+  estagiario_influencers:  'influencers',
+  analista_influencers:    'influencers',
+  estagiario_marketplaces: 'marketplaces',
+  analista_marketplaces:   'marketplaces',
+  estagiario_proprias:     'proprias',
+  analista_proprias:       'proprias',
+  supervisor_proprias:     'proprias',
+  estagiario_parceiras:    'parceiras',
+  analista_parceiras:      'parceiras',
+  supervisor_parceiras:    'parceiras',
+  // administrador e gerente ficam sem grupo (veem tudo)
 }
 
 export function canAccess(perfil, modulo) {
@@ -61,7 +79,6 @@ export function AuthProvider({ children }) {
       const perfil = await getUsuarioPerfil(userId)
       setUsuario(perfil)
     } catch {
-      // Perfil ainda não criado (primeiro login)
       setUsuario(null)
     } finally {
       setLoading(false)
