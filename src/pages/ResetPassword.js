@@ -14,9 +14,14 @@ export default function ResetPassword() {
   // O Supabase injeta o token na URL — precisa capturar a sessão
   useEffect(() => {
     supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') setSessaoOk(true)
+      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') setSessaoOk(true)
     })
   }, [])
+  useEffect(() => {
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    if (session) setSessaoOk(true)
+  })
+}, [])
 
   async function handleReset(e) {
     e.preventDefault()
