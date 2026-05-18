@@ -504,53 +504,93 @@ export default function VitrineAdmin() {
               <p style={{ fontSize: 14 }}>Quando parceiros selecionarem livros na vitrine, os pedidos aparecerão aqui.</p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {pedidos.map(pedido => (
-                <div
-                  key={pedido.id}
-                  style={{
-                    border: '1px solid #e5e7eb',
-                    borderRadius: 10,
-                    overflow: 'hidden',
-                    borderLeft: `4px solid ${
-                      pedido.status === 'novo' ? '#D4A005' :
-                      pedido.status === 'visto' ? '#3b82f6' :
-                      pedido.status === 'respondido' ? '#8b5cf6' :
-                      '#16a34a'
-                    }`,
-                  }}
-                >
-                  {/* Header do pedido */}
-                  <div style={{
-                    padding: '16px 20px',
-                    background: '#f9fafb',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                    gap: 10,
-                  }}>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 15 }}>{pedido.nome_parceiro}</div>
-                      <div style={{ fontSize: 13, color: '#666', marginTop: 2 }}>
-                        {pedido.tipo_contato === 'whatsapp' ? '📱' : '✉️'} {pedido.contato}
-                        <span style={{ marginLeft: 12, color: '#999' }}>
-                          {new Date(pedido.created_at).toLocaleDateString('pt-BR')} às{' '}
-                          {new Date(pedido.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {pedidos.map(pedido => {
+                const statusConfig = {
+                  novo:       { color: '#F2B705', bg: 'rgba(242,183,5,0.12)', label: '🟡 Novo' },
+                  visto:      { color: '#3b82f6', bg: 'rgba(59,130,246,0.12)', label: '🔵 Visto' },
+                  respondido: { color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)', label: '🟣 Respondido' },
+                  concluido:  { color: '#16a34a', bg: 'rgba(22,163,74,0.12)', label: '🟢 Concluído' },
+                };
+                const sc = statusConfig[pedido.status] || statusConfig.novo;
+                const itens = pedido.vitrine_pedido_itens || [];
+
+                return (
+                  <div
+                    key={pedido.id}
+                    style={{
+                      borderRadius: 12,
+                      overflow: 'hidden',
+                      border: `1px solid rgba(255,255,255,0.1)`,
+                      background: 'rgba(255,255,255,0.04)',
+                    }}
+                  >
+                    {/* Header do pedido */}
+                    <div style={{
+                      padding: '18px 22px',
+                      background: 'rgba(255,255,255,0.06)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: 12,
+                      borderBottom: '1px solid rgba(255,255,255,0.06)',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                        {/* Avatar inicial */}
+                        <div style={{
+                          width: 42,
+                          height: 42,
+                          borderRadius: '50%',
+                          background: sc.bg,
+                          border: `2px solid ${sc.color}`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 16,
+                          fontWeight: 700,
+                          color: sc.color,
+                          flexShrink: 0,
+                        }}>
+                          {(pedido.nome_parceiro || 'P')[0].toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 16, color: '#fff' }}>
+                            {pedido.nome_parceiro}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 4, flexWrap: 'wrap' }}>
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 5,
+                              fontSize: 13,
+                              color: 'rgba(255,255,255,0.7)',
+                              background: 'rgba(255,255,255,0.08)',
+                              padding: '3px 10px',
+                              borderRadius: 6,
+                            }}>
+                              {pedido.tipo_contato === 'whatsapp' ? '📱' : '✉️'} {pedido.contato}
+                            </span>
+                            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+                              {new Date(pedido.created_at).toLocaleDateString('pt-BR')} às{' '}
+                              {new Date(pedido.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+
                       <select
                         value={pedido.status}
                         onChange={e => atualizarStatusPedido(pedido.id, e.target.value)}
                         style={{
-                          padding: '6px 10px',
-                          border: '1.5px solid #ddd',
-                          borderRadius: 6,
-                          fontSize: 12,
+                          padding: '8px 12px',
+                          border: `1.5px solid ${sc.color}40`,
+                          borderRadius: 8,
+                          fontSize: 13,
                           fontWeight: 600,
                           cursor: 'pointer',
+                          background: sc.bg,
+                          color: sc.color,
                         }}
                       >
                         <option value="novo">🟡 Novo</option>
@@ -559,55 +599,90 @@ export default function VitrineAdmin() {
                         <option value="concluido">🟢 Concluído</option>
                       </select>
                     </div>
-                  </div>
 
-                  {/* Itens do pedido */}
-                  <div style={{ padding: '12px 20px' }}>
-                    {pedido.observacoes && (
-                      <p style={{
-                        fontSize: 13,
-                        color: '#666',
-                        fontStyle: 'italic',
-                        margin: '0 0 12px',
-                        padding: '8px 12px',
-                        background: '#fffbeb',
-                        borderRadius: 6,
+                    {/* Corpo do pedido */}
+                    <div style={{ padding: '18px 22px' }}>
+                      {/* Observações */}
+                      {pedido.observacoes && (
+                        <div style={{
+                          fontSize: 13,
+                          color: 'rgba(255,255,255,0.7)',
+                          fontStyle: 'italic',
+                          margin: '0 0 16px',
+                          padding: '10px 14px',
+                          background: 'rgba(242,183,5,0.08)',
+                          borderRadius: 8,
+                          borderLeft: '3px solid rgba(242,183,5,0.4)',
+                          lineHeight: 1.5,
+                        }}>
+                          "{pedido.observacoes}"
+                        </div>
+                      )}
+
+                      {/* Label */}
+                      <div style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: 'rgba(255,255,255,0.4)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px',
+                        marginBottom: 10,
                       }}>
-                        "{pedido.observacoes}"
-                      </p>
-                    )}
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                      {(pedido.vitrine_pedido_itens || []).map(item => (
-                        <span
-                          key={item.id}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            padding: '5px 10px',
-                            background: '#f0f0f0',
-                            borderRadius: 6,
-                            fontSize: 12,
-                            fontWeight: 500,
-                          }}
-                        >
-                          <BookOpen size={12} />
-                          {item.titulo_livro}
-                          {item.quantidade > 1 && (
-                            <span style={{
-                              background: '#3A3A3A',
-                              color: 'white',
-                              borderRadius: 4,
-                              padding: '1px 5px',
-                              fontSize: 10,
-                              fontWeight: 700,
+                        📚 {itens.length} {itens.length === 1 ? 'livro selecionado' : 'livros selecionados'}
+                      </div>
+
+                      {/* Lista de livros em formato de lista legível */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {itens.map(item => (
+                          <div
+                            key={item.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '10px 14px',
+                              background: 'rgba(255,255,255,0.06)',
+                              borderRadius: 8,
+                              border: '1px solid rgba(255,255,255,0.06)',
+                            }}
+                          >
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
                             }}>
-                              ×{item.quantidade}
-                            </span>
-                          )}
-                        </span>
-                      ))}
+                              <BookOpen size={14} style={{ color: '#F2B705', flexShrink: 0 }} />
+                              <span style={{
+                                fontSize: 14,
+                                fontWeight: 500,
+                                color: '#fff',
+                              }}>
+                                {item.titulo_livro}
+                              </span>
+                            </div>
+                            {item.quantidade > 1 && (
+                              <span style={{
+                                background: '#F2B705',
+                                color: '#2A2A2A',
+                                borderRadius: 6,
+                                padding: '2px 8px',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                flexShrink: 0,
+                                marginLeft: 10,
+                              }}>
+                                ×{item.quantidade}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
                   </div>
                 </div>
               ))}
