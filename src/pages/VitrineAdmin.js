@@ -557,25 +557,58 @@ export default function VitrineAdmin() {
                         <div>
                           <div style={{ fontWeight: 700, fontSize: 16, color: '#fff' }}>
                             {pedido.nome_parceiro}
+                            {pedido.cpf && (
+                              <span style={{ fontSize: 12, fontWeight: 400, color: 'rgba(255,255,255,0.5)', marginLeft: 10 }}>
+                                CPF: {pedido.cpf}
+                              </span>
+                            )}
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 4, flexWrap: 'wrap' }}>
-                            <span style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 5,
-                              fontSize: 13,
-                              color: 'rgba(255,255,255,0.7)',
-                              background: 'rgba(255,255,255,0.08)',
-                              padding: '3px 10px',
-                              borderRadius: 6,
-                            }}>
-                              {pedido.tipo_contato === 'whatsapp' ? '📱' : '✉️'} {pedido.contato}
-                            </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                            {pedido.contato && (
+                              <span style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 5,
+                                fontSize: 13,
+                                color: 'rgba(255,255,255,0.7)',
+                                background: 'rgba(255,255,255,0.08)',
+                                padding: '3px 10px',
+                                borderRadius: 6,
+                              }}>
+                                📱 {pedido.contato}
+                              </span>
+                            )}
+                            {pedido.email && (
+                              <span style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 5,
+                                fontSize: 13,
+                                color: 'rgba(255,255,255,0.7)',
+                                background: 'rgba(255,255,255,0.08)',
+                                padding: '3px 10px',
+                                borderRadius: 6,
+                              }}>
+                                ✉️ {pedido.email}
+                              </span>
+                            )}
                             <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
                               {new Date(pedido.created_at).toLocaleDateString('pt-BR')} às{' '}
                               {new Date(pedido.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                             </span>
                           </div>
+                          {(pedido.cep || pedido.endereco) && (
+                            <div style={{
+                              fontSize: 12,
+                              color: 'rgba(255,255,255,0.5)',
+                              marginTop: 6,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 5,
+                            }}>
+                              📍 {pedido.endereco}{pedido.cep ? ` — CEP: ${pedido.cep}` : ''}
+                            </div>
+                          )}
                         </div>
                       </div>
 
