@@ -384,6 +384,7 @@ export default function VitrineAdmin() {
                     <th style={th}>Capa</th>
                     <th style={{ ...th, textAlign: 'left' }}>Título / Autor</th>
                     <th style={th}>Editora</th>
+                    <th style={th}>ISBN</th>
                     <th style={th}>Preço</th>
                     <th style={th}>Status</th>
                     <th style={th}>Ações</th>
@@ -435,6 +436,7 @@ export default function VitrineAdmin() {
                         <div style={{ fontSize: 12, color: '#888' }}>{livro.autor}</div>
                       </td>
                       <td style={td}>{livro.editora}</td>
+                      <td style={{ ...td, fontFamily: 'monospace', fontSize: 11 }}>{livro.ean || '—'}</td>
                       <td style={td}>
                         {livro.preco ? `R$ ${Number(livro.preco).toFixed(2).replace('.', ',')}` : '—'}
                       </td>
