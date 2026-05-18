@@ -45,7 +45,6 @@ export default function VitrinePublica() {
   const [editoraFiltro, setEditoraFiltro] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState('');
   const [showFiltros, setShowFiltros] = useState(false);
-  const [soLancamentos, setSoLancamentos] = useState(false);
   const [selecionados, setSelecionados] = useState({}); // { livroId: qty }
   const [showCarrinho, setShowCarrinho] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -85,24 +84,27 @@ export default function VitrinePublica() {
 
   // ── Filtro ──
   const livrosFiltrados = useMemo(() => {
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    const limite = new Date(hoje);
+    limite.setDate(limite.getDate() + 14);
+
     return livros.filter(l => {
+      // Regra: livros já lançados + lançamentos dos próximos 14 dias
+      // Livros com lançamento depois de 14 dias ficam ocultos
+      if (l.data_lancamento) {
+        const dataLanc = new Date(l.data_lancamento);
+        if (dataLanc > limite) return false;
+      }
+
       const matchBusca = !busca ||
         l.titulo?.toLowerCase().includes(busca.toLowerCase()) ||
         l.autor?.toLowerCase().includes(busca.toLowerCase());
       const matchEditora = !editoraFiltro || l.editora === editoraFiltro;
       const matchCategoria = !categoriaFiltro || l.categoria === categoriaFiltro;
-      const matchLancamento = !soLancamentos || (() => {
-        if (!l.data_lancamento) return false;
-        const dataLanc = new Date(l.data_lancamento);
-        const hoje = new Date();
-        hoje.setHours(0, 0, 0, 0);
-        const limite = new Date(hoje);
-        limite.setDate(limite.getDate() + 14);
-        return dataLanc >= hoje && dataLanc <= limite;
-      })();
-      return matchBusca && matchEditora && matchCategoria && matchLancamento;
+      return matchBusca && matchEditora && matchCategoria;
     });
-  }, [livros, busca, editoraFiltro, categoriaFiltro, soLancamentos]);
+  }, [livros, busca, editoraFiltro, categoriaFiltro]);
 
   // ── Seleção ──
   const totalSelecionados = Object.values(selecionados).reduce((a, b) => a + b, 0);
@@ -213,10 +215,9 @@ export default function VitrinePublica() {
     setBusca('');
     setEditoraFiltro('');
     setCategoriaFiltro('');
-    setSoLancamentos(false);
   }
 
-  const temFiltroAtivo = busca || editoraFiltro || categoriaFiltro || soLancamentos;
+  const temFiltroAtivo = busca || editoraFiltro || categoriaFiltro;
 
   // ── Google Fonts ──
   useEffect(() => {
@@ -469,27 +470,6 @@ export default function VitrinePublica() {
                 </select>
               </div>
             )}
-
-            <button
-              onClick={() => setSoLancamentos(!soLancamentos)}
-              style={{
-                flex: '0 0 auto',
-                padding: '10px 16px',
-                border: `1.5px solid ${soLancamentos ? COLORS.accent : COLORS.border}`,
-                borderRadius: 10,
-                background: soLancamentos ? `${COLORS.accent}15` : COLORS.white,
-                color: soLancamentos ? COLORS.accent : COLORS.textLight,
-                fontSize: 13,
-                fontFamily: FONTS.body,
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
-            >
-              🆕 Próximos lançamentos
-            </button>
 
             {temFiltroAtivo && (
               <button
