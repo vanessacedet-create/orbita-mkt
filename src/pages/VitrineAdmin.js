@@ -609,6 +609,19 @@ export default function VitrineAdmin() {
                               📍 {pedido.endereco}{pedido.cep ? ` — CEP: ${pedido.cep}` : ''}
                             </div>
                           )}
+                          {pedido.data_divulgacao && (
+                            <div style={{
+                              fontSize: 12,
+                              color: '#F2B705',
+                              marginTop: 6,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 5,
+                              fontWeight: 600,
+                            }}>
+                              📅 Divulgação prevista: {new Date(pedido.data_divulgacao).toLocaleDateString('pt-BR')}
+                            </div>
+                          )}
                         </div>
                       </div>
 
