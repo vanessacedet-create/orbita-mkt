@@ -6,7 +6,8 @@ import { signOut } from './lib/supabase'
 import {
   LayoutDashboard, BookOpen, BookMarked, Users, LogOut,
   Orbit, ShieldAlert, Megaphone, CalendarDays, CheckSquare, UserRound, Eye,
-  Network, Calculator, HeartHandshake, CalendarCheck, GraduationCap, Compass, Sparkles
+  Network, Calculator, HeartHandshake, CalendarCheck, GraduationCap, Compass, Sparkles,
+  Store
 } from 'lucide-react'
 import './App.css'
 
@@ -29,6 +30,8 @@ const Eventos       = lazy(() => import('./pages/Eventos'))
 const Treinamentos  = lazy(() => import('./pages/Treinamentos'))
 const Descoberta    = lazy(() => import('./pages/Descoberta'))
 const Prospeccao    = lazy(() => import('./pages/Prospeccao'))
+const VitrinePublica = lazy(() => import('./pages/VitrinePublica'))
+const VitrineAdmin   = lazy(() => import('./pages/VitrineAdmin'))
 
 const MENU = [
   { path: '/',              label: 'Dashboard',    icon: LayoutDashboard, modulo: 'dashboard' },
@@ -46,6 +49,7 @@ const MENU = [
   { path: '/rh',            label: 'RH',           icon: HeartHandshake,  modulo: 'rh' },
   { path: '/treinamentos',  label: 'Treinamentos', icon: GraduationCap,   modulo: 'treinamentos' },
   { path: '/eventos',       label: 'Eventos',      icon: CalendarCheck,   modulo: 'eventos' },
+  { path: '/vitrine-admin', label: 'Vitrine',      icon: Store,           modulo: 'parceiros' },
   { path: '/usuarios',      label: 'Usuários',     icon: Users,           modulo: 'usuarios' },
 ]
 
@@ -181,6 +185,7 @@ function Shell() {
             <Route path="/treinamentos"  element={<RequireAuth modulo="treinamentos"><Treinamentos /></RequireAuth>} />
             <Route path="/descoberta"    element={<RequireAuth modulo="parceiros"><Descoberta /></RequireAuth>} />
             <Route path="/prospeccao"    element={<RequireAuth modulo="parceiros"><Prospeccao /></RequireAuth>} />
+            <Route path="/vitrine-admin" element={<RequireAuth modulo="parceiros"><VitrineAdmin /></RequireAuth>} />
           </Routes>
         </Suspense>
       </main>
@@ -192,11 +197,14 @@ export default function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Routes>
-          <Route path="/login"          element={<PublicRoute><Login /></PublicRoute>} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/*"              element={<RequireAuth><Shell /></RequireAuth>} />
-        </Routes>
+        <Suspense fallback={<div className="loading"><div className="spinner"/></div>}>
+          <Routes>
+            <Route path="/login"          element={<PublicRoute><Login /></PublicRoute>} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/vitrine"        element={<VitrinePublica />} />
+            <Route path="/*"              element={<RequireAuth><Shell /></RequireAuth>} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </AuthProvider>
   )
