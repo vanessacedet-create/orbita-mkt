@@ -52,7 +52,7 @@ export default function VitrinePublica() {
   const [livroDetalhe, setLivroDetalhe] = useState(null);
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
-  const [form, setForm] = useState({ nome: '', contato: '', tipo: 'whatsapp', obs: '' });
+  const [form, setForm] = useState({ nome: '', cpf: '', telefone: '', email: '', cep: '', endereco: '', obs: '' });
 
   // ── Carregar livros ──
   useEffect(() => {
@@ -66,6 +66,7 @@ export default function VitrinePublica() {
       .select('*')
       .eq('ativo', true)
       .order('destaque', { ascending: false })
+      .order('data_lancamento', { ascending: false, nullsFirst: false })
       .order('titulo', { ascending: true });
 
     if (!error && data) setLivros(data);
@@ -131,7 +132,7 @@ export default function VitrinePublica() {
 
   // ── Envio do pedido ──
   async function enviarPedido() {
-    if (!form.nome.trim() || !form.contato.trim()) return;
+    if (!form.nome.trim() || !form.email.trim() || !form.telefone.trim() || !form.cpf.trim()) return;
     setEnviando(true);
 
     try {
@@ -140,8 +141,12 @@ export default function VitrinePublica() {
         .from('vitrine_pedidos')
         .insert({
           nome_parceiro: form.nome.trim(),
-          contato: form.contato.trim(),
-          tipo_contato: form.tipo,
+          cpf: form.cpf.trim(),
+          contato: form.telefone.trim(),
+          tipo_contato: 'whatsapp',
+          email: form.email.trim(),
+          cep: form.cep.trim() || null,
+          endereco: form.endereco.trim() || null,
           observacoes: form.obs.trim() || null,
         })
         .select()
@@ -168,7 +173,7 @@ export default function VitrinePublica() {
 
       setEnviado(true);
       setSelecionados({});
-      setForm({ nome: '', contato: '', tipo: 'whatsapp', obs: '' });
+      setForm({ nome: '', cpf: '', telefone: '', email: '', cep: '', endereco: '', obs: '' });
 
       setTimeout(() => {
         setEnviado(false);
@@ -746,6 +751,15 @@ function LivroCard({ livro, selecionado, onToggle, onDetalhe }) {
         }}>
           {livro.autor || 'Autor não informado'}
         </p>
+        {livro.data_lancamento && (
+          <p style={{
+            fontSize: 11,
+            color: COLORS.textMuted,
+            margin: '0 0 6px',
+          }}>
+            📅 {new Date(livro.data_lancamento).toLocaleDateString('pt-BR')}
+          </p>
+        )}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -1121,11 +1135,11 @@ function PainelCarrinho({
                 marginBottom: 20,
                 lineHeight: 1.5,
               }}>
-                Preencha seus dados para que possamos entrar em contato sobre os livros selecionados.
+                Preencha seus dados para que possamos enviar os livros selecionados.
               </p>
 
               <div style={{ marginBottom: 16 }}>
-                <label style={labelStyle}>Nome *</label>
+                <label style={labelStyle}>Nome completo *</label>
                 <input
                   type="text"
                   placeholder="Seu nome completo"
@@ -1136,45 +1150,60 @@ function PainelCarrinho({
               </div>
 
               <div style={{ marginBottom: 16 }}>
-                <label style={labelStyle}>Tipo de contato</label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {[
-                    { val: 'whatsapp', label: 'WhatsApp' },
-                    { val: 'email', label: 'E-mail' }
-                  ].map(opt => (
-                    <button
-                      key={opt.val}
-                      onClick={() => setForm({ ...form, tipo: opt.val })}
-                      style={{
-                        flex: 1,
-                        padding: '10px',
-                        border: `1.5px solid ${form.tipo === opt.val ? COLORS.primary : COLORS.border}`,
-                        borderRadius: 10,
-                        background: form.tipo === opt.val ? `${COLORS.primary}10` : COLORS.white,
-                        color: form.tipo === opt.val ? COLORS.primary : COLORS.textLight,
-                        fontWeight: 600,
-                        fontSize: 13,
-                        fontFamily: FONTS.body,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+                <label style={labelStyle}>CPF *</label>
+                <input
+                  type="text"
+                  placeholder="000.000.000-00"
+                  value={form.cpf}
+                  onChange={e => setForm({ ...form, cpf: e.target.value })}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={labelStyle}>Telefone *</label>
+                  <input
+                    type="tel"
+                    placeholder="(11) 99999-9999"
+                    value={form.telefone}
+                    onChange={e => setForm({ ...form, telefone: e.target.value })}
+                    style={inputStyle}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={labelStyle}>E-mail *</label>
+                  <input
+                    type="email"
+                    placeholder="seu@email.com"
+                    value={form.email}
+                    onChange={e => setForm({ ...form, email: e.target.value })}
+                    style={inputStyle}
+                  />
                 </div>
               </div>
 
-              <div style={{ marginBottom: 16 }}>
-                <label style={labelStyle}>
-                  {form.tipo === 'whatsapp' ? 'WhatsApp *' : 'E-mail *'}
-                </label>
-                <input
-                  type={form.tipo === 'email' ? 'email' : 'tel'}
-                  placeholder={form.tipo === 'whatsapp' ? '(11) 99999-9999' : 'seu@email.com'}
-                  value={form.contato}
-                  onChange={e => setForm({ ...form, contato: e.target.value })}
-                  style={inputStyle}
-                />
+              <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+                <div style={{ flex: '0 0 120px' }}>
+                  <label style={labelStyle}>CEP *</label>
+                  <input
+                    type="text"
+                    placeholder="00000-000"
+                    value={form.cep}
+                    onChange={e => setForm({ ...form, cep: e.target.value })}
+                    style={inputStyle}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={labelStyle}>Endereço completo *</label>
+                  <input
+                    type="text"
+                    placeholder="Rua, número, complemento, bairro, cidade - UF"
+                    value={form.endereco}
+                    onChange={e => setForm({ ...form, endereco: e.target.value })}
+                    style={inputStyle}
+                  />
+                </div>
               </div>
 
               <div style={{ marginBottom: 16 }}>
@@ -1311,13 +1340,13 @@ function PainelCarrinho({
             {showForm ? (
               <button
                 onClick={onEnviar}
-                disabled={enviando || !form.nome.trim() || !form.contato.trim()}
+                disabled={enviando || !form.nome.trim() || !form.email.trim() || !form.telefone.trim() || !form.cpf.trim() || !form.cep.trim() || !form.endereco.trim()}
                 style={{
                   width: '100%',
                   padding: '14px',
                   border: 'none',
                   borderRadius: 12,
-                  background: (!form.nome.trim() || !form.contato.trim())
+                  background: (!form.nome.trim() || !form.email.trim() || !form.telefone.trim() || !form.cpf.trim() || !form.cep.trim() || !form.endereco.trim())
                     ? COLORS.textMuted
                     : COLORS.primary,
                   color: COLORS.white,
