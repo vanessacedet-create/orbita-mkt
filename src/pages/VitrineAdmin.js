@@ -100,7 +100,7 @@ export default function VitrineAdmin() {
       const buffer = await file.arrayBuffer();
       const wb = XLSX.read(buffer, { type: 'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws);
+      const rows = XLSX.utils.sheet_to_json(ws, { range: 1 });
 
       // Mapear colunas da planilha CEDET
       const livrosParaInserir = rows
@@ -115,6 +115,7 @@ export default function VitrineAdmin() {
           imagem_url: r['Link Imagem'] || null,
           ean: r['EAN'] ? String(r['EAN']) : null,
           encadernacao: r['Encadernação'] || null,
+          data_lancamento: r['Data de lançamento'] || null,
           ativo: true,
           destaque: false,
         }));
