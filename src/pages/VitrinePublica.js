@@ -777,6 +777,16 @@ function LivroCard({ livro, selecionado, onToggle, onDetalhe }) {
             📅 {new Date(livro.data_lancamento).toLocaleDateString('pt-BR')}
           </p>
         )}
+        {livro.ean && (
+          <p style={{
+            fontSize: 10,
+            color: COLORS.textMuted,
+            margin: '0 0 6px',
+            fontFamily: 'monospace',
+          }}>
+            ISBN: {livro.ean}
+          </p>
+        )}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
