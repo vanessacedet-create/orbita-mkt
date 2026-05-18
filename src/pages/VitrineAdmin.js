@@ -699,14 +699,26 @@ export default function VitrineAdmin() {
                               alignItems: 'center',
                               gap: 10,
                             }}>
-                              <BookOpen size={14} style={{ color: '#F2B705', flexShrink: 0 }} />
-                              <span style={{
-                                fontSize: 14,
-                                fontWeight: 500,
-                                color: '#fff',
-                              }}>
-                                {item.titulo_livro}
-                              </span>
+                              <BookOpen size={14} style={{ color: '#F2B705', flexShrink: 0, alignSelf: 'flex-start', marginTop: 2 }} />
+                              <div>
+                                <span style={{
+                                  fontSize: 14,
+                                  fontWeight: 500,
+                                  color: '#fff',
+                                }}>
+                                  {item.titulo_livro}
+                                </span>
+                                {item.ean_livro && (
+                                  <div style={{
+                                    fontSize: 11,
+                                    color: 'rgba(255,255,255,0.4)',
+                                    fontFamily: 'monospace',
+                                    marginTop: 2,
+                                  }}>
+                                    ISBN: {item.ean_livro}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                             {item.quantidade > 1 && (
                               <span style={{
