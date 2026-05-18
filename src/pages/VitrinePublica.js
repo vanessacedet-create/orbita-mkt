@@ -94,9 +94,11 @@ export default function VitrinePublica() {
       const matchLancamento = !soLancamentos || (() => {
         if (!l.data_lancamento) return false;
         const dataLanc = new Date(l.data_lancamento);
-        const tresMesesAtras = new Date();
-        tresMesesAtras.setMonth(tresMesesAtras.getMonth() - 3);
-        return dataLanc >= tresMesesAtras;
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+        const limite = new Date(hoje);
+        limite.setDate(limite.getDate() + 14);
+        return dataLanc >= hoje && dataLanc <= limite;
       })();
       return matchBusca && matchEditora && matchCategoria && matchLancamento;
     });
@@ -486,7 +488,7 @@ export default function VitrinePublica() {
                 gap: 6,
               }}
             >
-              🆕 Últimos lançamentos
+              🆕 Próximos lançamentos
             </button>
 
             {temFiltroAtivo && (
