@@ -100,7 +100,12 @@ export default function VitrineAdmin() {
       const buffer = await file.arrayBuffer();
       const wb = XLSX.read(buffer, { type: 'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, { range: 1 });
+
+      // Detectar se cabeçalhos estão na linha 1 ou 2
+      let rows = XLSX.utils.sheet_to_json(ws);
+      if (rows.length > 0 && !rows[0]['Nome produto']) {
+        rows = XLSX.utils.sheet_to_json(ws, { range: 1 });
+      }
 
       // Mapear colunas da planilha CEDET
       const livrosParaInserir = rows
