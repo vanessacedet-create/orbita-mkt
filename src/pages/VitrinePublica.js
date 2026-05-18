@@ -45,6 +45,7 @@ export default function VitrinePublica() {
   const [editoraFiltro, setEditoraFiltro] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState('');
   const [showFiltros, setShowFiltros] = useState(false);
+  const [soLancamentos, setSoLancamentos] = useState(false);
   const [selecionados, setSelecionados] = useState({}); // { livroId: qty }
   const [showCarrinho, setShowCarrinho] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -89,9 +90,16 @@ export default function VitrinePublica() {
         l.autor?.toLowerCase().includes(busca.toLowerCase());
       const matchEditora = !editoraFiltro || l.editora === editoraFiltro;
       const matchCategoria = !categoriaFiltro || l.categoria === categoriaFiltro;
-      return matchBusca && matchEditora && matchCategoria;
+      const matchLancamento = !soLancamentos || (() => {
+        if (!l.data_lancamento) return false;
+        const dataLanc = new Date(l.data_lancamento);
+        const tresMesesAtras = new Date();
+        tresMesesAtras.setMonth(tresMesesAtras.getMonth() - 3);
+        return dataLanc >= tresMesesAtras;
+      })();
+      return matchBusca && matchEditora && matchCategoria && matchLancamento;
     });
-  }, [livros, busca, editoraFiltro, categoriaFiltro]);
+  }, [livros, busca, editoraFiltro, categoriaFiltro, soLancamentos]);
 
   // ── Seleção ──
   const totalSelecionados = Object.values(selecionados).reduce((a, b) => a + b, 0);
@@ -180,9 +188,10 @@ export default function VitrinePublica() {
     setBusca('');
     setEditoraFiltro('');
     setCategoriaFiltro('');
+    setSoLancamentos(false);
   }
 
-  const temFiltroAtivo = busca || editoraFiltro || categoriaFiltro;
+  const temFiltroAtivo = busca || editoraFiltro || categoriaFiltro || soLancamentos;
 
   // ── Google Fonts ──
   useEffect(() => {
@@ -435,6 +444,27 @@ export default function VitrinePublica() {
                 </select>
               </div>
             )}
+
+            <button
+              onClick={() => setSoLancamentos(!soLancamentos)}
+              style={{
+                flex: '0 0 auto',
+                padding: '10px 16px',
+                border: `1.5px solid ${soLancamentos ? COLORS.accent : COLORS.border}`,
+                borderRadius: 10,
+                background: soLancamentos ? `${COLORS.accent}15` : COLORS.white,
+                color: soLancamentos ? COLORS.accent : COLORS.textLight,
+                fontSize: 13,
+                fontFamily: FONTS.body,
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              🆕 Últimos lançamentos
+            </button>
 
             {temFiltroAtivo && (
               <button
