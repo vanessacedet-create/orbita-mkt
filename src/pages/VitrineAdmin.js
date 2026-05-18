@@ -98,7 +98,7 @@ export default function VitrineAdmin() {
 
     try {
       const buffer = await file.arrayBuffer();
-      const wb = XLSX.read(buffer, { type: 'array' });
+      const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
       const ws = wb.Sheets[wb.SheetNames[0]];
 
       // Detectar se cabeçalhos estão na linha 1 ou 2
@@ -120,7 +120,9 @@ export default function VitrineAdmin() {
           imagem_url: r['Link Imagem'] || null,
           ean: r['EAN'] ? String(r['EAN']) : null,
           encadernacao: r['Encadernação'] || null,
-          data_lancamento: r['Data de lançamento'] || null,
+          data_lancamento: r['Data de lançamento'] instanceof Date
+            ? r['Data de lançamento'].toISOString().split('T')[0]
+            : r['Data de lançamento'] || null,
           ativo: true,
           destaque: false,
         }));
