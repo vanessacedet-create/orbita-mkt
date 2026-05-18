@@ -1,8 +1,8 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom'
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useState, useEffect } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { usePermissions } from './hooks/usePermissions'
-import { signOut } from './lib/supabase'
+import { signOut, supabase } from './lib/supabase'
 import {
   LayoutDashboard, BookOpen, BookMarked, Users, LogOut,
   Orbit, ShieldAlert, Megaphone, CalendarDays, CheckSquare, UserRound, Eye,
@@ -116,6 +116,21 @@ function SemAcesso() {
 function Shell() {
   const { usuario } = useAuth()
   const { can } = usePermissions()
+  const [pedidosNovos, setPedidosNovos] = useState(0)
+
+  // Buscar pedidos novos da vitrine
+  useEffect(() => {
+    async function fetchPedidosNovos() {
+      const { count } = await supabase
+        .from('vitrine_pedidos')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'novo')
+      setPedidosNovos(count || 0)
+    }
+    fetchPedidosNovos()
+    const interval = setInterval(fetchPedidosNovos, 30000) // atualiza a cada 30s
+    return () => clearInterval(interval)
+  }, [])
 
   async function handleLogout() {
     await signOut()
@@ -144,6 +159,24 @@ function Shell() {
             >
               <Icon size={17} strokeWidth={1.5} />
               <span>{label}</span>
+              {path === '/vitrine-admin' && pedidosNovos > 0 && (
+                <span style={{
+                  marginLeft: 'auto',
+                  background: '#dc2626',
+                  color: 'white',
+                  borderRadius: '50%',
+                  minWidth: 20,
+                  height: 20,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0 5px',
+                }}>
+                  {pedidosNovos}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
