@@ -52,7 +52,7 @@ export default function VitrinePublica() {
   const [livroDetalhe, setLivroDetalhe] = useState(null);
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
-  const [form, setForm] = useState({ nome: '', cpf: '', telefone: '', email: '', cep: '', endereco: '', obs: '' });
+  const [form, setForm] = useState({ nome: '', cpf: '', telefone: '', email: '', cep: '', endereco: '', dataDivulgacao: '', obs: '' });
 
   // ── Carregar livros ──
   useEffect(() => {
@@ -132,7 +132,7 @@ export default function VitrinePublica() {
 
   // ── Envio do pedido ──
   async function enviarPedido() {
-    if (!form.nome.trim() || !form.email.trim() || !form.telefone.trim() || !form.cpf.trim()) return;
+    if (!form.nome.trim() || !form.email.trim() || !form.telefone.trim() || !form.cpf.trim() || !form.dataDivulgacao) return;
     setEnviando(true);
 
     try {
@@ -147,6 +147,7 @@ export default function VitrinePublica() {
           email: form.email.trim(),
           cep: form.cep.trim() || null,
           endereco: form.endereco.trim() || null,
+          data_divulgacao: form.dataDivulgacao,
           observacoes: form.obs.trim() || null,
         })
         .select()
@@ -171,9 +172,25 @@ export default function VitrinePublica() {
 
       if (errItens) throw errItens;
 
+      // 3. Criar registro automático no Monitoramento
+      const livrosSelecionados = Object.keys(selecionados).map(id => {
+        const livro = livros.find(l => l.id === parseInt(id));
+        return livro?.titulo || '';
+      }).filter(Boolean).join(', ');
+
+      await supabase.from('monitoramento').insert({
+        parceiro_nome: form.nome.trim(),
+        data: form.dataDivulgacao,
+        status: 'pendente',
+        tipo_postagem: null,
+        observacao: `[Vitrine] Pedido #${pedido.id} — Livros: ${livrosSelecionados}`,
+        origem: 'vitrine',
+        origem_id: pedido.id,
+      });
+
       setEnviado(true);
       setSelecionados({});
-      setForm({ nome: '', cpf: '', telefone: '', email: '', cep: '', endereco: '', obs: '' });
+      setForm({ nome: '', cpf: '', telefone: '', email: '', cep: '', endereco: '', dataDivulgacao: '', obs: '' });
 
       setTimeout(() => {
         setEnviado(false);
@@ -1207,6 +1224,24 @@ function PainelCarrinho({
               </div>
 
               <div style={{ marginBottom: 16 }}>
+                <label style={labelStyle}>Data prevista de divulgação *</label>
+                <input
+                  type="date"
+                  value={form.dataDivulgacao}
+                  onChange={e => setForm({ ...form, dataDivulgacao: e.target.value })}
+                  style={inputStyle}
+                />
+                <p style={{
+                  fontSize: 11,
+                  color: COLORS.textMuted,
+                  marginTop: 4,
+                  margin: '4px 0 0',
+                }}>
+                  Informe a data em que você pretende divulgar os livros selecionados.
+                </p>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
                 <label style={labelStyle}>Observações (opcional)</label>
                 <textarea
                   placeholder="Alguma observação sobre os livros ou sobre a divulgação..."
@@ -1340,13 +1375,13 @@ function PainelCarrinho({
             {showForm ? (
               <button
                 onClick={onEnviar}
-                disabled={enviando || !form.nome.trim() || !form.email.trim() || !form.telefone.trim() || !form.cpf.trim() || !form.cep.trim() || !form.endereco.trim()}
+                disabled={enviando || !form.nome.trim() || !form.email.trim() || !form.telefone.trim() || !form.cpf.trim() || !form.cep.trim() || !form.endereco.trim() || !form.dataDivulgacao}
                 style={{
                   width: '100%',
                   padding: '14px',
                   border: 'none',
                   borderRadius: 12,
-                  background: (!form.nome.trim() || !form.email.trim() || !form.telefone.trim() || !form.cpf.trim() || !form.cep.trim() || !form.endereco.trim())
+                  background: (!form.nome.trim() || !form.email.trim() || !form.telefone.trim() || !form.cpf.trim() || !form.cep.trim() || !form.endereco.trim() || !form.dataDivulgacao)
                     ? COLORS.textMuted
                     : COLORS.primary,
                   color: COLORS.white,
