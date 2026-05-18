@@ -683,11 +683,6 @@ export default function VitrineAdmin() {
               })}
             </div>
           )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </>
       )}
 
