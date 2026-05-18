@@ -162,6 +162,7 @@ export default function VitrinePublica() {
           pedido_id: pedido.id,
           livro_id: parseInt(livroId),
           titulo_livro: livro?.titulo || 'Título desconhecido',
+          ean_livro: livro?.ean || null,
           quantidade: qty,
         };
       });
