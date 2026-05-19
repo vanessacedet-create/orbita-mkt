@@ -7,50 +7,52 @@ import {
   LayoutDashboard, BookOpen, BookMarked, Users, LogOut,
   Orbit, ShieldAlert, Megaphone, CalendarDays, CheckSquare, UserRound, Eye,
   Network, Calculator, HeartHandshake, CalendarCheck, GraduationCap, Compass, Sparkles,
-  Store
+  Store, FileText
 } from 'lucide-react'
 import './App.css'
 
 import Login from './pages/Login'
 import ResetPassword from './pages/ResetPassword'
 
-const Dashboard     = lazy(() => import('./pages/Dashboard'))
-const Cortesias     = lazy(() => import('./pages/Cortesias'))
-const Usuarios      = lazy(() => import('./pages/Usuarios'))
-const Campanhas     = lazy(() => import('./pages/Campanhas'))
-const Lancamentos   = lazy(() => import('./pages/Lancamentos'))
-const Tarefas       = lazy(() => import('./pages/Tarefas'))
-const Parceiros     = lazy(() => import('./pages/Parceiros'))
-const Monitoramento = lazy(() => import('./pages/Monitoramento'))
-const CRM           = lazy(() => import('./pages/CRM'))
-const Calculadora   = lazy(() => import('./pages/Calculadora'))
-const RH            = lazy(() => import('./pages/RH'))
-const CRMLiterario  = lazy(() => import('./pages/CRMLiterario'))
-const Eventos       = lazy(() => import('./pages/Eventos'))
-const Treinamentos  = lazy(() => import('./pages/Treinamentos'))
-const Descoberta    = lazy(() => import('./pages/Descoberta'))
-const Prospeccao    = lazy(() => import('./pages/Prospeccao'))
+const Dashboard      = lazy(() => import('./pages/Dashboard'))
+const Cortesias      = lazy(() => import('./pages/Cortesias'))
+const Usuarios       = lazy(() => import('./pages/Usuarios'))
+const Campanhas      = lazy(() => import('./pages/Campanhas'))
+const Lancamentos    = lazy(() => import('./pages/Lancamentos'))
+const Tarefas        = lazy(() => import('./pages/Tarefas'))
+const Parceiros      = lazy(() => import('./pages/Parceiros'))
+const Monitoramento  = lazy(() => import('./pages/Monitoramento'))
+const CRM            = lazy(() => import('./pages/CRM'))
+const Calculadora    = lazy(() => import('./pages/Calculadora'))
+const RH             = lazy(() => import('./pages/RH'))
+const CRMLiterario   = lazy(() => import('./pages/CRMLiterario'))
+const Eventos        = lazy(() => import('./pages/Eventos'))
+const Treinamentos   = lazy(() => import('./pages/Treinamentos'))
+const Descoberta     = lazy(() => import('./pages/Descoberta'))
+const Prospeccao     = lazy(() => import('./pages/Prospeccao'))
 const VitrinePublica = lazy(() => import('./pages/VitrinePublica'))
 const VitrineAdmin   = lazy(() => import('./pages/VitrineAdmin'))
+const GuiaParcerias  = lazy(() => import('./pages/GuiaParcerias'))
 
 const MENU = [
-  { path: '/',              label: 'Dashboard',    icon: LayoutDashboard, modulo: 'dashboard' },
-  { path: '/parceiros',     label: 'Parceiros',    icon: UserRound,       modulo: 'parceiros' },
-  { path: '/descoberta',    label: 'Descoberta',   icon: Compass,         modulo: 'parceiros' },
-  { path: '/prospeccao',    label: 'Prospecção',   icon: Sparkles,        modulo: 'parceiros' },
-  { path: '/crm',           label: 'CRM',          icon: Network,         modulo: 'crm' },
-  { path: '/crm-literario', label: 'CRM Literário',icon: BookMarked,      modulo: 'crm_literario' },
-  { path: '/calculadora',   label: 'Calculadora',  icon: Calculator,      modulo: 'calculadora' },
-  { path: '/cortesias',     label: 'Cortesias',    icon: BookOpen,        modulo: 'cortesias' },
-  { path: '/campanhas',     label: 'Campanhas',    icon: Megaphone,       modulo: 'campanhas' },
-  { path: '/monitoramento', label: 'Monitoramento',icon: Eye,             modulo: 'monitoramento' },
-  { path: '/lancamentos',   label: 'Lançamentos',  icon: CalendarDays,    modulo: 'lancamentos' },
-  { path: '/tarefas',       label: 'Tarefas',      icon: CheckSquare,     modulo: 'tarefas' },
-  { path: '/rh',            label: 'RH',           icon: HeartHandshake,  modulo: 'rh' },
-  { path: '/treinamentos',  label: 'Treinamentos', icon: GraduationCap,   modulo: 'treinamentos' },
-  { path: '/eventos',       label: 'Eventos',      icon: CalendarCheck,   modulo: 'eventos' },
-  { path: '/vitrine-admin', label: 'Vitrine',      icon: Store,           modulo: 'parceiros' },
-  { path: '/usuarios',      label: 'Usuários',     icon: Users,           modulo: 'usuarios' },
+  { path: '/',                 label: 'Dashboard',         icon: LayoutDashboard, modulo: 'dashboard'       },
+  { path: '/parceiros',        label: 'Parceiros',         icon: UserRound,       modulo: 'parceiros'       },
+  { path: '/descoberta',       label: 'Descoberta',        icon: Compass,         modulo: 'parceiros'       },
+  { path: '/prospeccao',       label: 'Prospecção',        icon: Sparkles,        modulo: 'parceiros'       },
+  { path: '/guia-parcerias',   label: 'Guia de Parcerias', icon: FileText,        modulo: 'guia_parcerias'  },
+  { path: '/crm',              label: 'CRM',               icon: Network,         modulo: 'crm'             },
+  { path: '/crm-literario',    label: 'CRM Literário',     icon: BookMarked,      modulo: 'crm_literario'   },
+  { path: '/calculadora',      label: 'Calculadora',       icon: Calculator,      modulo: 'calculadora'     },
+  { path: '/cortesias',        label: 'Cortesias',         icon: BookOpen,        modulo: 'cortesias'       },
+  { path: '/campanhas',        label: 'Campanhas',         icon: Megaphone,       modulo: 'campanhas'       },
+  { path: '/monitoramento',    label: 'Monitoramento',     icon: Eye,             modulo: 'monitoramento'   },
+  { path: '/lancamentos',      label: 'Lançamentos',       icon: CalendarDays,    modulo: 'lancamentos'     },
+  { path: '/tarefas',          label: 'Tarefas',           icon: CheckSquare,     modulo: 'tarefas'         },
+  { path: '/rh',               label: 'RH',                icon: HeartHandshake,  modulo: 'rh'              },
+  { path: '/treinamentos',     label: 'Treinamentos',      icon: GraduationCap,   modulo: 'treinamentos'    },
+  { path: '/eventos',          label: 'Eventos',           icon: CalendarCheck,   modulo: 'eventos'         },
+  { path: '/vitrine-admin',    label: 'Vitrine',           icon: Store,           modulo: 'parceiros'       },
+  { path: '/usuarios',         label: 'Usuários',          icon: Users,           modulo: 'usuarios'        },
 ]
 
 const PERFIL_LABEL = {
@@ -202,23 +204,24 @@ function Shell() {
       <main className="main-content">
         <Suspense fallback={<div className="loading"><div className="spinner"/></div>}>
           <Routes>
-            <Route path="/"              element={<HomeRedirect />} />
-            <Route path="/cortesias"     element={<RequireAuth modulo="cortesias"><Cortesias /></RequireAuth>} />
-            <Route path="/parceiros"     element={<RequireAuth modulo="parceiros"><Parceiros /></RequireAuth>} />
-            <Route path="/usuarios"      element={<RequireAuth modulo="usuarios"><Usuarios /></RequireAuth>} />
-            <Route path="/campanhas"     element={<RequireAuth modulo="campanhas"><Campanhas /></RequireAuth>} />
-            <Route path="/monitoramento" element={<RequireAuth modulo="monitoramento"><Monitoramento /></RequireAuth>} />
-            <Route path="/crm"           element={<RequireAuth modulo="crm"><CRM /></RequireAuth>} />
-            <Route path="/calculadora"   element={<RequireAuth modulo="calculadora"><Calculadora /></RequireAuth>} />
-            <Route path="/rh"            element={<RequireAuth modulo="rh"><RH /></RequireAuth>} />
-            <Route path="/eventos"       element={<RequireAuth modulo="eventos"><Eventos /></RequireAuth>} />
-            <Route path="/lancamentos"   element={<RequireAuth modulo="lancamentos"><Lancamentos /></RequireAuth>} />
-            <Route path="/tarefas"       element={<RequireAuth modulo="tarefas"><Tarefas /></RequireAuth>} />
-            <Route path="/crm-literario" element={<RequireAuth modulo="crm_literario"><CRMLiterario /></RequireAuth>} />
-            <Route path="/treinamentos"  element={<RequireAuth modulo="treinamentos"><Treinamentos /></RequireAuth>} />
-            <Route path="/descoberta"    element={<RequireAuth modulo="parceiros"><Descoberta /></RequireAuth>} />
-            <Route path="/prospeccao"    element={<RequireAuth modulo="parceiros"><Prospeccao /></RequireAuth>} />
-            <Route path="/vitrine-admin" element={<RequireAuth modulo="parceiros"><VitrineAdmin /></RequireAuth>} />
+            <Route path="/"                element={<HomeRedirect />} />
+            <Route path="/cortesias"       element={<RequireAuth modulo="cortesias"><Cortesias /></RequireAuth>} />
+            <Route path="/parceiros"       element={<RequireAuth modulo="parceiros"><Parceiros /></RequireAuth>} />
+            <Route path="/usuarios"        element={<RequireAuth modulo="usuarios"><Usuarios /></RequireAuth>} />
+            <Route path="/campanhas"       element={<RequireAuth modulo="campanhas"><Campanhas /></RequireAuth>} />
+            <Route path="/monitoramento"   element={<RequireAuth modulo="monitoramento"><Monitoramento /></RequireAuth>} />
+            <Route path="/crm"             element={<RequireAuth modulo="crm"><CRM /></RequireAuth>} />
+            <Route path="/calculadora"     element={<RequireAuth modulo="calculadora"><Calculadora /></RequireAuth>} />
+            <Route path="/rh"              element={<RequireAuth modulo="rh"><RH /></RequireAuth>} />
+            <Route path="/eventos"         element={<RequireAuth modulo="eventos"><Eventos /></RequireAuth>} />
+            <Route path="/lancamentos"     element={<RequireAuth modulo="lancamentos"><Lancamentos /></RequireAuth>} />
+            <Route path="/tarefas"         element={<RequireAuth modulo="tarefas"><Tarefas /></RequireAuth>} />
+            <Route path="/crm-literario"   element={<RequireAuth modulo="crm_literario"><CRMLiterario /></RequireAuth>} />
+            <Route path="/treinamentos"    element={<RequireAuth modulo="treinamentos"><Treinamentos /></RequireAuth>} />
+            <Route path="/descoberta"      element={<RequireAuth modulo="parceiros"><Descoberta /></RequireAuth>} />
+            <Route path="/prospeccao"      element={<RequireAuth modulo="parceiros"><Prospeccao /></RequireAuth>} />
+            <Route path="/vitrine-admin"   element={<RequireAuth modulo="parceiros"><VitrineAdmin /></RequireAuth>} />
+            <Route path="/guia-parcerias"  element={<RequireAuth modulo="guia_parcerias"><GuiaParcerias /></RequireAuth>} />
           </Routes>
         </Suspense>
       </main>
