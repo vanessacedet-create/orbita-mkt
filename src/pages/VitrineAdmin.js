@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import {
   Plus, Trash2, Edit2, Upload, Download, Search, Eye, EyeOff,
   Star, StarOff, Save, X, ChevronDown, Loader2, BookOpen,
-  FileSpreadsheet, Check, AlertCircle, Package, ClipboardList
+  FileSpreadsheet, Check, AlertCircle, Package, ClipboardList, Users
 } from 'lucide-react';
 
 /* ============================================
@@ -13,15 +13,19 @@ import {
    ============================================ */
 
 export default function VitrineAdmin() {
-  const [tab, setTab] = useState('livros'); // 'livros' | 'pedidos'
+  const [tab, setTab] = useState('livros'); // 'livros' | 'pedidos' | 'parceiros'
   const [livros, setLivros] = useState([]);
   const [pedidos, setPedidos] = useState([]);
+  const [parceiros, setParceiros] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editando, setEditando] = useState(null);
   const [importando, setImportando] = useState(false);
   const [msgImport, setMsgImport] = useState(null);
+  const [showFormParceiro, setShowFormParceiro] = useState(false);
+  const [editandoParceiro, setEditandoParceiro] = useState(null);
+  const [buscaParceiro, setBuscaParceiro] = useState('');
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -31,7 +35,7 @@ export default function VitrineAdmin() {
   async function carregarDados() {
     setLoading(true);
 
-    const [{ data: livrosData }, { data: pedidosData }] = await Promise.all([
+    const [{ data: livrosData }, { data: pedidosData }, { data: parceirosData }] = await Promise.all([
       supabase
         .from('vitrine_livros')
         .select('*')
@@ -40,10 +44,15 @@ export default function VitrineAdmin() {
         .from('vitrine_pedidos')
         .select('*, vitrine_pedido_itens(*)')
         .order('created_at', { ascending: false }),
+      supabase
+        .from('vitrine_parceiros')
+        .select('*')
+        .order('nome', { ascending: true }),
     ]);
 
     if (livrosData) setLivros(livrosData);
     if (pedidosData) setPedidos(pedidosData);
+    if (parceirosData) setParceiros(parceirosData);
     setLoading(false);
   }
 
@@ -175,10 +184,64 @@ export default function VitrineAdmin() {
     }
   }
 
+  // ── Parceiros: salvar (criar ou editar) ──
+  async function salvarParceiro(dados) {
+    if (editandoParceiro) {
+      const { error } = await supabase
+        .from('vitrine_parceiros')
+        .update(dados)
+        .eq('id', editandoParceiro.id);
+      if (!error) {
+        setParceiros(prev => prev.map(p =>
+          p.id === editandoParceiro.id ? { ...p, ...dados } : p
+        ));
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('vitrine_parceiros')
+        .insert(dados)
+        .select()
+        .single();
+      if (!error && data) {
+        setParceiros(prev => [...prev, data].sort((a, b) => a.nome.localeCompare(b.nome)));
+      }
+    }
+    setShowFormParceiro(false);
+    setEditandoParceiro(null);
+  }
+
+  // ── Parceiros: toggle ativo ──
+  async function toggleAtivoParceiro(parceiro) {
+    const { error } = await supabase
+      .from('vitrine_parceiros')
+      .update({ ativo: !parceiro.ativo })
+      .eq('id', parceiro.id);
+    if (!error) {
+      setParceiros(prev => prev.map(p =>
+        p.id === parceiro.id ? { ...p, ativo: !p.ativo } : p
+      ));
+    }
+  }
+
+  // ── Parceiros: excluir ──
+  async function excluirParceiro(id) {
+    if (!window.confirm('Excluir este parceiro? O acesso dele à vitrine será removido.')) return;
+    const { error } = await supabase.from('vitrine_parceiros').delete().eq('id', id);
+    if (!error) setParceiros(prev => prev.filter(p => p.id !== id));
+  }
+
+  // ── Parceiros: filtro ──
+  const parceirosFiltrados = parceiros.filter(p => {
+    if (!buscaParceiro) return true;
+    const t = buscaParceiro.toLowerCase();
+    return p.nome?.toLowerCase().includes(t) || p.email?.toLowerCase().includes(t);
+  });
+
   // ── Contadores ──
   const totalAtivos = livros.filter(l => l.ativo).length;
   const totalInativos = livros.filter(l => !l.ativo).length;
   const pedidosNovos = pedidos.filter(p => p.status === 'novo').length;
+  const parceirosAtivos = parceiros.filter(p => p.ativo).length;
 
   return (
     <div style={{ padding: '24px', maxWidth: 1200, margin: '0 auto' }}>
@@ -232,6 +295,16 @@ export default function VitrineAdmin() {
             <div style={{ fontSize: 20, fontWeight: 700, color: '#D4A005' }}>{pedidosNovos}</div>
             <div style={{ fontSize: 11, color: '#666' }}>Pedidos novos</div>
           </div>
+          <div style={{
+            background: '#eef2ff',
+            border: '1px solid #c7d2fe',
+            borderRadius: 10,
+            padding: '8px 16px',
+            textAlign: 'center',
+          }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: '#4338ca' }}>{parceirosAtivos}</div>
+            <div style={{ fontSize: 11, color: '#666' }}>Parceiros</div>
+          </div>
         </div>
       </div>
 
@@ -243,8 +316,9 @@ export default function VitrineAdmin() {
         borderBottom: '2px solid #e5e7eb',
       }}>
         {[
-          { key: 'livros', label: 'Livros', icon: BookOpen },
-          { key: 'pedidos', label: 'Pedidos', icon: ClipboardList, badge: pedidosNovos },
+          { key: 'livros',     label: 'Livros',    icon: BookOpen },
+          { key: 'pedidos',    label: 'Pedidos',   icon: ClipboardList, badge: pedidosNovos },
+          { key: 'parceiros',  label: 'Parceiros', icon: Users },
         ].map(t => (
           <button
             key={t.key}
@@ -746,6 +820,121 @@ export default function VitrineAdmin() {
         </>
       )}
 
+      {/* ═══ ABA PARCEIROS ═══ */}
+      {tab === 'parceiros' && (
+        <>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 200, position: 'relative' }}>
+              <Search size={16} style={{
+                position: 'absolute', left: 12, top: '50%',
+                transform: 'translateY(-50%)', color: '#999',
+              }} />
+              <input
+                type="text"
+                placeholder="Buscar por nome ou e-mail..."
+                value={buscaParceiro}
+                onChange={e => setBuscaParceiro(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px 10px 36px',
+                  border: '1.5px solid #ddd',
+                  borderRadius: 8,
+                  fontSize: 14,
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+            <button
+              onClick={() => { setEditandoParceiro(null); setShowFormParceiro(true); }}
+              style={btnPrimary}
+            >
+              <Plus size={16} /> Adicionar parceiro
+            </button>
+          </div>
+
+          {loading ? (
+            <p style={{ textAlign: 'center', padding: 40, color: '#999' }}>Carregando...</p>
+          ) : parceirosFiltrados.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#aaa' }}>
+              <Users size={40} style={{ marginBottom: 12, opacity: 0.3 }} />
+              <p style={{ fontSize: 15, margin: '0 0 6px' }}>Nenhum parceiro encontrado</p>
+              <p style={{ fontSize: 13 }}>
+                {buscaParceiro ? 'Tente um termo diferente.' : 'Adicione o primeiro parceiro para liberar acesso à vitrine.'}
+              </p>
+            </div>
+          ) : (
+            <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: '#f9fafb' }}>
+                    <th style={{ ...th, textAlign: 'left' }}>Nome</th>
+                    <th style={{ ...th, textAlign: 'left' }}>E-mail</th>
+                    <th style={th}>Cadastrado em</th>
+                    <th style={th}>Acesso</th>
+                    <th style={th}>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {parceirosFiltrados.map(parceiro => (
+                    <tr key={parceiro.id} style={{
+                      borderTop: '1px solid #f0f0f0',
+                      opacity: parceiro.ativo ? 1 : 0.5,
+                    }}>
+                      <td style={{ ...td, textAlign: 'left', fontWeight: 600 }}>
+                        {parceiro.nome}
+                      </td>
+                      <td style={{ ...td, textAlign: 'left', color: '#555', fontFamily: 'monospace', fontSize: 12 }}>
+                        {parceiro.email || '—'}
+                      </td>
+                      <td style={td}>
+                        {parceiro.created_at
+                          ? new Date(parceiro.created_at).toLocaleDateString('pt-BR')
+                          : '—'}
+                      </td>
+                      <td style={td}>
+                        <button
+                          onClick={() => toggleAtivoParceiro(parceiro)}
+                          style={{
+                            padding: '4px 12px',
+                            borderRadius: 20,
+                            border: 'none',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            background: parceiro.ativo ? '#dcfce7' : '#f3f4f6',
+                            color: parceiro.ativo ? '#16a34a' : '#6b7280',
+                          }}
+                        >
+                          {parceiro.ativo ? 'Ativo' : 'Inativo'}
+                        </button>
+                      </td>
+                      <td style={td}>
+                        <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                          <button
+                            onClick={() => { setEditandoParceiro(parceiro); setShowFormParceiro(true); }}
+                            style={iconBtn}
+                            title="Editar"
+                          >
+                            <Edit2 size={15} />
+                          </button>
+                          <button
+                            onClick={() => excluirParceiro(parceiro.id)}
+                            style={{ ...iconBtn, color: '#dc2626' }}
+                            title="Excluir"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+
       {/* ═══ MODAL FORM LIVRO ═══ */}
       {showForm && (
         <FormLivro
@@ -775,6 +964,126 @@ export default function VitrineAdmin() {
           onCancelar={() => { setShowForm(false); setEditando(null); }}
         />
       )}
+
+      {/* ═══ MODAL FORM PARCEIRO ═══ */}
+      {showFormParceiro && (
+        <FormParceiro
+          parceiro={editandoParceiro}
+          onSalvar={salvarParceiro}
+          onCancelar={() => { setShowFormParceiro(false); setEditandoParceiro(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ──────────────────────────────
+   COMPONENTE: Formulário de Parceiro
+   ────────────────────────────── */
+function FormParceiro({ parceiro, onSalvar, onCancelar }) {
+  const [form, setForm] = useState({
+    nome:  parceiro?.nome  || '',
+    email: parceiro?.email || '',
+    ativo: parceiro?.ativo ?? true,
+  });
+  const [erro, setErro] = useState('');
+
+  function handleSubmit() {
+    if (!form.nome.trim()) { setErro('O nome é obrigatório.'); return; }
+    if (!form.email.trim()) { setErro('O e-mail é obrigatório.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      setErro('Informe um e-mail válido.');
+      return;
+    }
+    setErro('');
+    onSalvar({ nome: form.nome.trim(), email: form.email.trim().toLowerCase(), ativo: form.ativo });
+  }
+
+  return (
+    <div
+      onClick={onCancelar}
+      style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(0,0,0,0.4)',
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 20,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: 'white',
+          borderRadius: 12,
+          maxWidth: 440,
+          width: '100%',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+        }}
+      >
+        {/* Header */}
+        <div style={{
+          padding: '18px 22px',
+          borderBottom: '1px solid #e5e7eb',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}>
+          <h2 style={{ fontSize: 17, fontWeight: 700, margin: 0 }}>
+            {parceiro ? 'Editar parceiro' : 'Adicionar parceiro'}
+          </h2>
+          <button onClick={onCancelar} style={iconBtn}><X size={18} /></button>
+        </div>
+
+        {/* Campos */}
+        <div style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <p style={{ fontSize: 13, color: '#888', margin: 0, lineHeight: 1.5 }}>
+            O parceiro poderá acessar a Vitrine Pública usando o e-mail cadastrado aqui.
+          </p>
+
+          <Field label="Nome completo *" value={form.nome} onChange={v => setForm({ ...form, nome: v })} />
+          <Field label="E-mail *" value={form.email} onChange={v => setForm({ ...form, email: v })} type="email" />
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+            <input
+              type="checkbox"
+              checked={form.ativo}
+              onChange={e => setForm({ ...form, ativo: e.target.checked })}
+            />
+            Acesso ativo (parceiro consegue entrar na vitrine)
+          </label>
+
+          {erro && (
+            <div style={{
+              display: 'flex', gap: 8, alignItems: 'center',
+              background: '#fef2f2', border: '1px solid #fecaca',
+              borderRadius: 8, padding: '10px 14px',
+              fontSize: 13, color: '#dc2626',
+            }}>
+              <AlertCircle size={15} style={{ flexShrink: 0 }} />
+              {erro}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          padding: '14px 22px',
+          borderTop: '1px solid #e5e7eb',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: 10,
+        }}>
+          <button onClick={onCancelar} style={btnSecondary}>Cancelar</button>
+          <button
+            onClick={handleSubmit}
+            style={btnPrimary}
+          >
+            <Save size={16} /> {parceiro ? 'Salvar alterações' : 'Adicionar'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
