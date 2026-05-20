@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import {
-  Search, ShoppingBag, X, ChevronDown, Send, Check,
-  BookOpen, Filter, Minus, Plus, ArrowLeft, Loader2, Star
+  Search, ShoppingBag, X, Send, Check,
+  BookOpen, Filter, Minus, Plus, ArrowLeft, Loader2, Star,
+  LogIn, History, ChevronRight, Package, LogOut, AlertCircle
 } from 'lucide-react';
 
 /* ============================================
    VITRINE CEDET — Página Pública
    Rota: /vitrine (sem autenticação)
+   Login por e-mail via vitrine_parceiros
    ============================================ */
 
-// ── Estilos inline (auto-contido, não depende de CSS externo) ──
 const COLORS = {
   bg: '#F7F7F5',
   card: '#FFFFFF',
@@ -27,6 +28,8 @@ const COLORS = {
   border: '#E0E0DE',
   borderLight: '#EDEDEB',
   success: '#5A8F6B',
+  error: '#C0392B',
+  errorLight: '#FDECEA',
   badge: '#F2B705',
   overlay: 'rgba(42, 42, 42, 0.55)',
   white: '#FFFFFF',
@@ -37,26 +40,547 @@ const FONTS = {
   body: "'DM Sans', 'Helvetica Neue', sans-serif",
 };
 
+// ── Normaliza CPF (usado na consulta de histórico) ──
+function normalizeCpf(cpf) {
+  return (cpf || '').replace(/\D/g, '');
+}
+
+// ── Formata data dd/mm/aaaa ──
+function fmtData(d) {
+  if (!d) return '—';
+  const dt = new Date(d);
+  return dt.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+}
+
+/* ============================================
+   TELA DE LOGIN
+   ============================================ */
+function TelaLogin({ onLogin }) {
+  const [valor, setValor] = useState('');
+  const [carregando, setCarregando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  useEffect(() => {
+    if (!document.getElementById('vitrine-fonts')) {
+      const link = document.createElement('link');
+      link.id = 'vitrine-fonts';
+      link.rel = 'stylesheet';
+      link.href = 'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@400;500;600&display=swap';
+      document.head.appendChild(link);
+    }
+  }, []);
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    const email = valor.trim();
+    if (!email) return;
+    setErro('');
+    setCarregando(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('vitrine_parceiros')
+        .select('*')
+        .eq('ativo', true)
+        .ilike('email', email)
+        .limit(1)
+        .single();
+
+      if (error || !data) {
+        setErro('E-mail não encontrado. Verifique seus dados ou entre em contato com a equipe CEDET.');
+        setCarregando(false);
+        return;
+      }
+
+      onLogin(data);
+    } catch {
+      setErro('Erro ao verificar acesso. Tente novamente.');
+    } finally {
+      setCarregando(false);
+    }
+  }
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: COLORS.bg,
+      fontFamily: FONTS.body,
+      display: 'flex',
+      flexDirection: 'column',
+    }}>
+      {/* Header */}
+      <header style={{
+        background: COLORS.primaryDark,
+        padding: '20px 24px',
+        textAlign: 'center',
+      }}>
+        <h1 style={{
+          fontFamily: FONTS.display,
+          fontSize: 'clamp(20px, 4vw, 28px)',
+          fontWeight: 700,
+          color: COLORS.white,
+          margin: 0,
+          letterSpacing: '0.5px',
+        }}>
+          Vitrine CEDET
+        </h1>
+        <p style={{
+          color: COLORS.accentLight,
+          fontSize: 13,
+          margin: '4px 0 0',
+          fontWeight: 500,
+        }}>
+          Catálogo de livros para parceiros
+        </p>
+      </header>
+
+      {/* Card de login */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '40px 20px',
+      }}>
+        <div style={{
+          background: COLORS.white,
+          borderRadius: 20,
+          padding: '40px 36px',
+          maxWidth: 420,
+          width: '100%',
+          boxShadow: '0 8px 40px rgba(0,0,0,0.08)',
+          border: `1px solid ${COLORS.borderLight}`,
+        }}>
+          <div style={{
+            width: 56,
+            height: 56,
+            borderRadius: '50%',
+            background: `${COLORS.accent}20`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 20px',
+          }}>
+            <BookOpen size={26} color={COLORS.accent} />
+          </div>
+
+          <h2 style={{
+            fontFamily: FONTS.display,
+            fontSize: 22,
+            fontWeight: 700,
+            color: COLORS.primaryDark,
+            margin: '0 0 6px',
+            textAlign: 'center',
+          }}>
+            Acesso de Parceiro
+          </h2>
+
+          <p style={{
+            fontSize: 14,
+            color: COLORS.textMuted,
+            margin: '0 0 28px',
+            textAlign: 'center',
+            lineHeight: 1.6,
+          }}>
+            Digite seu e-mail cadastrado para acessar o catálogo de lançamentos.
+          </p>
+
+          <form onSubmit={handleLogin}>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{
+                display: 'block',
+                fontSize: 12,
+                fontWeight: 600,
+                color: COLORS.textLight,
+                marginBottom: 8,
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+              }}>
+                E-mail
+              </label>
+              <input
+                type="email"
+                placeholder="seu@email.com"
+                value={valor}
+                onChange={e => { setValor(e.target.value); setErro(''); }}
+                autoFocus
+                style={{
+                  width: '100%',
+                  padding: '14px 16px',
+                  border: `1.5px solid ${erro ? COLORS.error : COLORS.border}`,
+                  borderRadius: 12,
+                  fontSize: 15,
+                  fontFamily: FONTS.body,
+                  background: COLORS.white,
+                  color: COLORS.text,
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  transition: 'border-color 0.2s',
+                }}
+                onFocus={e => { if (!erro) e.target.style.borderColor = COLORS.accent; }}
+                onBlur={e => { if (!erro) e.target.style.borderColor = COLORS.border; }}
+              />
+            </div>
+
+            {erro && (
+              <div style={{
+                display: 'flex',
+                gap: 8,
+                alignItems: 'flex-start',
+                background: COLORS.errorLight,
+                border: `1px solid ${COLORS.error}30`,
+                borderRadius: 10,
+                padding: '12px 14px',
+                marginBottom: 16,
+                fontSize: 13,
+                color: COLORS.error,
+                lineHeight: 1.5,
+              }}>
+                <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+                {erro}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={carregando || !valor.trim()}
+              style={{
+                width: '100%',
+                padding: '14px',
+                border: 'none',
+                borderRadius: 12,
+                background: (!valor.trim() || carregando) ? COLORS.textMuted : COLORS.primary,
+                color: COLORS.white,
+                fontSize: 15,
+                fontWeight: 600,
+                fontFamily: FONTS.body,
+                cursor: (!valor.trim() || carregando) ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                transition: 'background 0.2s',
+              }}
+            >
+              {carregando
+                ? <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> Verificando...</>
+                : <><LogIn size={18} /> Acessar vitrine</>
+              }
+            </button>
+          </form>
+
+          <p style={{
+            fontSize: 12,
+            color: COLORS.textMuted,
+            textAlign: 'center',
+            marginTop: 20,
+            lineHeight: 1.6,
+          }}>
+            Não sabe seu e-mail cadastrado? Entre em contato com a equipe CEDET.
+          </p>
+        </div>
+      </div>
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+    </div>
+  );
+}
+
+/* ============================================
+   PAINEL HISTÓRICO DE PEDIDOS
+   ============================================ */
+function PainelHistorico({ parceiro, onClose }) {
+  const [pedidos, setPedidos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [pedidoAberto, setPedidoAberto] = useState(null);
+
+  useEffect(() => {
+    async function carregarHistorico() {
+      setLoading(true);
+      const cpfNorm = normalizeCpf(parceiro.cpf);
+
+      const { data } = await supabase
+        .from('vitrine_pedidos')
+        .select('*, vitrine_pedido_itens(*)')
+        .or(`cpf.eq.${parceiro.cpf},cpf.eq.${cpfNorm},email.ilike.${parceiro.email}`)
+        .order('created_at', { ascending: false });
+
+      setPedidos(data || []);
+      setLoading(false);
+    }
+    carregarHistorico();
+  }, [parceiro]);
+
+  const STATUS_LABEL = {
+    novo:         { label: 'Recebido',    bg: '#EAF0F8', color: '#1A3A5C' },
+    em_analise:   { label: 'Em análise',  bg: '#FBF3E4', color: '#8B5E1A' },
+    aprovado:     { label: 'Aprovado',    bg: '#EAF3DE', color: '#3B6D11' },
+    enviado:      { label: 'Enviado',     bg: '#E8F0EC', color: '#1A3A2A' },
+    entregue:     { label: 'Entregue',    bg: '#E8F0EC', color: '#1A3A2A' },
+    cancelado:    { label: 'Cancelado',   bg: '#FDECEA', color: '#C0392B' },
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0,
+        background: COLORS.overlay,
+        zIndex: 300,
+        display: 'flex',
+        justifyContent: 'flex-end',
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: COLORS.white,
+          width: '100%',
+          maxWidth: 480,
+          height: '100%',
+          overflowY: 'auto',
+          boxShadow: '-10px 0 40px rgba(0,0,0,0.2)',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        {/* Header */}
+        <div style={{
+          padding: '20px 24px',
+          borderBottom: `1px solid ${COLORS.borderLight}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          background: COLORS.bg,
+          position: 'sticky',
+          top: 0,
+          zIndex: 1,
+        }}>
+          <div>
+            <h2 style={{
+              fontFamily: FONTS.display,
+              fontSize: 20,
+              fontWeight: 700,
+              margin: '0 0 2px',
+              color: COLORS.primaryDark,
+            }}>
+              Meus Pedidos
+            </h2>
+            <p style={{ fontSize: 13, color: COLORS.textMuted, margin: 0 }}>
+              {parceiro.nome}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none', border: 'none',
+              cursor: 'pointer', padding: 4,
+              color: COLORS.textMuted,
+            }}
+          >
+            <X size={22} />
+          </button>
+        </div>
+
+        {/* Conteúdo */}
+        <div style={{ flex: 1, padding: '16px 24px' }}>
+          {loading ? (
+            <div style={{
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+              padding: '60px 0', gap: 12,
+            }}>
+              <Loader2 size={28} color={COLORS.accent} style={{ animation: 'spin 1s linear infinite' }} />
+              <p style={{ color: COLORS.textMuted, fontSize: 14 }}>Carregando histórico...</p>
+            </div>
+          ) : pedidos.length === 0 ? (
+            <div style={{
+              textAlign: 'center', padding: '60px 20px',
+              color: COLORS.textMuted,
+            }}>
+              <Package size={44} style={{ marginBottom: 14, opacity: 0.3 }} />
+              <p style={{ fontSize: 15, fontWeight: 500, margin: '0 0 6px' }}>
+                Nenhum pedido ainda
+              </p>
+              <p style={{ fontSize: 13, margin: 0 }}>
+                Seus pedidos de livros aparecerão aqui depois que você enviar a primeira seleção.
+              </p>
+            </div>
+          ) : (
+            pedidos.map(pedido => {
+              const st = STATUS_LABEL[pedido.status] || { label: pedido.status, bg: '#F1EFE8', color: '#5F5E5A' };
+              const aberto = pedidoAberto === pedido.id;
+              const totalItens = (pedido.vitrine_pedido_itens || []).reduce((a, b) => a + (b.quantidade || 1), 0);
+
+              return (
+                <div
+                  key={pedido.id}
+                  style={{
+                    border: `1px solid ${aberto ? COLORS.accent : COLORS.borderLight}`,
+                    borderRadius: 14,
+                    marginBottom: 10,
+                    overflow: 'hidden',
+                    transition: 'border-color 0.2s',
+                  }}
+                >
+                  {/* Cabeçalho do pedido */}
+                  <button
+                    onClick={() => setPedidoAberto(aberto ? null : pedido.id)}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '14px 16px',
+                      background: aberto ? `${COLORS.accent}08` : COLORS.white,
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontFamily: FONTS.body,
+                      textAlign: 'left',
+                      gap: 10,
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        marginBottom: 4, flexWrap: 'wrap',
+                      }}>
+                        <span style={{
+                          fontSize: 13, fontWeight: 600, color: COLORS.primaryDark,
+                        }}>
+                          Pedido #{pedido.id}
+                        </span>
+                        <span style={{
+                          fontSize: 11, fontWeight: 600,
+                          background: st.bg, color: st.color,
+                          padding: '2px 8px', borderRadius: 20,
+                        }}>
+                          {st.label}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 12, color: COLORS.textMuted }}>
+                        {fmtData(pedido.created_at)} · {totalItens} {totalItens === 1 ? 'livro' : 'livros'}
+                        {pedido.data_divulgacao && ` · Divulgação: ${fmtData(pedido.data_divulgacao)}`}
+                      </div>
+                    </div>
+                    <ChevronRight
+                      size={16}
+                      color={COLORS.textMuted}
+                      style={{
+                        flexShrink: 0,
+                        transform: aberto ? 'rotate(90deg)' : 'none',
+                        transition: 'transform 0.2s',
+                      }}
+                    />
+                  </button>
+
+                  {/* Itens do pedido (expansível) */}
+                  {aberto && (
+                    <div style={{
+                      borderTop: `1px solid ${COLORS.borderLight}`,
+                      padding: '12px 16px',
+                      background: COLORS.bg,
+                    }}>
+                      {(pedido.vitrine_pedido_itens || []).length === 0 ? (
+                        <p style={{ fontSize: 13, color: COLORS.textMuted, margin: 0 }}>
+                          Sem itens registrados.
+                        </p>
+                      ) : (
+                        (pedido.vitrine_pedido_itens || []).map((item, i) => (
+                          <div
+                            key={i}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '8px 0',
+                              borderBottom: i < pedido.vitrine_pedido_itens.length - 1
+                                ? `1px solid ${COLORS.borderLight}`
+                                : 'none',
+                              fontSize: 13,
+                            }}
+                          >
+                            <span style={{
+                              color: COLORS.text,
+                              flex: 1,
+                              paddingRight: 12,
+                              lineHeight: 1.4,
+                            }}>
+                              {item.titulo_livro || 'Livro'}
+                            </span>
+                            <span style={{
+                              color: COLORS.textMuted,
+                              fontWeight: 600,
+                              flexShrink: 0,
+                            }}>
+                              × {item.quantidade || 1}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                      {pedido.observacoes && (
+                        <p style={{
+                          fontSize: 12,
+                          color: COLORS.textMuted,
+                          margin: '10px 0 0',
+                          fontStyle: 'italic',
+                          lineHeight: 1.5,
+                        }}>
+                          Obs: {pedido.observacoes}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================
+   COMPONENTE PRINCIPAL
+   ============================================ */
 export default function VitrinePublica() {
-  // ── State ──
+  // ── Auth ──
+  const [parceiro, setParceiro] = useState(null);
+
+  // ── Vitrine ──
   const [livros, setLivros] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
   const [editoraFiltro, setEditoraFiltro] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState('');
   const [showFiltros, setShowFiltros] = useState(false);
-  const [selecionados, setSelecionados] = useState({}); // { livroId: qty }
+  const [selecionados, setSelecionados] = useState({});
   const [showCarrinho, setShowCarrinho] = useState(false);
+  const [showHistorico, setShowHistorico] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [livroDetalhe, setLivroDetalhe] = useState(null);
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
-  const [form, setForm] = useState({ nome: '', cpf: '', telefone: '', email: '', cep: '', endereco: '', dataDivulgacao: '', obs: '' });
+  const [form, setForm] = useState({
+    telefone: '', cep: '', endereco: '', dataDivulgacao: '', obs: '',
+  });
+
+  // ── Google Fonts ──
+  useEffect(() => {
+    if (!document.getElementById('vitrine-fonts')) {
+      const link = document.createElement('link');
+      link.id = 'vitrine-fonts';
+      link.rel = 'stylesheet';
+      link.href = 'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@400;500;600&display=swap';
+      document.head.appendChild(link);
+    }
+  }, []);
 
   // ── Carregar livros ──
   useEffect(() => {
-    carregarLivros();
-  }, []);
+    if (parceiro) carregarLivros();
+  }, [parceiro]);
 
   async function carregarLivros() {
     setLoading(true);
@@ -72,17 +596,38 @@ export default function VitrinePublica() {
     setLoading(false);
   }
 
-  // ── Editoras e categorias únicas ──
-  const editoras = useMemo(() =>
-    [...new Set(livros.map(l => l.editora).filter(Boolean))].sort(),
-    [livros]
-  );
-  const categorias = useMemo(() =>
-    [...new Set(livros.map(l => l.categoria).filter(Boolean))].sort(),
-    [livros]
-  );
+  // ── Pré-preencher dados do último pedido ──
+  async function preencherUltimoPedido(parceiroData) {
+    const cpfNorm = normalizeCpf(parceiroData.cpf);
+    const { data } = await supabase
+      .from('vitrine_pedidos')
+      .select('contato, cep, endereco')
+      .or(`cpf.eq.${parceiroData.cpf},cpf.eq.${cpfNorm},email.ilike.${parceiroData.email}`)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
 
-  // ── Filtro ──
+    if (data) {
+      setForm(prev => ({
+        ...prev,
+        telefone: data.contato || '',
+        cep: data.cep || '',
+        endereco: data.endereco || '',
+      }));
+    }
+  }
+
+  function handleLogin(parceiroData) {
+    setParceiro(parceiroData);
+    preencherUltimoPedido(parceiroData);
+  }
+
+  // ── Filtros ──
+  const editoras = useMemo(() =>
+    [...new Set(livros.map(l => l.editora).filter(Boolean))].sort(), [livros]);
+  const categorias = useMemo(() =>
+    [...new Set(livros.map(l => l.categoria).filter(Boolean))].sort(), [livros]);
+
   const livrosFiltrados = useMemo(() => {
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
@@ -90,13 +635,10 @@ export default function VitrinePublica() {
     limite.setDate(limite.getDate() + 14);
 
     return livros.filter(l => {
-      // Regra: livros já lançados + lançamentos dos próximos 14 dias
-      // Livros com lançamento depois de 14 dias ficam ocultos
       if (l.data_lancamento) {
         const dataLanc = new Date(l.data_lancamento);
         if (dataLanc > limite) return false;
       }
-
       const matchBusca = !busca ||
         l.titulo?.toLowerCase().includes(busca.toLowerCase()) ||
         l.autor?.toLowerCase().includes(busca.toLowerCase());
@@ -112,11 +654,8 @@ export default function VitrinePublica() {
   function toggleSelecao(livro) {
     setSelecionados(prev => {
       const novo = { ...prev };
-      if (novo[livro.id]) {
-        delete novo[livro.id];
-      } else {
-        novo[livro.id] = 1;
-      }
+      if (novo[livro.id]) delete novo[livro.id];
+      else novo[livro.id] = 1;
       return novo;
     });
   }
@@ -125,30 +664,26 @@ export default function VitrinePublica() {
     setSelecionados(prev => {
       const novo = { ...prev };
       const novaQtd = (novo[livroId] || 1) + delta;
-      if (novaQtd <= 0) {
-        delete novo[livroId];
-      } else {
-        novo[livroId] = novaQtd;
-      }
+      if (novaQtd <= 0) delete novo[livroId];
+      else novo[livroId] = novaQtd;
       return novo;
     });
   }
 
-  // ── Envio do pedido ──
+  // ── Enviar pedido ──
   async function enviarPedido() {
-    if (!form.nome.trim() || !form.email.trim() || !form.telefone.trim() || !form.cpf.trim() || !form.dataDivulgacao) return;
+    if (!form.telefone.trim() || !form.dataDivulgacao) return;
     setEnviando(true);
 
     try {
-      // 1. Criar pedido
       const { data: pedido, error: errPedido } = await supabase
         .from('vitrine_pedidos')
         .insert({
-          nome_parceiro: form.nome.trim(),
-          cpf: form.cpf.trim(),
+          nome_parceiro: parceiro.nome,
+          cpf: parceiro.cpf,
           contato: form.telefone.trim(),
           tipo_contato: 'whatsapp',
-          email: form.email.trim(),
+          email: parceiro.email,
           cep: form.cep.trim() || null,
           endereco: form.endereco.trim() || null,
           data_divulgacao: form.dataDivulgacao,
@@ -159,7 +694,6 @@ export default function VitrinePublica() {
 
       if (errPedido) throw errPedido;
 
-      // 2. Inserir itens
       const itens = Object.entries(selecionados).map(([livroId, qty]) => {
         const livro = livros.find(l => l.id === parseInt(livroId));
         return {
@@ -177,14 +711,12 @@ export default function VitrinePublica() {
 
       if (errItens) throw errItens;
 
-      // 3. Criar registro automático no Monitoramento
-      const livrosSelecionados = Object.keys(selecionados).map(id => {
-        const livro = livros.find(l => l.id === parseInt(id));
-        return livro?.titulo || '';
-      }).filter(Boolean).join(', ');
+      const livrosSelecionados = Object.keys(selecionados)
+        .map(id => livros.find(l => l.id === parseInt(id))?.titulo || '')
+        .filter(Boolean).join(', ');
 
       await supabase.from('monitoramento').insert({
-        parceiro_nome: form.nome.trim(),
+        parceiro_nome: parceiro.nome,
         data: form.dataDivulgacao,
         status: 'pendente',
         tipo_postagem: null,
@@ -195,13 +727,13 @@ export default function VitrinePublica() {
 
       setEnviado(true);
       setSelecionados({});
-      setForm({ nome: '', cpf: '', telefone: '', email: '', cep: '', endereco: '', dataDivulgacao: '', obs: '' });
+      setForm(prev => ({ ...prev, dataDivulgacao: '', obs: '' }));
 
       setTimeout(() => {
         setEnviado(false);
         setShowForm(false);
         setShowCarrinho(false);
-      }, 3000);
+      }, 3500);
     } catch (err) {
       console.error('Erro ao enviar pedido:', err);
       alert('Erro ao enviar pedido. Tente novamente.');
@@ -210,7 +742,6 @@ export default function VitrinePublica() {
     }
   }
 
-  // ── Limpar filtros ──
   function limparFiltros() {
     setBusca('');
     setEditoraFiltro('');
@@ -219,18 +750,10 @@ export default function VitrinePublica() {
 
   const temFiltroAtivo = busca || editoraFiltro || categoriaFiltro;
 
-  // ── Google Fonts ──
-  useEffect(() => {
-    if (!document.getElementById('vitrine-fonts')) {
-      const link = document.createElement('link');
-      link.id = 'vitrine-fonts';
-      link.rel = 'stylesheet';
-      link.href = 'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@400;500;600&display=swap';
-      document.head.appendChild(link);
-    }
-  }, []);
+  // ── Login ──
+  if (!parceiro) return <TelaLogin onLogin={handleLogin} />;
 
-  // ── Render ──
+  // ── Vitrine principal ──
   return (
     <div style={{
       minHeight: '100vh',
@@ -251,15 +774,17 @@ export default function VitrinePublica() {
         <div style={{
           maxWidth: 1200,
           margin: '0 auto',
-          padding: '20px 24px',
+          padding: '16px 24px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap',
         }}>
           <div>
             <h1 style={{
               fontFamily: FONTS.display,
-              fontSize: 'clamp(20px, 4vw, 28px)',
+              fontSize: 'clamp(18px, 3vw, 24px)',
               fontWeight: 700,
               color: COLORS.white,
               margin: 0,
@@ -269,65 +794,95 @@ export default function VitrinePublica() {
             </h1>
             <p style={{
               color: COLORS.accentLight,
-              fontSize: 13,
-              margin: '4px 0 0',
+              fontSize: 12,
+              margin: '3px 0 0',
               fontWeight: 500,
-              letterSpacing: '0.3px',
             }}>
-              Catálogo de livros para parceiros
+              Olá, {parceiro.nome.split(' ')[0]}
             </p>
           </div>
 
-          {/* Botão carrinho */}
-          <button
-            onClick={() => setShowCarrinho(true)}
-            style={{
-              position: 'relative',
-              background: totalSelecionados > 0 ? COLORS.accent : 'rgba(255,255,255,0.15)',
-              border: 'none',
-              borderRadius: 12,
-              padding: '10px 16px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              color: COLORS.white,
-              fontSize: 14,
-              fontWeight: 600,
-              fontFamily: FONTS.body,
-              transition: 'all 0.2s',
-            }}
-          >
-            <ShoppingBag size={20} />
-            {totalSelecionados > 0 && (
-              <span>{totalSelecionados}</span>
-            )}
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {/* Histórico */}
+            <button
+              onClick={() => setShowHistorico(true)}
+              style={{
+                background: 'rgba(255,255,255,0.12)',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: 10,
+                padding: '9px 14px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                color: COLORS.white,
+                fontSize: 13,
+                fontWeight: 500,
+                fontFamily: FONTS.body,
+                transition: 'background 0.2s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
+            >
+              <History size={16} />
+              <span style={{ display: window.innerWidth < 480 ? 'none' : 'inline' }}>Meus pedidos</span>
+            </button>
+
+            {/* Carrinho */}
+            <button
+              onClick={() => setShowCarrinho(true)}
+              style={{
+                position: 'relative',
+                background: totalSelecionados > 0 ? COLORS.accent : 'rgba(255,255,255,0.15)',
+                border: 'none',
+                borderRadius: 10,
+                padding: '9px 14px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                color: COLORS.white,
+                fontSize: 14,
+                fontWeight: 600,
+                fontFamily: FONTS.body,
+                transition: 'all 0.2s',
+              }}
+            >
+              <ShoppingBag size={18} />
+              {totalSelecionados > 0 && <span>{totalSelecionados}</span>}
+            </button>
+
+            {/* Sair */}
+            <button
+              onClick={() => setParceiro(null)}
+              title="Sair"
+              style={{
+                background: 'none',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: 10,
+                padding: '9px 10px',
+                cursor: 'pointer',
+                color: 'rgba(255,255,255,0.6)',
+                display: 'flex',
+                alignItems: 'center',
+                transition: 'color 0.2s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.color = COLORS.white}
+              onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.6)'}
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
         </div>
       </header>
 
       {/* ─── BARRA DE BUSCA E FILTROS ─── */}
-      <div style={{
-        maxWidth: 1200,
-        margin: '0 auto',
-        padding: '20px 24px 0',
-      }}>
-        {/* Busca */}
-        <div style={{
-          display: 'flex',
-          gap: 10,
-          marginBottom: 12,
-        }}>
-          <div style={{
-            flex: 1,
-            position: 'relative',
-          }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 24px 0' }}>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+          <div style={{ flex: 1, position: 'relative' }}>
             <Search size={18} style={{
-              position: 'absolute',
-              left: 14,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: COLORS.textMuted,
+              position: 'absolute', left: 14, top: '50%',
+              transform: 'translateY(-50%)', color: COLORS.textMuted,
             }} />
             <input
               type="text"
@@ -345,7 +900,6 @@ export default function VitrinePublica() {
                 color: COLORS.text,
                 outline: 'none',
                 boxSizing: 'border-box',
-                transition: 'border-color 0.2s',
               }}
               onFocus={e => e.target.style.borderColor = COLORS.accent}
               onBlur={e => e.target.style.borderColor = COLORS.border}
@@ -357,32 +911,19 @@ export default function VitrinePublica() {
               background: showFiltros || temFiltroAtivo ? COLORS.primary : COLORS.white,
               color: showFiltros || temFiltroAtivo ? COLORS.white : COLORS.text,
               border: `1.5px solid ${showFiltros || temFiltroAtivo ? COLORS.primary : COLORS.border}`,
-              borderRadius: 12,
-              padding: '12px 16px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              fontFamily: FONTS.body,
-              fontWeight: 500,
-              fontSize: 14,
-              whiteSpace: 'nowrap',
+              borderRadius: 12, padding: '12px 16px',
+              cursor: 'pointer', display: 'flex', alignItems: 'center',
+              gap: 6, fontFamily: FONTS.body, fontWeight: 500,
+              fontSize: 14, whiteSpace: 'nowrap',
             }}
           >
-            <Filter size={16} />
-            Filtros
+            <Filter size={16} /> Filtros
             {temFiltroAtivo && (
               <span style={{
-                background: COLORS.accent,
-                color: COLORS.white,
-                borderRadius: '50%',
-                width: 18,
-                height: 18,
-                fontSize: 11,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 700,
+                background: COLORS.accent, color: COLORS.white,
+                borderRadius: '50%', width: 18, height: 18,
+                fontSize: 11, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', fontWeight: 700,
               }}>
                 {[busca, editoraFiltro, categoriaFiltro].filter(Boolean).length}
               </span>
@@ -390,161 +931,64 @@ export default function VitrinePublica() {
           </button>
         </div>
 
-        {/* Painel de filtros */}
         {showFiltros && (
           <div style={{
-            background: COLORS.white,
-            border: `1.5px solid ${COLORS.border}`,
-            borderRadius: 14,
-            padding: 20,
-            marginBottom: 12,
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 12,
-            alignItems: 'flex-end',
+            background: COLORS.white, border: `1.5px solid ${COLORS.border}`,
+            borderRadius: 14, padding: 20, marginBottom: 12,
+            display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end',
           }}>
             <div style={{ flex: '1 1 200px' }}>
-              <label style={{
-                display: 'block',
-                fontSize: 12,
-                fontWeight: 600,
-                color: COLORS.textLight,
-                marginBottom: 6,
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}>Editora</label>
-              <select
-                value={editoraFiltro}
-                onChange={e => setEditoraFiltro(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  border: `1.5px solid ${COLORS.border}`,
-                  borderRadius: 10,
-                  fontSize: 14,
-                  fontFamily: FONTS.body,
-                  background: COLORS.white,
-                  color: COLORS.text,
-                  cursor: 'pointer',
-                  boxSizing: 'border-box',
-                }}
-              >
+              <label style={labelStyle}>Editora</label>
+              <select value={editoraFiltro} onChange={e => setEditoraFiltro(e.target.value)} style={selectStyle}>
                 <option value="">Todas as editoras</option>
-                {editoras.map(e => (
-                  <option key={e} value={e}>{e}</option>
-                ))}
+                {editoras.map(e => <option key={e} value={e}>{e}</option>)}
               </select>
             </div>
-
             {categorias.length > 0 && (
               <div style={{ flex: '1 1 200px' }}>
-                <label style={{
-                  display: 'block',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: COLORS.textLight,
-                  marginBottom: 6,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                }}>Categoria</label>
-                <select
-                  value={categoriaFiltro}
-                  onChange={e => setCategoriaFiltro(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    border: `1.5px solid ${COLORS.border}`,
-                    borderRadius: 10,
-                    fontSize: 14,
-                    fontFamily: FONTS.body,
-                    background: COLORS.white,
-                    color: COLORS.text,
-                    cursor: 'pointer',
-                    boxSizing: 'border-box',
-                  }}
-                >
+                <label style={labelStyle}>Categoria</label>
+                <select value={categoriaFiltro} onChange={e => setCategoriaFiltro(e.target.value)} style={selectStyle}>
                   <option value="">Todas as categorias</option>
-                  {categorias.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
+                  {categorias.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
             )}
-
             {temFiltroAtivo && (
-              <button
-                onClick={limparFiltros}
-                style={{
-                  background: 'none',
-                  border: `1.5px solid ${COLORS.border}`,
-                  borderRadius: 10,
-                  padding: '10px 16px',
-                  cursor: 'pointer',
-                  fontSize: 13,
-                  fontFamily: FONTS.body,
-                  color: COLORS.textLight,
-                  fontWeight: 500,
-                  whiteSpace: 'nowrap',
-                }}
-              >
+              <button onClick={limparFiltros} style={{
+                background: 'none', border: `1.5px solid ${COLORS.border}`,
+                borderRadius: 10, padding: '10px 16px', cursor: 'pointer',
+                fontSize: 13, fontFamily: FONTS.body, color: COLORS.textLight,
+                fontWeight: 500, whiteSpace: 'nowrap',
+              }}>
                 Limpar filtros
               </button>
             )}
           </div>
         )}
 
-        {/* Contagem de resultados */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '8px 0 4px',
-        }}>
-          <p style={{
-            fontSize: 13,
-            color: COLORS.textMuted,
-            margin: 0,
-          }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0 4px' }}>
+          <p style={{ fontSize: 13, color: COLORS.textMuted, margin: 0 }}>
             {loading ? 'Carregando...' : `${livrosFiltrados.length} livro${livrosFiltrados.length !== 1 ? 's' : ''} disponíve${livrosFiltrados.length !== 1 ? 'is' : 'l'}`}
           </p>
         </div>
       </div>
 
       {/* ─── GRID DE LIVROS ─── */}
-      <div style={{
-        maxWidth: 1200,
-        margin: '0 auto',
-        padding: '12px 24px 100px',
-      }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '12px 24px 100px' }}>
         {loading ? (
-          <div style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            padding: '80px 0',
-            flexDirection: 'column',
-            gap: 16,
-          }}>
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '80px 0', flexDirection: 'column', gap: 16 }}>
             <Loader2 size={32} color={COLORS.accent} style={{ animation: 'spin 1s linear infinite' }} />
             <p style={{ color: COLORS.textMuted, fontSize: 15 }}>Carregando catálogo...</p>
             <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
           </div>
         ) : livrosFiltrados.length === 0 ? (
-          <div style={{
-            textAlign: 'center',
-            padding: '60px 20px',
-            color: COLORS.textMuted,
-          }}>
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: COLORS.textMuted }}>
             <BookOpen size={48} style={{ marginBottom: 16, opacity: 0.4 }} />
             <p style={{ fontSize: 16, fontWeight: 500 }}>Nenhum livro encontrado</p>
             <p style={{ fontSize: 14 }}>Tente ajustar os filtros de busca</p>
           </div>
         ) : (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-            gap: 20,
-          }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 20 }}>
             {livrosFiltrados.map(livro => (
               <LivroCard
                 key={livro.id}
@@ -558,31 +1002,17 @@ export default function VitrinePublica() {
         )}
       </div>
 
-      {/* ─── BOTÃO FLUTUANTE ENVIAR ─── */}
+      {/* ─── BOTÃO FLUTUANTE ─── */}
       {totalSelecionados > 0 && !showCarrinho && (
-        <div style={{
-          position: 'fixed',
-          bottom: 24,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 90,
-        }}>
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 90 }}>
           <button
             onClick={() => setShowCarrinho(true)}
             style={{
-              background: COLORS.primary,
-              color: COLORS.white,
-              border: 'none',
-              borderRadius: 16,
-              padding: '14px 28px',
-              fontSize: 15,
-              fontWeight: 600,
-              fontFamily: FONTS.body,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              boxShadow: '0 6px 30px rgba(75, 52, 40, 0.35)',
+              background: COLORS.primary, color: COLORS.white,
+              border: 'none', borderRadius: 16, padding: '14px 28px',
+              fontSize: 15, fontWeight: 600, fontFamily: FONTS.body,
+              cursor: 'pointer', display: 'flex', alignItems: 'center',
+              gap: 10, boxShadow: '0 6px 30px rgba(75, 52, 40, 0.35)',
             }}
           >
             <ShoppingBag size={18} />
@@ -592,7 +1022,7 @@ export default function VitrinePublica() {
         </div>
       )}
 
-      {/* ─── MODAL DETALHE DO LIVRO ─── */}
+      {/* ─── MODAL DETALHE ─── */}
       {livroDetalhe && (
         <ModalDetalhe
           livro={livroDetalhe}
@@ -602,7 +1032,7 @@ export default function VitrinePublica() {
         />
       )}
 
-      {/* ─── PAINEL LATERAL: CARRINHO / FORMULÁRIO ─── */}
+      {/* ─── PAINEL CARRINHO ─── */}
       {showCarrinho && (
         <PainelCarrinho
           livros={livros}
@@ -617,8 +1047,19 @@ export default function VitrinePublica() {
           enviado={enviado}
           onEnviar={enviarPedido}
           onClose={() => { setShowCarrinho(false); setShowForm(false); }}
+          parceiro={parceiro}
         />
       )}
+
+      {/* ─── PAINEL HISTÓRICO ─── */}
+      {showHistorico && (
+        <PainelHistorico
+          parceiro={parceiro}
+          onClose={() => setShowHistorico(false)}
+        />
+      )}
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
   );
 }
@@ -630,199 +1071,102 @@ function LivroCard({ livro, selecionado, onToggle, onDetalhe }) {
   const [imgError, setImgError] = useState(false);
 
   return (
-    <div
-      style={{
-        background: COLORS.card,
-        borderRadius: 14,
-        overflow: 'hidden',
-        border: `2px solid ${selecionado ? COLORS.accent : COLORS.borderLight}`,
-        transition: 'all 0.25s ease',
-        cursor: 'pointer',
-        position: 'relative',
-        boxShadow: selecionado
-          ? `0 4px 20px rgba(200, 149, 108, 0.25)`
-          : '0 2px 8px rgba(0,0,0,0.04)',
-      }}
-      onMouseEnter={e => {
-        if (!selecionado) e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)';
-      }}
-      onMouseLeave={e => {
-        if (!selecionado) e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)';
-      }}
+    <div style={{
+      background: COLORS.card,
+      borderRadius: 14,
+      overflow: 'hidden',
+      border: `2px solid ${selecionado ? COLORS.accent : COLORS.borderLight}`,
+      transition: 'all 0.25s ease',
+      cursor: 'pointer',
+      position: 'relative',
+      boxShadow: selecionado ? `0 4px 20px rgba(200, 149, 108, 0.25)` : '0 2px 8px rgba(0,0,0,0.04)',
+    }}
+      onMouseEnter={e => { if (!selecionado) e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)'; }}
+      onMouseLeave={e => { if (!selecionado) e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.04)'; }}
     >
-      {/* Badge destaque */}
       {livro.destaque && (
         <div style={{
-          position: 'absolute',
-          top: 10,
-          left: 10,
-          zIndex: 2,
-          background: COLORS.gold,
-          color: COLORS.white,
-          borderRadius: 8,
-          padding: '3px 8px',
-          fontSize: 11,
-          fontWeight: 700,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 3,
-          letterSpacing: '0.3px',
+          position: 'absolute', top: 10, left: 10, zIndex: 2,
+          background: COLORS.gold, color: COLORS.white,
+          borderRadius: 8, padding: '3px 8px', fontSize: 11, fontWeight: 700,
+          display: 'flex', alignItems: 'center', gap: 3, letterSpacing: '0.3px',
           boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
         }}>
           <Star size={11} fill="white" /> DESTAQUE
         </div>
       )}
 
-      {/* Check de seleção */}
       {selecionado && (
         <div style={{
-          position: 'absolute',
-          top: 10,
-          right: 10,
-          zIndex: 2,
-          background: COLORS.accent,
-          borderRadius: '50%',
-          width: 28,
-          height: 28,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          position: 'absolute', top: 10, right: 10, zIndex: 2,
+          background: COLORS.accent, borderRadius: '50%',
+          width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center',
           boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
         }}>
           <Check size={16} color="white" strokeWidth={3} />
         </div>
       )}
 
-      {/* Imagem da capa */}
-      <div
-        onClick={onDetalhe}
-        style={{
-          width: '100%',
-          aspectRatio: '3/4',
-          background: `linear-gradient(135deg, ${COLORS.borderLight}, ${COLORS.accentLight})`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-        }}
-      >
+      <div onClick={onDetalhe} style={{
+        width: '100%', aspectRatio: '3/4',
+        background: `linear-gradient(135deg, ${COLORS.borderLight}, ${COLORS.accentLight})`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+      }}>
         {livro.imagem_url && !imgError ? (
-          <img
-            src={livro.imagem_url}
-            alt={livro.titulo}
-            onError={() => setImgError(true)}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-            }}
-          />
+          <img src={livro.imagem_url} alt={livro.titulo} onError={() => setImgError(true)}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
           <BookOpen size={40} color={COLORS.textMuted} style={{ opacity: 0.3 }} />
         )}
       </div>
 
-      {/* Info */}
       <div style={{ padding: '12px 14px' }}>
-        <p
-          onClick={onDetalhe}
-          style={{
-            fontFamily: FONTS.display,
-            fontSize: 14,
-            fontWeight: 600,
-            margin: '0 0 4px',
-            lineHeight: 1.3,
-            color: COLORS.text,
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-          }}
-        >
+        <p onClick={onDetalhe} style={{
+          fontFamily: FONTS.display, fontSize: 14, fontWeight: 600,
+          margin: '0 0 4px', lineHeight: 1.3, color: COLORS.text,
+          display: '-webkit-box', WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical', overflow: 'hidden',
+        }}>
           {livro.titulo}
         </p>
-        <p style={{
-          fontSize: 12,
-          color: COLORS.textLight,
-          margin: '0 0 6px',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-        }}>
+        <p style={{ fontSize: 12, color: COLORS.textLight, margin: '0 0 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {livro.autor || 'Autor não informado'}
         </p>
         {livro.data_lancamento && (
-          <p style={{
-            fontSize: 11,
-            color: COLORS.textMuted,
-            margin: '0 0 6px',
-          }}>
+          <p style={{ fontSize: 11, color: COLORS.textMuted, margin: '0 0 6px' }}>
             📅 {new Date(livro.data_lancamento).toLocaleDateString('pt-BR')}
           </p>
         )}
         {livro.ean && (
-          <p style={{
-            fontSize: 10,
-            color: COLORS.textMuted,
-            margin: '0 0 6px',
-            fontFamily: 'monospace',
-          }}>
+          <p style={{ fontSize: 10, color: COLORS.textMuted, margin: '0 0 6px', fontFamily: 'monospace' }}>
             ISBN: {livro.ean}
           </p>
         )}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}>
-          <span style={{
-            fontSize: 11,
-            color: COLORS.accent,
-            fontWeight: 600,
-            background: `${COLORS.accent}15`,
-            padding: '2px 8px',
-            borderRadius: 6,
-          }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: COLORS.accent, fontWeight: 600, background: `${COLORS.accent}15`, padding: '2px 8px', borderRadius: 6 }}>
             {livro.editora}
           </span>
           {livro.preco && (
-            <span style={{
-              fontSize: 13,
-              fontWeight: 600,
-              color: COLORS.primaryDark,
-            }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.primaryDark }}>
               R$ {Number(livro.preco).toFixed(2).replace('.', ',')}
             </span>
           )}
         </div>
       </div>
 
-      {/* Botão selecionar */}
       <button
         onClick={(e) => { e.stopPropagation(); onToggle(); }}
         style={{
-          width: '100%',
-          padding: '10px',
-          border: 'none',
+          width: '100%', padding: '10px', border: 'none',
           borderTop: `1px solid ${COLORS.borderLight}`,
           background: selecionado ? COLORS.accent : COLORS.bg,
           color: selecionado ? COLORS.white : COLORS.primary,
-          fontSize: 13,
-          fontWeight: 600,
-          fontFamily: FONTS.body,
-          cursor: 'pointer',
-          transition: 'all 0.2s',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 6,
+          fontSize: 13, fontWeight: 600, fontFamily: FONTS.body,
+          cursor: 'pointer', transition: 'all 0.2s',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
         }}
       >
-        {selecionado ? (
-          <><Check size={14} /> Selecionado</>
-        ) : (
-          <><Plus size={14} /> Selecionar</>
-        )}
+        {selecionado ? <><Check size={14} /> Selecionado</> : <><Plus size={14} /> Selecionar</>}
       </button>
     </div>
   );
@@ -835,178 +1179,61 @@ function ModalDetalhe({ livro, selecionado, onToggle, onClose }) {
   const [imgError, setImgError] = useState(false);
 
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: COLORS.overlay,
-        zIndex: 200,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 20,
-        overflowY: 'auto',
-      }}
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{
-          background: COLORS.white,
-          borderRadius: 18,
-          maxWidth: 600,
-          width: '100%',
-          maxHeight: '90vh',
-          overflow: 'auto',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-        }}
-      >
-        {/* Imagem grande */}
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: COLORS.overlay,
+      zIndex: 200, display: 'flex', alignItems: 'center',
+      justifyContent: 'center', padding: 20, overflowY: 'auto',
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: COLORS.white, borderRadius: 18, maxWidth: 600,
+        width: '100%', maxHeight: '90vh', overflow: 'auto',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+      }}>
         <div style={{
-          width: '100%',
-          maxHeight: 350,
+          width: '100%', maxHeight: 350,
           background: `linear-gradient(135deg, ${COLORS.borderLight}, ${COLORS.accentLight})`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-          position: 'relative',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          overflow: 'hidden', position: 'relative',
         }}>
-          <button
-            onClick={onClose}
-            style={{
-              position: 'absolute',
-              top: 12,
-              right: 12,
-              background: 'rgba(0,0,0,0.5)',
-              border: 'none',
-              borderRadius: '50%',
-              width: 36,
-              height: 36,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              color: 'white',
-            }}
-          >
+          <button onClick={onClose} style={{
+            position: 'absolute', top: 12, right: 12,
+            background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%',
+            width: 36, height: 36, display: 'flex', alignItems: 'center',
+            justifyContent: 'center', cursor: 'pointer', color: 'white',
+          }}>
             <X size={18} />
           </button>
           {livro.imagem_url && !imgError ? (
-            <img
-              src={livro.imagem_url}
-              alt={livro.titulo}
-              onError={() => setImgError(true)}
-              style={{ maxWidth: '100%', maxHeight: 350, objectFit: 'contain' }}
-            />
+            <img src={livro.imagem_url} alt={livro.titulo} onError={() => setImgError(true)}
+              style={{ maxWidth: '100%', maxHeight: 350, objectFit: 'contain' }} />
           ) : (
             <BookOpen size={60} color={COLORS.textMuted} style={{ opacity: 0.3 }} />
           )}
         </div>
-
-        {/* Conteúdo */}
         <div style={{ padding: '24px' }}>
-          <h2 style={{
-            fontFamily: FONTS.display,
-            fontSize: 22,
-            fontWeight: 700,
-            margin: '0 0 8px',
-            color: COLORS.primaryDark,
-            lineHeight: 1.3,
-          }}>
+          <h2 style={{ fontFamily: FONTS.display, fontSize: 22, fontWeight: 700, margin: '0 0 8px', color: COLORS.primaryDark, lineHeight: 1.3 }}>
             {livro.titulo}
           </h2>
-
-          <p style={{
-            fontSize: 15,
-            color: COLORS.textLight,
-            margin: '0 0 16px',
-          }}>
+          <p style={{ fontSize: 15, color: COLORS.textLight, margin: '0 0 16px' }}>
             {livro.autor || 'Autor não informado'}
           </p>
-
-          <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 10,
-            marginBottom: 20,
-          }}>
-            {livro.editora && (
-              <span style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: COLORS.accent,
-                background: `${COLORS.accent}15`,
-                padding: '4px 12px',
-                borderRadius: 8,
-              }}>
-                {livro.editora}
-              </span>
-            )}
-            {livro.encadernacao && (
-              <span style={{
-                fontSize: 12,
-                color: COLORS.textLight,
-                background: `${COLORS.textMuted}15`,
-                padding: '4px 12px',
-                borderRadius: 8,
-              }}>
-                {livro.encadernacao}
-              </span>
-            )}
-            {livro.preco && (
-              <span style={{
-                fontSize: 14,
-                fontWeight: 700,
-                color: COLORS.primaryDark,
-                background: `${COLORS.gold}20`,
-                padding: '4px 12px',
-                borderRadius: 8,
-              }}>
-                R$ {Number(livro.preco).toFixed(2).replace('.', ',')}
-              </span>
-            )}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
+            {livro.editora && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.accent, background: `${COLORS.accent}15`, padding: '4px 12px', borderRadius: 8 }}>{livro.editora}</span>}
+            {livro.encadernacao && <span style={{ fontSize: 12, color: COLORS.textLight, background: `${COLORS.textMuted}15`, padding: '4px 12px', borderRadius: 8 }}>{livro.encadernacao}</span>}
+            {livro.preco && <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.primaryDark, background: `${COLORS.gold}20`, padding: '4px 12px', borderRadius: 8 }}>R$ {Number(livro.preco).toFixed(2).replace('.', ',')}</span>}
           </div>
-
           {livro.descricao && (
-            <div style={{
-              fontSize: 14,
-              lineHeight: 1.7,
-              color: COLORS.textLight,
-              borderTop: `1px solid ${COLORS.borderLight}`,
-              paddingTop: 16,
-              marginBottom: 20,
-              maxHeight: 300,
-              overflowY: 'auto',
-            }}>
+            <div style={{ fontSize: 14, lineHeight: 1.7, color: COLORS.textLight, borderTop: `1px solid ${COLORS.borderLight}`, paddingTop: 16, marginBottom: 20, maxHeight: 300, overflowY: 'auto' }}>
               {livro.descricao}
             </div>
           )}
-
-          <button
-            onClick={onToggle}
-            style={{
-              width: '100%',
-              padding: '14px',
-              border: 'none',
-              borderRadius: 12,
-              background: selecionado ? COLORS.textMuted : COLORS.primary,
-              color: COLORS.white,
-              fontSize: 15,
-              fontWeight: 600,
-              fontFamily: FONTS.body,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-            }}
-          >
-            {selecionado ? (
-              <><X size={16} /> Remover da seleção</>
-            ) : (
-              <><Plus size={16} /> Selecionar para divulgação</>
-            )}
+          <button onClick={onToggle} style={{
+            width: '100%', padding: '14px', border: 'none', borderRadius: 12,
+            background: selecionado ? COLORS.textMuted : COLORS.primary,
+            color: COLORS.white, fontSize: 15, fontWeight: 600, fontFamily: FONTS.body,
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          }}>
+            {selecionado ? <><X size={16} /> Remover da seleção</> : <><Plus size={16} /> Selecionar para divulgação</>}
           </button>
         </div>
       </div>
@@ -1015,88 +1242,47 @@ function ModalDetalhe({ livro, selecionado, onToggle, onClose }) {
 }
 
 /* ──────────────────────────────
-   COMPONENTE: Painel Lateral (Carrinho + Form)
+   COMPONENTE: Painel Carrinho + Form
    ────────────────────────────── */
 function PainelCarrinho({
   livros, selecionados, onAjustarQtd, onRemover,
   showForm, setShowForm, form, setForm,
-  enviando, enviado, onEnviar, onClose
+  enviando, enviado, onEnviar, onClose, parceiro,
 }) {
   const itens = Object.entries(selecionados).map(([id, qty]) => ({
     livro: livros.find(l => l.id === parseInt(id)),
-    qty,
-    id: parseInt(id),
+    qty, id: parseInt(id),
   })).filter(i => i.livro);
 
+  const formValido = form.telefone.trim() && form.dataDivulgacao;
+
   return (
-    <div
-      onClick={onClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: COLORS.overlay,
-        zIndex: 300,
-        display: 'flex',
-        justifyContent: 'flex-end',
-      }}
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{
-          background: COLORS.white,
-          width: '100%',
-          maxWidth: 440,
-          height: '100%',
-          overflowY: 'auto',
-          boxShadow: '-10px 0 40px rgba(0,0,0,0.2)',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: COLORS.overlay, zIndex: 300,
+      display: 'flex', justifyContent: 'flex-end',
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: COLORS.white, width: '100%', maxWidth: 440,
+        height: '100%', overflowY: 'auto', boxShadow: '-10px 0 40px rgba(0,0,0,0.2)',
+        display: 'flex', flexDirection: 'column',
+      }}>
         {/* Header */}
         <div style={{
-          padding: '20px 24px',
-          borderBottom: `1px solid ${COLORS.borderLight}`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          background: COLORS.bg,
+          padding: '20px 24px', borderBottom: `1px solid ${COLORS.borderLight}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: COLORS.bg, position: 'sticky', top: 0, zIndex: 1,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {showForm && (
-              <button
-                onClick={() => setShowForm(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: 4,
-                  color: COLORS.text,
-                }}
-              >
+              <button onClick={() => setShowForm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: COLORS.text }}>
                 <ArrowLeft size={20} />
               </button>
             )}
-            <h2 style={{
-              fontFamily: FONTS.display,
-              fontSize: 20,
-              fontWeight: 700,
-              margin: 0,
-              color: COLORS.primaryDark,
-            }}>
-              {showForm ? 'Seus dados' : 'Livros selecionados'}
+            <h2 style={{ fontFamily: FONTS.display, fontSize: 20, fontWeight: 700, margin: 0, color: COLORS.primaryDark }}>
+              {showForm ? 'Dados de envio' : 'Livros selecionados'}
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: 4,
-              color: COLORS.textMuted,
-            }}
-          >
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: COLORS.textMuted }}>
             <X size={22} />
           </button>
         </div>
@@ -1104,132 +1290,63 @@ function PainelCarrinho({
         {/* Conteúdo */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
           {enviado ? (
-            <div style={{
-              textAlign: 'center',
-              padding: '60px 20px',
-            }}>
+            <div style={{ textAlign: 'center', padding: '60px 20px' }}>
               <div style={{
-                width: 64,
-                height: 64,
-                borderRadius: '50%',
-                background: COLORS.success,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 20px',
+                width: 64, height: 64, borderRadius: '50%', background: COLORS.success,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px',
               }}>
                 <Check size={32} color="white" />
               </div>
-              <h3 style={{
-                fontFamily: FONTS.display,
-                fontSize: 22,
-                color: COLORS.primaryDark,
-                margin: '0 0 10px',
-              }}>
+              <h3 style={{ fontFamily: FONTS.display, fontSize: 22, color: COLORS.primaryDark, margin: '0 0 10px' }}>
                 Pedido enviado!
               </h3>
-              <p style={{
-                color: COLORS.textLight,
-                fontSize: 15,
-                lineHeight: 1.6,
-              }}>
+              <p style={{ color: COLORS.textLight, fontSize: 15, lineHeight: 1.6 }}>
                 Recebemos sua seleção de livros. Nossa equipe entrará em contato em breve.
               </p>
             </div>
+
           ) : showForm ? (
-            /* ── Formulário ── */
+            /* ── Formulário simplificado (dados do parceiro já conhecidos) ── */
             <div>
-              <p style={{
-                fontSize: 14,
-                color: COLORS.textLight,
-                marginBottom: 20,
-                lineHeight: 1.5,
+              {/* Resumo do parceiro */}
+              <div style={{
+                background: `${COLORS.accent}10`,
+                border: `1px solid ${COLORS.accent}30`,
+                borderRadius: 12, padding: '12px 16px', marginBottom: 20,
+                fontSize: 13,
               }}>
-                Preencha seus dados para que possamos enviar os livros selecionados.
-              </p>
-
-              <div style={{ marginBottom: 16 }}>
-                <label style={labelStyle}>Nome completo *</label>
-                <input
-                  type="text"
-                  placeholder="Seu nome completo"
-                  value={form.nome}
-                  onChange={e => setForm({ ...form, nome: e.target.value })}
-                  style={inputStyle}
-                />
+                <p style={{ margin: '0 0 2px', fontWeight: 600, color: COLORS.primaryDark }}>{parceiro.nome}</p>
+                <p style={{ margin: 0, color: COLORS.textMuted }}>{parceiro.email}</p>
               </div>
 
               <div style={{ marginBottom: 16 }}>
-                <label style={labelStyle}>CPF *</label>
+                <label style={labelStyle}>Telefone / WhatsApp *</label>
                 <input
-                  type="text"
-                  placeholder="000.000.000-00"
-                  value={form.cpf}
-                  onChange={e => setForm({ ...form, cpf: e.target.value })}
+                  type="tel" placeholder="(11) 99999-9999"
+                  value={form.telefone}
+                  onChange={e => setForm({ ...form, telefone: e.target.value })}
                   style={inputStyle}
                 />
-              </div>
-
-              <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-                <div style={{ flex: 1 }}>
-                  <label style={labelStyle}>Telefone *</label>
-                  <input
-                    type="tel"
-                    placeholder="(11) 99999-9999"
-                    value={form.telefone}
-                    onChange={e => setForm({ ...form, telefone: e.target.value })}
-                    style={inputStyle}
-                  />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={labelStyle}>E-mail *</label>
-                  <input
-                    type="email"
-                    placeholder="seu@email.com"
-                    value={form.email}
-                    onChange={e => setForm({ ...form, email: e.target.value })}
-                    style={inputStyle}
-                  />
-                </div>
               </div>
 
               <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
                 <div style={{ flex: '0 0 120px' }}>
-                  <label style={labelStyle}>CEP *</label>
-                  <input
-                    type="text"
-                    placeholder="00000-000"
-                    value={form.cep}
-                    onChange={e => setForm({ ...form, cep: e.target.value })}
-                    style={inputStyle}
-                  />
+                  <label style={labelStyle}>CEP</label>
+                  <input type="text" placeholder="00000-000" value={form.cep}
+                    onChange={e => setForm({ ...form, cep: e.target.value })} style={inputStyle} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label style={labelStyle}>Endereço completo *</label>
-                  <input
-                    type="text"
-                    placeholder="Rua, número, complemento, bairro, cidade - UF"
-                    value={form.endereco}
-                    onChange={e => setForm({ ...form, endereco: e.target.value })}
-                    style={inputStyle}
-                  />
+                  <label style={labelStyle}>Endereço completo</label>
+                  <input type="text" placeholder="Rua, número, bairro, cidade - UF"
+                    value={form.endereco} onChange={e => setForm({ ...form, endereco: e.target.value })} style={inputStyle} />
                 </div>
               </div>
 
               <div style={{ marginBottom: 16 }}>
                 <label style={labelStyle}>Data prevista de divulgação *</label>
-                <input
-                  type="date"
-                  value={form.dataDivulgacao}
-                  onChange={e => setForm({ ...form, dataDivulgacao: e.target.value })}
-                  style={inputStyle}
-                />
-                <p style={{
-                  fontSize: 11,
-                  color: COLORS.textMuted,
-                  marginTop: 4,
-                  margin: '4px 0 0',
-                }}>
+                <input type="date" value={form.dataDivulgacao}
+                  onChange={e => setForm({ ...form, dataDivulgacao: e.target.value })} style={inputStyle} />
+                <p style={{ fontSize: 11, color: COLORS.textMuted, marginTop: 4, lineHeight: 1.4 }}>
                   Informe a data em que você pretende divulgar os livros selecionados.
                 </p>
               </div>
@@ -1238,117 +1355,42 @@ function PainelCarrinho({
                 <label style={labelStyle}>Observações (opcional)</label>
                 <textarea
                   placeholder="Alguma observação sobre os livros ou sobre a divulgação..."
-                  value={form.obs}
-                  onChange={e => setForm({ ...form, obs: e.target.value })}
-                  rows={3}
-                  style={{
-                    ...inputStyle,
-                    resize: 'vertical',
-                    minHeight: 80,
-                  }}
+                  value={form.obs} onChange={e => setForm({ ...form, obs: e.target.value })}
+                  rows={3} style={{ ...inputStyle, resize: 'vertical', minHeight: 80 }}
                 />
               </div>
             </div>
+
           ) : (
             /* ── Lista de itens ── */
             <div>
               {itens.length === 0 ? (
-                <div style={{
-                  textAlign: 'center',
-                  padding: '40px 20px',
-                  color: COLORS.textMuted,
-                }}>
+                <div style={{ textAlign: 'center', padding: '40px 20px', color: COLORS.textMuted }}>
                   <ShoppingBag size={40} style={{ marginBottom: 12, opacity: 0.3 }} />
                   <p style={{ fontSize: 15 }}>Nenhum livro selecionado</p>
                   <p style={{ fontSize: 13 }}>Navegue pelo catálogo e selecione os livros que deseja divulgar</p>
                 </div>
               ) : (
                 itens.map(({ livro, qty, id }) => (
-                  <div
-                    key={id}
-                    style={{
-                      display: 'flex',
-                      gap: 12,
-                      padding: '14px 0',
-                      borderBottom: `1px solid ${COLORS.borderLight}`,
-                      alignItems: 'center',
-                    }}
-                  >
-                    {/* Mini capa */}
-                    <div style={{
-                      width: 50,
-                      height: 66,
-                      borderRadius: 6,
-                      overflow: 'hidden',
-                      flexShrink: 0,
-                      background: COLORS.borderLight,
-                    }}>
-                      {livro.imagem_url && (
-                        <img
-                          src={livro.imagem_url}
-                          alt=""
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        />
-                      )}
+                  <div key={id} style={{
+                    display: 'flex', gap: 12, padding: '14px 0',
+                    borderBottom: `1px solid ${COLORS.borderLight}`, alignItems: 'center',
+                  }}>
+                    <div style={{ width: 50, height: 66, borderRadius: 6, overflow: 'hidden', flexShrink: 0, background: COLORS.borderLight }}>
+                      {livro.imagem_url && <img src={livro.imagem_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
                     </div>
-
-                    {/* Info */}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{
-                        fontSize: 13,
-                        fontWeight: 600,
-                        margin: '0 0 2px',
-                        lineHeight: 1.3,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {livro.titulo}
                       </p>
-                      <p style={{
-                        fontSize: 11,
-                        color: COLORS.textMuted,
-                        margin: 0,
-                      }}>
-                        {livro.editora}
-                      </p>
-
-                      {/* Quantidade */}
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        marginTop: 6,
-                      }}>
-                        <button
-                          onClick={() => onAjustarQtd(id, -1)}
-                          style={miniBtn}
-                        >
-                          <Minus size={12} />
-                        </button>
-                        <span style={{ fontSize: 13, fontWeight: 600, minWidth: 20, textAlign: 'center' }}>
-                          {qty}
-                        </span>
-                        <button
-                          onClick={() => onAjustarQtd(id, 1)}
-                          style={miniBtn}
-                        >
-                          <Plus size={12} />
-                        </button>
+                      <p style={{ fontSize: 11, color: COLORS.textMuted, margin: 0 }}>{livro.editora}</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                        <button onClick={() => onAjustarQtd(id, -1)} style={miniBtn}><Minus size={12} /></button>
+                        <span style={{ fontSize: 13, fontWeight: 600, minWidth: 20, textAlign: 'center' }}>{qty}</span>
+                        <button onClick={() => onAjustarQtd(id, 1)} style={miniBtn}><Plus size={12} /></button>
                       </div>
                     </div>
-
-                    {/* Remover */}
-                    <button
-                      onClick={() => onRemover(id)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        padding: 4,
-                        color: COLORS.textMuted,
-                      }}
-                    >
+                    <button onClick={() => onRemover(id)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: COLORS.textMuted }}>
                       <X size={16} />
                     </button>
                   </div>
@@ -1358,65 +1400,35 @@ function PainelCarrinho({
           )}
         </div>
 
-        {/* Footer com botão */}
+        {/* Footer */}
         {!enviado && itens.length > 0 && (
-          <div style={{
-            padding: '16px 24px',
-            borderTop: `1px solid ${COLORS.borderLight}`,
-            background: COLORS.bg,
-          }}>
+          <div style={{ padding: '16px 24px', borderTop: `1px solid ${COLORS.borderLight}`, background: COLORS.bg }}>
             {showForm ? (
               <button
                 onClick={onEnviar}
-                disabled={enviando || !form.nome.trim() || !form.email.trim() || !form.telefone.trim() || !form.cpf.trim() || !form.cep.trim() || !form.endereco.trim() || !form.dataDivulgacao}
+                disabled={enviando || !formValido}
                 style={{
-                  width: '100%',
-                  padding: '14px',
-                  border: 'none',
-                  borderRadius: 12,
-                  background: (!form.nome.trim() || !form.email.trim() || !form.telefone.trim() || !form.cpf.trim() || !form.cep.trim() || !form.endereco.trim() || !form.dataDivulgacao)
-                    ? COLORS.textMuted
-                    : COLORS.primary,
-                  color: COLORS.white,
-                  fontSize: 15,
-                  fontWeight: 600,
-                  fontFamily: FONTS.body,
+                  width: '100%', padding: '14px', border: 'none', borderRadius: 12,
+                  background: (!formValido || enviando) ? COLORS.textMuted : COLORS.primary,
+                  color: COLORS.white, fontSize: 15, fontWeight: 600, fontFamily: FONTS.body,
                   cursor: enviando ? 'wait' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                   opacity: enviando ? 0.7 : 1,
                 }}
               >
-                {enviando ? (
-                  <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> Enviando...</>
-                ) : (
-                  <><Send size={16} /> Enviar pedido ({itens.length} {itens.length === 1 ? 'livro' : 'livros'})</>
-                )}
+                {enviando
+                  ? <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> Enviando...</>
+                  : <><Send size={16} /> Enviar pedido ({itens.length} {itens.length === 1 ? 'livro' : 'livros'})</>
+                }
               </button>
             ) : (
-              <button
-                onClick={() => setShowForm(true)}
-                style={{
-                  width: '100%',
-                  padding: '14px',
-                  border: 'none',
-                  borderRadius: 12,
-                  background: COLORS.primary,
-                  color: COLORS.white,
-                  fontSize: 15,
-                  fontWeight: 600,
-                  fontFamily: FONTS.body,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 8,
-                }}
-              >
-                Continuar
-                <Send size={16} />
+              <button onClick={() => setShowForm(true)} style={{
+                width: '100%', padding: '14px', border: 'none', borderRadius: 12,
+                background: COLORS.primary, color: COLORS.white,
+                fontSize: 15, fontWeight: 600, fontFamily: FONTS.body, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}>
+                Continuar <Send size={16} />
               </button>
             )}
           </div>
@@ -1428,38 +1440,30 @@ function PainelCarrinho({
 
 /* ── Estilos reutilizáveis ── */
 const labelStyle = {
-  display: 'block',
-  fontSize: 12,
-  fontWeight: 600,
-  color: COLORS.textLight,
-  marginBottom: 6,
-  textTransform: 'uppercase',
-  letterSpacing: '0.5px',
+  display: 'block', fontSize: 12, fontWeight: 600,
+  color: COLORS.textLight, marginBottom: 6,
+  textTransform: 'uppercase', letterSpacing: '0.5px',
 };
 
 const inputStyle = {
-  width: '100%',
-  padding: '12px 14px',
-  border: `1.5px solid ${COLORS.border}`,
-  borderRadius: 10,
-  fontSize: 14,
-  fontFamily: FONTS.body,
-  background: COLORS.white,
-  color: COLORS.text,
-  outline: 'none',
-  boxSizing: 'border-box',
+  width: '100%', padding: '12px 14px',
+  border: `1.5px solid ${COLORS.border}`, borderRadius: 10,
+  fontSize: 14, fontFamily: FONTS.body,
+  background: COLORS.white, color: COLORS.text,
+  outline: 'none', boxSizing: 'border-box',
+};
+
+const selectStyle = {
+  width: '100%', padding: '10px 12px',
+  border: `1.5px solid ${COLORS.border}`, borderRadius: 10,
+  fontSize: 14, fontFamily: FONTS.body,
+  background: COLORS.white, color: COLORS.text,
+  cursor: 'pointer', boxSizing: 'border-box',
 };
 
 const miniBtn = {
-  width: 26,
-  height: 26,
-  border: `1.5px solid ${COLORS.border}`,
-  borderRadius: 6,
-  background: COLORS.white,
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  color: COLORS.text,
-  padding: 0,
+  width: 26, height: 26, border: `1.5px solid ${COLORS.border}`,
+  borderRadius: 6, background: COLORS.white, cursor: 'pointer',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  color: COLORS.text, padding: 0,
 };
