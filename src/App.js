@@ -1,13 +1,13 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { lazy, Suspense, useState, useEffect } from 'react'
-import { AuthProvider, useAuth } from './context/AuthContext'
+import { AuthProvider, useAuth, MODULOS_PERMISSOES } from './context/AuthContext'
 import { usePermissions } from './hooks/usePermissions'
-import { signOut, supabase } from './lib/supabase'
+import { signOut, supabase, getUsuarios } from './lib/supabase'
 import {
   LayoutDashboard, BookOpen, BookMarked, Users, LogOut,
   Orbit, ShieldAlert, Megaphone, CalendarDays, CheckSquare, UserRound, Eye,
   Network, Calculator, HeartHandshake, CalendarCheck, GraduationCap, Compass, Sparkles,
-  Store, FileText
+  Store, FileText, SwitchCamera, X, Search, ChevronDown
 } from 'lucide-react'
 import './App.css'
 
@@ -85,6 +85,15 @@ const PERFIL_COLOR = {
   supervisor_parceiras:    '#e11d48',
 }
 
+// ── Perfis que podem usar o "Ver como" ──
+const PODE_VER_COMO = ['administrador', 'gerente']
+
+// ── Função local de permissão por perfil (independente do hook) ──
+function canPerfil(perfil, modulo) {
+  if (!perfil || !modulo) return false
+  return (MODULOS_PERMISSOES[modulo] || []).includes(perfil)
+}
+
 function RequireAuth({ children, modulo }) {
   const { session, loading } = useAuth()
   const { can } = usePermissions()
@@ -115,12 +124,252 @@ function SemAcesso() {
   )
 }
 
+/* ══════════════════════════════════════════════════════
+   MODAL: Seletor de usuário para "Ver como"
+══════════════════════════════════════════════════════ */
+function ModalVerComo({ todosUsuarios, usuarioAtual, onSelecionar, onFechar }) {
+  const [busca, setBusca] = useState('')
+
+  const filtrados = todosUsuarios
+    .filter(u => u.id !== usuarioAtual?.id)
+    .filter(u => {
+      if (!busca) return true
+      const t = busca.toLowerCase()
+      return u.nome?.toLowerCase().includes(t) ||
+             (PERFIL_LABEL[u.perfil] || u.perfil || '').toLowerCase().includes(t)
+    })
+
+  // Agrupar por perfil para melhor leitura
+  const grupos = filtrados.reduce((acc, u) => {
+    const label = PERFIL_LABEL[u.perfil] || u.perfil || 'Sem perfil'
+    if (!acc[label]) acc[label] = []
+    acc[label].push(u)
+    return acc
+  }, {})
+
+  return (
+    <div
+      onClick={onFechar}
+      style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(0,0,0,0.45)',
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 20,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: 'var(--sidebar-bg, #1a1a2e)',
+          border: '1px solid var(--border, #2a2a3e)',
+          borderRadius: 14,
+          width: '100%',
+          maxWidth: 420,
+          maxHeight: '75vh',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 24px 60px rgba(0,0,0,0.5)',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Header */}
+        <div style={{
+          padding: '16px 18px',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexShrink: 0,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <SwitchCamera size={16} style={{ color: 'var(--accent, #f59e0b)', flexShrink: 0 }} />
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'rgba(255,255,255,0.9)' }}>
+              Visualizar como
+            </span>
+          </div>
+          <button
+            onClick={onFechar}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              padding: 4, color: 'rgba(255,255,255,0.4)',
+              display: 'flex', alignItems: 'center',
+            }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Busca */}
+        <div style={{ padding: '10px 14px', flexShrink: 0, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ position: 'relative' }}>
+            <Search size={14} style={{
+              position: 'absolute', left: 10, top: '50%',
+              transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.3)',
+            }} />
+            <input
+              autoFocus
+              type="text"
+              placeholder="Buscar por nome ou perfil..."
+              value={busca}
+              onChange={e => setBusca(e.target.value)}
+              style={{
+                width: '100%', padding: '8px 10px 8px 30px',
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 8, fontSize: 13,
+                color: 'rgba(255,255,255,0.85)',
+                outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Lista */}
+        <div style={{ overflowY: 'auto', flex: 1, padding: '8px 0' }}>
+          {filtrados.length === 0 ? (
+            <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: 13, padding: '24px 0' }}>
+              Nenhum usuário encontrado
+            </p>
+          ) : (
+            Object.entries(grupos).map(([grupoPerfil, users]) => (
+              <div key={grupoPerfil}>
+                <div style={{
+                  padding: '6px 16px 4px',
+                  fontSize: 10, fontWeight: 600,
+                  letterSpacing: '.06em', textTransform: 'uppercase',
+                  color: 'rgba(255,255,255,0.25)',
+                }}>
+                  {grupoPerfil}
+                </div>
+                {users.map(u => (
+                  <button
+                    key={u.id}
+                    onClick={() => onSelecionar(u)}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center',
+                      gap: 10, padding: '9px 16px',
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      transition: 'background 0.12s', textAlign: 'left',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                  >
+                    <div style={{
+                      width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                      background: `${PERFIL_COLOR[u.perfil] || '#888'}22`,
+                      border: `1.5px solid ${PERFIL_COLOR[u.perfil] || '#888'}55`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 13, fontWeight: 700,
+                      color: PERFIL_COLOR[u.perfil] || '#888',
+                    }}>
+                      {(u.nome || 'U')[0].toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: 13, fontWeight: 500,
+                        color: 'rgba(255,255,255,0.85)',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>
+                        {u.nome}
+                      </div>
+                      <div style={{
+                        fontSize: 11,
+                        color: PERFIL_COLOR[u.perfil] || 'rgba(255,255,255,0.35)',
+                        marginTop: 1,
+                      }}>
+                        {PERFIL_LABEL[u.perfil] || u.perfil}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════
+   BANNER: faixa de aviso do modo "Ver como"
+══════════════════════════════════════════════════════ */
+function BannerVerComo({ viewAs, onSair }) {
+  return (
+    <div style={{
+      background: 'linear-gradient(90deg, #92400e, #b45309)',
+      color: '#fef3c7',
+      padding: '9px 20px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 10,
+      fontSize: 13,
+      fontWeight: 500,
+      flexShrink: 0,
+      borderBottom: '1px solid rgba(0,0,0,0.15)',
+    }}>
+      <SwitchCamera size={15} style={{ flexShrink: 0, opacity: 0.8 }} />
+      <span style={{ flex: 1 }}>
+        Modo visualização —{' '}
+        <strong style={{ fontWeight: 700 }}>{viewAs.nome}</strong>
+        <span style={{ opacity: 0.7, marginLeft: 6 }}>
+          ({PERFIL_LABEL[viewAs.perfil] || viewAs.perfil})
+        </span>
+        <span style={{ opacity: 0.6, marginLeft: 8, fontSize: 12 }}>
+          · Dados exibidos são os seus; apenas a interface reflete o perfil selecionado
+        </span>
+      </span>
+      <button
+        onClick={onSair}
+        style={{
+          background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.2)',
+          borderRadius: 6, padding: '4px 12px', cursor: 'pointer',
+          color: '#fef3c7', fontSize: 12, fontWeight: 600,
+          display: 'flex', alignItems: 'center', gap: 5,
+          flexShrink: 0,
+        }}
+      >
+        <X size={13} /> Sair do modo visualização
+      </button>
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════
+   SHELL
+══════════════════════════════════════════════════════ */
 function Shell() {
   const { usuario } = useAuth()
   const { can } = usePermissions()
   const [pedidosNovos, setPedidosNovos] = useState(0)
 
-  // Buscar pedidos novos da vitrine
+  // ── "Ver como" ──
+  const [viewAs, setViewAs] = useState(null)          // usuário sendo visualizado
+  const [showModal, setShowModal] = useState(false)    // modal de seleção
+  const [todosUsuarios, setTodosUsuarios] = useState([])
+
+  const podeUsarVerComo = PODE_VER_COMO.includes(usuario?.perfil)
+
+  // Carrega lista de usuários quando modal é aberto pela primeira vez
+  useEffect(() => {
+    if (podeUsarVerComo && todosUsuarios.length === 0) {
+      getUsuarios().then(data => setTodosUsuarios(data || [])).catch(() => {})
+    }
+  }, [podeUsarVerComo])
+
+  // Perfil ativo: viewAs se estiver no modo visualização, senão o real
+  const perfilAtivo = viewAs?.perfil || usuario?.perfil
+
+  // Função de permissão baseada no perfil ativo
+  function canAtivo(modulo) {
+    return canPerfil(perfilAtivo, modulo)
+  }
+
+  // Pedidos novos da vitrine
   useEffect(() => {
     async function fetchPedidosNovos() {
       const { count } = await supabase
@@ -130,15 +379,20 @@ function Shell() {
       setPedidosNovos(count || 0)
     }
     fetchPedidosNovos()
-    const interval = setInterval(fetchPedidosNovos, 30000) // atualiza a cada 30s
+    const interval = setInterval(fetchPedidosNovos, 30000)
     return () => clearInterval(interval)
   }, [])
 
   async function handleLogout() {
+    setViewAs(null)
     await signOut()
   }
 
-  const menuVisivel = MENU.filter(m => can(m.modulo))
+  // Menu filtrado pelo perfil ativo (real ou simulado)
+  const menuVisivel = MENU.filter(m => canAtivo(m.modulo))
+
+  // Usuário exibido na sidebar
+  const usuarioDisplay = viewAs || usuario
 
   return (
     <div className="app-shell">
@@ -163,17 +417,10 @@ function Shell() {
               <span>{label}</span>
               {path === '/vitrine-admin' && pedidosNovos > 0 && (
                 <span style={{
-                  marginLeft: 'auto',
-                  background: '#dc2626',
-                  color: 'white',
-                  borderRadius: '50%',
-                  minWidth: 20,
-                  height: 20,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  marginLeft: 'auto', background: '#dc2626', color: 'white',
+                  borderRadius: '50%', minWidth: 20, height: 20,
+                  fontSize: 11, fontWeight: 700,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
                   padding: '0 5px',
                 }}>
                   {pedidosNovos}
@@ -183,14 +430,70 @@ function Shell() {
           ))}
         </nav>
 
+        {/* ── Botão "Ver como" ── */}
+        {podeUsarVerComo && (
+          <button
+            onClick={() => setShowModal(true)}
+            style={{
+              margin: '0 10px 8px',
+              padding: '8px 12px',
+              background: viewAs ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.04)',
+              border: `1px solid ${viewAs ? 'rgba(245,158,11,0.35)' : 'rgba(255,255,255,0.08)'}`,
+              borderRadius: 8,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              width: 'calc(100% - 20px)',
+              color: viewAs ? '#fbbf24' : 'rgba(255,255,255,0.45)',
+              fontSize: 12,
+              fontWeight: 500,
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => {
+              if (!viewAs) e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
+            }}
+            onMouseLeave={e => {
+              if (!viewAs) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
+            }}
+          >
+            <SwitchCamera size={14} style={{ flexShrink: 0 }} />
+            <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {viewAs ? `Vendo como: ${viewAs.nome.split(' ')[0]}` : 'Visualizar como...'}
+            </span>
+            <ChevronDown size={12} style={{ flexShrink: 0, opacity: 0.5 }} />
+          </button>
+        )}
+
+        {/* ── Info do usuário ── */}
         <div className="sidebar-user">
-          {usuario && (
+          {usuarioDisplay && (
             <>
-              <div className="user-avatar">{(usuario.nome || 'U')[0].toUpperCase()}</div>
+              <div
+                className="user-avatar"
+                style={viewAs ? {
+                  outline: '2px solid #f59e0b',
+                  outlineOffset: 2,
+                } : {}}
+              >
+                {(usuarioDisplay.nome || 'U')[0].toUpperCase()}
+              </div>
               <div className="user-info">
-                <div className="user-name">{usuario.nome}</div>
-                <div className="user-perfil" style={{ color: PERFIL_COLOR[usuario.perfil] }}>
-                  {PERFIL_LABEL[usuario.perfil] || usuario.perfil}
+                <div className="user-name">
+                  {usuarioDisplay.nome}
+                  {viewAs && (
+                    <span style={{
+                      marginLeft: 6, fontSize: 9, fontWeight: 700,
+                      background: '#f59e0b', color: '#1c1917',
+                      padding: '1px 5px', borderRadius: 4,
+                      verticalAlign: 'middle', letterSpacing: '.04em',
+                    }}>
+                      PREVIEW
+                    </span>
+                  )}
+                </div>
+                <div className="user-perfil" style={{ color: PERFIL_COLOR[usuarioDisplay.perfil] }}>
+                  {PERFIL_LABEL[usuarioDisplay.perfil] || usuarioDisplay.perfil}
                 </div>
               </div>
             </>
@@ -201,30 +504,50 @@ function Shell() {
         </div>
       </aside>
 
-      <main className="main-content">
-        <Suspense fallback={<div className="loading"><div className="spinner"/></div>}>
-          <Routes>
-            <Route path="/"                element={<HomeRedirect />} />
-            <Route path="/cortesias"       element={<RequireAuth modulo="cortesias"><Cortesias /></RequireAuth>} />
-            <Route path="/parceiros"       element={<RequireAuth modulo="parceiros"><Parceiros /></RequireAuth>} />
-            <Route path="/usuarios"        element={<RequireAuth modulo="usuarios"><Usuarios /></RequireAuth>} />
-            <Route path="/campanhas"       element={<RequireAuth modulo="campanhas"><Campanhas /></RequireAuth>} />
-            <Route path="/monitoramento"   element={<RequireAuth modulo="monitoramento"><Monitoramento /></RequireAuth>} />
-            <Route path="/crm"             element={<RequireAuth modulo="crm"><CRM /></RequireAuth>} />
-            <Route path="/calculadora"     element={<RequireAuth modulo="calculadora"><Calculadora /></RequireAuth>} />
-            <Route path="/rh"              element={<RequireAuth modulo="rh"><RH /></RequireAuth>} />
-            <Route path="/eventos"         element={<RequireAuth modulo="eventos"><Eventos /></RequireAuth>} />
-            <Route path="/lancamentos"     element={<RequireAuth modulo="lancamentos"><Lancamentos /></RequireAuth>} />
-            <Route path="/tarefas"         element={<RequireAuth modulo="tarefas"><Tarefas /></RequireAuth>} />
-            <Route path="/crm-literario"   element={<RequireAuth modulo="crm_literario"><CRMLiterario /></RequireAuth>} />
-            <Route path="/treinamentos"    element={<RequireAuth modulo="treinamentos"><Treinamentos /></RequireAuth>} />
-            <Route path="/descoberta"      element={<RequireAuth modulo="parceiros"><Descoberta /></RequireAuth>} />
-            <Route path="/prospeccao"      element={<RequireAuth modulo="parceiros"><Prospeccao /></RequireAuth>} />
-            <Route path="/vitrine-admin"   element={<RequireAuth modulo="parceiros"><VitrineAdmin /></RequireAuth>} />
-            <Route path="/guia-parcerias"  element={<RequireAuth modulo="guia_parcerias"><GuiaParcerias /></RequireAuth>} />
-          </Routes>
-        </Suspense>
+      <main className="main-content" style={{ display: 'flex', flexDirection: 'column' }}>
+        {/* Banner de aviso quando em modo visualização */}
+        {viewAs && (
+          <BannerVerComo
+            viewAs={viewAs}
+            onSair={() => setViewAs(null)}
+          />
+        )}
+
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          <Suspense fallback={<div className="loading"><div className="spinner"/></div>}>
+            <Routes>
+              <Route path="/"                element={<HomeRedirect />} />
+              <Route path="/cortesias"       element={<RequireAuth modulo="cortesias"><Cortesias /></RequireAuth>} />
+              <Route path="/parceiros"       element={<RequireAuth modulo="parceiros"><Parceiros /></RequireAuth>} />
+              <Route path="/usuarios"        element={<RequireAuth modulo="usuarios"><Usuarios /></RequireAuth>} />
+              <Route path="/campanhas"       element={<RequireAuth modulo="campanhas"><Campanhas /></RequireAuth>} />
+              <Route path="/monitoramento"   element={<RequireAuth modulo="monitoramento"><Monitoramento /></RequireAuth>} />
+              <Route path="/crm"             element={<RequireAuth modulo="crm"><CRM /></RequireAuth>} />
+              <Route path="/calculadora"     element={<RequireAuth modulo="calculadora"><Calculadora /></RequireAuth>} />
+              <Route path="/rh"              element={<RequireAuth modulo="rh"><RH /></RequireAuth>} />
+              <Route path="/eventos"         element={<RequireAuth modulo="eventos"><Eventos /></RequireAuth>} />
+              <Route path="/lancamentos"     element={<RequireAuth modulo="lancamentos"><Lancamentos /></RequireAuth>} />
+              <Route path="/tarefas"         element={<RequireAuth modulo="tarefas"><Tarefas /></RequireAuth>} />
+              <Route path="/crm-literario"   element={<RequireAuth modulo="crm_literario"><CRMLiterario /></RequireAuth>} />
+              <Route path="/treinamentos"    element={<RequireAuth modulo="treinamentos"><Treinamentos /></RequireAuth>} />
+              <Route path="/descoberta"      element={<RequireAuth modulo="parceiros"><Descoberta /></RequireAuth>} />
+              <Route path="/prospeccao"      element={<RequireAuth modulo="parceiros"><Prospeccao /></RequireAuth>} />
+              <Route path="/vitrine-admin"   element={<RequireAuth modulo="parceiros"><VitrineAdmin /></RequireAuth>} />
+              <Route path="/guia-parcerias"  element={<RequireAuth modulo="guia_parcerias"><GuiaParcerias /></RequireAuth>} />
+            </Routes>
+          </Suspense>
+        </div>
       </main>
+
+      {/* Modal seletor */}
+      {showModal && (
+        <ModalVerComo
+          todosUsuarios={todosUsuarios}
+          usuarioAtual={usuario}
+          onSelecionar={u => { setViewAs(u); setShowModal(false) }}
+          onFechar={() => setShowModal(false)}
+        />
+      )}
     </div>
   )
 }
