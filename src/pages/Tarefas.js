@@ -8,6 +8,7 @@ import {
 } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { PERFIL_GRUPO } from '../context/AuthContext'
+import { useViewAs } from '../context/ViewAsContext'
 import {
   Plus, X, Pencil, Trash2, CheckSquare, Square, MessageSquare,
   Calendar, Flag, User, ChevronDown, List, Columns, Clock,
@@ -433,6 +434,7 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
 // ── MODAL DE IMPORTAÇÃO ────────────────────────────────────
 function ModalImportar({ usuarios, onClose, onImported }) {
   const { usuario } = useAuth()
+  const { perfilAtivo } = useViewAs()
   const [etapa, setEtapa] = useState('upload')
   const [arquivo, setArquivo] = useState(null)
   const [linhas, setLinhas] = useState([])
@@ -572,7 +574,7 @@ function ModalImportar({ usuarios, onClose, onImported }) {
   async function confirmarImportacao() {
     setImportando(true)
     try {
-      const grupoUsuario = PERFIL_GRUPO[usuario?.perfil] || null
+      const grupoUsuario = PERFIL_GRUPO[perfilAtivo] || null
       const validas = linhas.filter(l => l.valida).map(l => ({
         titulo: l.titulo, descricao: l.descricao || null, status: l.status,
         prioridade: l.prioridade, responsavel_id: l.responsavel_id,
@@ -746,6 +748,7 @@ function menuItemStyle() {
 // ── PÁGINA PRINCIPAL ───────────────────────────────────────
 export default function Tarefas() {
   const { usuario } = useAuth()
+  const { perfilAtivo } = useViewAs()  // perfil real ou viewAs
   const [tarefas, setTarefas]       = useState([])
   const [usuarios, setUsuarios]     = useState([])
   const [loading, setLoading]       = useState(true)
@@ -773,15 +776,15 @@ export default function Tarefas() {
     setLoading(true)
     try {
       const [t, us] = await Promise.all([getTarefas(), getUsuarios()])
-      // Filtra tarefas pelo grupo do usuário (admin/gerente veem tudo)
-      const grupoUsuario = PERFIL_GRUPO[usuario?.perfil]
+      // Filtra tarefas pelo perfil ativo (real ou viewAs — admin/gerente veem tudo)
+      const grupoUsuario = PERFIL_GRUPO[perfilAtivo]
       setTarefas(grupoUsuario ? t.filter(tarefa => tarefa.grupo === grupoUsuario || !tarefa.grupo) : t)
       setUsuarios(us || [])
     } catch(e) { console.error(e) }
     finally { setLoading(false) }
   }
 
-  useEffect(() => { carregar() }, []) // eslint-disable-line
+  useEffect(() => { carregar() }, [perfilAtivo]) // eslint-disable-line
 
   useEffect(() => {
     function handleClick(e) {
@@ -801,7 +804,7 @@ export default function Tarefas() {
     } else {
       const nova = await createTarefa({
         ...form,
-        grupo: PERFIL_GRUPO[usuario?.perfil] || null,
+        grupo: PERFIL_GRUPO[perfilAtivo] || null,
       })
       setTarefas(prev => [nova, ...prev])
       showToast('Tarefa criada!')
