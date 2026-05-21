@@ -40,9 +40,24 @@ const FONTS = {
   body: "'DM Sans', 'Helvetica Neue', sans-serif",
 };
 
-// ── Normaliza CPF (usado na consulta de histórico) ──
+// ── Limite de títulos por grupo ──
+const LIMITE_GRUPO = { A: Infinity, B: 3, C: 2, D: 1 };
+function limiteDoGrupo(grupo) {
+  return LIMITE_GRUPO[grupo?.toUpperCase()] ?? 1; // sem grupo = tratado como D
+}
+
+// ── Normaliza CPF (remove pontuação para salvar/comparar) ──
 function normalizeCpf(cpf) {
   return (cpf || '').replace(/\D/g, '');
+}
+
+// ── Formata CPF com máscara ──
+function formatarCpf(valor) {
+  const nums = valor.replace(/\D/g, '').slice(0, 11);
+  return nums
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/(\d{3})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3-$4');
 }
 
 // ── Formata data dd/mm/aaaa ──
@@ -563,7 +578,7 @@ export default function VitrinePublica() {
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
   const [form, setForm] = useState({
-    telefone: '', cep: '', endereco: '', dataDivulgacao: '', obs: '',
+    cpf: '', telefone: '', cep: '', endereco: '', dataDivulgacao: '', obs: '',
   });
 
   // ── Google Fonts ──
@@ -601,20 +616,19 @@ export default function VitrinePublica() {
     const cpfNorm = normalizeCpf(parceiroData.cpf);
     const { data } = await supabase
       .from('vitrine_pedidos')
-      .select('contato, cep, endereco')
+      .select('contato, cep, endereco, cpf')
       .or(`cpf.eq.${parceiroData.cpf},cpf.eq.${cpfNorm},email.ilike.${parceiroData.email}`)
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
 
-    if (data) {
-      setForm(prev => ({
-        ...prev,
-        telefone: data.contato || '',
-        cep: data.cep || '',
-        endereco: data.endereco || '',
-      }));
-    }
+    setForm(prev => ({
+      ...prev,
+      cpf: data?.cpf || parceiroData.cpf || '',
+      telefone: data?.contato || '',
+      cep: data?.cep || '',
+      endereco: data?.endereco || '',
+    }));
   }
 
   function handleLogin(parceiroData) {
@@ -649,14 +663,19 @@ export default function VitrinePublica() {
   }, [livros, busca, editoraFiltro, categoriaFiltro]);
 
   // ── Seleção ──
+  const totalTitulos = Object.keys(selecionados).length;
   const totalSelecionados = Object.values(selecionados).reduce((a, b) => a + b, 0);
+  const limite = limiteDoGrupo(parceiro?.grupo);
 
   function toggleSelecao(livro) {
     setSelecionados(prev => {
-      const novo = { ...prev };
-      if (novo[livro.id]) delete novo[livro.id];
-      else novo[livro.id] = 1;
-      return novo;
+      if (prev[livro.id]) {
+        const novo = { ...prev };
+        delete novo[livro.id];
+        return novo;
+      }
+      if (Object.keys(prev).length >= limite) return prev; // limite atingido
+      return { ...prev, [livro.id]: 1 };
     });
   }
 
@@ -672,7 +691,8 @@ export default function VitrinePublica() {
 
   // ── Enviar pedido ──
   async function enviarPedido() {
-    if (!form.telefone.trim() || !form.dataDivulgacao) return;
+    if (!form.cpf.trim() || !form.telefone.trim() || !form.dataDivulgacao) return;
+    const cpfLimpo = normalizeCpf(form.cpf);
     setEnviando(true);
 
     try {
@@ -680,7 +700,7 @@ export default function VitrinePublica() {
         .from('vitrine_pedidos')
         .insert({
           nome_parceiro: parceiro.nome,
-          cpf: parceiro.cpf,
+          cpf: cpfLimpo,
           contato: form.telefone.trim(),
           tipo_contato: 'whatsapp',
           email: parceiro.email,
@@ -728,7 +748,6 @@ export default function VitrinePublica() {
       setEnviado(true);
       setSelecionados({});
       setForm(prev => ({ ...prev, dataDivulgacao: '', obs: '' }));
-
       setTimeout(() => {
         setEnviado(false);
         setShowForm(false);
@@ -797,8 +816,20 @@ export default function VitrinePublica() {
               fontSize: 12,
               margin: '3px 0 0',
               fontWeight: 500,
+              display: 'flex', alignItems: 'center', gap: 6,
             }}>
               Olá, {parceiro.nome.split(' ')[0]}
+              {parceiro.grupo && (
+                <span style={{
+                  background: 'rgba(255,255,255,0.15)',
+                  border: '1px solid rgba(255,255,255,0.25)',
+                  borderRadius: 5, padding: '1px 6px',
+                  fontSize: 11, fontWeight: 700, letterSpacing: '.04em',
+                }}>
+                  Grupo {parceiro.grupo}
+                  {limite < Infinity ? ` · ${totalTitulos}/${limite} livros` : ` · ${totalTitulos} livros`}
+                </span>
+              )}
             </p>
           </div>
 
@@ -994,6 +1025,7 @@ export default function VitrinePublica() {
                 key={livro.id}
                 livro={livro}
                 selecionado={!!selecionados[livro.id]}
+                limiteAtingido={!selecionados[livro.id] && totalTitulos >= limite}
                 onToggle={() => toggleSelecao(livro)}
                 onDetalhe={() => setLivroDetalhe(livro)}
               />
@@ -1037,6 +1069,7 @@ export default function VitrinePublica() {
         <PainelCarrinho
           livros={livros}
           selecionados={selecionados}
+          limite={limite}
           onAjustarQtd={ajustarQtd}
           onRemover={(id) => ajustarQtd(id, -999)}
           showForm={showForm}
@@ -1067,7 +1100,7 @@ export default function VitrinePublica() {
 /* ──────────────────────────────
    COMPONENTE: Card de Livro
    ────────────────────────────── */
-function LivroCard({ livro, selecionado, onToggle, onDetalhe }) {
+function LivroCard({ livro, selecionado, limiteAtingido, onToggle, onDetalhe }) {
   const [imgError, setImgError] = useState(false);
 
   return (
@@ -1155,18 +1188,25 @@ function LivroCard({ livro, selecionado, onToggle, onDetalhe }) {
       </div>
 
       <button
-        onClick={(e) => { e.stopPropagation(); onToggle(); }}
+        onClick={(e) => { e.stopPropagation(); if (!limiteAtingido) onToggle(); }}
+        disabled={limiteAtingido && !selecionado}
         style={{
           width: '100%', padding: '10px', border: 'none',
           borderTop: `1px solid ${COLORS.borderLight}`,
-          background: selecionado ? COLORS.accent : COLORS.bg,
-          color: selecionado ? COLORS.white : COLORS.primary,
+          background: selecionado ? COLORS.accent : limiteAtingido ? COLORS.borderLight : COLORS.bg,
+          color: selecionado ? COLORS.white : limiteAtingido ? COLORS.textMuted : COLORS.primary,
           fontSize: 13, fontWeight: 600, fontFamily: FONTS.body,
-          cursor: 'pointer', transition: 'all 0.2s',
+          cursor: (limiteAtingido && !selecionado) ? 'not-allowed' : 'pointer',
+          transition: 'all 0.2s',
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
         }}
       >
-        {selecionado ? <><Check size={14} /> Selecionado</> : <><Plus size={14} /> Selecionar</>}
+        {selecionado
+          ? <><Check size={14} /> Selecionado</>
+          : limiteAtingido
+            ? 'Limite atingido'
+            : <><Plus size={14} /> Selecionar</>
+        }
       </button>
     </div>
   );
@@ -1245,7 +1285,7 @@ function ModalDetalhe({ livro, selecionado, onToggle, onClose }) {
    COMPONENTE: Painel Carrinho + Form
    ────────────────────────────── */
 function PainelCarrinho({
-  livros, selecionados, onAjustarQtd, onRemover,
+  livros, selecionados, limite, onAjustarQtd, onRemover,
   showForm, setShowForm, form, setForm,
   enviando, enviado, onEnviar, onClose, parceiro,
 }) {
@@ -1254,7 +1294,8 @@ function PainelCarrinho({
     qty, id: parseInt(id),
   })).filter(i => i.livro);
 
-  const formValido = form.telefone.trim() && form.dataDivulgacao;
+  const cpfValido = normalizeCpf(form.cpf).length === 11;
+  const formValido = cpfValido && form.telefone.trim() && form.dataDivulgacao;
 
   return (
     <div onClick={onClose} style={{
@@ -1317,6 +1358,26 @@ function PainelCarrinho({
               }}>
                 <p style={{ margin: '0 0 2px', fontWeight: 600, color: COLORS.primaryDark }}>{parceiro.nome}</p>
                 <p style={{ margin: 0, color: COLORS.textMuted }}>{parceiro.email}</p>
+              </div>
+
+              {/* CPF */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={labelStyle}>CPF *</label>
+                <input
+                  type="text"
+                  placeholder="000.000.000-00"
+                  value={form.cpf}
+                  onChange={e => setForm({ ...form, cpf: formatarCpf(e.target.value) })}
+                  style={{
+                    ...inputStyle,
+                    borderColor: form.cpf && !cpfValido ? COLORS.error : COLORS.border,
+                  }}
+                />
+                {form.cpf && !cpfValido && (
+                  <p style={{ fontSize: 11, color: COLORS.error, marginTop: 4 }}>
+                    CPF inválido. Verifique os dígitos.
+                  </p>
+                )}
               </div>
 
               <div style={{ marginBottom: 16 }}>
