@@ -574,13 +574,17 @@ function ModalImportar({ usuarios, onClose, onImported }) {
   async function confirmarImportacao() {
     setImportando(true)
     try {
-      const grupoUsuario = PERFIL_GRUPO[perfilAtivo] || null
-      const validas = linhas.filter(l => l.valida).map(l => ({
-        titulo: l.titulo, descricao: l.descricao || null, status: l.status,
-        prioridade: l.prioridade, responsavel_id: l.responsavel_id,
-        data_prazo: l.data_prazo, livro_ids: l.livro_ids,
-        grupo: grupoUsuario,
-      }))
+      const grupoFallback = PERFIL_GRUPO[perfilAtivo] || null
+      const validas = linhas.filter(l => l.valida).map(l => {
+        const resp = (usuarios || []).find(u => u.id === l.responsavel_id)
+        const grupoResp = resp ? PERFIL_GRUPO[resp.perfil] : null
+        return {
+          titulo: l.titulo, descricao: l.descricao || null, status: l.status,
+          prioridade: l.prioridade, responsavel_id: l.responsavel_id,
+          data_prazo: l.data_prazo, livro_ids: l.livro_ids,
+          grupo: grupoResp || grupoFallback,
+        }
+      })
       const ignoradas = linhas.filter(l => !l.valida).map(l => ({ linha: l.linha, titulo: l.titulo, responsavel: l.responsavelNome, erros: l.erros }))
       const r = await importarTarefasLote({ tarefas: validas, ignoradas, filename: arquivo.name, userId: usuario?.id })
       setResultado(r)
@@ -776,9 +780,10 @@ export default function Tarefas() {
     setLoading(true)
     try {
       const [t, us] = await Promise.all([getTarefas(), getUsuarios()])
-      // Filtra tarefas pelo perfil ativo (real ou viewAs — admin/gerente veem tudo)
+      // Filtra tarefas estritamente pelo grupo do perfil ativo.
+      // Admin e gerente (sem PERFIL_GRUPO) veem tudo.
       const grupoUsuario = PERFIL_GRUPO[perfilAtivo]
-      setTarefas(grupoUsuario ? t.filter(tarefa => tarefa.grupo === grupoUsuario || !tarefa.grupo) : t)
+      setTarefas(grupoUsuario ? t.filter(tarefa => tarefa.grupo === grupoUsuario) : t)
       setUsuarios(us || [])
     } catch(e) { console.error(e) }
     finally { setLoading(false) }
@@ -794,9 +799,17 @@ export default function Tarefas() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [showMenuNova])
 
+  // Helper: define o grupo da tarefa pelo responsável.
+  // Se não houver responsável, usa o grupo de quem está criando.
+  function grupoDaTarefa(form) {
+    const responsavel = (usuarios || []).find(u => u.id === form.responsavel_id)
+    const grupoResp = responsavel ? PERFIL_GRUPO[responsavel.perfil] : null
+    return grupoResp || PERFIL_GRUPO[perfilAtivo] || null
+  }
+
   async function handleSave(form, id) {
     if (id) {
-      const upd = await updateTarefa(id, form)
+      const upd = await updateTarefa(id, { ...form, grupo: grupoDaTarefa(form) })
       setTarefas(prev => prev.map(t => t.id === upd.id ? upd : t))
       if (upd.status === 'concluido' && abaView === 'ativas') showToast('Tarefa concluída! 🎉')
       else if (upd.status !== 'concluido' && abaView === 'concluidas') showToast('Tarefa reativada!')
@@ -804,7 +817,7 @@ export default function Tarefas() {
     } else {
       const nova = await createTarefa({
         ...form,
-        grupo: PERFIL_GRUPO[perfilAtivo] || null,
+        grupo: grupoDaTarefa(form),
       })
       setTarefas(prev => [nova, ...prev])
       showToast('Tarefa criada!')
