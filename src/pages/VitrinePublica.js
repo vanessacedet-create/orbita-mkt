@@ -735,15 +735,41 @@ export default function VitrinePublica() {
         .map(id => livros.find(l => l.id === parseInt(id))?.titulo || '')
         .filter(Boolean).join(', ');
 
-      await supabase.from('monitoramento').insert({
-        parceiro_nome: parceiro.nome,
-        data: form.dataDivulgacao,
-        status: 'pendente',
-        tipo_postagem: null,
-        observacao: `[Vitrine] Pedido #${pedido.id} — Livros: ${livrosSelecionados}`,
-        origem: 'vitrine',
-        origem_id: pedido.id,
-      });
+      // Busca parceiro_id no CRM (parceiros) — primeiro pelo nome, depois pela livraria
+      let parceiroCRMid = null;
+      const { data: porNome } = await supabase
+        .from('parceiros')
+        .select('id')
+        .ilike('nome', `%${parceiro.nome}%`)
+        .limit(1)
+        .maybeSingle();
+
+      if (porNome) {
+        parceiroCRMid = porNome.id;
+      } else {
+        const { data: porLivraria } = await supabase
+          .from('parceiros')
+          .select('id')
+          .ilike('livraria', `%${parceiro.nome}%`)
+          .limit(1)
+          .maybeSingle();
+        parceiroCRMid = porLivraria?.id || null;
+      }
+
+      // Só registra no monitoramento se encontrou o parceiro no CRM
+      if (parceiroCRMid) {
+        await supabase.from('monitoramento').insert({
+          parceiro_id: parceiroCRMid,
+          data: form.dataDivulgacao,
+          status: 'pendente',
+          tipo_postagem: null,
+          observacao: `[Vitrine] Pedido #${pedido.id} — Livros: ${livrosSelecionados}`,
+          origem: 'vitrine',
+          origem_id: pedido.id,
+        });
+      } else {
+        console.warn(`[Vitrine→Monitoramento] Parceiro "${parceiro.nome}" não encontrado no CRM. Registro não criado.`);
+      }
 
       setEnviado(true);
       setSelecionados({});
