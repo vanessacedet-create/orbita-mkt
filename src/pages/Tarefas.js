@@ -752,7 +752,7 @@ function menuItemStyle() {
 // ── PÁGINA PRINCIPAL ───────────────────────────────────────
 export default function Tarefas() {
   const { usuario } = useAuth()
-  const { perfilAtivo } = useViewAs()  // perfil real ou viewAs
+  const { perfilAtivo, usuarioAtivo } = useViewAs()  // perfil real ou viewAs
   const [tarefas, setTarefas]       = useState([])
   const [usuarios, setUsuarios]     = useState([])
   const [loading, setLoading]       = useState(true)
@@ -780,16 +780,24 @@ export default function Tarefas() {
     setLoading(true)
     try {
       const [t, us] = await Promise.all([getTarefas(), getUsuarios()])
-      // Filtra tarefas estritamente pelo grupo do perfil ativo.
+
+      // Filtra tarefas pelo grupo principal + grupos_extras do usuário.
       // Admin e gerente (sem PERFIL_GRUPO) veem tudo.
-      const grupoUsuario = PERFIL_GRUPO[perfilAtivo]
-      setTarefas(grupoUsuario ? t.filter(tarefa => tarefa.grupo === grupoUsuario) : t)
+      const grupoPrincipal = PERFIL_GRUPO[perfilAtivo]
+      const gruposExtras = usuarioAtivo?.grupos_extras || []
+
+      if (!grupoPrincipal) {
+        setTarefas(t) // admin/gerente
+      } else {
+        const gruposPermitidos = new Set([grupoPrincipal, ...gruposExtras])
+        setTarefas(t.filter(tarefa => tarefa.grupo && gruposPermitidos.has(tarefa.grupo)))
+      }
       setUsuarios(us || [])
     } catch(e) { console.error(e) }
     finally { setLoading(false) }
   }
 
-  useEffect(() => { carregar() }, [perfilAtivo]) // eslint-disable-line
+  useEffect(() => { carregar() }, [perfilAtivo, usuarioAtivo?.grupos_extras]) // eslint-disable-line
 
   useEffect(() => {
     function handleClick(e) {
