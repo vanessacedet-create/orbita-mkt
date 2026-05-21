@@ -179,8 +179,24 @@ export default function VitrineAdmin() {
       .from('vitrine_pedidos')
       .update({ status: novoStatus })
       .eq('id', pedidoId);
+
     if (!error) {
       setPedidos(prev => prev.map(p => p.id === pedidoId ? { ...p, status: novoStatus } : p));
+
+      if (novoStatus === 'concluido') {
+        const pedido = pedidos.find(p => p.id === pedidoId);
+        if (pedido) {
+          const resultado = await criarEnvioCortesia(pedido);
+          if (resultado.ok) {
+            const aviso = resultado.livrosFaltando > 0
+              ? `Envio criado nas cortesias (Envio #${resultado.envioId}). ⚠️ ${resultado.livrosFaltando} livro(s) não encontrado(s) no catálogo pelo ISBN — verifique manualmente.`
+              : `Envio criado nas cortesias (Envio #${resultado.envioId}).`;
+            alert(aviso);
+          } else {
+            alert(`Pedido marcado como concluído, mas não foi possível criar o envio nas cortesias automaticamente.\n\n${resultado.msg}\n\nCrie o envio manualmente em Cortesias.`);
+          }
+        }
+      }
     }
   }
 
@@ -208,6 +224,63 @@ export default function VitrineAdmin() {
     }
     setShowFormParceiro(false);
     setEditandoParceiro(null);
+  }
+
+  // ── Concluir pedido → criar envio nas cortesias ──
+  async function criarEnvioCortesia(pedido) {
+    try {
+      // 1. Buscar parceiro no CRM pelo e-mail
+      const { data: parceiroCRM } = await supabase
+        .from('parceiros')
+        .select('id')
+        .ilike('email', pedido.email || '')
+        .limit(1)
+        .single();
+
+      if (!parceiroCRM) {
+        console.warn('[Vitrine→Cortesia] Parceiro não encontrado no CRM:', pedido.email);
+        return { ok: false, msg: 'Parceiro não encontrado no CRM. Verifique se o e-mail está cadastrado.' };
+      }
+
+      // 2. Buscar IDs dos livros na tabela livros pelo EAN/ISBN
+      const itens = pedido.vitrine_pedido_itens || [];
+      const eans = itens.map(i => i.ean_livro).filter(Boolean);
+      let livroIds = [];
+
+      if (eans.length > 0) {
+        const { data: livrosEncontrados } = await supabase
+          .from('livros')
+          .select('id, isbn')
+          .in('isbn', eans);
+        livroIds = (livrosEncontrados || []).map(l => l.id);
+      }
+
+      // 3. Criar envio
+      const { data: envio, error: errEnvio } = await supabase
+        .from('envios')
+        .insert({
+          parceiro_id: parceiroCRM.id,
+          status: 'enviado',
+          data_envio: pedido.data_divulgacao || new Date().toISOString().slice(0, 10),
+          observacoes: `[Vitrine] Pedido #${pedido.id} — ${itens.map(i => i.titulo_livro).join(', ')}`,
+        })
+        .select()
+        .single();
+
+      if (errEnvio) throw errEnvio;
+
+      // 4. Vincular livros ao envio
+      if (livroIds.length > 0) {
+        await supabase.from('envio_livros').insert(
+          livroIds.map(livro_id => ({ envio_id: envio.id, livro_id }))
+        );
+      }
+
+      return { ok: true, envioId: envio.id, livrosFaltando: eans.length - livroIds.length };
+    } catch (err) {
+      console.error('[Vitrine→Cortesia] Erro:', err);
+      return { ok: false, msg: 'Erro ao criar envio nas cortesias.' };
+    }
   }
 
   // ── Parceiros: toggle ativo ──
@@ -869,6 +942,7 @@ export default function VitrineAdmin() {
                   <tr style={{ background: '#f9fafb' }}>
                     <th style={{ ...th, textAlign: 'left' }}>Nome</th>
                     <th style={{ ...th, textAlign: 'left' }}>E-mail</th>
+                    <th style={th}>Grupo</th>
                     <th style={th}>Cadastrado em</th>
                     <th style={th}>Acesso</th>
                     <th style={th}>Ações</th>
@@ -885,6 +959,19 @@ export default function VitrineAdmin() {
                       </td>
                       <td style={{ ...td, textAlign: 'left', color: '#555', fontFamily: 'monospace', fontSize: 12 }}>
                         {parceiro.email || '—'}
+                      </td>
+                      <td style={td}>
+                        {parceiro.grupo ? (
+                          <span style={{
+                            display: 'inline-block',
+                            padding: '2px 10px', borderRadius: 20,
+                            fontSize: 12, fontWeight: 700,
+                            background: { A: '#dcfce7', B: '#dbeafe', C: '#fef9c3', D: '#f3f4f6' }[parceiro.grupo] || '#f3f4f6',
+                            color:      { A: '#15803d', B: '#1d4ed8', C: '#854d0e', D: '#6b7280' }[parceiro.grupo] || '#6b7280',
+                          }}>
+                            {parceiro.grupo}
+                          </span>
+                        ) : '—'}
                       </td>
                       <td style={td}>
                         {parceiro.created_at
@@ -984,6 +1071,7 @@ function FormParceiro({ parceiro, onSalvar, onCancelar }) {
   const [form, setForm] = useState({
     nome:  parceiro?.nome  || '',
     email: parceiro?.email || '',
+    grupo: parceiro?.grupo || '',
     ativo: parceiro?.ativo ?? true,
   });
   const [erro, setErro] = useState('');
@@ -996,7 +1084,7 @@ function FormParceiro({ parceiro, onSalvar, onCancelar }) {
       return;
     }
     setErro('');
-    onSalvar({ nome: form.nome.trim(), email: form.email.trim().toLowerCase(), ativo: form.ativo });
+    onSalvar({ nome: form.nome.trim(), email: form.email.trim().toLowerCase(), grupo: form.grupo || null, ativo: form.ativo });
   }
 
   return (
@@ -1044,6 +1132,23 @@ function FormParceiro({ parceiro, onSalvar, onCancelar }) {
 
           <Field label="Nome completo *" value={form.nome} onChange={v => setForm({ ...form, nome: v })} />
           <Field label="E-mail *" value={form.email} onChange={v => setForm({ ...form, email: v })} type="email" />
+
+          <div>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#555', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Grupo
+            </label>
+            <select
+              value={form.grupo}
+              onChange={e => setForm({ ...form, grupo: e.target.value })}
+              style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #ddd', borderRadius: 8, fontSize: 14, background: '#fff', color: '#1a1a1a', cursor: 'pointer', boxSizing: 'border-box' }}
+            >
+              <option value="">Sem grupo definido</option>
+              <option value="A">Grupo A — sem limite de livros</option>
+              <option value="B">Grupo B — até 3 livros</option>
+              <option value="C">Grupo C — até 2 livros</option>
+              <option value="D">Grupo D — 1 livro</option>
+            </select>
+          </div>
 
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
             <input
