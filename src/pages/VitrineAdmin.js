@@ -229,17 +229,37 @@ export default function VitrineAdmin() {
   // ── Concluir pedido → criar envio nas cortesias ──
   async function criarEnvioCortesia(pedido) {
     try {
-      // 1. Buscar parceiro no CRM pelo e-mail
-      const { data: parceiroCRM } = await supabase
+      // 1. Buscar parceiro no CRM pelo nome (tenta nome exato, depois livraria)
+      const nomeParceiro = (pedido.nome_parceiro || '').trim();
+
+      let parceiroCRM = null;
+
+      // Tenta pelo nome do parceiro
+      const { data: porNome } = await supabase
         .from('parceiros')
-        .select('id')
-        .ilike('email', pedido.email || '')
+        .select('id, nome, livraria')
+        .ilike('nome', `%${nomeParceiro}%`)
         .limit(1)
-        .single();
+        .maybeSingle();
+
+      if (porNome) {
+        parceiroCRM = porNome;
+      } else {
+        // Tenta pelo nome da livraria
+        const { data: porLivraria } = await supabase
+          .from('parceiros')
+          .select('id, nome, livraria')
+          .ilike('livraria', `%${nomeParceiro}%`)
+          .limit(1)
+          .maybeSingle();
+        parceiroCRM = porLivraria;
+      }
 
       if (!parceiroCRM) {
-        console.warn('[Vitrine→Cortesia] Parceiro não encontrado no CRM:', pedido.email);
-        return { ok: false, msg: 'Parceiro não encontrado no CRM. Verifique se o e-mail está cadastrado.' };
+        return {
+          ok: false,
+          msg: `Parceiro "${nomeParceiro}" não encontrado no CRM.\n\nVerifique se o nome cadastrado na vitrine bate com o nome ou livraria no CRM.`,
+        };
       }
 
       // 2. Buscar IDs dos livros na tabela livros pelo EAN/ISBN
