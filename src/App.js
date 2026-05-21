@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { lazy, Suspense, useState, useEffect } from 'react'
 import { AuthProvider, useAuth, MODULOS_PERMISSOES } from './context/AuthContext'
+import { ViewAsContext } from './context/ViewAsContext'
 import { usePermissions } from './hooks/usePermissions'
 import { signOut, supabase, getUsuarios } from './lib/supabase'
 import {
@@ -394,7 +395,14 @@ function Shell() {
   // Usuário exibido na sidebar
   const usuarioDisplay = viewAs || usuario
 
+  const viewAsValue = {
+    perfilAtivo: viewAs?.perfil || usuario?.perfil,
+    usuarioAtivo: viewAs || usuario,
+    estaEmModoVisual: !!viewAs,
+  }
+
   return (
+    <ViewAsContext.Provider value={viewAsValue}>
     <div className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-brand">
@@ -549,6 +557,7 @@ function Shell() {
         />
       )}
     </div>
+    </ViewAsContext.Provider>
   )
 }
 
