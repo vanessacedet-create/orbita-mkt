@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useViewAs } from '../context/ViewAsContext'
+import { useAuth } from '../context/AuthContext'
 import { PERFIL_GRUPO } from '../context/AuthContext'
 import { getRegistrosMonitoramento, createRegistroMonitoramento, updateRegistroMonitoramento, deleteRegistroMonitoramento, getParceiros, getParceirosAtivos, getLancamentosMonitoramento } from '../lib/supabase'
 import { ChevronLeft, ChevronRight, Eye, Plus, Pencil, Trash2, X } from 'lucide-react'
@@ -306,8 +307,14 @@ function Calendario({semanas, porDia, hj, onClickDia}){
 
 // ── PÁGINA PRINCIPAL ───────────────────────────────────────
 export default function Monitoramento(){
+  const { usuario } = useAuth()
   const { perfilAtivo } = useViewAs()
-  const grupoMonit = PERFIL_GRUPO[perfilAtivo] || null
+  const ehAdmin = usuario?.perfil === 'administrador' || usuario?.perfil === 'gerente'
+  const grupoDoPerfil = PERFIL_GRUPO[perfilAtivo] || null
+  const [filtroGrupoAdmin, setFiltroGrupoAdmin] = useState('todos')
+  const grupoMonit = ehAdmin
+    ? (filtroGrupoAdmin === 'todos' ? null : filtroGrupoAdmin)
+    : grupoDoPerfil
   const agora = new Date()
   const[ano,setAno]     = useState(agora.getFullYear())
   const[mes,setMes]     = useState(agora.getMonth()+1)
@@ -426,6 +433,16 @@ export default function Monitoramento(){
           </div>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:16,flexWrap:'wrap'}}>
+          {ehAdmin && (
+            <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}}
+              value={filtroGrupoAdmin} onChange={e=>setFiltroGrupoAdmin(e.target.value)}>
+              <option value="todos">Todos os grupos</option>
+              <option value="influencers">Influencers</option>
+              <option value="parceiras">Parceiras</option>
+              <option value="proprias">Próprias</option>
+              <option value="marketplaces">Marketplaces</option>
+            </select>
+          )}
           {/* Resumo */}
           <div style={{display:'flex',gap:16}}>
             {[{n:totalPostou,l:'Postaram',c:'#22c55e'},{n:totalNao,l:'Não postaram',c:'#ef4444'},{n:totalSemRet,l:'Sem retorno',c:'#eab308'},{n:totalPend,l:'Pendentes',c:'#6b7280'}].map(({n,l,c})=>(
