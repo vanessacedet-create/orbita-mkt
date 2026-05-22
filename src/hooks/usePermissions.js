@@ -17,24 +17,26 @@ export function usePermissions() {
   const abasExtras = usuario?.abas_extras || []
   const abasExtrasKey = JSON.stringify(abasExtras)
 
-  const can = useMemo(() => {
-    return (modulo) => {
+  const can = useMemo(
+    () => (modulo) => {
       if (!perfil || !modulo) return false
       return (MODULOS_PERMISSOES[modulo] || []).includes(perfil) ||
              abasExtras.includes(modulo)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [perfil, abasExtrasKey])
+    },
+    [perfil, abasExtrasKey] // eslint-disable-line
+  )
 
-  const modulosPermitidos = useMemo(() => {
-    if (!perfil) return []
-    const porPerfil = Object.keys(MODULOS_PERMISSOES).filter(m =>
-      MODULOS_PERMISSOES[m].includes(perfil)
-    )
-    const extras = abasExtras.filter(m => !porPerfil.includes(m))
-    return [...porPerfil, ...extras]
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [perfil, abasExtrasKey])
+  const modulosPermitidos = useMemo(
+    () => {
+      if (!perfil) return []
+      const porPerfil = Object.keys(MODULOS_PERMISSOES).filter(m =>
+        MODULOS_PERMISSOES[m].includes(perfil)
+      )
+      const extras = abasExtras.filter(m => !porPerfil.includes(m))
+      return [...porPerfil, ...extras]
+    },
+    [perfil, abasExtrasKey] // eslint-disable-line
+  )
 
   return { can, modulosPermitidos, perfil }
 }
