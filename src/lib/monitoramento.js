@@ -46,16 +46,20 @@ export async function getLancamentosMonitoramento({ ano, mes, grupo } = {}) {
   const ultimoDia = new Date(ano, mes, 0).getDate()
   const fim = `${ano}-${String(mes).padStart(2,'0')}-${String(ultimoDia).padStart(2,'0')}`
 
-  const { data: lancData, error: lancError } = await supabase
+  // Lançamentos: filtra via join com campanhas pelo grupo, quando aplicável.
+  // O !inner garante que registros sem campanha (ou de outro grupo) sejam excluídos.
+  let qLanc = supabase
     .from('lancamento_parceiros')
     .select(`
       id, status, data_combinada, tipo_divulgacao, link,
       parceiros(id, nome),
-      lancamento_livros(id, livros(id, titulo), campanhas(id, nome, tipo))
+      lancamento_livros!inner(id, livros(id, titulo), campanhas!inner(id, nome, tipo, grupo))
     `)
     .not('data_combinada', 'is', null)
     .gte('data_combinada', ini)
     .lte('data_combinada', fim)
+  if (grupo) qLanc = qLanc.eq('lancamento_livros.campanhas.grupo', grupo)
+  const { data: lancData, error: lancError } = await qLanc
   if (lancError) throw lancError
 
   let qCampPromo = supabase.from('campanhas').select('id, nome').eq('tipo', 'Promoção')
