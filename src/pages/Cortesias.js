@@ -1,4 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
+import { useViewAs } from '../context/ViewAsContext'
+import { PERFIL_GRUPO } from '../context/AuthContext'
 import {
   getParceiros, getParceirosAtivos, createParceiro, updateParceiro, deleteParceiro, getEditoras,
   getLivros, createLivro, updateLivro, deleteLivro,
@@ -193,7 +195,7 @@ function BuscaDuplicatas({ parceiros, livros, envios, onClose }) {
 }
 
 // ── UPLOAD PLANILHA ────────────────────────────────────────
-function UploadPlanilha({ onImport, tipo }) {
+function UploadPlanilha({ onImport, tipo, grupo }) {
   const [open, setOpen]           = useState(false)
   const [preview, setPreview]     = useState([])
   const [erros, setErros]         = useState([])
@@ -309,7 +311,7 @@ function UploadPlanilha({ onImport, tipo }) {
             sucesso++
           }
         } else {
-          await createLivro({ titulo: row.titulo || '', isbn: row.isbn || '', sku: row.sku || '', autor: row.autor || '', editora: row.editora || '' })
+          await createLivro({ titulo: row.titulo || '', isbn: row.isbn || '', sku: row.sku || '', autor: row.autor || '', editora: row.editora || '', grupo: grupo })
           sucesso++
         }
       } catch { falhas++ }
@@ -853,7 +855,7 @@ function ParceirosTab({ parceiros, setParceiros }) {
   return (
     <>
       <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginBottom:20}}>
-        <UploadPlanilha tipo="parceiros" onImport={reload}/>
+        <UploadPlanilha tipo="parceiros" onImport={reload} grupo={grupoLivros}/>
         <button className="btn btn-ghost" onClick={()=>{
           const rows = parceiros.map(p => ({
             'Nome':              p.nome,
@@ -983,7 +985,7 @@ function LivrosTab() {
     const sq = s !== undefined ? s : search
     setLoading(true)
     try {
-      const { data, count } = await getLivros({ page: pg, pageSize: sz, search: sq })
+      const { data, count } = await getLivros({ page: pg, pageSize: sz, search: sq, grupo: grupoLivros })
       setLivros(data || [])
       setTotal(count || 0)
     } catch (e) { console.error(e); showToast('Erro ao carregar livros', 'error') }
@@ -1016,7 +1018,7 @@ function LivrosTab() {
         data_lancamento: form.data_lancamento||null,
       }
       if (editing) { await updateLivro(editing.id, payload); showToast('Atualizado!') }
-      else { await createLivro(payload); showToast('Cadastrado!') }
+      else { await createLivro({ ...payload, grupo: grupoLivros }); showToast('Cadastrado!') }
       await fetchLivros()
       close()
     } catch { showToast('Erro ao salvar','error') } finally { setSaving(false) }
@@ -1034,7 +1036,7 @@ function LivrosTab() {
         <UploadPlanilha tipo="livros" onImport={() => { setPage(0); fetchLivros(0, pageSize, search) }}/>
         <button className="btn btn-ghost" onClick={async ()=>{
           try {
-            const { data: todos } = await getLivros({ page: 0, pageSize: 99999 })
+            const { data: todos } = await getLivros({ page: 0, pageSize: 99999, grupo: grupoLivros })
             const rows = (todos||[]).map(l => ({
               'Título':   l.titulo,
               'ISBN':     l.isbn||'',
@@ -1595,6 +1597,8 @@ function RelatoriosTab({ parceiros, envios }) {
 
 // ── MAIN ───────────────────────────────────────────────────
 export default function Cortesias() {
+  const { perfilAtivo } = useViewAs()
+  const grupoLivros = PERFIL_GRUPO[perfilAtivo] || null
   const [tab, setTab]             = useState('envios')
   const [parceiros, setParceiros] = useState([])
   const [livros, setLivros]       = useState([])
