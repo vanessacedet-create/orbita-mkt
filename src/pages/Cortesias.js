@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useViewAs } from '../context/ViewAsContext'
+import { useAuth } from '../context/AuthContext'
 import { PERFIL_GRUPO } from '../context/AuthContext'
 import {
   getParceiros, getParceirosAtivos, createParceiro, updateParceiro, deleteParceiro, getEditoras,
@@ -1597,9 +1598,14 @@ function RelatoriosTab({ parceiros, envios }) {
 
 // ── MAIN ───────────────────────────────────────────────────
 export default function Cortesias() {
+  const { usuario } = useAuth()
   const { perfilAtivo } = useViewAs()
-  const grupoLivros = PERFIL_GRUPO[perfilAtivo] || null   // grupo do usuário ativo
-  // Listagem: cada grupo vê apenas os próprios livros (admin/gerente vê tudo)
+  const ehAdmin = usuario?.perfil === 'administrador' || usuario?.perfil === 'gerente'
+  const grupoDoPerfil = PERFIL_GRUPO[perfilAtivo] || null
+  const [filtroGrupoAdmin, setFiltroGrupoAdmin] = useState('todos')
+  const grupoLivros = ehAdmin
+    ? (filtroGrupoAdmin === 'todos' ? null : filtroGrupoAdmin)
+    : grupoDoPerfil
   const gruposLivrosVisiveis = grupoLivros ? [grupoLivros] : null
   const [tab, setTab]             = useState('envios')
   const [parceiros, setParceiros] = useState([])
