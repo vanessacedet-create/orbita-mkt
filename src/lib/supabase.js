@@ -56,6 +56,7 @@ export {
   addLivroTarefa, removeLivroTarefa,
   importarTarefasLote, desfazerImportacao, getLotesRecentes,
   addComentario,
+  gerarProximaOcorrencia, calcularProximoPrazo,
 } from './tarefas'
 
 export {
