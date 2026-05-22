@@ -400,11 +400,48 @@ export async function importarDivulgacoesPromocao(campanhaId, rows) {
 }
 
 export async function getDashboardStats({ dataInicio, dataFim, tipoCampanha, origem, grupo } = {}) {
+  // ── Quando filtra por grupo, descobrimos quais parceiros pertencem ao grupo
+  // através das campanhas do grupo. Um parceiro "pertence" ao grupo se já
+  // participou de pelo menos uma campanha dele.
+  let parceiroIdsDoGrupo = null
+  let campanhaIdsDoGrupo = null
+  if (grupo) {
+    const { data: campsDoGrupo } = await supabase
+      .from('campanhas').select('id').eq('grupo', grupo)
+    campanhaIdsDoGrupo = (campsDoGrupo || []).map(c => c.id)
+
+    if (campanhaIdsDoGrupo.length > 0) {
+      const [{ data: cpIds }, { data: llIds }] = await Promise.all([
+        supabase.from('campanha_parceiros')
+          .select('parceiro_id').in('campanha_id', campanhaIdsDoGrupo),
+        supabase.from('lancamento_livros')
+          .select('id').in('campanha_id', campanhaIdsDoGrupo),
+      ])
+      const lancLivroIds = (llIds || []).map(x => x.id)
+      let lpParceirosIds = []
+      if (lancLivroIds.length > 0) {
+        const { data: lps } = await supabase.from('lancamento_parceiros')
+          .select('parceiro_id').in('lancamento_livro_id', lancLivroIds)
+        lpParceirosIds = (lps || []).map(x => x.parceiro_id)
+      }
+      const all = [...(cpIds || []).map(x => x.parceiro_id), ...lpParceirosIds]
+      parceiroIdsDoGrupo = [...new Set(all.filter(Boolean))]
+    } else {
+      parceiroIdsDoGrupo = []
+    }
+  }
+
+  // ── Total de parceiros (filtrado por grupo se aplicável) ─────────────────
   let qParceiros = supabase.from('parceiros').select('*', { count: 'exact', head: true })
   if (dataInicio) qParceiros = qParceiros.gte('created_at', dataInicio)
   if (dataFim)    qParceiros = qParceiros.lte('created_at', dataFim + 'T23:59:59')
+  if (parceiroIdsDoGrupo !== null) {
+    if (parceiroIdsDoGrupo.length === 0) qParceiros = qParceiros.eq('id', '00000000-0000-0000-0000-000000000000')
+    else qParceiros = qParceiros.in('id', parceiroIdsDoGrupo)
+  }
   const { count: totalParceiros } = await qParceiros
 
+  // ── Total de campanhas ──────────────────────────────────────────────────
   let qCampanhas = supabase.from('campanhas').select('*', { count: 'exact', head: true })
   if (dataInicio) qCampanhas = qCampanhas.gte('data_inicio', dataInicio)
   if (dataFim)    qCampanhas = qCampanhas.lte('data_inicio', dataFim)
@@ -412,20 +449,35 @@ export async function getDashboardStats({ dataInicio, dataFim, tipoCampanha, ori
   if (grupo) qCampanhas = qCampanhas.eq('grupo', grupo)
   const { count: totalCampanhas } = await qCampanhas
 
-  let qLP = supabase.from('lancamento_parceiros').select('id, status, origem, data_divulgacao').eq('status', 'publicado')
+  // ── Divulgações de lançamento (filtradas via lancamento_livros → campanha)
+  // lancamento_parceiros → lancamento_livros → campanhas(grupo)
+  let qLP = supabase
+    .from('lancamento_parceiros')
+    .select('id, status, origem, data_divulgacao, lancamento_livros!inner(campanha_id, campanhas!inner(grupo))')
+    .eq('status', 'publicado')
   if (dataInicio) qLP = qLP.gte('data_divulgacao', dataInicio)
   if (dataFim)    qLP = qLP.lte('data_divulgacao', dataFim)
   if (origem)     qLP = origem === 'organica' ? qLP.eq('origem','organica') : qLP.neq('origem','organica')
+  if (grupo)      qLP = qLP.eq('lancamento_livros.campanhas.grupo', grupo)
   const { data: lpData } = await qLP
 
-  let qCP = supabase.from('campanha_parceiros').select('id, status, origem, campanhas(tipo)').eq('status','publicado')
+  // ── Divulgações de promoção (campanha_parceiros → campanhas(grupo)) ────
+  let qCP = supabase
+    .from('campanha_parceiros')
+    .select('id, status, origem, campanhas!inner(tipo, grupo)')
+    .eq('status', 'publicado')
   if (origem)     qCP = origem === 'organica' ? qCP.eq('origem','organica') : qCP.neq('origem','organica')
+  if (grupo)      qCP = qCP.eq('campanhas.grupo', grupo)
   const { data: cpData } = await qCP
 
-  let qDL = supabase.from('divulgacoes_livraria').select('id, origem, data_divulgacao')
+  // ── Divulgações de livraria (divulgacoes_livraria → campanha_parceiros → campanhas(grupo))
+  let qDL = supabase
+    .from('divulgacoes_livraria')
+    .select('id, origem, data_divulgacao, campanha_parceiros!inner(campanhas!inner(grupo))')
   if (dataInicio) qDL = qDL.gte('data_divulgacao', dataInicio)
   if (dataFim)    qDL = qDL.lte('data_divulgacao', dataFim)
   if (origem)     qDL = origem === 'organica' ? qDL.eq('origem','organica') : qDL.neq('origem','organica')
+  if (grupo)      qDL = qDL.eq('campanha_parceiros.campanhas.grupo', grupo)
   const { data: dlData } = await qDL
 
   const lpPublicados = lpData || []
@@ -447,11 +499,18 @@ export async function getDashboardStats({ dataInicio, dataFim, tipoCampanha, ori
   const totalOrganicas   = divLancOrg  + divPromOrg  + divLibOrg
   const totalCombinadas  = divLancComb + divPromComb + divLibComb
 
-  const { data: parceirosRaw } = await supabase.from('parceiros').select('id, tipo_parceria, status')
+  // ── Breakdown de parceiros (também respeita o grupo) ────────────────────
+  let qParcsRaw = supabase.from('parceiros').select('id, tipo_parceria, status')
+  if (parceiroIdsDoGrupo !== null) {
+    if (parceiroIdsDoGrupo.length === 0) qParcsRaw = qParcsRaw.eq('id', '00000000-0000-0000-0000-000000000000')
+    else qParcsRaw = qParcsRaw.in('id', parceiroIdsDoGrupo)
+  }
+  const { data: parceirosRaw } = await qParcsRaw
   const parcs = parceirosRaw || []
   const parceirosPorTipo   = parcs.reduce((a,p)=>{ const t=p.tipo_parceria||'Sem tipo'; a[t]=(a[t]||0)+1; return a },{})
   const parceirosPorStatus = parcs.reduce((a,p)=>{ const s=p.status||'ativo'; a[s]=(a[s]||0)+1; return a },{})
 
+  // ── Breakdown de campanhas ──────────────────────────────────────────────
   let qCampsRaw = supabase.from('campanhas').select('id, tipo, status')
   if (grupo) qCampsRaw = qCampsRaw.eq('grupo', grupo)
   const { data: campanhasRaw } = await qCampsRaw
