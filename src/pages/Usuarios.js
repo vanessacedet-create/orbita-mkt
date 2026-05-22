@@ -9,7 +9,6 @@ const ABAS_LIBERAVEIS = [
   { value: 'cortesias',     label: 'Livros (Cortesias)' },
   { value: 'lancamentos',   label: 'Lançamentos' },
 ]
-const PERFIS_PARCEIRAS = ['estagiario_parceiras', 'analista_parceiras', 'supervisor_parceiras']
 
 import { useAuth } from '../context/AuthContext'
 import { Users, Plus, X, Pencil , Settings2 } from 'lucide-react'
@@ -393,7 +392,7 @@ export default function Usuarios() {
                         </td>
                         <td style={{fontSize:12,color:'var(--text-muted)'}}>{p?.grupo||'—'}</td>
                         <td>
-                          {PERFIS_PARCEIRAS.includes(u.perfil) && eu?.perfil === 'administrador' ? (
+                          {eu?.perfil === 'administrador' && !isEu ? (
                             <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
                               {(u.abas_extras||[]).length > 0
                                 ? (u.abas_extras).map(a => {
