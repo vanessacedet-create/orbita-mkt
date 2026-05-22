@@ -74,3 +74,7 @@ export {
   getDivulgacaoLivro, addDivulgadoresLivro, updateDivulgacaoStatus,
   bulkUpdateDivulgacao, removeDivulgacaoLivro,
 } from './crm-literario'
+
+export {
+  getCRMStatusConfig, saveCRMStatusConfig, corParaBg,
+} from './crm-status'
