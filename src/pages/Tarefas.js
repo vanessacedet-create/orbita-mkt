@@ -242,15 +242,37 @@ function SeletorLivros({ tarefaId, livrosVinculados, onChange }) {
 // ── MODAL TAREFA ───────────────────────────────────────────
 function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
   const { usuario } = useAuth()
+  const storageKey = `orbita_modal_form_${tarefa?.id || 'new'}`
   const EMPTY = { titulo:'', descricao:'', status:'a_fazer', prioridade:'media', responsavel_id:'', data_prazo: tarefa?._dataPrazo || '' }
-  const [form, setForm] = useState(tarefa && !tarefa._dataPrazo ? {
+  const formInicial = tarefa && !tarefa._dataPrazo ? {
     titulo:          tarefa.titulo,
     descricao:       tarefa.descricao || '',
     status:          tarefa.status,
     prioridade:      tarefa.prioridade,
     responsavel_id:  tarefa.responsavel_id || '',
     data_prazo:      tarefa.data_prazo || '',
-  } : EMPTY)
+  } : EMPTY
+
+  const [form, setFormRaw] = useState(() => {
+    try {
+      const salvo = sessionStorage.getItem(storageKey)
+      if (salvo) return JSON.parse(salvo)
+    } catch {}
+    return formInicial
+  })
+
+  function setForm(updater) {
+    setFormRaw(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      try { sessionStorage.setItem(storageKey, JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
+
+  function limparRascunho() {
+    try { sessionStorage.removeItem(storageKey) } catch {}
+  }
+
   const [checklist, setChecklist]     = useState(tarefa?.tarefa_checklist || [])
   const [comentarios, setComentarios] = useState(tarefa?.tarefa_comentarios || [])
   const [livrosVinculados, setLivrosVinculados] = useState(tarefa?.tarefa_livros || [])
@@ -270,6 +292,7 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
         data_prazo:     form.data_prazo || null,
         created_by:     tarefa ? undefined : usuario?.id,
       }, tarefa?.id)
+      limparRascunho()
       onClose()
     } catch(e) { console.error(e) } finally { setSaving(false) }
   }
@@ -309,8 +332,8 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
         <div className="modal-header" style={{ position:'sticky', top:0, background:'var(--surface)', zIndex:10 }}>
           <h2 className="modal-title">{tarefa ? 'Editar tarefa' : 'Nova tarefa'}</h2>
           <div style={{ display:'flex', gap:8 }}>
-            {tarefa && <button className="btn btn-danger btn-sm" onClick={()=>{ onDelete(tarefa.id); onClose() }}><Trash2 size={13}/></button>}
-            <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
+            {tarefa && <button className="btn btn-danger btn-sm" onClick={()=>{ limparRascunho(); onDelete(tarefa.id); onClose() }}><Trash2 size={13}/></button>}
+            <button className="btn btn-ghost btn-icon" onClick={()=>{ limparRascunho(); onClose() }}><X size={16}/></button>
           </div>
         </div>
 
@@ -440,7 +463,7 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
         )}
 
         <div className="form-actions" style={{ marginTop:16 }}>
-          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-ghost" onClick={()=>{ limparRascunho(); onClose() }}>Cancelar</button>
           <button className="btn btn-primary" onClick={salvar} disabled={saving||!form.titulo.trim()}>
             {saving ? 'Salvando...' : tarefa ? 'Salvar' : 'Criar tarefa'}
           </button>
