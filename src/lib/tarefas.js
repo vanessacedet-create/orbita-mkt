@@ -208,3 +208,129 @@ export async function addComentario(tarefa_id, usuario_id, texto) {
   if (error) throw error
   return data
 }
+
+// ── RECORRÊNCIA ─────────────────────────────────────────────────────────────
+
+/**
+ * Calcula o próximo prazo a partir de uma data de referência,
+ * com base no tipo e config de recorrência.
+ * Para tipo 'personalizada', chama a API do Claude para interpretar
+ * a descrição em linguagem natural.
+ */
+export async function calcularProximoPrazo(dataRef, tipo, config = {}) {
+  const d = new Date(dataRef + 'T12:00:00')
+
+  if (tipo === 'diaria') {
+    d.setDate(d.getDate() + 1)
+    return toISO(d)
+  }
+
+  if (tipo === 'semanal') {
+    const alvo = config.dia_semana ?? d.getDay()
+    d.setDate(d.getDate() + 7)
+    // ajusta para o dia da semana correto se necessário
+    while (d.getDay() !== alvo) d.setDate(d.getDate() + 1)
+    return toISO(d)
+  }
+
+  if (tipo === 'quinzenal') {
+    d.setDate(d.getDate() + 14)
+    return toISO(d)
+  }
+
+  if (tipo === 'mensal') {
+    if (config.ultimo_dia_util) {
+      d.setMonth(d.getMonth() + 2, 0) // último dia do próximo mês
+      while (!isDiaUtil(d)) d.setDate(d.getDate() - 1)
+      return toISO(d)
+    }
+    const dia = config.dia_mes ?? d.getDate()
+    d.setMonth(d.getMonth() + 1, dia)
+    return toISO(d)
+  }
+
+  if (tipo === 'anual') {
+    d.setFullYear(d.getFullYear() + 1)
+    return toISO(d)
+  }
+
+  if (tipo === 'personalizada') {
+    return await calcularProximoPrazoIA(dataRef, config.descricao || '')
+  }
+
+  return null
+}
+
+function toISO(d) {
+  return d.toISOString().slice(0, 10)
+}
+
+function isDiaUtil(d) {
+  const dow = d.getDay()
+  return dow !== 0 && dow !== 6
+}
+
+async function calcularProximoPrazoIA(dataRef, descricao) {
+  const prompt = `Hoje é ${dataRef}. A regra de recorrência é: "${descricao}".
+Qual é a próxima data de vencimento após ${dataRef}?
+Responda APENAS com a data no formato YYYY-MM-DD, sem nenhum texto adicional.`
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 20,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    })
+    const json = await res.json()
+    const texto = json?.content?.[0]?.text?.trim() || ''
+    if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) return texto
+  } catch (e) {
+    console.error('Erro ao calcular prazo via IA:', e)
+  }
+  return null
+}
+
+/**
+ * Ao concluir uma tarefa recorrente: cria a próxima ocorrência no banco.
+ * Retorna a nova tarefa criada (ou null se não houver recorrência).
+ */
+export async function gerarProximaOcorrencia(tarefa) {
+  if (!tarefa.recorrencia_ativa || !tarefa.recorrencia_tipo) return null
+
+  const proximoPrazo = await calcularProximoPrazo(
+    tarefa.data_prazo || toISO(new Date()),
+    tarefa.recorrencia_tipo,
+    tarefa.recorrencia_config || {}
+  )
+  if (!proximoPrazo) return null
+
+  const payload = {
+    titulo:              tarefa.titulo,
+    descricao:           tarefa.descricao,
+    status:              'a_fazer',
+    prioridade:          tarefa.prioridade,
+    responsavel_id:      tarefa.responsavel_id,
+    grupo:               tarefa.grupo,
+    created_by:          tarefa.created_by,
+    data_prazo:          proximoPrazo,
+    recorrencia_ativa:   true,
+    recorrencia_tipo:    tarefa.recorrencia_tipo,
+    recorrencia_config:  tarefa.recorrencia_config,
+    recorrencia_origem_id: tarefa.recorrencia_origem_id || tarefa.id,
+  }
+
+  const { data, error } = await supabase
+    .from('tarefas')
+    .insert([payload])
+    .select(`*, responsavel:responsavel_id(id, nome), criador:created_by(id, nome),
+      tarefa_checklist(id, texto, concluido, ordem),
+      tarefa_comentarios(id, texto, created_at, usuario:usuario_id(id, nome)),
+      tarefa_livros(id, livros(id, titulo, autor, isbn))`)
+    .single()
+  if (error) throw error
+  return data
+}
