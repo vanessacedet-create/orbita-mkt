@@ -1,18 +1,24 @@
 import { useMemo } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { MODULOS_PERMISSOES } from '../context/AuthContext'
+import { useViewAs } from '../context/ViewAsContext'
 
 // Hook centralizado de permissões.
-// Substitui o uso espalhado de canAccess() e a duplicação entre
-// App.js (menuVisivel) e RequireAuth (canAccess por rota).
 //
-// Uso:
-//   const { can, menuVisivel, perfil } = usePermissions()
-//   can('campanhas')      → true/false
-//   can('rh')             → true/false
-//   menuVisivel           → array de módulos que o usuário pode ver
-export function usePermissions() {
-  const { usuario } = useAuth()
+// Sem argumento: usa o "perfil ativo" (real ou viewAs) — o que reflete
+// o que o usuário está vendo na tela. É o comportamento padrão correto
+// para o menu, RequireAuth e qualquer checagem de UI.
+//
+// Com argumento { useRealUser: true }: força o perfil real do usuário
+// logado, ignorando o "Ver como". Útil para checagens de segurança
+// que NÃO devem ser afetadas pela visualização (ex: só admin pode trocar
+// perfis de outros usuários, mesmo durante "Ver como").
+export function usePermissions(options = {}) {
+  const { useRealUser = false } = options
+  const { usuario: usuarioReal } = useAuth()
+  const { usuarioAtivo } = useViewAs()
+  const usuario = useRealUser ? usuarioReal : (usuarioAtivo || usuarioReal)
+
   const perfil = usuario?.perfil || null
   const abasExtras = usuario?.abas_extras || []
   const abasExtrasKey = JSON.stringify(abasExtras)
@@ -38,5 +44,5 @@ export function usePermissions() {
     [perfil, abasExtrasKey] // eslint-disable-line
   )
 
-  return { can, modulosPermitidos, perfil }
+  return { can, modulosPermitidos, perfil, usuario }
 }
