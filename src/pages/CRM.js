@@ -2,16 +2,20 @@ import { useEffect, useState } from 'react'
 import {
   getParceiros, getParceirosAtivos, getEditoras, getUsuarios,
   getCRMParceiros, updateParceiroCRM, getStatusHistory, addStatusHistory, createParceiroCRM, deleteParceiro,
+  getCRMStatusConfig, saveCRMStatusConfig, corParaBg,
 } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
+import { useViewAs } from '../context/ViewAsContext'
+import { PERFIL_GRUPO } from '../context/AuthContext'
 import {
   Users, Plus, X, ChevronRight, Clock, ExternalLink,
-  Instagram, Youtube, Search, ArrowRight, Trash2
+  Instagram, Youtube, Search, ArrowRight, Trash2, Settings2, GripVertical
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
-// ── PIPELINE ───────────────────────────────────────────────
-const PIPELINE = [
+// ── PIPELINE FALLBACK (usado se não houver config no banco) ──
+const PIPELINE_FALLBACK = [
   { value: 'found',        label: 'Encontrado',        cor: '#06b6d4', bg: 'rgba(6,182,212,0.12)'   },
   { value: 'prospected',   label: 'Prospectado',       cor: '#6b7280', bg: 'rgba(107,114,128,0.12)' },
   { value: 'negotiating',  label: 'Negociando',        cor: '#eab308', bg: 'rgba(234,179,8,0.12)'   },
@@ -41,10 +45,10 @@ function useToast() {
   return [t, show]
 }
 
-function pipelineInfo(v) { return PIPELINE.find(p=>p.value===v) || PIPELINE[0] }
+function pipelineInfo(v, pipeline = PIPELINE_FALLBACK) { return pipeline.find(p=>p.value===v) || pipeline[0] }
 
 // ── MODAL DETALHE PARCEIRO CRM ─────────────────────────────
-function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose }) {
+function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline }) {
   const [parceiro, setParceiro] = useState(inicial)
   const [history, setHistory]   = useState([])
   const [aba, setAba]           = useState('perfil') // perfil | pipeline | historico
@@ -157,7 +161,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose }) {
 
         {/* Abas */}
         <div style={{display:'flex',gap:4,padding:'12px 0 0',borderBottom:'1px solid var(--border)',marginBottom:16}}>
-          {[{v:'perfil',l:'Perfil CRM'},{v:'pipeline',l:'Pipeline'},{v:'historico',l:`Histórico (${history.length})`}].map(({v,l})=>(
+          {[{v:'perfil',l:'Perfil CRM'},{v:'pipeline',l:'Pipeline'},{v:'livros_propostos',l:`Livros propostos (${(parceiro.livros_propostos||[]).length})`},{v:'historico',l:`Histórico (${history.length})`}].map(({v,l})=>(
             <button key={v} onClick={()=>setAba(v)}
               className={`btn btn-sm ${aba===v?'btn-primary':'btn-ghost'}`}
               style={{borderRadius:'6px 6px 0 0'}}>
@@ -361,6 +365,54 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose }) {
         )}
 
         {/* ── ABA HISTÓRICO ── */}
+
+        {/* ── ABA LIVROS PROPOSTOS ── */}
+        {aba==='livros_propostos' && (
+          <div>
+            {(parceiro.livros_propostos||[]).length === 0 ? (
+              <div style={{textAlign:'center',padding:'40px 20px',color:'var(--text-muted)'}}>
+                <p style={{fontSize:13}}>Nenhum livro proposto a este parceiro ainda.</p>
+              </div>
+            ) : (
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {(parceiro.livros_propostos||[]).map((lp, idx) => {
+                  const info = pipelineInfo(lp.status)
+                  return (
+                    <div key={idx} style={{
+                      padding:'12px 14px',
+                      background:'var(--surface-2)',
+                      borderRadius:8,
+                      border:'1px solid var(--border)',
+                    }}>
+                      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,marginBottom: lp.nota ? 6 : 0}}>
+                        <div style={{display:'flex',alignItems:'center',gap:8,minWidth:0,flex:1}}>
+                          <span style={{fontSize:13,fontWeight:600,color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                            {lp.livro || 'Livro sem título'}
+                          </span>
+                        </div>
+                        <span style={{
+                          fontSize:11,fontWeight:700,
+                          background: info.bg,
+                          color: info.cor,
+                          padding:'3px 10px',borderRadius:99,flexShrink:0
+                        }}>{info.label}</span>
+                      </div>
+                      {lp.nota && (
+                        <p style={{fontSize:12,color:'var(--text-muted)',margin:0,whiteSpace:'pre-wrap'}}>{lp.nota}</p>
+                      )}
+                      {lp.data && (
+                        <div style={{fontSize:10,color:'var(--text-muted)',marginTop:6,opacity:0.7}}>
+                          Proposto em {lp.data}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {aba==='historico' && (
           <div>
             {history.length===0
@@ -396,7 +448,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose }) {
 }
 
 // ── CARD DO PARCEIRO NO KANBAN ─────────────────────────────
-function KanbanCard({ parceiro, onClick, onDragStart, onDragEnd, isDragging, onDelete }) {
+function KanbanCard({ parceiro, onClick, onDragStart, onDragEnd, isDragging, onDelete, pipeline }) {
   const plats = parceiro.platforms || []
   const eng = parceiro.engagement_rate
   return (
@@ -461,7 +513,7 @@ function KanbanCard({ parceiro, onClick, onDragStart, onDragEnd, isDragging, onD
 
 
 // ── MODAL NOVO PARCEIRO ────────────────────────────────────
-function ModalNovoParceiro({ onSave, onClose }) {
+function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
   const TIPOS_PARCERIA = ['Livraria de influencer', 'Booktime', 'Divulgação editoras próprias']
   const [form, setForm] = useState({
     nome: '', tipo_parceria: '', cpf: '', livraria: '',
@@ -667,12 +719,19 @@ function ModalNovoParceiro({ onSave, onClose }) {
 
 // ── PÁGINA PRINCIPAL ───────────────────────────────────────
 export default function CRM() {
+  const { usuario } = useAuth()
+  const { perfilAtivo } = useViewAs()
+  const grupoAtivo = PERFIL_GRUPO[perfilAtivo] || null
+  const ehAdmin = usuario?.perfil === 'administrador'
+
   const [parceiros, setParceiros]     = useState([])
   const [todos, setTodos]             = useState([])
+  const [pipeline, setPipeline]       = useState(PIPELINE_FALLBACK)
   const [loading, setLoading]         = useState(true)
   const [search, setSearch]           = useState('')
   const [modalParceiro, setModalParceiro] = useState(null)
   const [modalNovo, setModalNovo]       = useState(false)
+  const [modalConfig, setModalConfig]   = useState(false)
   const [dragId, setDragId]             = useState(null)
   const [dragOverCol, setDragOverCol]   = useState(null)
   const [filtroStatus, setFiltroStatus]   = useState('')
@@ -684,21 +743,23 @@ export default function CRM() {
   async function carregar() {
     setLoading(true)
     try {
-      const [crm, base] = await Promise.all([
-        getCRMParceiros(),
+      const [crm, base, pipe] = await Promise.all([
+        getCRMParceiros({ grupo: grupoAtivo }),
         getParceiros(),
+        getCRMStatusConfig(grupoAtivo),
       ])
       setParceiros(crm)
       setTodos(base)
+      setPipeline(pipe)
     } catch(e) { console.error(e) } finally { setLoading(false) }
   }
 
-  useEffect(() => { carregar() }, [])
+  useEffect(() => { carregar() }, [grupoAtivo]) // eslint-disable-line
 
   async function handleSave(upd) {
     // Recarrega do banco para garantir que current_status e todos os campos estão atualizados
     try {
-      const atualizado = await getCRMParceiros()
+      const atualizado = await getCRMParceiros({ grupo: grupoAtivo })
       setParceiros(atualizado)
     } catch {
       // Fallback: atualiza só o parceiro editado
@@ -730,7 +791,7 @@ export default function CRM() {
     setParceiros(prev => prev.map(p => p.id === dragId ? { ...p, current_status: novoStatus } : p))
     try {
       await addStatusHistory(dragId, novoStatus, 'Status alterado via kanban')
-      showToast(`${parceiro.nome} → ${pipelineInfo(novoStatus).label}`)
+      showToast(`${parceiro.nome} → ${pipelineInfo(novoStatus, pipeline).label}`)
     } catch(e) {
       // Reverte se falhar
       setParceiros(prev => prev.map(p => p.id === dragId ? { ...p, current_status: parceiro.current_status } : p))
@@ -755,7 +816,7 @@ export default function CRM() {
 
   // Agrupa por status
   const porStatus = {}
-  for (const st of PIPELINE) {
+  for (const st of pipeline) {
     porStatus[st.value] = filtrados.filter(p => p.current_status === st.value)
   }
 
@@ -786,7 +847,7 @@ export default function CRM() {
             </div>
             <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
               <option value="">Todos os status</option>
-              {PIPELINE.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
+              {pipeline.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
             <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroPlat} onChange={e=>setFiltroPlat(e.target.value)}>
               <option value="">Todas as plataformas</option>
@@ -839,7 +900,7 @@ export default function CRM() {
               )}
 
               {/* Colunas do pipeline */}
-              {PIPELINE.map(st=>{
+              {pipeline.map(st=>{
                 const items = porStatus[st.value] || []
                 return (
                   <div key={st.value} style={{width:220,flexShrink:0}}>
@@ -882,7 +943,7 @@ export default function CRM() {
         <ModalNovoParceiro
           onSave={handleNovoParceiro}
           onClose={()=>setModalNovo(false)}
-        />
+         pipeline={pipeline} grupo={grupoAtivo}/>
       )}
       {modalParceiro && (
         <ModalParceiroCRM
@@ -890,7 +951,7 @@ export default function CRM() {
           todos={todos}
           onSave={handleSave}
           onClose={()=>setModalParceiro(null)}
-        />
+         pipeline={pipeline}/>
       )}
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
     </div>
