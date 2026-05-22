@@ -560,7 +560,7 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
         notes: form.notes||null,
         editoras_sugeridas: form.editoras_sugeridas.length ? form.editoras_sugeridas.join(',') : null,
       }
-      const novo = await createParceiroCRM(payload, statusInicial)
+      const novo = await createParceiroCRM({ ...payload, grupo }, statusInicial)
       onSave({ ...novo, current_status: statusInicial })
       onClose()
     } catch(e) { console.error(e) } finally { setSaving(false) }
@@ -773,6 +773,15 @@ export default function CRM() {
     showToast(`${novo.nome} adicionado ao CRM!`)
   }
 
+  async function handleSalvarConfigStatus(novosStatuses) {
+    try {
+      await saveCRMStatusConfig(grupoAtivo, novosStatuses, usuario?.id)
+      setPipeline(await getCRMStatusConfig(grupoAtivo))
+      setModalConfig(false)
+      showToast('Configuração de status salva!')
+    } catch (e) { showToast('Erro ao salvar configuração', 'error') }
+  }
+
   async function handleDeleteParceiro(id, nome) {
     if (!window.confirm(`Excluir "${nome}" do CRM? Esta ação não pode ser desfeita.`)) return
     try {
@@ -872,6 +881,11 @@ export default function CRM() {
           <button className="btn btn-primary" onClick={()=>setModalNovo(true)} style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
             <Plus size={15}/> Novo Parceiro
           </button>
+        {ehAdmin && (
+          <button className="btn btn-ghost btn-sm" onClick={()=>setModalConfig(true)} title="Configurar status do CRM" style={{marginLeft:6}}>
+            <Settings2 size={14}/> Configurar status
+          </button>
+        )}
         </div>
       </div>
 
@@ -938,6 +952,15 @@ export default function CRM() {
           </div>
         )
       }
+
+      {modalConfig && (
+        <ModalConfigStatus
+          grupo={grupoAtivo}
+          pipeline={pipeline}
+          userId={usuario?.id}
+          onSave={handleSalvarConfigStatus}
+          onClose={()=>setModalConfig(false)}/>
+      )}
 
       {modalNovo && (
         <ModalNovoParceiro
