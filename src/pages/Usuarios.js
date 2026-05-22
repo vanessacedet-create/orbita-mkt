@@ -8,6 +8,7 @@ const ABAS_LIBERAVEIS = [
   { value: 'monitoramento', label: 'Monitoramento' },
   { value: 'cortesias',     label: 'Livros (Cortesias)' },
   { value: 'lancamentos',   label: 'Lançamentos' },
+  { value: 'crm',           label: 'CRM' },
 ]
 
 import { useAuth } from '../context/AuthContext'
