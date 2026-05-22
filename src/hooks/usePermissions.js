@@ -14,20 +14,27 @@ import { MODULOS_PERMISSOES } from '../context/AuthContext'
 export function usePermissions() {
   const { usuario } = useAuth()
   const perfil = usuario?.perfil || null
+  const abasExtras = usuario?.abas_extras || []
+  const abasExtrasKey = JSON.stringify(abasExtras)
 
   const can = useMemo(() => {
     return (modulo) => {
       if (!perfil || !modulo) return false
-      return (MODULOS_PERMISSOES[modulo] || []).includes(perfil)
+      return (MODULOS_PERMISSOES[modulo] || []).includes(perfil) ||
+             abasExtras.includes(modulo)
     }
-  }, [perfil])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [perfil, abasExtrasKey])
 
   const modulosPermitidos = useMemo(() => {
     if (!perfil) return []
-    return Object.keys(MODULOS_PERMISSOES).filter(m =>
+    const porPerfil = Object.keys(MODULOS_PERMISSOES).filter(m =>
       MODULOS_PERMISSOES[m].includes(perfil)
     )
-  }, [perfil])
+    const extras = abasExtras.filter(m => !porPerfil.includes(m))
+    return [...porPerfil, ...extras]
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [perfil, abasExtrasKey])
 
   return { can, modulosPermitidos, perfil }
 }
