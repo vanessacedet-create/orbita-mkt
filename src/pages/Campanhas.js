@@ -5,7 +5,6 @@ import {
   getCampanhas, getCampanha, createCampanha, updateCampanha, deleteCampanha, reordenarCampanhas,
   getParceiros, getParceirosAtivos, getLivros, getUsuarios,
   addParceiroCampanha, updateParceiroCampanha, removeParceiroCampanha,
-  getFollowUps, registrarContato,
   getDivulgacoesParceiro, createDivulgacaoCampanha, updateDivulgacaoCampanha, deleteDivulgacaoCampanha,
   importarDivulgacoesPromocao,
   getLivrosDestaqueParceiro, addLivroDestaqueParceiro, removeLivroDestaqueParceiro, importarLivrosDestaquePlanilha,
@@ -16,7 +15,7 @@ import {
 } from '../lib/supabase'
 import {
   Plus, Pencil, Trash2, X, ChevronLeft, BookOpen, Upload,
-  Users, Link, BarChart2, Calendar, CheckCircle, Clock, AlertCircle, Phone, Bell
+  Users, Link, BarChart2, Calendar, CheckCircle, Clock, AlertCircle, Bell
 } from 'lucide-react'
 import { differenceInDays } from 'date-fns'
 
@@ -2397,191 +2396,11 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros, usuarios = [] 
   )
 }
 
-// ── FOLLOW-UP TAB ─────────────────────────────────────────
-function FollowUpTab() {
-  const [dados, setDados]       = useState([])
-  const [loading, setLoading]   = useState(true)
-  const [modal, setModal]       = useState(null) // { cp, campanha }
-  const [formContato, setFormContato] = useState({ data_contato:'', nota_contato:'' })
-  const [saving, setSaving]     = useState(false)
-  const [filtro, setFiltro]     = useState('pendentes') // 'pendentes' | 'todos'
-  const [toast, showToast]      = useToast()
-
-  async function reload() {
-    const result = await getFollowUps()
-    setDados(result)
-  }
-
-  useEffect(() => { reload().finally(()=>setLoading(false)) }, [])
-
-  function abrirModal(cp, campanha) {
-    setFormContato({ data_contato: new Date().toISOString().slice(0,10), nota_contato: cp.nota_contato||'' })
-    setModal({ cp, campanha })
-  }
-
-  async function salvarContato() {
-    setSaving(true)
-    try {
-      await registrarContato(modal.cp.id, formContato)
-      await reload()
-      showToast('Contato registrado!')
-      setModal(null)
-    } catch { showToast('Erro ao salvar','error') }
-    finally { setSaving(false) }
-  }
-
-  const hoje = new Date()
-
-  // Monta lista de lembretes: 1 item por parceiro de cada campanha
-  const lembretes = dados.flatMap(campanha => {
-    const diasParaInicio = campanha.data_inicio
-      ? (() => { try { const d = new Date(campanha.data_inicio + 'T12:00:00'); return isNaN(d.getTime()) ? 0 : differenceInDays(d, hoje) } catch { return 0 } })()
-      : null
-    const noJanela = diasParaInicio !== null && diasParaInicio <= 15
-    return (campanha.campanha_parceiros||[]).map(cp => ({
-      cp,
-      campanha,
-      diasParaInicio,
-      noJanela,
-      urgente: diasParaInicio !== null && diasParaInicio <= 3 && diasParaInicio >= 0,
-      atrasado: diasParaInicio !== null && diasParaInicio < 0,
-    }))
-  })
-
-  const filtrados = lembretes.filter(l => {
-    if (filtro === 'pendentes') return !l.cp.contato_realizado && l.noJanela
-    return true
-  })
-
-  const totalPendentes = lembretes.filter(l => !l.cp.contato_realizado && l.noJanela).length
-
-  if (loading) return <div className="loading"><div className="spinner"/></div>
-
-  return (
-    <>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Follow-up</h1>
-          <p className="page-subtitle">Lembretes de contato com parceiros das campanhas</p>
-        </div>
-        {totalPendentes > 0 && (
-          <div style={{display:'flex',alignItems:'center',gap:8,background:'rgba(245,101,101,0.1)',border:'1px solid rgba(245,101,101,0.25)',borderRadius:8,padding:'8px 14px'}}>
-            <Bell size={15} color="var(--red)"/>
-            <span style={{fontSize:13,fontWeight:600,color:'var(--red)'}}>{totalPendentes} contato{totalPendentes!==1?'s':''} pendente{totalPendentes!==1?'s':''}</span>
-          </div>
-        )}
-      </div>
-
-      {/* Filtro */}
-      <div style={{display:'flex',gap:8,marginBottom:20}}>
-        <button className={`btn btn-sm ${filtro==='pendentes'?'btn-primary':'btn-ghost'}`} onClick={()=>setFiltro('pendentes')}>
-          Pendentes {totalPendentes>0&&<span style={{marginLeft:4,background:'var(--red)',color:'#fff',borderRadius:99,padding:'1px 6px',fontSize:10}}>{totalPendentes}</span>}
-        </button>
-        <button className={`btn btn-sm ${filtro==='todos'?'btn-primary':'btn-ghost'}`} onClick={()=>setFiltro('todos')}>Todos os contatos</button>
-      </div>
-
-      {filtrados.length === 0 ? (
-        <div className="empty-state" style={{marginTop:40}}>
-          <Phone size={32} strokeWidth={1} color="var(--text-muted)"/>
-          <p>{filtro==='pendentes' ? 'Nenhum contato pendente no momento! 🎉' : 'Nenhuma campanha com parceiros cadastrados.'}</p>
-        </div>
-      ) : (
-        <div className="table-card">
-          <table>
-            <thead>
-              <tr>
-                <th>Parceiro</th>
-                <th>Campanha</th>
-                <th>Início da campanha</th>
-                <th>Situação</th>
-                <th>Último contato</th>
-                <th>Ação</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtrados.map(({ cp, campanha, diasParaInicio, urgente, atrasado }) => {
-                const jaContatado = cp.contato_realizado
-                let situacaoCls = 'badge-indigo'
-                let situacaoLabel = `Em ${diasParaInicio} dias`
-                if (jaContatado)       { situacaoCls = 'badge-green';  situacaoLabel = 'Contatado' }
-                else if (atrasado)     { situacaoCls = 'badge-red';    situacaoLabel = `Campanha iniciada` }
-                else if (urgente)      { situacaoCls = 'badge-red';    situacaoLabel = diasParaInicio===0?'Hoje!':diasParaInicio===1?'Amanhã!':`${diasParaInicio} dias ⚠` }
-                else if (diasParaInicio <= 7) { situacaoCls = 'badge-amber'; situacaoLabel = `${diasParaInicio} dias` }
-
-                return (
-                  <tr key={`${campanha.id}-${cp.id}`} style={{opacity: jaContatado ? 0.65 : 1}}>
-                    <td className="td-strong">{cp.parceiros?.nome||'—'}</td>
-                    <td>
-                      <div style={{fontSize:13,color:'var(--text)'}}>{campanha.nome}</div>
-                      {campanha.tipo&&<div style={{fontSize:11,color:'var(--text-muted)'}}>{campanha.tipo}</div>}
-                    </td>
-                    <td className="td-muted">
-                      {campanha.data_inicio
-                        ? fmtDate(campanha.data_inicio, 'dd MMM yyyy', {locale:ptBR})
-                        : '—'}
-                    </td>
-                    <td><span className={`badge ${situacaoCls}`}>{situacaoLabel}</span></td>
-                    <td className="td-muted" style={{fontSize:12}}>
-                      {cp.data_contato
-                        ? fmtDate(cp.data_contato, 'dd MMM yyyy', {locale:ptBR})
-                        : '—'}
-                      {cp.nota_contato && <div style={{fontSize:11,color:'var(--text-muted)',marginTop:2,maxWidth:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{cp.nota_contato}</div>}
-                    </td>
-                    <td>
-                      <button
-                        className="btn btn-sm btn-ghost"
-                        style={{color: jaContatado ? 'var(--text-muted)' : 'var(--green)', fontWeight:600, whiteSpace:'nowrap'}}
-                        onClick={()=>abrirModal(cp, campanha)}
-                      >
-                        <Phone size={12}/> {jaContatado ? 'Atualizar' : 'Registrar contato'}
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {modal && (
-        <div className="modal-backdrop" onClick={()=>{}}>
-          <div className="modal" style={{maxWidth:440}}>
-            <div className="modal-header">
-              <h2 className="modal-title">Registrar Contato</h2>
-              <button className="btn btn-ghost btn-icon" onClick={()=>setModal(null)}><X size={16}/></button>
-            </div>
-            <div style={{background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,padding:'10px 14px',marginBottom:16}}>
-              <div style={{fontSize:13,fontWeight:700,color:'var(--text)'}}>{modal.cp.parceiros?.nome}</div>
-              <div style={{fontSize:12,color:'var(--text-muted)',marginTop:2}}>Campanha: {modal.campanha.nome}</div>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Data do contato</label>
-              <input className="form-input" type="date" value={formContato.data_contato} onChange={e=>setFormContato(f=>({...f,data_contato:e.target.value}))}/>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Observações</label>
-              <textarea className="form-textarea" value={formContato.nota_contato} onChange={e=>setFormContato(f=>({...f,nota_contato:e.target.value}))} placeholder="Como foi o contato? Algum combinado?"/>
-            </div>
-            <div className="form-actions">
-              <button className="btn btn-ghost" onClick={()=>setModal(null)}>Cancelar</button>
-              <button className="btn btn-primary" onClick={salvarContato} disabled={saving||!formContato.data_contato}>
-                {saving?'Salvando...':'✓ Confirmar contato'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
-    </>
-  )
-}
 
 // ── LISTA DE CAMPANHAS ─────────────────────────────────────
 export default function Campanhas() {
   const { perfilAtivo } = useViewAs()
   const grupoCampanhas = PERFIL_GRUPO[perfilAtivo] || null
-  const [tab, setTab]               = useState('campanhas')
   const [campanhas, setCampanhas]   = useState([])
   const [dragId, setDragId]         = useState(null)
   const [dragOver, setDragOver]     = useState(null)
@@ -2670,21 +2489,7 @@ export default function Campanhas() {
 
   return (
     <>
-      {/* Tabs */}
-      <div style={{display:'flex',gap:4,marginBottom:24,borderBottom:'1px solid var(--border)',paddingBottom:0}}>
-        {[{id:'campanhas',label:'Campanhas',icon:BarChart2},{id:'followup',label:'Follow-up',icon:Phone}].map(t=>(
-          <button key={t.id}
-            className={`tab-btn ${tab===t.id?'active':''}`}
-            onClick={()=>setTab(t.id)}
-            style={{display:'flex',alignItems:'center',gap:7}}
-          >
-            <t.icon size={14}/>{t.label}
-          </button>
-        ))}
-      </div>
-
-      {tab==='followup' && <FollowUpTab/>}
-      {tab==='campanhas' && <>
+      {true && <>
       <div className="page-header">
         <div>
           <h1 className="page-title">Campanhas</h1>
