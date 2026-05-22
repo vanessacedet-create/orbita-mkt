@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { useViewAs } from '../context/ViewAsContext'
+import { PERFIL_GRUPO } from '../context/AuthContext'
 import { getRegistrosMonitoramento, createRegistroMonitoramento, updateRegistroMonitoramento, deleteRegistroMonitoramento, getParceiros, getParceirosAtivos, getLancamentosMonitoramento } from '../lib/supabase'
 import { ChevronLeft, ChevronRight, Eye, Plus, Pencil, Trash2, X } from 'lucide-react'
 
@@ -304,6 +306,8 @@ function Calendario({semanas, porDia, hj, onClickDia}){
 
 // ── PÁGINA PRINCIPAL ───────────────────────────────────────
 export default function Monitoramento(){
+  const { perfilAtivo } = useViewAs()
+  const grupoMonit = PERFIL_GRUPO[perfilAtivo] || null
   const agora = new Date()
   const[ano,setAno]     = useState(agora.getFullYear())
   const[mes,setMes]     = useState(agora.getMonth()+1)
@@ -321,8 +325,8 @@ export default function Monitoramento(){
     setLoading(true)
     try{
       const [regs, lancs] = await Promise.all([
-        getRegistrosMonitoramento({ano:a,mes:m}),
-        getLancamentosMonitoramento({ano:a,mes:m}),
+        getRegistrosMonitoramento({ano:a,mes:m,grupo:grupoMonit}),
+        getLancamentosMonitoramento({ano:a,mes:m,grupo:grupoMonit}),
       ])
       setRegistros(regs)
       setLancamentos(lancs)
@@ -335,7 +339,7 @@ export default function Monitoramento(){
     const a = visao==='mensal' ? ano : Number(semDom.split('-')[0])
     const m = visao==='mensal' ? mes  : Number(semDom.split('-')[1])
     carregar(a,m)
-  },[ano,mes,visao,semDom])
+  },[ano,mes,visao,semDom,grupoMonit]) // eslint-disable-line
 
   function navMes(d){let nm=mes+d,na=ano;if(nm>12){nm=1;na++}if(nm<1){nm=12;na--}setMes(nm);setAno(na)}
   function navSem(d){setSemDom(addDias(semDom,d*7))}
@@ -389,7 +393,8 @@ export default function Monitoramento(){
       setRegistros(p=>p.map(r=>r.id===upd.id?upd:r))
       showToast('Atualizado!')
     } else {
-      const novo = await createRegistroMonitoramento(form)
+      const payload = grupoMonit ? { ...form, grupo: grupoMonit } : form
+      const novo = await createRegistroMonitoramento(payload)
       setRegistros(p=>[...p,novo])
       showToast('Registrado!')
     }
