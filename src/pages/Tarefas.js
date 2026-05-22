@@ -53,6 +53,25 @@ function useToast() {
   return [toast, show]
 }
 
+// Persiste estado de UI no sessionStorage para sobreviver à navegação
+function usePersistedState(key, defaultValue) {
+  const storageKey = `orbita_tarefas_${key}`
+  const [state, setState] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem(storageKey)
+      return saved !== null ? JSON.parse(saved) : defaultValue
+    } catch { return defaultValue }
+  })
+  function setPersistedState(value) {
+    setState(prev => {
+      const next = typeof value === 'function' ? value(prev) : value
+      try { sessionStorage.setItem(storageKey, JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
+  return [state, setPersistedState]
+}
+
 function PrioridadeBadge({ value }) {
   const p = PRIORIDADE.find(x => x.value === value) || PRIORIDADE[2]
   const Icon = p.icon
@@ -759,21 +778,34 @@ export default function Tarefas() {
   const [modal, setModal]           = useState(null)
   const [showImportar, setShowImportar] = useState(false)
   const [showMenuNova, setShowMenuNova] = useState(false)
-  const [view, setView]             = useState('kanban')
-  const [filtroStatus, setFiltroStatus]         = useState('todos')
-  const [filtroPrioridade, setFiltroPrioridade] = useState('todas')
-  const [filtroResponsavel, setFiltroResponsavel] = useState('todos')
+  const [view, setView]             = usePersistedState('view', 'kanban')
+  const [filtroStatus, setFiltroStatus]         = usePersistedState('filtroStatus', 'todos')
+  const [filtroPrioridade, setFiltroPrioridade] = usePersistedState('filtroPrioridade', 'todas')
+  const [filtroResponsavel, setFiltroResponsavel] = usePersistedState('filtroResponsavel', 'todos')
   const [toast, showToast]          = useToast()
   const [dragId, setDragId]         = useState(null)
   const [dragOverCol, setDragOverCol] = useState(null)
-  const [sortCol, setSortCol]       = useState('data_prazo')
-  const [sortDir, setSortDir]       = useState('asc')
-  const [abaView, setAbaView]       = useState('ativas')
+  const [sortCol, setSortCol]       = usePersistedState('sortCol', 'data_prazo')
+  const [sortDir, setSortDir]       = usePersistedState('sortDir', 'asc')
+  const [abaView, setAbaView]       = usePersistedState('abaView', 'ativas')
+  const [modalIdPendente, setModalIdPendente] = usePersistedState('modalId', null)
   const menuRef = useRef()
 
   function toggleSort(col) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortCol(col); setSortDir('asc') }
+  }
+
+  function abrirModal(tarefa) {
+    setModal(tarefa)
+    if (tarefa && tarefa !== 'new' && tarefa.id) setModalIdPendente(tarefa.id)
+    else setModalIdPendente(null)
+  }
+
+  function fecharModal() {
+    setModal(null)
+    setModalIdPendente(null)
+    carregar()
   }
 
   async function carregar() {
@@ -798,6 +830,15 @@ export default function Tarefas() {
   }
 
   useEffect(() => { carregar() }, [perfilAtivo, usuarioAtivo?.grupos_extras]) // eslint-disable-line
+
+  // Reabre o modal da tarefa que estava aberta antes de sair da tela
+  useEffect(() => {
+    if (!loading && modalIdPendente && tarefas.length > 0) {
+      const tarefa = tarefas.find(t => t.id === modalIdPendente)
+      if (tarefa) setModal(tarefa)
+      else setModalIdPendente(null) // tarefa não existe mais, limpa
+    }
+  }, [loading]) // eslint-disable-line
 
   useEffect(() => {
     function handleClick(e) {
@@ -925,7 +966,7 @@ export default function Tarefas() {
           </div>
 
           <div ref={menuRef} style={{ position:'relative', display:'flex' }}>
-            <button className="btn btn-primary" onClick={()=>setModal('new')} style={{ borderTopRightRadius:0, borderBottomRightRadius:0, borderRight:'1px solid rgba(255,255,255,0.2)' }}>
+            <button className="btn btn-primary" onClick={()=>abrirModal('new')} style={{ borderTopRightRadius:0, borderBottomRightRadius:0, borderRight:'1px solid rgba(255,255,255,0.2)' }}>
               <Plus size={14}/> Nova tarefa
             </button>
             <button className="btn btn-primary" onClick={()=>setShowMenuNova(s=>!s)} style={{ borderTopLeftRadius:0, borderBottomLeftRadius:0, padding:'0 8px' }} aria-label="Mais opções">
@@ -933,7 +974,7 @@ export default function Tarefas() {
             </button>
             {showMenuNova && (
               <div style={{ position:'absolute', top:'calc(100% + 4px)', right:0, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, boxShadow:'0 4px 16px rgba(0,0,0,0.2)', zIndex:20, minWidth:220, padding:6 }}>
-                <button onClick={()=>{ setShowMenuNova(false); setModal('new') }} style={menuItemStyle()} onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                <button onClick={()=>{ setShowMenuNova(false); abrirModal('new') }} style={menuItemStyle()} onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                   <Plus size={13}/> Criar manualmente
                 </button>
                 <button onClick={()=>{ setShowMenuNova(false); setShowImportar(true) }} style={menuItemStyle()} onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
@@ -1007,11 +1048,11 @@ export default function Tarefas() {
                         {isOver ? '↓ Soltar aqui' : 'Nenhuma tarefa'}
                       </div>
                     : lista.map(t => (
-                        <CardKanban key={t.id} tarefa={t} onClick={()=>setModal(t)} onDragStart={()=>setDragId(t.id)} onDragEnd={()=>{ setDragId(null); setDragOverCol(null) }} isDragging={dragId===t.id}/>
+                        <CardKanban key={t.id} tarefa={t} onClick={()=>abrirModal(t)} onDragStart={()=>setDragId(t.id)} onDragEnd={()=>{ setDragId(null); setDragOverCol(null) }} isDragging={dragId===t.id}/>
                       ))
                   }
                   {isOver && lista.length > 0 && <div style={{ height:4, borderRadius:99, background:corCol, opacity:0.4, margin:'4px 0' }}/>}
-                  <button onClick={()=>setModal('new')} style={{ width:'100%', padding:'8px', border:'1px dashed var(--border)', borderRadius:8, background:'transparent', cursor:'pointer', fontSize:12, color:'var(--text-muted)', display:'flex', alignItems:'center', justifyContent:'center', gap:4, marginTop:4, transition:'all 0.15s' }}
+                  <button onClick={()=>abrirModal('new')} style={{ width:'100%', padding:'8px', border:'1px dashed var(--border)', borderRadius:8, background:'transparent', cursor:'pointer', fontSize:12, color:'var(--text-muted)', display:'flex', alignItems:'center', justifyContent:'center', gap:4, marginTop:4, transition:'all 0.15s' }}
                     onMouseEnter={e=>{ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.color='var(--accent)' }}
                     onMouseLeave={e=>{ e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.color='var(--text-muted)' }}>
                     <Plus size={12}/> Adicionar
@@ -1059,7 +1100,7 @@ export default function Tarefas() {
                     const checkDone  = t.tarefa_checklist?.filter(x=>x.concluido).length || 0
                     const livrosCount = t.tarefa_livros?.length || 0
                     return (
-                      <tr key={t.id} style={{ cursor:'pointer' }} onClick={()=>setModal(t)}>
+                      <tr key={t.id} style={{ cursor:'pointer' }} onClick={()=>abrirModal(t)}>
                         <td>
                           <div style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{t.titulo}</div>
                           {t.descricao && <div style={{ fontSize:11.5, color:'var(--text-muted)', marginTop:2, overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis', maxWidth:280 }}>{t.descricao}</div>}
@@ -1102,16 +1143,16 @@ export default function Tarefas() {
 
       {/* CALENDÁRIO */}
       {view === 'calendario' && (
-        <ViewCalendario tarefas={tarefasFiltradas} onClickTarefa={t=>setModal(t)} onNovaTarefa={(data)=>setModal({ _dataPrazo: data })}/>
+        <ViewCalendario tarefas={tarefasFiltradas} onClickTarefa={t=>abrirModal(t)} onNovaTarefa={(data)=>abrirModal({ _dataPrazo: data })}/>
       )}
 
       {/* EQUIPE */}
       {view === 'equipe' && (
-        <ViewEquipe tarefas={tarefas} usuarios={usuarios} usuario={usuario} onOpen={t => setModal(t)}/>
+        <ViewEquipe tarefas={tarefas} usuarios={usuarios} usuario={usuario} onOpen={t => abrirModal(t)}/>
       )}
 
       {modal && (
-        <ModalTarefa tarefa={modal === 'new' ? null : modal} usuarios={usuarios} onSave={handleSave} onDelete={handleDelete} onClose={()=>{ setModal(null); carregar() }}/>
+        <ModalTarefa tarefa={modal === 'new' ? null : modal} usuarios={usuarios} onSave={handleSave} onDelete={handleDelete} onClose={fecharModal}/>
       )}
 
       {showImportar && (
