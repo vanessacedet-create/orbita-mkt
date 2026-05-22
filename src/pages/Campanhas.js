@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useViewAs } from '../context/ViewAsContext'
+import { useAuth } from '../context/AuthContext'
 import { PERFIL_GRUPO } from '../context/AuthContext'
 import {
   getCampanhas, getCampanha, createCampanha, updateCampanha, deleteCampanha, reordenarCampanhas,
@@ -104,6 +105,9 @@ function ProgressoParceiros({ parceiros }) {
 
 // ── MODAL CAMPANHA (criar/editar) ──────────────────────────
 function ModalCampanha({ campanha, livros, parceiros, onSave, onClose }) {
+  const { perfilAtivo: _pa } = useViewAs()
+  const _g = PERFIL_GRUPO[_pa] || null
+  const gruposLivros = _g ? [_g] : null
   const EMPTY = { nome:'', tipo:'', status:'planejamento', data_inicio:'', data_fim:'', descricao:'', livro_ids:[], parceiro_ids:[], adicionar_lancamentos_auto: false }
   const [form, setForm]         = useState(campanha ? {
     nome: campanha.nome, tipo: campanha.tipo||'', status: campanha.status,
@@ -126,7 +130,7 @@ function ModalCampanha({ campanha, livros, parceiros, onSave, onClose }) {
     if (!livroSearch || livroSearch.length < 2) { setLivroResults([]); setLivroOpen(false); return }
     const t = setTimeout(async () => {
       try {
-        const { data } = await getLivros({ page:0, pageSize:50, search: livroSearch })
+        const { data } = await getLivros({ page:0, pageSize:50, search: livroSearch, grupos: gruposLivros })
         setLivroResults(data || [])
         setLivroOpen(true)
       } catch {}
@@ -687,6 +691,9 @@ function ModalImportarLivrosDestaque({ campanhaParceiro_id, onImport, onClose })
 // ── MODAL DIVULGAÇÃO ───────────────────────────────────────
 // ── BUSCA DE LIVRO (reutilizável) ─────────────────────────
 function BuscaLivro({ livroId, livroTitulo, onChange, placeholder }) {
+  const { perfilAtivo: _pa } = useViewAs()
+  const _g = PERFIL_GRUPO[_pa] || null
+  const gruposLivros = _g ? [_g] : null
   const [search, setSearch] = useState(livroTitulo||'')
   const [results, setResults] = useState([])
   const [open, setOpen] = useState(false)
@@ -694,7 +701,7 @@ function BuscaLivro({ livroId, livroTitulo, onChange, placeholder }) {
   useEffect(() => {
     if (!search || search.length < 2) { setResults([]); return }
     const t = setTimeout(async () => {
-      try { const { data } = await getLivros({ page:0, pageSize:50, search }); setResults(data||[]); setOpen(true) } catch {}
+      try { const { data } = await getLivros({ page:0, pageSize:50, search, grupos: gruposLivros }); setResults(data||[]); setOpen(true) } catch {}
     }, 300)
     return () => clearTimeout(t)
   }, [search])
@@ -1193,6 +1200,9 @@ function ModalEditarDivulgacao({ div, principal, onSave, onClose }) {
 
 // ── DETALHE LANÇAMENTO ─────────────────────────────────────
 function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLancamentoLivros, parceiros, usuarios = [], reload, showToast }) {
+  const { perfilAtivo: _pa } = useViewAs()
+  const _g = PERFIL_GRUPO[_pa] || null
+  const gruposLivros = _g ? [_g] : null
   const [livroSearch, setLivroSearch]   = useState('')
   const [livroResults, setLivroResults] = useState([])
   const [livroOpen, setLivroOpen]       = useState(false)
@@ -1219,7 +1229,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
     if (!livroSearch || livroSearch.length < 2) { setLivroResults([]); return }
     const t = setTimeout(async () => {
       try {
-        const { data } = await getLivros({ page:0, pageSize:1000, search: livroSearch })
+        const { data } = await getLivros({ page:0, pageSize:1000, search: livroSearch, grupos: gruposLivros })
         setLivroResults(data || [])
         setLivroOpen(true)
       } catch {}
@@ -1747,6 +1757,9 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
 
 // ── MODAL IMPORTAR LIVROS POR ISBN ────────────────────────
 function ModalImportarLivros({ campanhaId, livrosExistentes, onImport, onClose }) {
+  const { perfilAtivo: _pa } = useViewAs()
+  const _g = PERFIL_GRUPO[_pa] || null
+  const gruposLivros = _g ? [_g] : null
   const [preview, setPreview]   = useState([])  // [{isbn, titulo, id, encontrado}]
   const [loading, setLoading]   = useState(false)
   const [saving, setSaving]     = useState(false)
@@ -1775,7 +1788,7 @@ function ModalImportarLivros({ campanhaId, livrosExistentes, onImport, onClose }
       // Busca cada ISBN no banco
       const resultados = await Promise.all(isbns.map(async isbn => {
         try {
-          const { data: livros } = await getLivros({ page:0, pageSize:5, search: isbn })
+          const { data: livros } = await getLivros({ page:0, pageSize:5, search: isbn, grupos: gruposLivros })
           const encontrado = livros?.find(l => (l.isbn||'').replace(/\D/g,'') === isbn || (l.sku||'') === isbn)
           return { isbn, titulo: encontrado?.titulo || null, id: encontrado?.id || null, encontrado: !!encontrado }
         } catch { return { isbn, titulo: null, id: null, encontrado: false } }
@@ -2399,8 +2412,16 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros, usuarios = [] 
 
 // ── LISTA DE CAMPANHAS ─────────────────────────────────────
 export default function Campanhas() {
+  const { usuario } = useAuth()
   const { perfilAtivo } = useViewAs()
-  const grupoCampanhas = PERFIL_GRUPO[perfilAtivo] || null
+  const ehAdmin = usuario?.perfil === 'administrador' || usuario?.perfil === 'gerente'
+  const grupoDoPerfil = PERFIL_GRUPO[perfilAtivo] || null
+  // Admin pode filtrar manualmente; outros usuários ficam travados no grupo do perfil
+  const [filtroGrupoAdmin, setFiltroGrupoAdmin] = useState('todos')
+  const grupoCampanhas = ehAdmin
+    ? (filtroGrupoAdmin === 'todos' ? null : filtroGrupoAdmin)
+    : grupoDoPerfil
+  const gruposLivros = grupoCampanhas ? [grupoCampanhas] : null
   const [campanhas, setCampanhas]   = useState([])
   const [dragId, setDragId]         = useState(null)
   const [dragOver, setDragOver]     = useState(null)
@@ -2418,7 +2439,7 @@ export default function Campanhas() {
     const [cs, ps, ls, us] = await Promise.all([
       getCampanhas({ grupo: grupoCampanhas }),
       getParceirosAtivos(),
-      getLivros({ page:0, pageSize:5000 }),
+      getLivros({ page:0, pageSize:5000, grupos: gruposLivros }),
       getUsuarios(),
     ])
     setCampanhas(cs)
@@ -2427,7 +2448,7 @@ export default function Campanhas() {
     setUsuarios(us||[])
   }
 
-  useEffect(() => { reload().finally(()=>setLoading(false)) }, [])
+  useEffect(() => { reload().finally(()=>setLoading(false)) }, [grupoCampanhas]) // eslint-disable-line
 
   async function handleCreate(form) {
     const { parceiro_ids = [], ...rest } = form
@@ -2495,7 +2516,19 @@ export default function Campanhas() {
           <h1 className="page-title">Campanhas</h1>
           <p className="page-subtitle">{campanhas.length} campanha{campanhas.length!==1?'s':''} · {campanhas.filter(c=>c.status==='em_andamento').length} em andamento</p>
         </div>
-        <button className="btn btn-primary" onClick={()=>setModal(true)}><Plus size={16}/> Nova Campanha</button>
+        <div style={{display:'flex',gap:8,alignItems:'center'}}>
+          {ehAdmin && (
+            <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}}
+              value={filtroGrupoAdmin} onChange={e=>setFiltroGrupoAdmin(e.target.value)}>
+              <option value="todos">Todos os grupos</option>
+              <option value="influencers">Influencers</option>
+              <option value="parceiras">Parceiras</option>
+              <option value="proprias">Próprias</option>
+              <option value="marketplaces">Marketplaces</option>
+            </select>
+          )}
+          <button className="btn btn-primary" onClick={()=>setModal(true)}><Plus size={16}/> Nova Campanha</button>
+        </div>
       </div>
 
       {/* Filtros */}
