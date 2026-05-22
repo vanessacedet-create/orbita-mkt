@@ -376,8 +376,7 @@ function Shell() {
         setViewAs(atualizado)
       }
     }).catch(() => {})
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewAs?.id])
+  }, [viewAs?.id]) // eslint-disable-line
 
   // Perfil ativo: viewAs se estiver no modo visualização, senão o real
   const perfilAtivo = viewAs?.perfil || usuario?.perfil
