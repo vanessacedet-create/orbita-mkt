@@ -5,8 +5,6 @@ import {
   getCRMStatusConfig, saveCRMStatusConfig, corParaBg,
 } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { useViewAs } from '../context/ViewAsContext'
-import { PERFIL_GRUPO } from '../context/AuthContext'
 import {
   Users, Plus, X, ChevronRight, Clock, ExternalLink,
   Instagram, Youtube, Search, ArrowRight, Trash2, Settings2, GripVertical
@@ -718,11 +716,12 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
 }
 
 // ── PÁGINA PRINCIPAL ───────────────────────────────────────
-export default function CRM() {
+export default function CRM({ grupo, titulo }) {
   const { usuario } = useAuth()
-  const { perfilAtivo } = useViewAs()
-  const grupoAtivo = PERFIL_GRUPO[perfilAtivo] || null
   const ehAdmin = usuario?.perfil === 'administrador'
+  // Grupo recebido como prop (cada rota passa o seu)
+  const grupoAtivo = grupo
+  const PIPELINE_KEY = grupo  // pipeline é configurado por grupo
 
   const [parceiros, setParceiros]     = useState([])
   const [todos, setTodos]             = useState([])
@@ -746,7 +745,7 @@ export default function CRM() {
       const [crm, base, pipe] = await Promise.all([
         getCRMParceiros({ grupo: grupoAtivo }),
         getParceiros(),
-        getCRMStatusConfig(grupoAtivo),
+        getCRMStatusConfig(PIPELINE_KEY),
       ])
       setParceiros(crm)
       setTodos(base)
@@ -775,8 +774,8 @@ export default function CRM() {
 
   async function handleSalvarConfigStatus(novosStatuses) {
     try {
-      await saveCRMStatusConfig(grupoAtivo, novosStatuses, usuario?.id)
-      setPipeline(await getCRMStatusConfig(grupoAtivo))
+      await saveCRMStatusConfig(PIPELINE_KEY, novosStatuses, usuario?.id)
+      setPipeline(await getCRMStatusConfig(PIPELINE_KEY))
       setModalConfig(false)
       showToast('Configuração de status salva!')
     } catch (e) { showToast('Erro ao salvar configuração', 'error') }
@@ -881,11 +880,9 @@ export default function CRM() {
           <button className="btn btn-primary" onClick={()=>setModalNovo(true)} style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
             <Plus size={15}/> Novo Parceiro
           </button>
-        {ehAdmin && (
-          <button className="btn btn-ghost btn-sm" onClick={()=>setModalConfig(true)} title="Configurar status do CRM" style={{marginLeft:6}}>
-            <Settings2 size={14}/> Configurar status
-          </button>
-        )}
+        <button className="btn btn-ghost btn-sm" onClick={()=>setModalConfig(true)} title="Configurar status do CRM" style={{marginLeft:6}}>
+          <Settings2 size={14}/> Configurar status
+        </button>
         </div>
       </div>
 
@@ -955,7 +952,7 @@ export default function CRM() {
 
       {modalConfig && (
         <ModalConfigStatus
-          grupo={grupoAtivo}
+          grupo={PIPELINE_KEY}
           pipeline={pipeline}
           userId={usuario?.id}
           onSave={handleSalvarConfigStatus}
@@ -966,7 +963,8 @@ export default function CRM() {
         <ModalNovoParceiro
           onSave={handleNovoParceiro}
           onClose={()=>setModalNovo(false)}
-         pipeline={pipeline} grupo={grupoAtivo}/>
+          pipeline={pipeline}
+          grupo={grupoAtivo}/>
       )}
       {modalParceiro && (
         <ModalParceiroCRM
