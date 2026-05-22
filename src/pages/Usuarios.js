@@ -1,7 +1,18 @@
 import { useEffect, useState } from 'react'
 import { getUsuarios, updateUsuario } from '../lib/supabase'
+
+// Módulos que podem ser liberados individualmente para editoras parceiras
+const ABAS_LIBERAVEIS = [
+  { value: 'dashboard',     label: 'Dashboard' },
+  { value: 'campanhas',     label: 'Campanhas' },
+  { value: 'monitoramento', label: 'Monitoramento' },
+  { value: 'cortesias',     label: 'Livros (Cortesias)' },
+  { value: 'lancamentos',   label: 'Lançamentos' },
+]
+const PERFIS_PARCEIRAS = ['estagiario_parceiras', 'analista_parceiras', 'supervisor_parceiras']
+
 import { useAuth } from '../context/AuthContext'
-import { Users, Plus, X, Pencil } from 'lucide-react'
+import { Users, Plus, X, Pencil , Settings2 } from 'lucide-react'
 
 const PERFIS = [
   { v:'administrador',          l:'Administrador',            grupo:'Gestão' },
@@ -119,11 +130,71 @@ function ModalNovoUsuario({ onSave, onClose }) {
   )
 }
 
+
+function ModalAbasExtras({ usuario, onSave, onClose }) {
+  const [selecionadas, setSelecionadas] = useState(usuario.abas_extras || [])
+  const [saving, setSaving] = useState(false)
+
+  function toggle(value) {
+    setSelecionadas(prev =>
+      prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
+    )
+  }
+
+  async function salvar() {
+    setSaving(true)
+    try { await onSave(usuario.id, selecionadas) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal" style={{ maxWidth: 400 }}>
+        <div className="modal-header">
+          <h2 className="modal-title">Abas liberadas — {usuario.nome?.split(' ')[0]}</h2>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
+        </div>
+        <p style={{ fontSize:13, color:'var(--text-muted)', marginBottom:16 }}>
+          Libere módulos adicionais além do que o perfil desta usuária já permite.
+        </p>
+        <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:20 }}>
+          {ABAS_LIBERAVEIS.map(aba => {
+            const ativo = selecionadas.includes(aba.value)
+            return (
+              <label key={aba.value} style={{
+                display:'flex', alignItems:'center', gap:12,
+                padding:'10px 14px', borderRadius:8, cursor:'pointer',
+                background: ativo ? 'var(--accent-glow)' : 'var(--surface-2)',
+                border: `1px solid ${ativo ? 'var(--accent)' : 'var(--border)'}`,
+                transition: 'all 0.15s',
+              }}>
+                <input type="checkbox" checked={ativo} onChange={() => toggle(aba.value)}
+                  style={{ width:15, height:15, accentColor:'var(--accent)', cursor:'pointer' }}/>
+                <span style={{ fontSize:13, fontWeight: ativo ? 600 : 400,
+                  color: ativo ? 'var(--accent)' : 'var(--text)' }}>
+                  {aba.label}
+                </span>
+              </label>
+            )
+          })}
+        </div>
+        <div className="form-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={salvar} disabled={saving}>
+            {saving ? 'Salvando...' : 'Salvar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Usuarios() {
   const { usuario: eu } = useAuth()
   const [usuarios, setUsuarios]             = useState([])
   const [loading, setLoading]               = useState(true)
   const [modal, setModal]                   = useState(false)
+  const [modalAbas, setModalAbas]           = useState(null) // usuário sendo editado
   const [busca, setBusca]                   = useState('')
   const [filtroPerfil, setFiltroPerfil]     = useState('')
   const [editandoPerfil, setEditandoPerfil] = useState(null)
@@ -165,6 +236,13 @@ export default function Usuarios() {
     try {
       const upd = await updateUsuario(userId, { perfil: novoPerfil })
       setUsuarios(prev => prev.map(u => u.id === userId ? { ...u, perfil: upd.perfil } : u))
+  }
+
+  async function handleSalvarAbas(userId, abas) {
+    const upd = await updateUsuario(userId, { abas_extras: abas })
+    setUsuarios(prev => prev.map(u => u.id === userId ? { ...u, abas_extras: upd.abas_extras } : u))
+    setModalAbas(null)
+    showToast('Abas atualizadas!')
       setEditandoPerfil(null)
       showToast('Perfil atualizado!')
     } catch(e) {
@@ -235,6 +313,7 @@ export default function Usuarios() {
                     <th>E-mail</th>
                     <th>Perfil</th>
                     <th>Grupo</th>
+                  <th>Abas extras</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -309,6 +388,27 @@ export default function Usuarios() {
                           }
                         </td>
                         <td style={{fontSize:12,color:'var(--text-muted)'}}>{p?.grupo||'—'}</td>
+                        <td>
+                          {PERFIS_PARCEIRAS.includes(u.perfil) && eu?.perfil === 'administrador' ? (
+                            <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                              {(u.abas_extras||[]).length > 0
+                                ? (u.abas_extras).map(a => {
+                                    const aba = ABAS_LIBERAVEIS.find(x=>x.value===a)
+                                    return <span key={a} style={{fontSize:10,fontWeight:700,background:'var(--accent-glow)',border:'1px solid var(--accent)',color:'var(--accent)',borderRadius:99,padding:'2px 7px'}}>{aba?.label||a}</span>
+                                  })
+                                : <span style={{fontSize:11,color:'var(--text-muted)'}}>—</span>
+                              }
+                              <button
+                                className="btn btn-ghost btn-icon btn-sm"
+                                title="Configurar abas"
+                                onClick={() => setModalAbas(u)}
+                                style={{opacity:0.5}}
+                                onMouseEnter={e=>e.currentTarget.style.opacity='1'}
+                                onMouseLeave={e=>e.currentTarget.style.opacity='0.5'}
+                              ><Settings2 size={11}/></button>
+                            </div>
+                          ) : <span style={{fontSize:11,color:'var(--text-muted)'}}>—</span>}
+                        </td>
                       </tr>
                     )
                   })}
@@ -317,7 +417,8 @@ export default function Usuarios() {
             </div>
       }
 
-      {modal && <ModalNovoUsuario onSave={handleCriar} onClose={() => setModal(false)}/>}
+      {modal && <ModalNovoUsuario onSave={handleCriar} onClose={() => setModal(false)}/>
+      {modalAbas && <ModalAbasExtras usuario={modalAbas} onSave={handleSalvarAbas} onClose={()=>setModalAbas(null)}/>}
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
     </div>
   )
