@@ -236,15 +236,19 @@ export default function Usuarios() {
     try {
       const upd = await updateUsuario(userId, { perfil: novoPerfil })
       setUsuarios(prev => prev.map(u => u.id === userId ? { ...u, perfil: upd.perfil } : u))
+      setEditandoPerfil(null)
+      showToast('Perfil atualizado!')
+    } catch(e) {
+      showToast('Erro ao atualizar', 'error')
+    }
   }
 
   async function handleSalvarAbas(userId, abas) {
-    const upd = await updateUsuario(userId, { abas_extras: abas })
-    setUsuarios(prev => prev.map(u => u.id === userId ? { ...u, abas_extras: upd.abas_extras } : u))
-    setModalAbas(null)
-    showToast('Abas atualizadas!')
-      setEditandoPerfil(null)
-      showToast('Perfil atualizado!')
+    try {
+      const upd = await updateUsuario(userId, { abas_extras: abas })
+      setUsuarios(prev => prev.map(u => u.id === userId ? { ...u, abas_extras: upd.abas_extras } : u))
+      setModalAbas(null)
+      showToast('Abas atualizadas!')
     } catch(e) {
       showToast('Erro ao atualizar', 'error')
     }
