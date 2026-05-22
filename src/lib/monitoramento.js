@@ -1,14 +1,16 @@
 import { supabase } from './client'
 
-export async function getRegistrosMonitoramento({ ano, mes } = {}) {
+export async function getRegistrosMonitoramento({ ano, mes, grupo } = {}) {
   const ini = `${ano}-${String(mes).padStart(2,'0')}-01`
   const ultimoDia = new Date(ano, mes, 0).getDate()
   const fim = `${ano}-${String(mes).padStart(2,'0')}-${String(ultimoDia).padStart(2,'0')}`
-  const { data, error } = await supabase
+  let q = supabase
     .from('monitoramento')
     .select('*, parceiros(id, nome)')
     .gte('data', ini).lte('data', fim)
     .order('data', { ascending: true })
+  if (grupo) q = q.eq('grupo', grupo)
+  const { data, error } = await q
   if (error) throw error
   return data || []
 }
@@ -39,7 +41,7 @@ export async function deleteRegistroMonitoramento(id) {
   if (error) throw error
 }
 
-export async function getLancamentosMonitoramento({ ano, mes } = {}) {
+export async function getLancamentosMonitoramento({ ano, mes, grupo } = {}) {
   const ini = `${ano}-${String(mes).padStart(2,'0')}-01`
   const ultimoDia = new Date(ano, mes, 0).getDate()
   const fim = `${ano}-${String(mes).padStart(2,'0')}-${String(ultimoDia).padStart(2,'0')}`
@@ -56,10 +58,9 @@ export async function getLancamentosMonitoramento({ ano, mes } = {}) {
     .lte('data_combinada', fim)
   if (lancError) throw lancError
 
-  const { data: campPromo } = await supabase
-    .from('campanhas')
-    .select('id, nome')
-    .eq('tipo', 'Promoção')
+  let qCampPromo = supabase.from('campanhas').select('id, nome').eq('tipo', 'Promoção')
+  if (grupo) qCampPromo = qCampPromo.eq('grupo', grupo)
+  const { data: campPromo } = await qCampPromo
 
   const campPromoIds = (campPromo || []).map(c => c.id)
   const campPromoMap = Object.fromEntries((campPromo || []).map(c => [c.id, c.nome]))
