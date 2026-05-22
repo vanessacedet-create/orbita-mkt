@@ -87,7 +87,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ session, usuario, loading, setUsuario }}>
+    <AuthContext.Provider value={{ session, usuario, loading, setUsuario, abasExtras: usuario?.abas_extras || [] }}>
       {children}
     </AuthContext.Provider>
   )
