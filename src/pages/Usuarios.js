@@ -421,7 +421,7 @@ export default function Usuarios() {
             </div>
       }
 
-      {modal && <ModalNovoUsuario onSave={handleCriar} onClose={() => setModal(false)}/>
+      {modal && <ModalNovoUsuario onSave={handleCriar} onClose={() => setModal(false)}/>}
       {modalAbas && <ModalAbasExtras usuario={modalAbas} onSave={handleSalvarAbas} onClose={()=>setModalAbas(null)}/>}
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
     </div>
