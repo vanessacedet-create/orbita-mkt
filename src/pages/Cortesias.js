@@ -422,7 +422,7 @@ function UploadPlanilha({ onImport, tipo, grupo }) {
 }
 
 // ── ENVIOS TAB ─────────────────────────────────────────────
-function EnviosTab({ parceiros, livros, envios, setEnvios }) {
+function EnviosTab({ parceiros, livros, envios, setEnvios, gruposLivrosVisiveis }) {
   const [loading, setLoading]       = useState(true)
   const [modal, setModal]           = useState(false)
   const [buscaModal, setBuscaModal] = useState(false)
@@ -532,7 +532,7 @@ function EnviosTab({ parceiros, livros, envios, setEnvios }) {
       setLivrosLoading(true)
       setLivrosErro('')
       try {
-        const r = await getLivros({ page: 0, pageSize: 20, search: livroSearch.trim() })
+        const r = await getLivros({ page: 0, pageSize: 20, search: livroSearch.trim(), grupos: gruposLivrosVisiveis })
         setLivrosFiltrados(r.data || [])
         if ((r.data||[]).length === 0) setLivrosErro('Nenhum livro encontrado com este ISBN/título.')
       } catch (e) {
@@ -985,7 +985,7 @@ function LivrosTab() {
     const sq = s !== undefined ? s : search
     setLoading(true)
     try {
-      const { data, count } = await getLivros({ page: pg, pageSize: sz, search: sq, grupo: grupoLivros })
+      const { data, count } = await getLivros({ page: pg, pageSize: sz, search: sq, grupos: gruposLivrosVisiveis })
       setLivros(data || [])
       setTotal(count || 0)
     } catch (e) { console.error(e); showToast('Erro ao carregar livros', 'error') }
@@ -1036,7 +1036,7 @@ function LivrosTab() {
         <UploadPlanilha tipo="livros" onImport={() => { setPage(0); fetchLivros(0, pageSize, search) }}/>
         <button className="btn btn-ghost" onClick={async ()=>{
           try {
-            const { data: todos } = await getLivros({ page: 0, pageSize: 99999, grupo: grupoLivros })
+            const { data: todos } = await getLivros({ page: 0, pageSize: 99999, grupos: gruposLivrosVisiveis })
             const rows = (todos||[]).map(l => ({
               'Título':   l.titulo,
               'ISBN':     l.isbn||'',
@@ -1598,7 +1598,9 @@ function RelatoriosTab({ parceiros, envios }) {
 // ── MAIN ───────────────────────────────────────────────────
 export default function Cortesias() {
   const { perfilAtivo } = useViewAs()
-  const grupoLivros = PERFIL_GRUPO[perfilAtivo] || null
+  const grupoLivros = PERFIL_GRUPO[perfilAtivo] || null   // grupo do usuário ativo
+  // Listagem: cada grupo vê apenas os próprios livros (admin/gerente vê tudo)
+  const gruposLivrosVisiveis = grupoLivros ? [grupoLivros] : null
   const [tab, setTab]             = useState('envios')
   const [parceiros, setParceiros] = useState([])
   const [livros, setLivros]       = useState([])
@@ -1606,7 +1608,7 @@ export default function Cortesias() {
 
   useEffect(() => {
     getParceirosAtivos().then(setParceiros).catch(console.error)
-    getLivros({ page:0, pageSize:5000 }).then(r => setLivros(r.data || [])).catch(console.error)
+    getLivros({ page:0, pageSize:5000, grupos: gruposLivrosVisiveis }).then(r => setLivros(r.data || [])).catch(console.error)
     getEnvios().then(r => setEnvios(r.data || [])).catch(console.error)
   }, [])
 
@@ -1619,7 +1621,7 @@ export default function Cortesias() {
           </button>
         ))}
       </div>
-      {tab==='envios'      && <EnviosTab       parceiros={parceiros} livros={livros} envios={envios} setEnvios={setEnvios}/>}
+      {tab==='envios'      && <EnviosTab       parceiros={parceiros} livros={livros} envios={envios} setEnvios={setEnvios} gruposLivrosVisiveis={gruposLivrosVisiveis}/>}
       {tab==='livros'      && <LivrosTab/>}
       {tab==='divulgacoes' && <DivulgacoesTab  envios={envios} setEnvios={setEnvios}/>}
       {tab==='relatorios'  && <RelatoriosTab   parceiros={parceiros} envios={envios}/>}
