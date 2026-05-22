@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { getDashboardStats } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { useViewAs } from '../context/ViewAsContext'
+import { PERFIL_GRUPO } from '../context/AuthContext'
 import { LayoutDashboard, X, Users, Megaphone, TrendingUp, ChevronDown } from 'lucide-react'
 
 const STATUS_CAMPANHA_LABEL = {
@@ -112,6 +114,8 @@ function ModalDivulgados({ stats, onClose }) {
 // ── DASHBOARD ──────────────────────────────────────────────
 export default function Dashboard() {
   const { usuario } = useAuth()
+  const { perfilAtivo } = useViewAs()
+  const grupoDash = PERFIL_GRUPO[perfilAtivo] || null
   const [stats, setStats]         = useState(null)
   const [statsBase, setStatsBase] = useState(null)
   const [loading, setLoading]     = useState(true)
@@ -131,13 +135,13 @@ export default function Dashboard() {
 
   async function carregar(filtros) {
     setLoading(true)
-    try { setStats(await getDashboardStats(filtros)) } finally { setLoading(false) }
+    try { setStats(await getDashboardStats({...filtros, grupo: grupoDash})) } finally { setLoading(false) }
   }
 
   useEffect(() => {
     const filtros = { dataInicio:dataInicio||undefined, dataFim:dataFim||undefined }
-    getDashboardStats(filtros).then(s=>{ setStatsBase(s); setStats(s) }).finally(()=>setLoading(false))
-  }, [dataInicio, dataFim])
+    getDashboardStats({...filtros, grupo: grupoDash}).then(s=>{ setStatsBase(s); setStats(s) }).finally(()=>setLoading(false))
+  }, [dataInicio, dataFim, grupoDash]) // eslint-disable-line
 
   // Recarrega divulgações ao filtrar por origem/tipo
   useEffect(() => {
@@ -150,7 +154,7 @@ export default function Dashboard() {
         dataFim: dataFim||undefined,
       })
     }
-  }, [filtroDiv, dataInicio, dataFim])
+  }, [filtroDiv, dataInicio, dataFim, grupoDash]) // eslint-disable-line
 
   const hora = new Date().getHours()
   const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite'
