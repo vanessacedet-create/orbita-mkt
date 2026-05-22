@@ -983,7 +983,7 @@ export default function CRM({ grupo, titulo }) {
         <div style={{display:'flex',alignItems:'center',gap:14}}>
           <Users size={22} color="var(--accent)"/>
           <div>
-            <h1 className="page-title" style={{margin:0}}>CRM de Influencers</h1>
+            <h1 className="page-title" style={{margin:0}}>{titulo}</h1>
             <p style={{fontSize:12,color:'var(--text-muted)',margin:0}}>
               {total} parceiro{total!==1?'s':''} · {ativos} ativo{ativos!==1?'s':''}
             </p>
