@@ -1,4 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
+import { useViewAs } from '../context/ViewAsContext'
+import { PERFIL_GRUPO } from '../context/AuthContext'
 import { getLivrosLancamento, importarLancamentos, updateLivro, deleteLivro } from '../lib/supabase'
 import { ChevronLeft, ChevronRight, Upload, X, Calendar, Pencil, Trash2, Download } from 'lucide-react'
 import * as XLSX from 'xlsx'
@@ -166,7 +168,7 @@ function ModalDia({ dataKey, livros, coresEditoras, onEditLivro, onClose }) {
 }
 
 // ── MODAL IMPORTAR ─────────────────────────────────────────
-function ModalImportar({ onImport, onClose }) {
+function ModalImportar({ onImport, onClose , grupo }) {
   const [preview, setPreview]     = useState([])
   const [arquivo, setArquivo]     = useState(null)
   const [erros, setErros]         = useState([])
@@ -237,7 +239,7 @@ function ModalImportar({ onImport, onClose }) {
     if (!preview.length) return
     setSaving(true)
     try {
-      const res = await importarLancamentos(preview)
+      const res = await importarLancamentos(preview, { grupo })
       setResultado(res)
       if (res.erros.length===0) setTimeout(()=>{onImport();onClose()},2000)
     } catch(e){console.error(e)} finally{setSaving(false)}
@@ -302,6 +304,8 @@ function ModalImportar({ onImport, onClose }) {
 
 // ── PÁGINA PRINCIPAL ───────────────────────────────────────
 export default function Lancamentos() {
+  const { perfilAtivo } = useViewAs()
+  const grupoLanc = PERFIL_GRUPO[perfilAtivo] || null
   const agora = new Date()
   const [ano, setAno]           = useState(agora.getFullYear())
   const [mes, setMes]           = useState(agora.getMonth()+1)
@@ -316,11 +320,11 @@ export default function Lancamentos() {
 
   async function carregar(a,m) {
     setLoading(true)
-    try { setLivros(await getLivrosLancamento({ano:a,mes:m})) }
+    try { setLivros(await getLivrosLancamento({ano:a,mes:m,grupo:grupoLanc})) }
     catch(e){console.error(e)} finally{setLoading(false)}
   }
 
-  useEffect(()=>{ carregar(ano,mes) },[ano,mes])
+  useEffect(()=>{ carregar(ano,mes) },[ano,mes,grupoLanc]) // eslint-disable-line
 
   function navMes(delta) {
     let nm=mes+delta, na=ano
@@ -513,6 +517,7 @@ export default function Lancamentos() {
       )}
       {modalImportar && (
         <ModalImportar
+          grupo={grupoLanc}
           onImport={()=>{ carregar(ano,mes); showToast('Importação concluída!') }}
           onClose={()=>setModalImportar(false)}
         />
