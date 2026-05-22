@@ -36,7 +36,7 @@ const MENU = [
   { path: '/',                 label: 'Dashboard',         icon: LayoutDashboard, modulo: 'dashboard'       },
   { path: '/parceiros',        label: 'Parceiros',         icon: UserRound,       modulo: 'parceiros'       },
   { path: '/guia-parcerias',   label: 'Guia de Parcerias', icon: FileText,        modulo: 'guia_parcerias'  },
-  { path: '/crm',              label: 'CRM',               icon: Network,         modulo: 'crm'             },
+  { path: '/crm',              label: 'CRM Influencers',               icon: Network,         modulo: 'crm'             },
   { path: '/calculadora',      label: 'Calculadora',       icon: Calculator,      modulo: 'calculadora'     },
   { path: '/cortesias',        label: 'Cortesias',         icon: BookOpen,        modulo: 'cortesias'       },
   { path: '/campanhas',        label: 'Campanhas',         icon: Megaphone,       modulo: 'campanhas'       },
