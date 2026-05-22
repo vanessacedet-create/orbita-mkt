@@ -36,7 +36,8 @@ const MENU = [
   { path: '/',                 label: 'Dashboard',         icon: LayoutDashboard, modulo: 'dashboard'       },
   { path: '/parceiros',        label: 'Parceiros',         icon: UserRound,       modulo: 'parceiros'       },
   { path: '/guia-parcerias',   label: 'Guia de Parcerias', icon: FileText,        modulo: 'guia_parcerias'  },
-  { path: '/crm',              label: 'CRM Influencers',               icon: Network,         modulo: 'crm'             },
+  { path: '/crm-influencers', label: 'CRM Influencers', icon: Network, modulo: 'crm_influencers' },
+  { path: '/crm-parceiras',   label: 'CRM Parceiras',   icon: Network, modulo: 'crm_parceiras'   },
   { path: '/calculadora',      label: 'Calculadora',       icon: Calculator,      modulo: 'calculadora'     },
   { path: '/cortesias',        label: 'Cortesias',         icon: BookOpen,        modulo: 'cortesias'       },
   { path: '/campanhas',        label: 'Campanhas',         icon: Megaphone,       modulo: 'campanhas'       },
@@ -541,7 +542,8 @@ function Shell() {
               <Route path="/usuarios"        element={<RequireAuth modulo="usuarios"><Usuarios /></RequireAuth>} />
               <Route path="/campanhas"       element={<RequireAuth modulo="campanhas"><Campanhas /></RequireAuth>} />
               <Route path="/monitoramento"   element={<RequireAuth modulo="monitoramento"><Monitoramento /></RequireAuth>} />
-              <Route path="/crm"             element={<RequireAuth modulo="crm"><CRM /></RequireAuth>} />
+              <Route path="/crm-influencers" element={<RequireAuth modulo="crm_influencers"><CRM grupo="influencers" titulo="CRM Influencers" /></RequireAuth>} />
+              <Route path="/crm-parceiras"   element={<RequireAuth modulo="crm_parceiras"><CRM grupo="parceiras"   titulo="CRM Parceiras"   /></RequireAuth>} />
               <Route path="/calculadora"     element={<RequireAuth modulo="calculadora"><Calculadora /></RequireAuth>} />
               <Route path="/rh"              element={<RequireAuth modulo="rh"><RH /></RequireAuth>} />
               <Route path="/eventos"         element={<RequireAuth modulo="eventos"><Eventos /></RequireAuth>} />
