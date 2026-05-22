@@ -355,19 +355,37 @@ function Shell() {
 
   const podeUsarVerComo = PODE_VER_COMO.includes(usuario?.perfil)
 
-  // Carrega lista de usuários quando modal é aberto pela primeira vez
+  // Carrega lista de usuários sempre que o modal abre — garante dados frescos
+  // (importante pois o admin pode ter editado abas_extras de uma usuária)
   useEffect(() => {
-    if (podeUsarVerComo && todosUsuarios.length === 0) {
+    if (podeUsarVerComo && showModal) {
       getUsuarios().then(data => setTodosUsuarios(data || [])).catch(() => {})
     }
-  }, [podeUsarVerComo])
+  }, [podeUsarVerComo, showModal])
+
+  // Quando viewAs é trocado, recarrega os dados completos do usuário
+  // visualizado para garantir grupos_extras e abas_extras atualizados
+  useEffect(() => {
+    if (!viewAs?.id) return
+    getUsuarios().then(data => {
+      const atualizado = (data || []).find(u => u.id === viewAs.id)
+      if (atualizado && (
+        JSON.stringify(atualizado.abas_extras) !== JSON.stringify(viewAs.abas_extras) ||
+        JSON.stringify(atualizado.grupos_extras) !== JSON.stringify(viewAs.grupos_extras)
+      )) {
+        setViewAs(atualizado)
+      }
+    }).catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewAs?.id])
 
   // Perfil ativo: viewAs se estiver no modo visualização, senão o real
   const perfilAtivo = viewAs?.perfil || usuario?.perfil
+  const abasExtrasAtivo = viewAs?.abas_extras || usuario?.abas_extras || []
 
-  // Função de permissão baseada no perfil ativo
+  // Função de permissão baseada no perfil ativo + abas_extras individuais
   function canAtivo(modulo) {
-    return canPerfil(perfilAtivo, modulo)
+    return canPerfil(perfilAtivo, modulo) || abasExtrasAtivo.includes(modulo)
   }
 
   // Pedidos novos da vitrine
