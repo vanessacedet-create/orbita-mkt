@@ -253,6 +253,7 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
     data_prazo:      tarefa.data_prazo || '',
   } : EMPTY
 
+  // ── estado persistido ──────────────────────────────────────────────────────
   const [form, setFormRaw] = useState(() => {
     try {
       const salvo = sessionStorage.getItem(storageKey)
@@ -269,36 +270,76 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
     })
   }
 
-  function limparRascunho() {
-    try { sessionStorage.removeItem(storageKey) } catch {}
+  // checklist local (inclui itens ainda não salvos no banco para tarefas novas)
+  const checklistKey = storageKey + '_checklist'
+  const tabKey       = storageKey + '_tab'
+
+  const [checklist, setChecklistRaw] = useState(() => {
+    try {
+      const salvo = sessionStorage.getItem(checklistKey)
+      if (salvo) return JSON.parse(salvo)
+    } catch {}
+    return tarefa?.tarefa_checklist || []
+  })
+
+  function setChecklist(updater) {
+    setChecklistRaw(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater
+      try { sessionStorage.setItem(checklistKey, JSON.stringify(next)) } catch {}
+      return next
+    })
   }
 
-  const [checklist, setChecklist]     = useState(tarefa?.tarefa_checklist || [])
+  const [tab, setTabRaw] = useState(() => {
+    try { return sessionStorage.getItem(tabKey) || 'detalhes' } catch { return 'detalhes' }
+  })
+  function setTab(v) { setTabRaw(v); try { sessionStorage.setItem(tabKey, v) } catch {} }
+
+  function limparRascunho() {
+    try {
+      sessionStorage.removeItem(storageKey)
+      sessionStorage.removeItem(checklistKey)
+      sessionStorage.removeItem(tabKey)
+    } catch {}
+  }
+  // ── fim estado persistido ───────────────────────────────────────────────────
+
   const [comentarios, setComentarios] = useState(tarefa?.tarefa_comentarios || [])
   const [livrosVinculados, setLivrosVinculados] = useState(tarefa?.tarefa_livros || [])
   const [novoItem, setNovoItem]       = useState('')
   const [novoComent, setNovoComent]   = useState('')
   const [saving, setSaving]           = useState(false)
-  const [tab, setTab]                 = useState('detalhes')
   const checkInputRef = useRef()
 
   async function salvar() {
     if (!form.titulo.trim()) return
     setSaving(true)
     try {
+      // itens locais (sem id real) são enviados junto para o pai salvar no banco
+      const itensPendentes = checklist.filter(x => x._local)
       await onSave({
         ...form,
         responsavel_id: form.responsavel_id || null,
         data_prazo:     form.data_prazo || null,
         created_by:     tarefa ? undefined : usuario?.id,
+        _checklistPendente: itensPendentes.map(x => x.texto),
       }, tarefa?.id)
       limparRascunho()
       onClose()
     } catch(e) { console.error(e) } finally { setSaving(false) }
   }
 
+  function addItemLocal() {
+    if (!novoItem.trim()) return
+    const item = { id: `_local_${Date.now()}`, texto: novoItem.trim(), concluido: false, ordem: checklist.length, _local: true }
+    setChecklist(prev => [...prev, item])
+    setNovoItem('')
+    checkInputRef.current?.focus()
+  }
+
   async function addItem() {
-    if (!novoItem.trim() || !tarefa) return
+    if (!novoItem.trim()) return
+    if (!tarefa) { addItemLocal(); return }
     const item = await addChecklistItem(tarefa.id, novoItem.trim())
     setChecklist(prev => [...prev, item])
     setNovoItem('')
@@ -306,11 +347,17 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
   }
 
   async function toggleItem(item) {
+    if (item._local) {
+      setChecklist(prev => prev.map(x => x.id === item.id ? { ...x, concluido: !x.concluido } : x))
+      return
+    }
     const upd = await updateChecklistItem(item.id, { concluido: !item.concluido })
     setChecklist(prev => prev.map(x => x.id === upd.id ? upd : x))
   }
 
   async function removeItem(id) {
+    const item = checklist.find(x => x.id === id)
+    if (item?._local) { setChecklist(prev => prev.filter(x => x.id !== id)); return }
     await deleteChecklistItem(id)
     setChecklist(prev => prev.filter(x => x.id !== id))
   }
@@ -337,21 +384,19 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
           </div>
         </div>
 
-        {tarefa && (
-          <div style={{ display:'flex', gap:0, borderBottom:'1px solid var(--border)', marginBottom:16 }}>
-            {[
-              { id:'detalhes',    label:'Detalhes' },
-              { id:'checklist',   label:`Checklist ${checkTotal > 0 ? `(${checkDone}/${checkTotal})` : ''}` },
-              { id:'comentarios', label:`Comentários (${comentarios.length})` },
-            ].map(t => (
-              <button key={t.id} onClick={()=>setTab(t.id)} style={{
-                padding:'8px 16px', fontSize:12, fontWeight:700, border:'none', cursor:'pointer',
-                background:'transparent', borderBottom: tab===t.id ? '2px solid var(--accent)' : '2px solid transparent',
-                color: tab===t.id ? 'var(--accent)' : 'var(--text-muted)', transition:'all 0.15s'
-              }}>{t.label}</button>
-            ))}
-          </div>
-        )}
+        <div style={{ display:'flex', gap:0, borderBottom:'1px solid var(--border)', marginBottom:16 }}>
+          {[
+            { id:'detalhes',    label:'Detalhes' },
+            { id:'checklist',   label:`Checklist${checkTotal > 0 ? ` (${checkDone}/${checkTotal})` : ''}` },
+            ...(tarefa ? [{ id:'comentarios', label:`Comentários (${comentarios.length})` }] : []),
+          ].map(t => (
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{
+              padding:'8px 16px', fontSize:12, fontWeight:700, border:'none', cursor:'pointer',
+              background:'transparent', borderBottom: tab===t.id ? '2px solid var(--accent)' : '2px solid transparent',
+              color: tab===t.id ? 'var(--accent)' : 'var(--text-muted)', transition:'all 0.15s'
+            }}>{t.label}</button>
+          ))}
+        </div>
 
         {tab === 'detalhes' && (
           <div className="form-grid">
@@ -852,7 +897,13 @@ export default function Tarefas() {
     finally { setLoading(false) }
   }
 
-  useEffect(() => { carregar() }, [perfilAtivo, usuarioAtivo?.grupos_extras]) // eslint-disable-line
+  const ultimoPerfil = useRef(null)
+  useEffect(() => {
+    const chave = `${perfilAtivo}|${JSON.stringify(usuarioAtivo?.grupos_extras || [])}`
+    if (chave === ultimoPerfil.current) return // mesmo perfil, não recarrega
+    ultimoPerfil.current = chave
+    carregar()
+  }, [perfilAtivo, usuarioAtivo?.grupos_extras]) // eslint-disable-line
 
   // Reabre o modal da tarefa que estava aberta antes de sair da tela
   useEffect(() => {
@@ -881,16 +932,22 @@ export default function Tarefas() {
 
   async function handleSave(form, id) {
     if (id) {
-      const upd = await updateTarefa(id, { ...form, grupo: grupoDaTarefa(form) })
+      const { _checklistPendente: _cp, ...formLimpo } = form
+      const upd = await updateTarefa(id, { ...formLimpo, grupo: grupoDaTarefa(formLimpo) })
       setTarefas(prev => prev.map(t => t.id === upd.id ? upd : t))
       if (upd.status === 'concluido' && abaView === 'ativas') showToast('Tarefa concluída! 🎉')
       else if (upd.status !== 'concluido' && abaView === 'concluidas') showToast('Tarefa reativada!')
       else showToast('Tarefa atualizada!')
     } else {
+      const { _checklistPendente, ...formLimpo } = form
       const nova = await createTarefa({
-        ...form,
-        grupo: grupoDaTarefa(form),
+        ...formLimpo,
+        grupo: grupoDaTarefa(formLimpo),
       })
+      // salva itens de checklist que foram adicionados antes de criar a tarefa
+      if (_checklistPendente?.length) {
+        await Promise.all(_checklistPendente.map(texto => addChecklistItem(nova.id, texto)))
+      }
       setTarefas(prev => [nova, ...prev])
       showToast('Tarefa criada!')
     }
