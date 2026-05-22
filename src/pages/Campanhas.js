@@ -1,4 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
+import { useViewAs } from '../context/ViewAsContext'
+import { PERFIL_GRUPO } from '../context/AuthContext'
 import {
   getCampanhas, getCampanha, createCampanha, updateCampanha, deleteCampanha, reordenarCampanhas,
   getParceiros, getParceirosAtivos, getLivros, getUsuarios,
@@ -2577,6 +2579,8 @@ function FollowUpTab() {
 
 // ── LISTA DE CAMPANHAS ─────────────────────────────────────
 export default function Campanhas() {
+  const { perfilAtivo } = useViewAs()
+  const grupoCampanhas = PERFIL_GRUPO[perfilAtivo] || null
   const [tab, setTab]               = useState('campanhas')
   const [campanhas, setCampanhas]   = useState([])
   const [dragId, setDragId]         = useState(null)
@@ -2593,7 +2597,7 @@ export default function Campanhas() {
 
   async function reload() {
     const [cs, ps, ls, us] = await Promise.all([
-      getCampanhas(),
+      getCampanhas({ grupo: grupoCampanhas }),
       getParceirosAtivos(),
       getLivros({ page:0, pageSize:5000 }),
       getUsuarios(),
@@ -2608,7 +2612,7 @@ export default function Campanhas() {
 
   async function handleCreate(form) {
     const { parceiro_ids = [], ...rest } = form
-    const campanha = await createCampanha(rest)
+    const campanha = await createCampanha({ ...rest, grupo: grupoCampanhas })
     for (const pid of parceiro_ids) {
       await addParceiroCampanha(campanha.id, pid)
     }
