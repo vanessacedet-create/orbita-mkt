@@ -1,7 +1,7 @@
 import { supabase } from './client'
 
-export async function getCampanhas() {
-  const { data, error } = await supabase
+export async function getCampanhas({ grupo } = {}) {
+  let q = supabase
     .from('campanhas')
     .select(`
       *,
@@ -9,10 +9,12 @@ export async function getCampanhas() {
       campanha_parceiros(id, status, parceiros(id, nome, tipo_parceria)),
       lancamento_livros(id, lancamento_parceiros(id, status))
     `)
-    .order('ordem', { ascending: true, nullsFirst: false })
-    .order('created_at', { ascending: false })
+  if (grupo) q = q.eq('grupo', grupo)
+  q = q.order('ordem', { ascending: true, nullsFirst: false })
+       .order('created_at', { ascending: false })
+  const { data, error } = await q
   if (error) throw error
-  return data
+  return data || []
 }
 
 export async function getCampanha(id) {
@@ -29,10 +31,10 @@ export async function getCampanha(id) {
   return data
 }
 
-export async function createCampanha({ nome, tipo, status, data_inicio, data_fim, descricao, livro_ids = [], adicionar_lancamentos_auto = false }) {
+export async function createCampanha({ nome, tipo, status, data_inicio, data_fim, descricao, grupo = null, livro_ids = [], adicionar_lancamentos_auto = false }) {
   const { data: campanha, error } = await supabase
     .from('campanhas')
-    .insert([{ nome, tipo, status, data_inicio, data_fim, descricao }])
+    .insert([{ nome, tipo, status, data_inicio, data_fim, descricao, grupo }])
     .select().single()
   if (error) throw error
 
@@ -397,7 +399,7 @@ export async function importarDivulgacoesPromocao(campanhaId, rows) {
   return results
 }
 
-export async function getDashboardStats({ dataInicio, dataFim, tipoCampanha, origem } = {}) {
+export async function getDashboardStats({ dataInicio, dataFim, tipoCampanha, origem, grupo } = {}) {
   let qParceiros = supabase.from('parceiros').select('*', { count: 'exact', head: true })
   if (dataInicio) qParceiros = qParceiros.gte('created_at', dataInicio)
   if (dataFim)    qParceiros = qParceiros.lte('created_at', dataFim + 'T23:59:59')
@@ -407,6 +409,7 @@ export async function getDashboardStats({ dataInicio, dataFim, tipoCampanha, ori
   if (dataInicio) qCampanhas = qCampanhas.gte('data_inicio', dataInicio)
   if (dataFim)    qCampanhas = qCampanhas.lte('data_inicio', dataFim)
   if (tipoCampanha) qCampanhas = qCampanhas.eq('tipo', tipoCampanha)
+  if (grupo) qCampanhas = qCampanhas.eq('grupo', grupo)
   const { count: totalCampanhas } = await qCampanhas
 
   let qLP = supabase.from('lancamento_parceiros').select('id, status, origem, data_divulgacao').eq('status', 'publicado')
@@ -449,7 +452,9 @@ export async function getDashboardStats({ dataInicio, dataFim, tipoCampanha, ori
   const parceirosPorTipo   = parcs.reduce((a,p)=>{ const t=p.tipo_parceria||'Sem tipo'; a[t]=(a[t]||0)+1; return a },{})
   const parceirosPorStatus = parcs.reduce((a,p)=>{ const s=p.status||'ativo'; a[s]=(a[s]||0)+1; return a },{})
 
-  const { data: campanhasRaw } = await supabase.from('campanhas').select('id, tipo, status')
+  let qCampsRaw = supabase.from('campanhas').select('id, tipo, status')
+  if (grupo) qCampsRaw = qCampsRaw.eq('grupo', grupo)
+  const { data: campanhasRaw } = await qCampsRaw
   const camps = campanhasRaw || []
   const campanhasPorTipo   = camps.reduce((a,c)=>{ const t=c.tipo||'Sem tipo'; a[t]=(a[t]||0)+1; return a },{})
   const campanhasPorStatus = camps.reduce((a,c)=>{ const s=c.status||'planejamento'; a[s]=(a[s]||0)+1; return a },{})
