@@ -716,6 +716,148 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
 }
 
 // ── PÁGINA PRINCIPAL ───────────────────────────────────────
+
+// ── MODAL: CONFIGURAR STATUS DO CRM POR GRUPO ─────────────────
+function ModalConfigStatus({ grupo, pipeline, onSave, onClose }) {
+  const [items, setItems] = useState(() => (pipeline || []).map(p => ({ ...p })))
+  const [saving, setSaving] = useState(false)
+  const [erro, setErro] = useState('')
+
+  function addStatus() {
+    setItems(prev => [...prev, {
+      value: `status_${prev.length}`,
+      label: 'Novo status',
+      cor: '#6b7280',
+      bg: 'rgba(107,114,128,0.12)',
+    }])
+  }
+
+  function removeStatus(i) {
+    if (items.length <= 1) { setErro('É necessário pelo menos um status.'); return }
+    setItems(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  function moveUp(i) {
+    if (i === 0) return
+    setItems(prev => {
+      const arr = [...prev]
+      const tmp = arr[i - 1]; arr[i - 1] = arr[i]; arr[i] = tmp
+      return arr
+    })
+  }
+
+  function moveDown(i) {
+    if (i === items.length - 1) return
+    setItems(prev => {
+      const arr = [...prev]
+      const tmp = arr[i + 1]; arr[i + 1] = arr[i]; arr[i] = tmp
+      return arr
+    })
+  }
+
+  function updateField(i, field, value) {
+    setItems(prev => prev.map((s, idx) => {
+      if (idx !== i) return s
+      const next = { ...s, [field]: value }
+      if (field === 'cor') next.bg = corParaBg(value)
+      return next
+    }))
+  }
+
+  async function salvar() {
+    const labels = items.map(s => (s.label || '').trim().toLowerCase())
+    if (labels.some(l => !l)) { setErro('Todos os status precisam de um nome.'); return }
+    const dup = labels.find((l, i) => labels.indexOf(l) !== i)
+    if (dup) { setErro('Há nomes de status duplicados: ' + dup); return }
+
+    setSaving(true); setErro('')
+    try {
+      const slugify = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'status'
+      const normalizado = items.map((s, i) => ({
+        value: s.value && /^[a-z0-9_]+$/.test(s.value) ? s.value : slugify(s.label) + '_' + i,
+        label: s.label.trim(),
+        cor:   s.cor || '#6b7280',
+        bg:    s.bg || corParaBg(s.cor),
+      }))
+      await onSave(normalizado)
+    } catch (e) { setErro(e?.message || 'Erro ao salvar') }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal" style={{maxWidth:560,maxHeight:'88vh',overflowY:'auto'}}>
+        <div className="modal-header">
+          <h2 className="modal-title">Configurar status — {grupo || 'CRM'}</h2>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
+        </div>
+
+        <p style={{fontSize:13,color:'var(--text-muted)',marginBottom:14}}>
+          Defina os status do pipeline do CRM para este grupo.
+          A ordem aqui é a mesma que aparece no kanban.
+        </p>
+
+        <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:14}}>
+          {items.map((s, i) => (
+            <div key={i} style={{
+              display:'flex',alignItems:'center',gap:8,
+              padding:'8px 10px',background:'var(--surface-2)',
+              borderRadius:8,border:'1px solid var(--border)'
+            }}>
+              <div style={{display:'flex',flexDirection:'column',gap:2}}>
+                <button type="button" onClick={()=>moveUp(i)} disabled={i===0}
+                  style={{background:'none',border:'none',cursor:i===0?'default':'pointer',color:i===0?'var(--text-muted)':'var(--text)',padding:0,opacity:i===0?0.3:1}}>▲</button>
+                <button type="button" onClick={()=>moveDown(i)} disabled={i===items.length-1}
+                  style={{background:'none',border:'none',cursor:i===items.length-1?'default':'pointer',color:i===items.length-1?'var(--text-muted)':'var(--text)',padding:0,opacity:i===items.length-1?0.3:1}}>▼</button>
+              </div>
+              <input
+                type="color"
+                value={s.cor || '#6b7280'}
+                onChange={e=>updateField(i,'cor',e.target.value)}
+                style={{width:32,height:32,border:'1px solid var(--border)',borderRadius:6,cursor:'pointer',background:'transparent',padding:2,flexShrink:0}}
+                title="Cor do status"
+              />
+              <input
+                className="form-input"
+                value={s.label}
+                onChange={e=>updateField(i,'label',e.target.value)}
+                placeholder="Nome do status"
+                style={{flex:1,fontSize:13}}
+              />
+              <button type="button"
+                className="btn btn-ghost btn-icon btn-sm"
+                onClick={()=>removeStatus(i)}
+                title="Remover"
+                style={{opacity:0.5}}
+              ><Trash2 size={13}/></button>
+            </div>
+          ))}
+        </div>
+
+        <button type="button" className="btn btn-ghost" onClick={addStatus} style={{width:'100%',marginBottom:14}}>
+          <Plus size={14}/> Adicionar status
+        </button>
+
+        {erro && (
+          <div style={{
+            background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.2)',
+            color:'#ef4444',padding:'8px 12px',borderRadius:8,
+            fontSize:12,marginBottom:14
+          }}>{erro}</div>
+        )}
+
+        <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={salvar} disabled={saving}>
+            {saving ? 'Salvando...' : 'Salvar configuração'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function CRM({ grupo, titulo }) {
   const { usuario } = useAuth()
   const ehAdmin = usuario?.perfil === 'administrador'
