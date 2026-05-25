@@ -2555,9 +2555,9 @@ const gruposLivros = grupoCampanhas ? [grupoCampanhas] : null
       getUsuarios(),
     ])
 
-    const campanhasFiltradas = cs.filter(c => 
-      canAccessGroup(usuario?.perfil, c.grupo || 'influencers')
-    )
+    const campanhasFiltradas = ehAdmin
+  ? cs
+  : cs.filter(c => canAccessGroup(perfilEfetivo, c.grupo || 'influencers'))
 
     setCampanhas(campanhasFiltradas)
     setParceiros(ps)
@@ -2571,7 +2571,14 @@ const gruposLivros = grupoCampanhas ? [grupoCampanhas] : null
 
   async function handleCreate(form) {
     const { parceiro_ids = [], ...rest } = form
-    const campanha = await createCampanha({ ...rest, grupo: grupoCampanhas })
+   const grupoNovaCampanha = ehAdmin
+  ? (grupoCampanhas || 'influencers')
+  : grupoDoPerfil
+
+const campanha = await createCampanha({
+  ...rest,
+  grupo: grupoNovaCampanha
+})
     for (const pid of parceiro_ids) {
       await addParceiroCampanha(campanha.id, pid)
     }
