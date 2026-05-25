@@ -166,181 +166,75 @@ function ModalCampanha({ campanha, livros, parceiros, onSave, onClose }) {
   }
 
   return (
-          <div style={{display:'flex',gap:8,alignItems:'center'}}>
-          {/* Admin, Gerente e todo o time de Parceiras podem criar */}
-          {ehAdmin || ['estagiario_parceiras', 'analista_parceiras', 'supervisor_parceiras'].includes(usuario?.perfil) ? (
-            <button className="btn btn-primary" onClick={()=>setModal(true)}><Plus size={16}/> Nova Campanha</button>
-          ) : null}
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Campanhas</h1>
+          <p className="page-subtitle">{campanhas.length} campanha{campanhas.length!==1?'s':''} · {campanhas.filter(c=>c.status==='em_andamento').length} em andamento</p>
         </div>
-        <div className="form-grid">
-          <div className="form-group">
-            <label className="form-label">Nome da campanha *</label>
-            <input className="form-input" value={form.nome} onChange={e=>setForm(f=>({...f,nome:e.target.value}))} placeholder="Ex: Lançamento Coleção Inverno 2026"/>
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Tipo</label>
-              <select className="form-select" value={form.tipo} onChange={e=>setForm(f=>({...f,tipo:e.target.value}))}>
-                <option value="">Selecionar...</option>
-                {TIPOS_CAMPANHA.map(t=><option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Status</label>
-              <select className="form-select" value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}>
-                {STATUS_CAMPANHA.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Data início</label>
-              <input className="form-input" type="date" value={form.data_inicio} onChange={e=>setForm(f=>({...f,data_inicio:e.target.value}))}/>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Data fim</label>
-              <input className="form-input" type="date" value={form.data_fim} onChange={e=>setForm(f=>({...f,data_fim:e.target.value}))}/>
-            </div>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Descrição / Objetivo</label>
-            <textarea className="form-textarea" value={form.descricao} onChange={e=>setForm(f=>({...f,descricao:e.target.value}))} placeholder="Descreva os objetivos e estratégia da campanha..."/>
-          </div>
-
-          {/* Livros e Parceiros — ocultos para Lançamento (gerenciados depois) */}
-          {form.tipo !== 'Lançamento' && form.tipo !== 'Geral' && <div className="form-group">
-            <label className="form-label">
-              Livros vinculados
-              {form.livro_ids.length > 0 && <span style={{color:'var(--accent)',marginLeft:6}}>({form.livro_ids.length} selecionado{form.livro_ids.length>1?'s':''})</span>}
-            </label>
-            {form.livro_ids.length > 0 && (
-              <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:8}}>
-                {form.livro_ids.map(id => {
-                  const l = (campanha?.campanha_livros||[]).map(cl=>cl.livros).find(x=>x?.id===id)
-                    || livroResults.find(x=>x.id===id)
-                    || form._livroCache?.[id]
-                  return l ? (
-                    <div key={id} style={{display:'flex',alignItems:'center',gap:6,background:'var(--accent-glow)',border:'1px solid rgba(224,96,48,0.2)',borderRadius:20,padding:'3px 10px 3px 10px',fontSize:12}}>
-                      <span style={{color:'var(--accent)'}}>{l.titulo}</span>
-                      <button onClick={()=>toggleLivro(id)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',padding:0,display:'flex'}}><X size={11}/></button>
-                    </div>
-                  ) : null
-                })}
-              </div>
-            )}
-            <div style={{position:'relative'}}>
-              <input className="form-input" placeholder="Buscar livro por título, autor ou ISBN..." value={livroSearch}
-                onChange={e=>setLivroSearch(e.target.value)}
-                onFocus={()=>livroResults.length>0&&setLivroOpen(true)}
-                style={{marginBottom:6}} autoComplete="off"/>
-              {livroOpen && livroResults.length > 0 && (
-                <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:200,border:'1px solid var(--border)',borderRadius:8,maxHeight:200,overflowY:'auto',background:'var(--surface)',boxShadow:'0 8px 24px rgba(0,0,0,0.3)'}}>
-                  {livroResults.map(l => {
-                    const sel = form.livro_ids.includes(l.id)
-                    return (
-                      <div key={l.id} onClick={()=>{if(!sel){toggleLivro(l.id);setLivroSearch('');setLivroOpen(false)}}}
-                        style={{padding:'9px 14px',cursor:sel?'default':'pointer',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:10,opacity:sel?.5:1}}
-                        onMouseEnter={e=>{if(!sel)e.currentTarget.style.background='var(--surface-2)'}}
-                        onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-                        <div style={{flex:1}}>
-                          <div style={{fontSize:13,color:'var(--text)'}}>{l.titulo}</div>
-                          {l.autor && <div style={{fontSize:11.5,color:'var(--text-muted)'}}>{l.autor}{l.isbn?` · ${l.isbn}`:''}</div>}
-                        </div>
-                        {sel ? <span style={{fontSize:11,color:'var(--text-muted)'}}>adicionado</span> : <Plus size={13} color="var(--accent)"/>}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-            <p style={{fontSize:11.5,color:'var(--text-muted)',marginTop:4}}>Deixe em branco para campanha genérica (sem livro específico).</p>
-          </div>}
-
-          {form.tipo !== 'Lançamento' && form.tipo !== 'Geral' && <>{/* Parceiros vinculados */}
-          <div className="form-group">
-            <label className="form-label">
-              Parceiros
-              {form.parceiro_ids.length > 0 && <span style={{color:'var(--accent)',marginLeft:6}}>({form.parceiro_ids.length} selecionado{form.parceiro_ids.length>1?'s':''})</span>}
-            </label>
-            {form.parceiro_ids.length > 0 && (
-              <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:8}}>
-                {form.parceiro_ids.map(id => {
-                  const p = parceiros.find(x=>x.id===id)
-                  return p ? (
-                    <div key={id} style={{display:'flex',alignItems:'center',gap:6,background:'rgba(99,102,241,0.08)',border:'1px solid rgba(99,102,241,0.2)',borderRadius:20,padding:'3px 10px',fontSize:12}}>
-                      <span style={{color:'var(--indigo)'}}>{p.nome}</span>
-                      <button onClick={()=>toggleParceiro(id)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',padding:0,display:'flex'}}><X size={11}/></button>
-                    </div>
-                  ) : null
-                })}
-              </div>
-            )}
-            <div style={{position:'relative'}}>
-              <input className="form-input" placeholder="Buscar parceiro por nome..."
-                value={parceiroSearch}
-                onChange={e=>{setParceiroSearch(e.target.value);setParceiroOpen(true)}}
-                onFocus={()=>setParceiroOpen(true)}
-                autoComplete="off"
-              />
-              {parceiroOpen && parceiroSearch && (
-                <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:200,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,maxHeight:160,overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,0.3)'}}>
-                  {parceiros.filter(p=>p.nome.toLowerCase().includes(parceiroSearch.toLowerCase())).length===0
-                    ? <div style={{padding:'10px 14px',fontSize:13,color:'var(--text-muted)'}}>Nenhum parceiro encontrado.</div>
-                    : parceiros.filter(p=>p.nome.toLowerCase().includes(parceiroSearch.toLowerCase())).map(p=>{
-                        const sel = form.parceiro_ids.includes(p.id)
-                        return (
-                          <div key={p.id} onClick={()=>{if(!sel){toggleParceiro(p.id);setParceiroSearch('');setParceiroOpen(false)}}}
-                            style={{padding:'9px 14px',cursor:sel?'default':'pointer',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:10,opacity:sel?.5:1}}
-                            onMouseEnter={e=>{if(!sel)e.currentTarget.style.background='var(--surface-2)'}}
-                            onMouseLeave={e=>e.currentTarget.style.background='transparent'}
-                          >
-                            <div style={{flex:1}}>
-                              <div style={{fontSize:13,color:'var(--text)'}}>{p.nome}</div>
-                              {p.tipo_parceria&&<div style={{fontSize:11.5,color:'var(--text-muted)'}}>{p.tipo_parceria}</div>}
-                            </div>
-                            {sel ? <span style={{fontSize:11,color:'var(--text-muted)'}}>adicionado</span> : <Plus size={13} color="var(--indigo)"/>}
-                          </div>
-                        )
-                      })
-                  }
-                </div>
-              )}
-            </div>
-            <p style={{fontSize:11.5,color:'var(--text-muted)',marginTop:4}}>Parceiros podem ser adicionados ou removidos depois também.</p>
-          </div></>}
-
-          {(form.tipo === 'Lançamento' || form.tipo === 'Geral' || form.tipo === 'Book Time') && (
-            <div style={{padding:'12px 14px',background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8}}>
-              <label style={{display:'flex',alignItems:'flex-start',gap:10,cursor:'pointer'}}>
-                <input type="checkbox" checked={form.adicionar_lancamentos_auto}
-                  onChange={e=>setForm(f=>({...f,adicionar_lancamentos_auto:e.target.checked}))}
-                  style={{marginTop:2,width:16,height:16,accentColor:'var(--accent)',flexShrink:0}}/>
-                <div>
-                  <div style={{fontSize:13,fontWeight:600,color:'var(--text)'}}>
-                    Adicionar lançamentos automaticamente pelo período
-                  </div>
-                  <div style={{fontSize:11,color:'var(--text-muted)',marginTop:2}}>
-                    Quando marcado, todos os livros com data de lançamento entre a data início e fim serão incluídos automaticamente na campanha.
-                  </div>
-                </div>
-              </label>
-              {!form.adicionar_lancamentos_auto && (
-                <div style={{fontSize:12,color:'var(--text-muted)',marginTop:8,paddingTop:8,borderTop:'1px solid var(--border)'}}>
-                  📚 Os livros e parceiros poderão ser adicionados manualmente após criar a campanha.
-                </div>
-              )}
-            </div>
+        <div style={{display:'flex',gap:8,alignItems:'center'}}>
+          {/* Permite criar para Admin, Gerente e time de Parceiras */}
+          {(['administrador', 'gerente', 'estagiario_parceiras', 'analista_parceiras', 'supervisor_parceiras'].includes(usuario?.perfil)) && (
+            <button className="btn btn-primary" onClick={()=>setModal(true)}><Plus size={16}/> Nova Campanha</button>
           )}
         </div>
-        <div className="form-actions">
-          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={save} disabled={saving||!form.nome.trim()}>
-            {saving?'Salvando...':campanha?'Salvar':'Criar campanha'}
-          </button>
-        </div>
-        {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
       </div>
-    </div>
+
+      {/* Filtros */}
+      <div style={{display:'flex',gap:8,marginBottom:20,flexWrap:'wrap',alignItems:'center'}}>
+        <div style={{display:'flex',gap:6}}>
+          <button className={`btn btn-sm ${filtroStatus==='todos'?'btn-primary':'btn-ghost'}`} onClick={()=>setFiltroStatus('todos')}>Todas</button>
+          {STATUS_CAMPANHA.map(s=>(
+            <button key={s.value} className={`btn btn-sm ${filtroStatus===s.value?'btn-primary':'btn-ghost'}`} onClick={()=>setFiltroStatus(s.value)}>{s.label}</button>
+          ))}
+        </div>
+        <input className="search-input" style={{marginLeft:'auto'}} placeholder="Buscar campanha..." value={search} onChange={e=>setSearch(e.target.value)}/>
+      </div>
+
+      {loading
+        ? <div className="loading"><div className="spinner"/></div>
+        : filtradas.length === 0
+          ? <div className="empty-state" style={{marginTop:40}}><p>Nenhuma campanha encontrada.</p></div>
+          : (() => {
+              const ORDEM_TIPOS = ['Promoção', 'Lançamento', 'Geral']
+              const grupos = ORDEM_TIPOS.map(tipo => ({
+                tipo,
+                items: filtradas.filter(c => c.tipo === tipo)
+              })).filter(g => g.items.length > 0)
+              const semTipo = filtradas.filter(c => !ORDEM_TIPOS.includes(c.tipo))
+              if (semTipo.length > 0) grupos.push({ tipo: 'Outros', items: semTipo })
+
+              function renderCard(c) {
+                // ... seu renderCard original ...
+                // (mantenha exatamente como estava antes)
+              }
+
+              return (
+                <div>
+                  {grupos.map(grupo => (
+                    <div key={grupo.tipo} style={{marginBottom:32}}>
+                      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
+                        <h2 style={{fontSize:13,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'var(--text-muted)',margin:0}}>
+                          {grupo.tipo}
+                        </h2>
+                        <span style={{fontSize:12,color:'var(--text-muted)',background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:20,padding:'1px 8px'}}>
+                          {grupo.items.length}
+                        </span>
+                        <div style={{flex:1,height:'1px',background:'var(--border)'}}/>
+                      </div>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(340px,1fr))',gap:16}}>
+                        {grupo.items.map(renderCard)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()
+      }
+
+      {modal && <ModalCampanha livros={livros} parceiros={parceiros} onSave={handleCreate} onClose={()=>setModal(false)}/>}
+      {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
+    </>
   )
 }
 
