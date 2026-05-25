@@ -252,7 +252,7 @@ const TIPOS_RECORRENCIA = [
   { value: 'personalizada', label: 'Personalizada' },
 ]
 
-const DIAS_SEMANA = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado']
+const DIAS_SEMANA_RECORRENCIA = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado']
 
 function RecorrenciaPanel({ form, setForm }) {
   const [testando, setTestando] = useState(false)
@@ -332,7 +332,7 @@ function RecorrenciaPanel({ form, setForm }) {
             <div>
               <label style={{ fontSize:11, color:'var(--text-muted)', display:'block', marginBottom:4 }}>Dia da semana</label>
               <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
-                {DIAS_SEMANA.map((d,i) => (
+                {DIAS_SEMANA_RECORRENCIA.map((d,i) => (
                   <button key={i} type="button" onClick={()=>setConfig({ dia_semana: i })} style={{
                     padding:'4px 10px', borderRadius:6, fontSize:11, fontWeight:600, cursor:'pointer', border:'none',
                     background: cfg.dia_semana===i ? 'var(--accent)' : 'var(--surface-3)',
@@ -347,7 +347,7 @@ function RecorrenciaPanel({ form, setForm }) {
             <div>
               <label style={{ fontSize:11, color:'var(--text-muted)', display:'block', marginBottom:4 }}>Dia da semana de referência</label>
               <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
-                {DIAS_SEMANA.map((d,i) => (
+                {DIAS_SEMANA_RECORRENCIA.map((d,i) => (
                   <button key={i} type="button" onClick={()=>setConfig({ dia_semana: i })} style={{
                     padding:'4px 10px', borderRadius:6, fontSize:11, fontWeight:600, cursor:'pointer', border:'none',
                     background: cfg.dia_semana===i ? 'var(--accent)' : 'var(--surface-3)',
@@ -857,7 +857,8 @@ function ModalImportar({ usuarios, onClose, onImported }) {
   async function confirmarImportacao() {
     setImportando(true)
     try {
-      const grupoFallback = PERFIL_GRUPO[perfilAtivo] || null
+      const perfilEfetivo = perfilAtivo || usuario?.perfil
+      const grupoFallback = PERFIL_GRUPO[perfilEfetivo] || null
       const validas = linhas.filter(l => l.valida).map(l => {
         const resp = (usuarios || []).find(u => u.id === l.responsavel_id)
         const grupoResp = resp ? PERFIL_GRUPO[resp.perfil] : null
@@ -1039,6 +1040,17 @@ function menuItemStyle() {
 export default function Tarefas() {
   const { usuario } = useAuth()
   const { perfilAtivo, usuarioAtivo } = useViewAs()  // perfil real ou viewAs
+
+  // Quando estiver em modo "Ver como", usa o perfil/usuário visualizado.
+  // Isso impede que um administrador visualizando a equipe de Parceiras veja tarefas de outros grupos.
+  const perfilEfetivo = perfilAtivo || usuario?.perfil
+  const usuarioEfetivo = usuarioAtivo || usuario
+  const ehAdminVisual = ['administrador', 'gerente'].includes(perfilEfetivo)
+  const grupoPrincipal = PERFIL_GRUPO[perfilEfetivo] || null
+  const gruposExtras = usuarioEfetivo?.grupos_extras || []
+  const gruposPermitidos = new Set([grupoPrincipal, ...gruposExtras].filter(Boolean))
+  const usuarioFiltroId = usuarioEfetivo?.id || usuario?.id
+
   const [tarefas, setTarefas]       = useState([])
   const [usuarios, setUsuarios]     = useState([])
   const [loading, setLoading]       = useState(true)
@@ -1080,17 +1092,14 @@ export default function Tarefas() {
     try {
       const [t, us] = await Promise.all([getTarefas(), getUsuarios()])
 
-      // Filtra tarefas pelo grupo principal + grupos_extras do usuário.
-      // Admin e gerente (sem PERFIL_GRUPO) veem tudo.
-      const grupoPrincipal = PERFIL_GRUPO[perfilAtivo]
-      const gruposExtras = usuarioAtivo?.grupos_extras || []
-
-      if (!grupoPrincipal) {
-        setTarefas(t) // admin/gerente
+      // Filtra tarefas pelo grupo principal + grupos_extras do perfil efetivo.
+      // Admin e gerente visualizados veem tudo. Demais perfis veem apenas seus grupos permitidos.
+      if (ehAdminVisual) {
+        setTarefas(t)
       } else {
-        const gruposPermitidos = new Set([grupoPrincipal, ...gruposExtras])
         setTarefas(t.filter(tarefa => tarefa.grupo && gruposPermitidos.has(tarefa.grupo)))
       }
+
       setUsuarios(us || [])
     } catch(e) { console.error(e) }
     finally { setLoading(false) }
@@ -1098,11 +1107,11 @@ export default function Tarefas() {
 
   const ultimoPerfil = useRef(null)
   useEffect(() => {
-    const chave = `${perfilAtivo}|${JSON.stringify(usuarioAtivo?.grupos_extras || [])}`
+    const chave = `${perfilEfetivo}|${JSON.stringify(gruposExtras)}`
     if (chave === ultimoPerfil.current) return // mesmo perfil, não recarrega
     ultimoPerfil.current = chave
     carregar()
-  }, [perfilAtivo, usuarioAtivo?.grupos_extras]) // eslint-disable-line
+  }, [perfilEfetivo, JSON.stringify(gruposExtras)]) // eslint-disable-line
 
   // Reabre o modal da tarefa que estava aberta antes de sair da tela
   useEffect(() => {
@@ -1122,11 +1131,11 @@ export default function Tarefas() {
   }, [showMenuNova])
 
   // Helper: define o grupo da tarefa pelo responsável.
-  // Se não houver responsável, usa o grupo de quem está criando.
+  // Se não houver responsável, usa o grupo do perfil efetivo.
   function grupoDaTarefa(form) {
     const responsavel = (usuarios || []).find(u => u.id === form.responsavel_id)
     const grupoResp = responsavel ? PERFIL_GRUPO[responsavel.perfil] : null
-    return grupoResp || PERFIL_GRUPO[perfilAtivo] || null
+    return grupoResp || grupoPrincipal || null
   }
 
   async function handleSave(form, id) {
@@ -1205,7 +1214,7 @@ export default function Tarefas() {
     if (filtroStatus !== 'todos' && t.status !== filtroStatus) return false
     if (filtroPrioridade !== 'todas' && t.prioridade !== filtroPrioridade) return false
     if (filtroResponsavel !== 'todos') {
-      if (filtroResponsavel === 'minha' && t.responsavel_id !== usuario?.id) return false
+      if (filtroResponsavel === 'minha' && t.responsavel_id !== usuarioFiltroId) return false
       if (filtroResponsavel !== 'minha' && t.responsavel_id !== filtroResponsavel) return false
     }
     return true
@@ -1233,6 +1242,13 @@ export default function Tarefas() {
 
   const totalAtrasadas = tarefasAtivas.filter(t => t.data_prazo && t.status !== 'concluido' && isPast(new Date(t.data_prazo + 'T12:00:00')) && !isToday(new Date(t.data_prazo + 'T12:00:00'))).length
   const algumaTemLivros = tarefasFiltradas.some(t => (t.tarefa_livros?.length || 0) > 0)
+
+  const usuariosVisiveis = ehAdminVisual
+    ? usuarios
+    : usuarios.filter(u => {
+        const grupoUsuario = PERFIL_GRUPO[u.perfil] || u.grupo || null
+        return u.id === usuarioFiltroId || (grupoUsuario && gruposPermitidos.has(grupoUsuario))
+      })
 
   if (loading) return <div className="loading"><div className="spinner"/></div>
 
@@ -1311,7 +1327,7 @@ export default function Tarefas() {
         <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 10px' }} value={filtroResponsavel} onChange={e=>setFiltroResponsavel(e.target.value)}>
           <option value="todos">Todos os responsáveis</option>
           <option value="minha">Minhas tarefas</option>
-          {usuarios.map(u=><option key={u.id} value={u.id}>{u.nome}</option>)}
+          {usuariosVisiveis.map(u=><option key={u.id} value={u.id}>{u.nome}</option>)}
         </select>
         {(filtroStatus!=='todos'||filtroPrioridade!=='todas'||filtroResponsavel!=='todos') && (
           <button className="btn btn-ghost btn-sm" onClick={()=>{ setFiltroStatus('todos'); setFiltroPrioridade('todas'); setFiltroResponsavel('todos') }}>
@@ -1350,7 +1366,7 @@ export default function Tarefas() {
                         <CardKanban key={t.id} tarefa={t} onClick={()=>abrirModal(t)} onDragStart={()=>setDragId(t.id)} onDragEnd={()=>{ setDragId(null); setDragOverCol(null) }} isDragging={dragId===t.id}/>
                       ))
                   }
-                  {isOver && lista.length > 0 && <div style={{ height:4, borderRadius:99, background:corCol, opacity:0.4, margin:'4px 0' }}/>}
+                  {isOver && lista.length > 0 && <div style={{ height:4, borderRadius:99, background:corCol, opacity:0.4, margin:'4px 0' }}/>} 
                   <button onClick={()=>abrirModal('new')} style={{ width:'100%', padding:'8px', border:'1px dashed var(--border)', borderRadius:8, background:'transparent', cursor:'pointer', fontSize:12, color:'var(--text-muted)', display:'flex', alignItems:'center', justifyContent:'center', gap:4, marginTop:4, transition:'all 0.15s' }}
                     onMouseEnter={e=>{ e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.color='var(--accent)' }}
                     onMouseLeave={e=>{ e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.color='var(--text-muted)' }}>
@@ -1384,7 +1400,7 @@ export default function Tarefas() {
                         onMouseLeave={e=>e.currentTarget.style.color=sortCol===col?'var(--accent)':'var(--text-muted)'}>
                         <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}>
                           {label}
-                          {sortCol === col ? sortDir === 'asc' ? <ChevronUp size={12}/> : <ChevronDown size={12}/> : <ChevronUp size={12} style={{ opacity:0.2 }}/>}
+                          {sortCol === col ? sortDir === 'asc' ? <ChevronUp size={12}/> : <ChevronDown size={12}/> : <ChevronUp size={12} style={{ opacity:0.2 }}/>} 
                         </span>
                       </th>
                     ))}
@@ -1448,15 +1464,24 @@ export default function Tarefas() {
 
       {/* EQUIPE */}
       {view === 'equipe' && (
-        <ViewEquipe tarefas={tarefas} usuarios={usuarios} usuario={usuario} onOpen={t => abrirModal(t)}/>
+        <ViewEquipe
+          tarefas={tarefas}
+          usuarios={usuariosVisiveis}
+          usuario={usuario}
+          usuarioEfetivo={usuarioEfetivo}
+          perfilEfetivo={perfilEfetivo}
+          gruposPermitidos={gruposPermitidos}
+          ehAdminVisual={ehAdminVisual}
+          onOpen={t => abrirModal(t)}
+        />
       )}
 
       {modal && (
-        <ModalTarefa tarefa={modal === 'new' ? null : modal} usuarios={usuarios} onSave={handleSave} onDelete={handleDelete} onClose={fecharModal}/>
+        <ModalTarefa tarefa={modal === 'new' ? null : modal} usuarios={usuariosVisiveis} onSave={handleSave} onDelete={handleDelete} onClose={fecharModal}/>
       )}
 
       {showImportar && (
-        <ModalImportar usuarios={usuarios} onClose={()=>setShowImportar(false)} onImported={()=>{ carregar(); showToast('Tarefas importadas!') }}/>
+        <ModalImportar usuarios={usuariosVisiveis} onClose={()=>setShowImportar(false)} onImported={()=>{ carregar(); showToast('Tarefas importadas!') }}/>
       )}
 
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
@@ -1509,7 +1534,7 @@ function ViewCalendario({ tarefas, onClickTarefa, onNovaTarefa }) {
           {diasSemana.map(d=><div key={d} style={{ padding:'10px 0', textAlign:'center', fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>{d}</div>)}
         </div>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)' }}>
-          {Array.from({length: primeiroDia}).map((_,i)=><div key={`v${i}`} style={{ minHeight:110, background:'var(--surface)', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)', opacity:0.4 }}/>)}
+          {Array.from({length: primeiroDia}).map((_,i)=><div key={`v${i}`} style={{ minHeight:110, background:'var(--surface)', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)', opacity:0.4 }}/>) }
           {Array.from({length: diasNoMes}).map((_,i)=>{
             const dia = i + 1
             const dataKey = `${ano}-${String(mes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`
@@ -1540,7 +1565,7 @@ function ViewCalendario({ tarefas, onClickTarefa, onNovaTarefa }) {
               </div>
             )
           })}
-          {Array.from({length: (7 - (primeiroDia + diasNoMes) % 7) % 7}).map((_,i)=><div key={`f${i}`} style={{ minHeight:110, background:'var(--surface)', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)', opacity:0.4 }}/>)}
+          {Array.from({length: (7 - (primeiroDia + diasNoMes) % 7) % 7}).map((_,i)=><div key={`f${i}`} style={{ minHeight:110, background:'var(--surface)', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)', opacity:0.4 }}/>) }
         </div>
       </div>
 
@@ -1560,15 +1585,16 @@ function ViewCalendario({ tarefas, onClickTarefa, onNovaTarefa }) {
 }
 
 // ── VIEW EQUIPE ─────────────────────────────────────────────
-function ViewEquipe({ tarefas, usuarios, usuario, onOpen }) {
+function ViewEquipe({ tarefas, usuarios, usuario, usuarioEfetivo, perfilEfetivo, gruposPermitidos, ehAdminVisual, onOpen }) {
   const hoje = new Date()
   hoje.setHours(0,0,0,0)
 
-  const isAdmin = usuario?.perfil === 'administrador'
-
-  const usuariosVisiveis = isAdmin
+  const usuariosVisiveis = ehAdminVisual
     ? usuarios
-    : usuarios.filter(u => u.id === usuario?.id || (u.grupo && u.grupo === usuario?.grupo))
+    : usuarios.filter(u => {
+        const grupoUsuario = PERFIL_GRUPO[u.perfil] || u.grupo || null
+        return u.id === usuarioEfetivo?.id || (grupoUsuario && gruposPermitidos.has(grupoUsuario))
+      })
 
   function iniciais(nome) {
     if (!nome) return '?'
@@ -1645,7 +1671,7 @@ function ViewEquipe({ tarefas, usuarios, usuario, onOpen }) {
                               onMouseLeave={e => e.currentTarget.style.borderColor = atr ? 'rgba(239,68,68,0.2)' : 'transparent'}>
                               <div style={{ fontSize:12, color:'var(--text)', fontWeight:500, marginBottom:3, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', lineHeight:1.4 }}>{t.titulo}</div>
                               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                                {t.prioridade && <PrioridadeBadge value={t.prioridade}/>}
+                                {t.prioridade && <PrioridadeBadge value={t.prioridade}/>} 
                                 {t.data_prazo && (
                                   <span style={{ fontSize:10, display:'flex', alignItems:'center', gap:3, color: atr ? '#ef4444' : 'var(--text-muted)', fontWeight: atr ? 700 : 400 }}>
                                     <Calendar size={10}/>
