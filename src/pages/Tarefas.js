@@ -447,7 +447,7 @@ function SeletorParceiro({ value, onChange }) {
         <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0, marginLeft:8 }}>
           {value && (
             <span
-              onClick={e => { e.stopPropagation(); onChange(''); setBusca('') }}
+              onClick={e => { e.stopPropagation(); onChange(null); setBusca('') }}
               style={{ display:'flex', alignItems:'center', cursor:'pointer', color:'var(--text-muted)', opacity:0.6 }}
             ><X size={12}/></span>
           )}
@@ -484,7 +484,7 @@ function SeletorParceiro({ value, onChange }) {
                 <button
                   key={p.id}
                   type="button"
-                  onClick={() => { onChange(p.id); setAberto(false); setBusca('') }}
+                  onClick={() => { onChange(p); setAberto(false); setBusca('') }}
                   style={{
                     width:'100%', padding:'9px 14px', textAlign:'left', border:'none', cursor:'pointer',
                     background: selecionado ? 'var(--accent-glow)' : 'transparent',
@@ -928,7 +928,19 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
                 <label className="form-label">Parceiro (opcional)</label>
                 <SeletorParceiro
                   value={form.parceiro_id}
-                  onChange={v => setForm(f => ({ ...f, parceiro_id: v }))}
+                  onChange={p => {
+                    if (!p) {
+                      setForm(f => ({ ...f, parceiro_id: '' }))
+                    } else {
+                      setForm(f => ({
+                        ...f,
+                        parceiro_id: p.id,
+                        // preenche responsável automaticamente se o parceiro tiver um responsável interno
+                        // e o campo ainda estiver vazio (não sobrescreve escolha manual)
+                        responsavel_id: f.responsavel_id ? f.responsavel_id : (p.responsavel_interno_id || f.responsavel_id),
+                      }))
+                    }
+                  }}
                 />
               </div>
               <div className="form-group" style={{ flex: 1 }}>
@@ -1417,7 +1429,7 @@ function ModalCriarLote({ usuarios, grupoPrincipal, onClose, onCreate }) {
           status: 'a_fazer',
           prioridade,
           data_prazo: dataPrazo || null,
-          responsavel_id: responsavelId || null,
+          responsavel_id: parceiro.responsavel_interno_id || responsavelId || null,
           parceiro_id: parceiro.id,
           tipo_tarefa: tipoTarefa,
           grupo: grupoPrincipal,
@@ -1500,9 +1512,13 @@ function ModalCriarLote({ usuarios, grupoPrincipal, onClose, onCreate }) {
               </div>
             </div>
             <div className="form-group">
-              <label className="form-label">Responsável</label>
+              <label className="form-label">Responsável padrão
+                <span style={{ fontSize:11, color:'var(--text-muted)', fontWeight:400, marginLeft:6 }}>
+                  (usado quando o parceiro não tem responsável definido)
+                </span>
+              </label>
               <select className="form-select" value={responsavelId} onChange={e => setResponsavelId(e.target.value)}>
-                <option value="">Sem responsável</option>
+                <option value="">Sem responsável padrão</option>
                 {usuarios.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
               </select>
             </div>
@@ -1549,7 +1565,19 @@ function ModalCriarLote({ usuarios, grupoPrincipal, onClose, onCreate }) {
                           <div style={{ fontSize:13, fontWeight:600, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                             {tipoTarefa} — {p.livraria || p.nome}
                           </div>
-                          <div style={{ fontSize:11, color:'var(--text-muted)' }}>{p.nome}</div>
+                          <div style={{ fontSize:11, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:6 }}>
+                            <span>{p.nome}</span>
+                            {(p.responsavel_interno_id || responsavelId) && (
+                              <>
+                                <span>·</span>
+                                <span style={{ color: p.responsavel_interno_id ? 'var(--accent)' : 'var(--text-muted)' }}>
+                                  {p.responsavel_interno_id
+                                    ? (usuarios.find(u => u.id === p.responsavel_interno_id)?.nome || '—')
+                                    : (usuarios.find(u => u.id === responsavelId)?.nome || '—')}
+                                </span>
+                              </>
+                            )}
+                          </div>
                         </div>
                         {cl && (
                           <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:99,
