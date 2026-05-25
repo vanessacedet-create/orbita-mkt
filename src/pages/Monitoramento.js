@@ -309,10 +309,16 @@ function Calendario({semanas, porDia, hj, onClickDia}){
 export default function Monitoramento(){
   const { usuario } = useAuth()
   const { perfilAtivo } = useViewAs()
-  const ehAdmin = usuario?.perfil === 'administrador' || usuario?.perfil === 'gerente'
-  const grupoDoPerfil = PERFIL_GRUPO[perfilAtivo] || null
+
+  // Quando estiver em modo "Ver como", usa o perfil visualizado.
+  // Isso impede que um administrador vendo como Parceiras enxergue registros de Influencers.
+  const perfilEfetivo = perfilAtivo || usuario?.perfil
+  const ehAdminVisual = ['administrador', 'gerente'].includes(perfilEfetivo)
+  const grupoDoPerfil = PERFIL_GRUPO[perfilEfetivo] || null
+
   const [filtroGrupoAdmin, setFiltroGrupoAdmin] = useState('todos')
-  const grupoMonit = ehAdmin
+
+  const grupoMonit = ehAdminVisual
     ? (filtroGrupoAdmin === 'todos' ? null : filtroGrupoAdmin)
     : grupoDoPerfil
   const agora = new Date()
@@ -342,11 +348,12 @@ export default function Monitoramento(){
   }
 
   useEffect(()=>{ getParceirosAtivos().then(setParceiros).catch(console.error) },[])
+
   useEffect(()=>{
     const a = visao==='mensal' ? ano : Number(semDom.split('-')[0])
     const m = visao==='mensal' ? mes  : Number(semDom.split('-')[1])
     carregar(a,m)
-  },[ano,mes,visao,semDom,grupoMonit]) // eslint-disable-line
+  },[ano,mes,visao,semDom,grupoMonit,perfilEfetivo]) // eslint-disable-line
 
   function navMes(d){let nm=mes+d,na=ano;if(nm>12){nm=1;na++}if(nm<1){nm=12;na--}setMes(nm);setAno(na)}
   function navSem(d){setSemDom(addDias(semDom,d*7))}
@@ -400,7 +407,8 @@ export default function Monitoramento(){
       setRegistros(p=>p.map(r=>r.id===upd.id?upd:r))
       showToast('Atualizado!')
     } else {
-      const payload = grupoMonit ? { ...form, grupo: grupoMonit } : form
+      const grupoNovoRegistro = grupoMonit || 'influencers'
+      const payload = { ...form, grupo: grupoNovoRegistro }
       const novo = await createRegistroMonitoramento(payload)
       setRegistros(p=>[...p,novo])
       showToast('Registrado!')
@@ -433,7 +441,7 @@ export default function Monitoramento(){
           </div>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:16,flexWrap:'wrap'}}>
-          {ehAdmin && (
+          {ehAdminVisual && (
             <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}}
               value={filtroGrupoAdmin} onChange={e=>setFiltroGrupoAdmin(e.target.value)}>
               <option value="todos">Todos os grupos</option>
