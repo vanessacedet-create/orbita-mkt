@@ -43,7 +43,6 @@ function useToast() {
   return [toast, show]
 }
 
-// Remove acentos e normaliza string para comparação
 function normalizar(str) {
   return (str || '')
     .toLowerCase()
@@ -76,12 +75,7 @@ function BuscaDuplicatas({ parceiros, livros, envios, onClose }) {
     )
     if (jaEnviado) {
       const s = STATUS_OPTIONS.find(x => x.value === jaEnviado.status)
-      setResultado({
-        encontrado: true,
-        status: s,
-        data: jaEnviado.data_envio,
-        obs: jaEnviado.observacoes,
-      })
+      setResultado({ encontrado: true, status: s, data: jaEnviado.data_envio, obs: jaEnviado.observacoes })
     } else {
       setResultado({ encontrado: false })
     }
@@ -97,7 +91,6 @@ function BuscaDuplicatas({ parceiros, livros, envios, onClose }) {
           <h2 className="modal-title">Verificar Envio Anterior</h2>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
         </div>
-
         <div className="form-grid">
           <div className="form-group">
             <label className="form-label">Parceiro</label>
@@ -108,28 +101,19 @@ function BuscaDuplicatas({ parceiros, livros, envios, onClose }) {
           </div>
           <div className="form-group">
             <label className="form-label">Livro</label>
-            <input
-              className="form-input"
-              placeholder="Buscar por título, ISBN ou SKU..."
+            <input className="form-input" placeholder="Buscar por título, ISBN ou SKU..."
               value={livroSearch}
               onChange={e => { setLivroSearch(e.target.value); setLivroId(''); setResultado(null) }}
-              style={{ marginBottom: 6 }}
-            />
+              style={{ marginBottom: 6 }}/>
             <div style={{ border:'1px solid var(--border)', borderRadius:8, maxHeight:160, overflowY:'auto', background:'var(--surface-2)' }}>
               {livroSearch === '' ? (
                 <div style={{ padding:'10px 14px', fontSize:13, color:'var(--text-muted)' }}>Digite para buscar um livro...</div>
               ) : livrosFiltrados.length === 0 ? (
                 <div style={{ padding:'10px 14px', fontSize:13, color:'var(--text-muted)' }}>Nenhum livro encontrado.</div>
               ) : livrosFiltrados.map(l => (
-                <div
-                  key={l.id}
-                  onClick={() => { setLivroId(l.id); setLivroSearch(l.titulo); setResultado(null) }}
-                  style={{
-                    padding:'10px 14px', cursor:'pointer',
-                    borderBottom:'1px solid var(--border)',
-                    background: livroId === l.id ? 'var(--accent-glow)' : 'transparent',
-                  }}
-                >
+                <div key={l.id} onClick={() => { setLivroId(l.id); setLivroSearch(l.titulo); setResultado(null) }}
+                  style={{ padding:'10px 14px', cursor:'pointer', borderBottom:'1px solid var(--border)',
+                    background: livroId === l.id ? 'var(--accent-glow)' : 'transparent' }}>
                   <div style={{ fontSize:13, color: livroId===l.id ? 'var(--accent)':'var(--text)', fontWeight: livroId===l.id?600:400 }}>{l.titulo}</div>
                   <div style={{ fontSize:11.5, color:'var(--text-muted)', marginTop:2 }}>
                     {l.isbn && <span>ISBN: {l.isbn}</span>}
@@ -141,32 +125,21 @@ function BuscaDuplicatas({ parceiros, livros, envios, onClose }) {
             </div>
           </div>
         </div>
-
         <div style={{ marginTop: 16, marginBottom: resultado ? 16 : 0 }}>
-          <button
-            className="btn btn-primary"
-            style={{ width: '100%', justifyContent: 'center' }}
-            onClick={buscar}
-            disabled={!parceiroId || !livroId}
-          >
+          <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}
+            onClick={buscar} disabled={!parceiroId || !livroId}>
             <Search size={15}/> Verificar
           </button>
         </div>
-
         {resultado && (
-          <div style={{
-            borderRadius: 10,
-            padding: '16px 18px',
+          <div style={{ borderRadius: 10, padding: '16px 18px',
             background: resultado.encontrado ? 'var(--amber-light)' : 'var(--green-light)',
-            border: `1px solid ${resultado.encontrado ? 'rgba(245,166,35,0.25)' : 'rgba(62,207,142,0.25)'}`,
-          }}>
+            border: `1px solid ${resultado.encontrado ? 'rgba(245,166,35,0.25)' : 'rgba(62,207,142,0.25)'}` }}>
             {resultado.encontrado ? (
               <>
                 <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
                   <AlertCircle size={18} color="var(--amber)"/>
-                  <span style={{ fontWeight:700, color:'var(--amber)', fontSize:14 }}>
-                    Este livro já foi enviado para este parceiro!
-                  </span>
+                  <span style={{ fontWeight:700, color:'var(--amber)', fontSize:14 }}>Este livro já foi enviado para este parceiro!</span>
                 </div>
                 <div style={{ fontSize:13, color:'var(--text-soft)', lineHeight:1.7 }}>
                   <div><strong>Parceiro:</strong> {parceiro?.nome}</div>
@@ -179,14 +152,11 @@ function BuscaDuplicatas({ parceiros, livros, envios, onClose }) {
             ) : (
               <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                 <CheckCircle size={18} color="var(--green)"/>
-                <span style={{ fontWeight:700, color:'var(--green)', fontSize:14 }}>
-                  Este livro ainda não foi enviado para este parceiro.
-                </span>
+                <span style={{ fontWeight:700, color:'var(--green)', fontSize:14 }}>Este livro ainda não foi enviado para este parceiro.</span>
               </div>
             )}
           </div>
         )}
-
         <div className="form-actions" style={{ marginTop: 16 }}>
           <button className="btn btn-ghost" onClick={onClose}>Fechar</button>
         </div>
@@ -196,7 +166,7 @@ function BuscaDuplicatas({ parceiros, livros, envios, onClose }) {
 }
 
 // ── UPLOAD PLANILHA ────────────────────────────────────────
-function UploadPlanilha({ onImport, tipo, grupo }) {
+function UploadPlanilha({ onImport, tipo, grupo, gruposLivrosVisiveis }) {
   const [open, setOpen]           = useState(false)
   const [preview, setPreview]     = useState([])
   const [erros, setErros]         = useState([])
@@ -209,11 +179,11 @@ function UploadPlanilha({ onImport, tipo, grupo }) {
   const colunas          = tipo === 'parceiros' ? colunasParceiros : colunasLivros
 
   const nomeColuna = {
-    nome: 'Nome', tipo_parceria: 'Tipo de Parceria', cpf: 'CPF', livraria: 'Livraria', taxa_engajamento: 'Engajamento', editoras_divulga: 'Editoras', temas: 'Temas',
+    nome: 'Nome', tipo_parceria: 'Tipo de Parceria', cpf: 'CPF', livraria: 'Livraria',
+    taxa_engajamento: 'Engajamento', editoras_divulga: 'Editoras', temas: 'Temas',
     titulo: 'Título', isbn: 'ISBN', sku: 'SKU', autor: 'Autor', editora: 'Editora'
   }
 
-  // Mapeia variações de nomes de colunas (com/sem acento, maiúsculas)
   const aliases = {
     titulo: ['titulo', 'título', 'title', 'nome do livro'],
     isbn:   ['isbn', 'ean', 'isbn/ean'],
@@ -231,27 +201,21 @@ function UploadPlanilha({ onImport, tipo, grupo }) {
 
   function resolverColuna(headers, campo) {
     const alts = aliases[campo] || [campo]
-    return headers.find(h => alts.includes(normalizar(h).replace(/_/g, ' ').trim()) ||
-                              alts.includes(normalizar(h)))
+    return headers.find(h => alts.includes(normalizar(h).replace(/_/g, ' ').trim()) || alts.includes(normalizar(h)))
   }
 
   function handleFile(e) {
     const file = e.target.files[0]
     if (!file) return
     setErros([]); setPreview([]); setResultado(null)
-
     const reader = new FileReader()
     reader.onload = (ev) => {
       try {
         const wb   = XLSX.read(ev.target.result, { type: 'array' })
         const ws   = wb.Sheets[wb.SheetNames[0]]
         const rows = XLSX.utils.sheet_to_json(ws, { defval: '' })
-
         if (rows.length === 0) { setErros(['A planilha está vazia.']); return }
-
         const headers = Object.keys(rows[0])
-
-        // Normaliza mapeando aliases
         const normalized = rows.map(row => {
           const obj = {}
           colunas.forEach(campo => {
@@ -260,13 +224,11 @@ function UploadPlanilha({ onImport, tipo, grupo }) {
           })
           return obj
         })
-
         const campoObrigatorio = tipo === 'parceiros' ? 'nome' : 'titulo'
         const errosEncontrados = []
         normalized.forEach((row, i) => {
           if (!row[campoObrigatorio]) errosEncontrados.push(`Linha ${i + 2}: campo "${campoObrigatorio}" está vazio.`)
         })
-
         setErros(errosEncontrados)
         setPreview(normalized.slice(0, 5))
         inputRef.current._allRows = normalized
@@ -282,42 +244,28 @@ function UploadPlanilha({ onImport, tipo, grupo }) {
     if (!rows || rows.length === 0) return
     setImporting(true)
     let sucesso = 0, falhas = 0, atualizados = 0
-
-    // Para parceiros: busca todos existentes para comparar por nome
     let parceirosExistentes = []
     if (tipo === 'parceiros') {
       try { parceirosExistentes = await getParceiros() } catch {}
     }
-
     for (const row of rows) {
       try {
         if (tipo === 'parceiros') {
           const payload = {
-            nome:             row.nome || '',
-            tipo_parceria:    row.tipo_parceria || '',
-            cpf:              row.cpf || '',
-            livraria:         row.livraria || '',
-            taxa_engajamento: row.taxa_engajamento || '',
-            editoras_divulga: row.editoras_divulga || '',
-            temas:            row.temas || '',
+            nome: row.nome || '', tipo_parceria: row.tipo_parceria || '', cpf: row.cpf || '',
+            livraria: row.livraria || '', taxa_engajamento: row.taxa_engajamento || '',
+            editoras_divulga: row.editoras_divulga || '', temas: row.temas || '',
           }
-          // Verifica se já existe pelo nome (normalizado)
           const normalizado = (s) => s.toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g,'')
           const existente = parceirosExistentes.find(p => normalizado(p.nome) === normalizado(row.nome || ''))
-          if (existente) {
-            await updateParceiro(existente.id, payload)
-            atualizados++
-          } else {
-            await createParceiro(payload)
-            sucesso++
-          }
+          if (existente) { await updateParceiro(existente.id, payload); atualizados++ }
+          else { await createParceiro(payload); sucesso++ }
         } else {
           await createLivro({ titulo: row.titulo || '', isbn: row.isbn || '', sku: row.sku || '', autor: row.autor || '', editora: row.editora || '', grupo: grupo })
           sucesso++
         }
       } catch { falhas++ }
     }
-
     setImporting(false)
     setResultado({ sucesso, falhas, atualizados })
     onImport()
@@ -333,7 +281,6 @@ function UploadPlanilha({ onImport, tipo, grupo }) {
       <button className="btn btn-ghost" onClick={() => setOpen(true)}>
         <Upload size={15}/> Importar planilha
       </button>
-
       {open && (
         <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && reset()}>
           <div className="modal" style={{ maxWidth: 560 }}>
@@ -341,13 +288,10 @@ function UploadPlanilha({ onImport, tipo, grupo }) {
               <h2 className="modal-title">Importar {tipo === 'parceiros' ? 'Parceiros' : 'Livros'}</h2>
               <button className="btn btn-ghost btn-icon" onClick={reset}><X size={16}/></button>
             </div>
-
             <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'12px 16px', marginBottom:16 }}>
               <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
                 <FileSpreadsheet size={15} color="var(--text-muted)"/>
-                <span style={{ fontSize:12, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>
-                  Colunas esperadas
-                </span>
+                <span style={{ fontSize:12, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Colunas esperadas</span>
               </div>
               <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                 {colunas.map(c => <span key={c} className="badge badge-indigo" style={{fontSize:11}}>{nomeColuna[c]}</span>)}
@@ -356,21 +300,17 @@ function UploadPlanilha({ onImport, tipo, grupo }) {
                 Acentos e maiúsculas são aceitos. {tipo === 'livros' ? '"EAN" também é aceito no lugar de "ISBN".' : ''}
               </p>
             </div>
-
             {!resultado && (
               <>
-                <div
-                  style={{ border:'2px dashed var(--border)', borderRadius:10, padding:'28px 20px', textAlign:'center', marginBottom:16, cursor:'pointer' }}
+                <div style={{ border:'2px dashed var(--border)', borderRadius:10, padding:'28px 20px', textAlign:'center', marginBottom:16, cursor:'pointer' }}
                   onClick={() => inputRef.current?.click()}
                   onDragOver={e => e.preventDefault()}
-                  onDrop={e => { e.preventDefault(); handleFile({ target: { files: e.dataTransfer.files } }) }}
-                >
+                  onDrop={e => { e.preventDefault(); handleFile({ target: { files: e.dataTransfer.files } }) }}>
                   <Upload size={24} color="var(--text-muted)" style={{ marginBottom:8 }}/>
                   <p style={{ fontSize:13.5, color:'var(--text-soft)' }}>Clique para selecionar ou arraste o arquivo</p>
                   <p style={{ fontSize:12, color:'var(--text-muted)', marginTop:4 }}>Apenas .xlsx</p>
                 </div>
                 <input ref={inputRef} type="file" accept=".xlsx" style={{ display:'none' }} onChange={handleFile}/>
-
                 {erros.length > 0 && (
                   <div style={{ background:'var(--red-light)', border:'1px solid rgba(245,101,101,0.2)', borderRadius:8, padding:'10px 14px', marginBottom:12 }}>
                     {erros.slice(0, 5).map((e,i) => (
@@ -381,7 +321,6 @@ function UploadPlanilha({ onImport, tipo, grupo }) {
                     {erros.length > 5 && <p style={{ fontSize:12, color:'var(--red)', marginTop:4 }}>...e mais {erros.length - 5} erros.</p>}
                   </div>
                 )}
-
                 {preview.length > 0 && erros.length === 0 && (
                   <div style={{ marginBottom:16 }}>
                     <p style={{ fontSize:12, color:'var(--text-muted)', marginBottom:8 }}>
@@ -397,7 +336,6 @@ function UploadPlanilha({ onImport, tipo, grupo }) {
                 )}
               </>
             )}
-
             {resultado && (
               <div style={{ textAlign:'center', padding:'20px 0' }}>
                 <CheckCircle size={40} color="var(--green)" style={{ marginBottom:12 }}/>
@@ -406,7 +344,6 @@ function UploadPlanilha({ onImport, tipo, grupo }) {
                 {resultado.falhas > 0 && <p style={{ fontSize:13, color:'var(--red)', marginTop:4 }}>{resultado.falhas} linha(s) com erro</p>}
               </div>
             )}
-
             <div className="form-actions">
               <button className="btn btn-ghost" onClick={reset}>{resultado ? 'Fechar' : 'Cancelar'}</button>
               {!resultado && preview.length > 0 && erros.length === 0 && (
@@ -433,23 +370,16 @@ function EnviosTab({ parceiros, livros, envios, setEnvios, gruposLivrosVisiveis 
   const [saving, setSaving]         = useState(false)
   const [toast, showToast]          = useToast()
 
-  // Multi-livro: form com array de livro_ids
-  const EMPTY = {
-    parceiro_id: '',
-    livro_ids: [],
-    status: 'enviado',
-    data_envio: new Date().toISOString().slice(0,10),
-    observacoes: ''
-  }
+  const EMPTY = { parceiro_id: '', livro_ids: [], status: 'enviado', data_envio: new Date().toISOString().slice(0,10), observacoes: '' }
   const [form, setForm] = useState(EMPTY)
 
   useEffect(() => {
     if (envios.length >= 0) setLoading(false)
   }, [envios])
 
-  function openNew()   { setEditing(null); setForm(EMPTY); setParceiroSearch(''); setParceiroOpen(false); setLivroSearch(''); setModal(true) }
+  function openNew() { setEditing(null); setForm(EMPTY); setParceiroSearch(''); setParceiroOpen(false); setLivroSearch(''); setModal(true) }
+
   async function openEdit(e) {
-    // Busca PRIMEIRO, abre modal só depois — garante todos os livros
     setSaving(true)
     try {
       const completo = await getEnvioCompleto(e.id)
@@ -462,8 +392,6 @@ function EnviosTab({ parceiros, livros, envios, setEnvios, gruposLivrosVisiveis 
       setLivroSearch('')
       setModal(true)
     } catch (err) {
-      console.error(err)
-      // Fallback com dados da memória
       const livro_ids = (e.envio_livros || []).map(el => el.livros?.id).filter(Boolean)
       const p = parceiros.find(x => x.id === e.parceiro_id)
       setEditing(e)
@@ -472,18 +400,15 @@ function EnviosTab({ parceiros, livros, envios, setEnvios, gruposLivrosVisiveis 
       setParceiroOpen(false)
       setLivroSearch('')
       setModal(true)
-    } finally {
-      setSaving(false)
-    }
+    } finally { setSaving(false) }
   }
+
   function close() { setModal(false); setEditing(null); setParceiroOpen(false) }
 
   function toggleLivro(livroId) {
     setForm(f => ({
       ...f,
-      livro_ids: f.livro_ids.includes(livroId)
-        ? f.livro_ids.filter(id => id !== livroId)
-        : [...f.livro_ids, livroId]
+      livro_ids: f.livro_ids.includes(livroId) ? f.livro_ids.filter(id => id !== livroId) : [...f.livro_ids, livroId]
     }))
   }
 
@@ -537,7 +462,6 @@ function EnviosTab({ parceiros, livros, envios, setEnvios, gruposLivrosVisiveis 
         setLivrosFiltrados(r.data || [])
         if ((r.data||[]).length === 0) setLivrosErro('Nenhum livro encontrado com este ISBN/título.')
       } catch (e) {
-        console.error('Erro busca livros:', e)
         setLivrosErro('Erro ao buscar livros: ' + (e.message || e))
         setLivrosFiltrados([])
       }
@@ -561,13 +485,10 @@ function EnviosTab({ parceiros, livros, envios, setEnvios, gruposLivrosVisiveis 
           <p className="page-subtitle">{envios.length} envio{envios.length!==1?'s':''} registrado{envios.length!==1?'s':''}</p>
         </div>
         <div style={{ display:'flex', gap:10 }}>
-          <button className="btn btn-ghost" onClick={() => setBuscaModal(true)}>
-            <Search size={15}/> Verificar duplicata
-          </button>
+          <button className="btn btn-ghost" onClick={() => setBuscaModal(true)}><Search size={15}/> Verificar duplicata</button>
           <button className="btn btn-primary" onClick={openNew}><Plus size={16}/> Registrar Envio</button>
         </div>
       </div>
-
       <div className="table-card">
         <div className="table-toolbar">
           <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
@@ -579,7 +500,6 @@ function EnviosTab({ parceiros, livros, envios, setEnvios, gruposLivrosVisiveis 
           </div>
           <input className="search-input" placeholder="Buscar parceiro ou livro..." value={search} onChange={e=>setSearch(e.target.value)}/>
         </div>
-
         {loading ? <div className="loading" style={{minHeight:'auto',padding:40}}><div className="spinner"/></div>
         : filtered.length === 0 ? <div className="empty-state"><p>Nenhum envio encontrado.</p></div>
         : (
@@ -593,8 +513,7 @@ function EnviosTab({ parceiros, livros, envios, setEnvios, gruposLivrosVisiveis 
                     <td className="td-strong">{e.parceiros?.nome||'—'}</td>
                     <td>
                       {(e.envio_livros||[]).length === 0 ? <span className="td-muted">—</span> :
-                      (e.envio_livros||[]).length === 1 ?
-                        <span>{e.envio_livros[0].livros?.titulo}</span> :
+                      (e.envio_livros||[]).length === 1 ? <span>{e.envio_livros[0].livros?.titulo}</span> :
                         <div>
                           <span>{e.envio_livros[0].livros?.titulo}</span>
                           <span style={{marginLeft:6, fontSize:11, background:'var(--surface-3)', color:'var(--text-muted)', borderRadius:10, padding:'1px 7px'}}>
@@ -618,7 +537,6 @@ function EnviosTab({ parceiros, livros, envios, setEnvios, gruposLivrosVisiveis 
         )}
       </div>
 
-      {/* Modal Registrar Envio */}
       {modal && (
         <div className="modal-backdrop" onClick={()=>{}}>
           <div className="modal" style={{ maxWidth: 520 }}>
@@ -629,14 +547,10 @@ function EnviosTab({ parceiros, livros, envios, setEnvios, gruposLivrosVisiveis 
             <div className="form-grid">
               <div className="form-group" style={{position:'relative'}}>
                 <label className="form-label">Parceiro *</label>
-                <input
-                  className="form-input"
-                  placeholder="Digite para buscar o parceiro..."
+                <input className="form-input" placeholder="Digite para buscar o parceiro..."
                   value={parceiroSearch}
                   onChange={e=>{ setParceiroSearch(e.target.value); setForm(f=>({...f,parceiro_id:''})); setParceiroOpen(true) }}
-                  onFocus={()=>setParceiroOpen(true)}
-                  autoComplete="off"
-                />
+                  onFocus={()=>setParceiroOpen(true)} autoComplete="off"/>
                 {parceiroOpen && parceiroSearch && (
                   <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:100,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,maxHeight:200,overflowY:'auto',boxShadow:'0 8px 24px rgba(0,0,0,0.3)'}}>
                     {parceiros.filter(p=>p.nome.toLowerCase().includes(parceiroSearch.toLowerCase())).length === 0
@@ -645,8 +559,7 @@ function EnviosTab({ parceiros, livros, envios, setEnvios, gruposLivrosVisiveis 
                         <div key={p.id} onClick={()=>{ setForm(f=>({...f,parceiro_id:p.id})); setParceiroSearch(p.nome); setParceiroOpen(false) }}
                           style={{padding:'10px 14px',cursor:'pointer',fontSize:13,borderBottom:'1px solid var(--border)',color:'var(--text)'}}
                           onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'}
-                          onMouseLeave={e=>e.currentTarget.style.background='transparent'}
-                        >
+                          onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                           {p.nome}
                           {p.tipo_parceria && <span style={{fontSize:11,color:'var(--text-muted)',marginLeft:8}}>{p.tipo_parceria}</span>}
                         </div>
@@ -656,35 +569,22 @@ function EnviosTab({ parceiros, livros, envios, setEnvios, gruposLivrosVisiveis 
                 )}
               </div>
 
-              {/* Livros selecionados — lista de pedido */}
               {form.livro_ids.length > 0 && (
                 <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:10, overflow:'hidden', maxHeight:280, overflowY:'auto' }}>
                   <div style={{ padding:'8px 14px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                    <span style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color:'var(--text-muted)' }}>
-                      Livros selecionados
-                    </span>
-                    <span style={{ fontSize:11, fontWeight:700, color:'var(--accent)' }}>
-                      {form.livro_ids.length} item{form.livro_ids.length>1?'s':''}
-                    </span>
+                    <span style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color:'var(--text-muted)' }}>Livros selecionados</span>
+                    <span style={{ fontSize:11, fontWeight:700, color:'var(--accent)' }}>{form.livro_ids.length} item{form.livro_ids.length>1?'s':''}</span>
                   </div>
                   {form.livro_ids.map((id, idx) => {
-                    // Primeiro tenta no envio carregado, depois no prop livros
                     const elFromEnvio = (editing?.envio_livros || []).find(el => el.livros?.id === id)
                     const l = elFromEnvio?.livros || livros.find(x => x.id === id)
                     if (!l) return null
                     return (
-                      <div key={id} style={{
-                        display:'flex', alignItems:'center', gap:12,
-                        padding:'10px 14px',
-                        borderBottom: idx < form.livro_ids.length-1 ? '1px solid var(--border)' : 'none',
-                        background:'transparent',
-                      }}>
-                        <div style={{
-                          width:28, height:28, borderRadius:6, flexShrink:0,
-                          background:'var(--accent-glow)', border:'1px solid rgba(224,96,48,0.2)',
-                          display:'flex', alignItems:'center', justifyContent:'center',
-                          fontSize:11, fontWeight:700, color:'var(--accent)',
-                        }}>{idx+1}</div>
+                      <div key={id} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 14px',
+                        borderBottom: idx < form.livro_ids.length-1 ? '1px solid var(--border)' : 'none' }}>
+                        <div style={{ width:28, height:28, borderRadius:6, flexShrink:0, background:'var(--accent-glow)',
+                          border:'1px solid rgba(224,96,48,0.2)', display:'flex', alignItems:'center', justifyContent:'center',
+                          fontSize:11, fontWeight:700, color:'var(--accent)' }}>{idx+1}</div>
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ fontSize:13, fontWeight:600, color:'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{l.titulo}</div>
                           <div style={{ fontSize:11.5, color:'var(--text-muted)', marginTop:1 }}>
@@ -693,11 +593,8 @@ function EnviosTab({ parceiros, livros, envios, setEnvios, gruposLivrosVisiveis 
                             {l.isbn && <span>ISBN: {l.isbn}</span>}
                           </div>
                         </div>
-                        <button
-                          onClick={() => toggleLivro(id)}
-                          style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', padding:4, borderRadius:4, display:'flex', alignItems:'center' }}
-                          title="Remover"
-                        >
+                        <button onClick={() => toggleLivro(id)}
+                          style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', padding:4, borderRadius:4, display:'flex', alignItems:'center' }}>
                           <X size={14}/>
                         </button>
                       </div>
@@ -706,16 +603,10 @@ function EnviosTab({ parceiros, livros, envios, setEnvios, gruposLivrosVisiveis 
                 </div>
               )}
 
-              {/* Busca de livros */}
               <div className="form-group">
                 <label className="form-label">Adicionar livro *</label>
-                <input
-                  className="form-input"
-                  placeholder="Buscar por título, ISBN ou SKU..."
-                  value={livroSearch}
-                  onChange={e => setLivroSearch(e.target.value)}
-                  style={{ marginBottom: 6 }}
-                />
+                <input className="form-input" placeholder="Buscar por título, ISBN ou SKU..."
+                  value={livroSearch} onChange={e => setLivroSearch(e.target.value)} style={{ marginBottom: 6 }}/>
                 {livroSearch && (
                   <div style={{ border:'1px solid var(--border)', borderRadius:8, maxHeight:200, overflowY:'auto', background:'var(--surface-2)' }}>
                     {livrosLoading ? (
@@ -727,17 +618,10 @@ function EnviosTab({ parceiros, livros, envios, setEnvios, gruposLivrosVisiveis 
                     ) : livrosFiltrados.map(l => {
                       const selecionado = form.livro_ids.includes(l.id)
                       return (
-                        <div
-                          key={l.id}
-                          onClick={() => { if (!selecionado) { toggleLivro(l.id); setLivroSearch('') } }}
-                          style={{
-                            padding:'10px 14px', cursor: selecionado ? 'default' : 'pointer',
-                            borderBottom:'1px solid var(--border)',
-                            display:'flex', alignItems:'center', gap:10,
-                            background: selecionado ? 'var(--surface-3)' : 'transparent',
-                            opacity: selecionado ? 0.5 : 1,
-                          }}
-                        >
+                        <div key={l.id} onClick={() => { if (!selecionado) { toggleLivro(l.id); setLivroSearch('') } }}
+                          style={{ padding:'10px 14px', cursor: selecionado ? 'default' : 'pointer',
+                            borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:10,
+                            background: selecionado ? 'var(--surface-3)' : 'transparent', opacity: selecionado ? 0.5 : 1 }}>
                           <div style={{ flex:1 }}>
                             <div style={{ fontSize:13, color:'var(--text)', fontWeight:500 }}>{l.titulo}</div>
                             <div style={{ fontSize:11.5, color:'var(--text-muted)', marginTop:1 }}>
@@ -746,10 +630,7 @@ function EnviosTab({ parceiros, livros, envios, setEnvios, gruposLivrosVisiveis 
                               {l.isbn && <span>ISBN: {l.isbn}</span>}
                             </div>
                           </div>
-                          {selecionado
-                            ? <span style={{ fontSize:11, color:'var(--text-muted)' }}>já adicionado</span>
-                            : <Plus size={14} color="var(--accent)"/>
-                          }
+                          {selecionado ? <span style={{ fontSize:11, color:'var(--text-muted)' }}>já adicionado</span> : <Plus size={14} color="var(--accent)"/>}
                         </div>
                       )
                     })}
@@ -784,23 +665,14 @@ function EnviosTab({ parceiros, livros, envios, setEnvios, gruposLivrosVisiveis 
         </div>
       )}
 
-      {/* Modal Busca Duplicatas */}
-      {buscaModal && (
-        <BuscaDuplicatas
-          parceiros={parceiros}
-          livros={livros}
-          envios={envios}
-          onClose={() => setBuscaModal(false)}
-        />
-      )}
-
+      {buscaModal && <BuscaDuplicatas parceiros={parceiros} livros={livros} envios={envios} onClose={() => setBuscaModal(false)}/>}
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
     </>
   )
 }
 
 // ── PARCEIROS TAB ──────────────────────────────────────────
-function ParceirosTab({ parceiros, setParceiros }) {
+function ParceirosTab({ parceiros, setParceiros, grupo, gruposLivrosVisiveis }) {
   const [modal, setModal]     = useState(false)
   const [editing, setEditing] = useState(null)
   const [search, setSearch]   = useState('')
@@ -812,21 +684,20 @@ function ParceirosTab({ parceiros, setParceiros }) {
   const [form, setForm] = useState(EMPTY)
 
   function openNew()   { setEditing(null); setForm(EMPTY); setModal(true) }
-  function openEdit(p) { setEditing(p); setForm({
-    nome:              p.nome,
-    tipo_parceria:     p.tipo_parceria||'',
-    cpf:               p.cpf||'',
-    livraria:          p.livraria||'',
-    taxa_engajamento:  p.taxa_engajamento||'',
-    editoras_divulga:  p.editoras_divulga ? p.editoras_divulga.split(',').map(e=>e.trim()).filter(Boolean) : [],
-    temas:             p.temas||'',
-  }); setModal(true) }
-  function close()     { setModal(false); setEditing(null) }
+  function openEdit(p) {
+    setEditing(p)
+    setForm({
+      nome: p.nome, tipo_parceria: p.tipo_parceria||'', cpf: p.cpf||'', livraria: p.livraria||'',
+      taxa_engajamento: p.taxa_engajamento||'',
+      editoras_divulga: p.editoras_divulga ? p.editoras_divulga.split(',').map(e=>e.trim()).filter(Boolean) : [],
+      temas: p.temas||'',
+    })
+    setModal(true)
+  }
+  function close() { setModal(false); setEditing(null) }
   async function reload() { setParceiros(await getParceirosAtivos()) }
 
-  useEffect(() => {
-    getEditoras().then(setEditoras).catch(console.error)
-  }, [])
+  useEffect(() => { getEditoras().then(setEditoras).catch(console.error) }, [])
 
   async function save() {
     if (!form.nome.trim()) return
@@ -856,16 +727,12 @@ function ParceirosTab({ parceiros, setParceiros }) {
   return (
     <>
       <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginBottom:20}}>
-        <UploadPlanilha tipo="parceiros" onImport={reload} grupo={grupoLivros}/>
+        <UploadPlanilha tipo="parceiros" onImport={reload} grupo={grupo} gruposLivrosVisiveis={gruposLivrosVisiveis}/>
         <button className="btn btn-ghost" onClick={()=>{
           const rows = parceiros.map(p => ({
-            'Nome':              p.nome,
-            'Tipo de Parceria':  p.tipo_parceria||'',
-            'CPF':               p.cpf||'',
-            'Livraria':          p.livraria||'',
-            'Taxa de Engajamento': p.taxa_engajamento||'',
-            'Editoras que Divulga': p.editoras_divulga||'',
-            'Temas':             p.temas||'',
+            'Nome': p.nome, 'Tipo de Parceria': p.tipo_parceria||'', 'CPF': p.cpf||'',
+            'Livraria': p.livraria||'', 'Taxa de Engajamento': p.taxa_engajamento||'',
+            'Editoras que Divulga': p.editoras_divulga||'', 'Temas': p.temas||'',
           }))
           const ws = XLSX.utils.json_to_sheet(rows)
           const wb = XLSX.utils.book_new()
@@ -924,7 +791,6 @@ function ParceirosTab({ parceiros, setParceiros }) {
               <div className="form-group"><label className="form-label">Taxa de Engajamento Interno</label><input className="form-input" value={form.taxa_engajamento} onChange={e=>setForm(f=>({...f,taxa_engajamento:e.target.value}))} placeholder="Ex: 5%, alto, médio..."/></div>
               <div className="form-group">
                 <label className="form-label">Editoras que o Parceiro Divulga</label>
-                {/* Tags selecionadas */}
                 {form.editoras_divulga.length > 0 && (
                   <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:8}}>
                     {form.editoras_divulga.map(e=>(
@@ -935,7 +801,6 @@ function ParceirosTab({ parceiros, setParceiros }) {
                     ))}
                   </div>
                 )}
-                {/* Busca */}
                 <input className="form-input" value={editoraSearch} onChange={e=>setEditoraSearch(e.target.value)} placeholder="Buscar editora..."/>
                 {editoraSearch.trim() && (
                   <div style={{border:'1px solid var(--border)',borderRadius:8,marginTop:4,maxHeight:160,overflowY:'auto',background:'var(--surface-2)'}}>
@@ -965,7 +830,7 @@ function ParceirosTab({ parceiros, setParceiros }) {
 }
 
 // ── LIVROS TAB ─────────────────────────────────────────────
-function LivrosTab() {
+function LivrosTab({ gruposLivrosVisiveis, grupo }) {
   const [modal, setModal]       = useState(false)
   const [editing, setEditing]   = useState(null)
   const [saving, setSaving]     = useState(false)
@@ -1010,16 +875,9 @@ function LivrosTab() {
     if (!form.titulo.trim()) return
     setSaving(true)
     try {
-      const payload = {
-        titulo: form.titulo.trim(),
-        isbn: form.isbn.trim()||null,
-        sku: form.sku.trim()||null,
-        autor: form.autor.trim()||null,
-        editora: form.editora.trim()||null,
-        data_lancamento: form.data_lancamento||null,
-      }
+      const payload = { titulo: form.titulo.trim(), isbn: form.isbn.trim()||null, sku: form.sku.trim()||null, autor: form.autor.trim()||null, editora: form.editora.trim()||null, data_lancamento: form.data_lancamento||null }
       if (editing) { await updateLivro(editing.id, payload); showToast('Atualizado!') }
-      else { await createLivro({ ...payload, grupo: grupoLivros }); showToast('Cadastrado!') }
+      else { await createLivro({ ...payload, grupo }); showToast('Cadastrado!') }
       await fetchLivros()
       close()
     } catch { showToast('Erro ao salvar','error') } finally { setSaving(false) }
@@ -1034,17 +892,11 @@ function LivrosTab() {
   return (
     <>
       <div style={{display:'flex',justifyContent:'flex-end',gap:10,marginBottom:20}}>
-        <UploadPlanilha tipo="livros" onImport={() => { setPage(0); fetchLivros(0, pageSize, search) }}/>
+        <UploadPlanilha tipo="livros" onImport={() => { setPage(0); fetchLivros(0, pageSize, search) }} grupo={grupo} gruposLivrosVisiveis={gruposLivrosVisiveis}/>
         <button className="btn btn-ghost" onClick={async ()=>{
           try {
             const { data: todos } = await getLivros({ page: 0, pageSize: 99999, grupos: gruposLivrosVisiveis })
-            const rows = (todos||[]).map(l => ({
-              'Título':   l.titulo,
-              'ISBN':     l.isbn||'',
-              'SKU':      l.sku||'',
-              'Autor':    l.autor||'',
-              'Editora':  l.editora||'',
-            }))
+            const rows = (todos||[]).map(l => ({ 'Título': l.titulo, 'ISBN': l.isbn||'', 'SKU': l.sku||'', 'Autor': l.autor||'', 'Editora': l.editora||'' }))
             const ws = XLSX.utils.json_to_sheet(rows)
             const wb = XLSX.utils.book_new()
             XLSX.utils.book_append_sheet(wb, ws, 'Livros')
@@ -1056,9 +908,7 @@ function LivrosTab() {
       <div className="table-card">
         <div className="table-toolbar">
           <div style={{display:'flex',alignItems:'center',gap:12}}>
-            <span className="table-title">
-              {search ? `${total} resultado${total!==1?'s':''} para "${search}"` : `Livros (${total})`}
-            </span>
+            <span className="table-title">{search ? `${total} resultado${total!==1?'s':''} para "${search}"` : `Livros (${total})`}</span>
             {totalPages > 1 && <span style={{fontSize:12,color:'var(--text-muted)'}}>Pág. {page+1}/{totalPages}</span>}
           </div>
           <div style={{display:'flex',gap:8,alignItems:'center'}}>
@@ -1068,7 +918,6 @@ function LivrosTab() {
             <input className="search-input" placeholder="Buscar título, autor, ISBN ou SKU..." value={searchInput} onChange={e=>setSearchInput(e.target.value)}/>
           </div>
         </div>
-
         {loading
           ? <div className="loading" style={{minHeight:'auto',padding:40}}><div className="spinner"/></div>
           : livros.length === 0
@@ -1092,7 +941,6 @@ function LivrosTab() {
                 </tbody>
               </table>
         }
-
         {totalPages > 1 && (
           <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:6,padding:'14px 20px',borderTop:'1px solid var(--border)'}}>
             <button className="btn btn-ghost btn-sm" onClick={()=>setPage(0)} disabled={page===0}>«</button>
@@ -1107,7 +955,6 @@ function LivrosTab() {
           </div>
         )}
       </div>
-
       {modal&&(
         <div className="modal-backdrop" onClick={()=>{}}>
           <div className="modal">
@@ -1139,17 +986,13 @@ function LivrosTab() {
 // ── DIVULGAÇÕES TAB ───────────────────────────────────────
 function DivulgacoesTab({ envios, setEnvios }) {
   const [search, setSearch]   = useState('')
-  const [modal, setModal]     = useState(null) // { envio }
-  const [datas, setDatas]     = useState({})   // { envioLivroId: 'yyyy-mm-dd' }
-  const [checked, setChecked] = useState({})   // { envioLivroId: bool }
+  const [modal, setModal]     = useState(null)
+  const [datas, setDatas]     = useState({})
+  const [checked, setChecked] = useState({})
   const [saving, setSaving]   = useState(false)
   const [toast, showToast]    = useToast()
 
-  // Envios que têm pelo menos 1 livro ainda não divulgado
-  const pendentes = envios.filter(e =>
-    (e.envio_livros||[]).some(el => !el.divulgado)
-  )
-
+  const pendentes = envios.filter(e => (e.envio_livros||[]).some(el => !el.divulgado))
   const filtrados = pendentes.filter(e => {
     const q = search.toLowerCase()
     return (e.parceiros?.nome||'').toLowerCase().includes(q) ||
@@ -1158,17 +1001,11 @@ function DivulgacoesTab({ envios, setEnvios }) {
 
   function abrirModal(envio) {
     const hoje = new Date().toISOString().slice(0,10)
-    const initDatas = {}
-    const initCheck = {}
+    const initDatas = {}; const initCheck = {}
     ;(envio.envio_livros||[]).forEach(el => {
-      if (!el.divulgado) {
-        initDatas[el.id] = hoje
-        initCheck[el.id] = false // desmarcado por padrão
-      }
+      if (!el.divulgado) { initDatas[el.id] = hoje; initCheck[el.id] = false }
     })
-    setDatas(initDatas)
-    setChecked(initCheck)
-    setModal({ envio })
+    setDatas(initDatas); setChecked(initCheck); setModal({ envio })
   }
 
   async function salvarDivulgacoes() {
@@ -1181,11 +1018,8 @@ function DivulgacoesTab({ envios, setEnvios }) {
           await updateEnvioLivroDivulgacao(el.id, { divulgado: true, data_divulgacao: datas[el.id] })
         }
       }
-      // Se todos foram divulgados (os que já estavam + os que acabamos de marcar), muda status
       const todosDiv = (modal.envio.envio_livros||[]).every(el => el.divulgado || checked[el.id])
-      if (todosDiv) {
-        await updateEnvioStatus(modal.envio.id, 'divulgado')
-      }
+      if (todosDiv) await updateEnvioStatus(modal.envio.id, 'divulgado')
       const novosEnvios = await getEnvios()
       setEnvios(novosEnvios.data || [])
       const qtd = Object.values(checked).filter(Boolean).length
@@ -1203,13 +1037,11 @@ function DivulgacoesTab({ envios, setEnvios }) {
           <p className="page-subtitle">{pendentes.length} envio{pendentes.length!==1?'s':''} com livros aguardando divulgação</p>
         </div>
       </div>
-
       <div className="table-card">
         <div className="table-toolbar">
           <span className="table-title">Envios pendentes</span>
           <input className="search-input" placeholder="Buscar parceiro ou livro..." value={search} onChange={e=>setSearch(e.target.value)}/>
         </div>
-
         {filtrados.length === 0
           ? <div className="empty-state"><p>{search ? 'Nenhum resultado.' : 'Todos os livros já foram divulgados!'}</p></div>
           : <table>
@@ -1226,13 +1058,9 @@ function DivulgacoesTab({ envios, setEnvios }) {
                           {livros.map((el,i) => (
                             <div key={i} style={{display:'flex',alignItems:'center',gap:7,fontSize:12.5}}>
                               <div style={{width:8,height:8,borderRadius:'50%',flexShrink:0,background:el.divulgado?'var(--green)':'var(--amber)'}}/>
-                              <span style={{color:el.divulgado?'var(--text-muted)':'var(--text)',textDecoration:el.divulgado?'line-through':'none'}}>
-                                {el.livros.titulo}
-                              </span>
+                              <span style={{color:el.divulgado?'var(--text-muted)':'var(--text)',textDecoration:el.divulgado?'line-through':'none'}}>{el.livros.titulo}</span>
                               {el.divulgado && el.data_divulgacao && (
-                                <span style={{fontSize:11,color:'var(--text-muted)'}}>
-                                  ({format(new Date(el.data_divulgacao+'T12:00:00'),'dd/MM/yy',{locale:ptBR})})
-                                </span>
+                                <span style={{fontSize:11,color:'var(--text-muted)'}}>({format(new Date(el.data_divulgacao+'T12:00:00'),'dd/MM/yy',{locale:ptBR})})</span>
                               )}
                             </div>
                           ))}
@@ -1242,11 +1070,7 @@ function DivulgacoesTab({ envios, setEnvios }) {
                         {e.data_envio ? format(new Date(e.data_envio+'T12:00:00'),'dd MMM yyyy',{locale:ptBR}) : '—'}
                       </td>
                       <td>
-                        <button
-                          className="btn btn-sm btn-ghost"
-                          style={{color:'var(--green)',fontWeight:600,whiteSpace:'nowrap'}}
-                          onClick={()=>abrirModal(e)}
-                        >
+                        <button className="btn btn-sm btn-ghost" style={{color:'var(--green)',fontWeight:600,whiteSpace:'nowrap'}} onClick={()=>abrirModal(e)}>
                           ✓ Registrar ({pendentesCount} livro{pendentesCount!==1?'s':''})
                         </button>
                       </td>
@@ -1257,7 +1081,6 @@ function DivulgacoesTab({ envios, setEnvios }) {
             </table>
         }
       </div>
-
       {modal && (
         <div className="modal-backdrop" onClick={()=>{}}>
           <div className="modal" style={{maxWidth:500}}>
@@ -1265,11 +1088,9 @@ function DivulgacoesTab({ envios, setEnvios }) {
               <h2 className="modal-title">Registrar Divulgação</h2>
               <button className="btn btn-ghost btn-icon" onClick={()=>setModal(null)}><X size={16}/></button>
             </div>
-
             <p style={{fontSize:13,color:'var(--text-muted)',marginBottom:16}}>
               Parceiro: <strong style={{color:'var(--text)'}}>{modal.envio.parceiros?.nome}</strong>
             </p>
-
             <div style={{display:'flex',flexDirection:'column',gap:10,marginBottom:20}}>
               {(modal.envio.envio_livros||[]).filter(el=>el.livros).map(el => {
                 const jaDivulgado = el.divulgado
@@ -1278,32 +1099,22 @@ function DivulgacoesTab({ envios, setEnvios }) {
                   <div key={el.id} style={{
                     background: jaDivulgado ? 'var(--surface-2)' : marcado ? 'var(--accent-glow)' : 'var(--surface-2)',
                     border: `1px solid ${marcado && !jaDivulgado ? 'rgba(224,96,48,0.3)' : 'var(--border)'}`,
-                    borderRadius:8, padding:'12px 14px',
-                    opacity: jaDivulgado ? 0.55 : 1,
-                    transition:'all 0.15s',
+                    borderRadius:8, padding:'12px 14px', opacity: jaDivulgado ? 0.55 : 1, transition:'all 0.15s',
                   }}>
                     <div style={{display:'flex',alignItems:'center',gap:10,marginBottom: (!jaDivulgado && marcado) ? 10 : 0}}>
-                      {/* Checkbox */}
                       {!jaDivulgado && (
-                        <div
-                          onClick={()=>setChecked(c=>({...c,[el.id]:!c[el.id]}))}
-                          style={{
-                            width:18,height:18,borderRadius:5,flexShrink:0,cursor:'pointer',
+                        <div onClick={()=>setChecked(c=>({...c,[el.id]:!c[el.id]}))}
+                          style={{ width:18,height:18,borderRadius:5,flexShrink:0,cursor:'pointer',
                             border:`2px solid ${marcado?'var(--accent)':'var(--border)'}`,
                             background:marcado?'var(--accent)':'transparent',
-                            display:'flex',alignItems:'center',justifyContent:'center',
-                            transition:'all 0.15s',
-                          }}
-                        >
+                            display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.15s' }}>
                           {marcado && <span style={{color:'#fff',fontSize:11,fontWeight:700,lineHeight:1}}>✓</span>}
                         </div>
                       )}
                       <div style={{width:8,height:8,borderRadius:'50%',flexShrink:0,background:jaDivulgado?'var(--green)':'var(--amber)'}}/>
-                      <span style={{
-                        fontSize:13,fontWeight:600,flex:1,
+                      <span style={{ fontSize:13,fontWeight:600,flex:1,
                         color: jaDivulgado?'var(--text-muted)':marcado?'var(--accent)':'var(--text)',
-                        textDecoration:jaDivulgado?'line-through':'none',
-                      }}>{el.livros.titulo}</span>
+                        textDecoration:jaDivulgado?'line-through':'none' }}>{el.livros.titulo}</span>
                       {jaDivulgado
                         ? <span className="badge badge-green" style={{fontSize:11}}>Já divulgado</span>
                         : !marcado && <span style={{fontSize:11,color:'var(--text-muted)'}}>clique para marcar</span>
@@ -1312,27 +1123,16 @@ function DivulgacoesTab({ envios, setEnvios }) {
                     {!jaDivulgado && marcado && (
                       <div style={{display:'flex',alignItems:'center',gap:10,paddingLeft:28}}>
                         <label style={{fontSize:12,color:'var(--text-muted)',whiteSpace:'nowrap'}}>Data de divulgação:</label>
-                        <input
-                          className="form-input"
-                          type="date"
-                          value={datas[el.id]||''}
-                          onChange={e=>setDatas(d=>({...d,[el.id]:e.target.value}))}
-                          style={{flex:1,padding:'6px 10px',fontSize:13}}
-                        />
+                        <input className="form-input" type="date" value={datas[el.id]||''} onChange={e=>setDatas(d=>({...d,[el.id]:e.target.value}))} style={{flex:1,padding:'6px 10px',fontSize:13}}/>
                       </div>
                     )}
                   </div>
                 )
               })}
             </div>
-
             <div className="form-actions">
               <button className="btn btn-ghost" onClick={()=>setModal(null)}>Cancelar</button>
-              <button
-                className="btn btn-primary"
-                onClick={salvarDivulgacoes}
-                disabled={saving || Object.values(checked).every(v=>!v)}
-              >
+              <button className="btn btn-primary" onClick={salvarDivulgacoes} disabled={saving || Object.values(checked).every(v=>!v)}>
                 {saving ? 'Salvando...' : '✓ Salvar divulgações'}
               </button>
             </div>
@@ -1346,14 +1146,12 @@ function DivulgacoesTab({ envios, setEnvios }) {
 
 // ── RELATÓRIOS TAB ────────────────────────────────────────
 function RelatoriosTab({ parceiros, envios }) {
-  const [modo, setModo]               = useState('parceiro') // 'parceiro' | 'livro'
-  // Modo parceiro
+  const [modo, setModo]               = useState('parceiro')
   const [parceiroId, setParceiroId]   = useState('')
   const [parceiroSearch, setParceiroSearch] = useState('')
   const [parceiroOpen, setParceiroOpen]     = useState(false)
   const [dataInicio, setDataInicio]   = useState('')
   const [dataFim, setDataFim]         = useState('')
-  // Modo livro
   const [livroSearch, setLivroSearch] = useState('')
   const [resultado, setResultado]     = useState(null)
 
@@ -1365,42 +1163,29 @@ function RelatoriosTab({ parceiros, envios }) {
     if (dataFim)    enviosFiltrados = enviosFiltrados.filter(e => e.data_envio && e.data_envio <= dataFim)
     const totalLivros = enviosFiltrados.reduce((acc, e) => acc + (e.envio_livros||[]).length, 0)
     const porStatus = {}
-    STATUS_OPTIONS.forEach(s => {
-      porStatus[s.value] = enviosFiltrados.filter(e => e.status === s.value).reduce((acc, e) => acc + (e.envio_livros||[]).length, 0)
-    })
+    STATUS_OPTIONS.forEach(s => { porStatus[s.value] = enviosFiltrados.filter(e => e.status === s.value).reduce((acc, e) => acc + (e.envio_livros||[]).length, 0) })
     setResultado({ tipo: 'parceiro', parceiro, envios: enviosFiltrados, totalLivros, porStatus })
   }
 
   function gerarRelatorioLivro() {
     if (!livroSearch.trim()) return
     const busca = livroSearch.trim().toLowerCase().replace(/-/g,'')
-    // Busca todos os envios que contém o livro pesquisado
     const encontrados = []
     for (const envio of envios) {
       for (const el of (envio.envio_livros||[])) {
         const titulo = (el.livros?.titulo||'').toLowerCase()
         const isbn   = (el.livros?.isbn||'').replace(/-/g,'').toLowerCase()
         const sku    = (el.livros?.sku||'').toLowerCase()
-        if (titulo.includes(busca) || isbn.includes(busca) || sku.includes(busca)) {
-          encontrados.push({ envio, el })
-          break // um livro por envio basta para listar o parceiro
-        }
+        if (titulo.includes(busca) || isbn.includes(busca) || sku.includes(busca)) { encontrados.push({ envio, el }); break }
       }
     }
-    // Agrupa por parceiro
     const porParceiro = {}
     for (const { envio, el } of encontrados) {
       const pId = envio.parceiro_id
-      if (!porParceiro[pId]) {
-        const parceiro = parceiros.find(p => p.id === pId)
-        porParceiro[pId] = { parceiro, envios: [], livrosEnviados: [] }
-      }
+      if (!porParceiro[pId]) { const parceiro = parceiros.find(p => p.id === pId); porParceiro[pId] = { parceiro, envios: [], livrosEnviados: [] } }
       porParceiro[pId].envios.push(envio)
-      // Coleta todos os livros do envio que batem com a busca
       for (const item of (envio.envio_livros||[])) {
-        const t = (item.livros?.titulo||'').toLowerCase()
-        const i = (item.livros?.isbn||'').replace(/-/g,'').toLowerCase()
-        const s = (item.livros?.sku||'').toLowerCase()
+        const t = (item.livros?.titulo||'').toLowerCase(); const i = (item.livros?.isbn||'').replace(/-/g,'').toLowerCase(); const s = (item.livros?.sku||'').toLowerCase()
         if (t.includes(busca)||i.includes(busca)||s.includes(busca)) {
           if (!porParceiro[pId].livrosEnviados.find(x=>x.id===item.livros?.id)) {
             porParceiro[pId].livrosEnviados.push({ ...item.livros, data_envio: envio.data_envio, status: envio.status })
@@ -1412,9 +1197,9 @@ function RelatoriosTab({ parceiros, envios }) {
   }
 
   const STATUS_OPTIONS_LOCAL = [
-    { value: 'enviado',   label: 'Enviado',   cls: 'badge-amber' },
+    { value: 'enviado', label: 'Enviado', cls: 'badge-amber' },
     { value: 'divulgado', label: 'Divulgado', cls: 'badge-green' },
-    { value: 'cancelado', label: 'Cancelado', cls: 'badge-red'   },
+    { value: 'cancelado', label: 'Cancelado', cls: 'badge-red' },
   ]
 
   return (
@@ -1425,17 +1210,11 @@ function RelatoriosTab({ parceiros, envios }) {
           <p className="page-subtitle">Consulte cortesias por parceiro ou por livro</p>
         </div>
       </div>
-
-      {/* Toggle modo */}
       <div style={{display:'flex',gap:8,marginBottom:16}}>
         {[{v:'parceiro',l:'🔍 Por parceiro'},{v:'livro',l:'📚 Por livro / ISBN'}].map(({v,l})=>(
-          <button key={v} onClick={()=>{setModo(v);setResultado(null)}}
-            className={`btn btn-sm ${modo===v?'btn-primary':'btn-ghost'}`}>
-            {l}
-          </button>
+          <button key={v} onClick={()=>{setModo(v);setResultado(null)}} className={`btn btn-sm ${modo===v?'btn-primary':'btn-ghost'}`}>{l}</button>
         ))}
       </div>
-
       <div className="table-card" style={{padding:'20px 24px', marginBottom:24, overflow:'visible'}}>
         {modo === 'parceiro' ? (
           <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:16, alignItems:'end'}}>
@@ -1533,7 +1312,6 @@ function RelatoriosTab({ parceiros, envios }) {
 
       {resultado && resultado.tipo === 'parceiro' && (
         <>
-          {/* Cards de resumo */}
           <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:14, marginBottom:20}}>
             <div className="table-card" style={{padding:'16px 20px', textAlign:'center'}}>
               <p style={{fontSize:11,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em',color:'var(--text-muted)',marginBottom:6}}>Total de envios</p>
@@ -1552,15 +1330,11 @@ function RelatoriosTab({ parceiros, envios }) {
               <p style={{fontSize:32,fontWeight:800,color:'var(--amber)'}}>{resultado.porStatus.enviado}</p>
             </div>
           </div>
-
-          {/* Tabela detalhada */}
           <div className="table-card">
             <div className="table-toolbar">
               <span className="table-title">
                 Cortesias de <strong>{resultado.parceiro.nome}</strong>
                 {dataInicio && dataFim && <span style={{fontWeight:400,color:'var(--text-muted)'}}> · {format(new Date(dataInicio+'T12:00:00'),'dd/MM/yyyy',{locale:ptBR})} até {format(new Date(dataFim+'T12:00:00'),'dd/MM/yyyy',{locale:ptBR})}</span>}
-                {dataInicio && !dataFim && <span style={{fontWeight:400,color:'var(--text-muted)'}}> · a partir de {format(new Date(dataInicio+'T12:00:00'),'dd/MM/yyyy',{locale:ptBR})}</span>}
-                {!dataInicio && dataFim && <span style={{fontWeight:400,color:'var(--text-muted)'}}> · até {format(new Date(dataFim+'T12:00:00'),'dd/MM/yyyy',{locale:ptBR})}</span>}
               </span>
             </div>
             {resultado.envios.length === 0
@@ -1576,11 +1350,7 @@ function RelatoriosTab({ parceiros, envios }) {
                           <td className="td-muted" style={{whiteSpace:'nowrap'}}>
                             {e.data_envio ? format(new Date(e.data_envio+'T12:00:00'),'dd MMM yyyy',{locale:ptBR}) : '—'}
                           </td>
-                          <td>
-                            <div style={{display:'flex',flexDirection:'column',gap:3}}>
-                              {livros.map((t,i)=><span key={i} style={{fontSize:12.5}}>{t}</span>)}
-                            </div>
-                          </td>
+                          <td><div style={{display:'flex',flexDirection:'column',gap:3}}>{livros.map((t,i)=><span key={i} style={{fontSize:12.5}}>{t}</span>)}</div></td>
                           <td style={{textAlign:'center',fontWeight:700,color:'var(--accent)'}}>{livros.length}</td>
                           <td><span className={`badge ${s.cls}`}>{s.label}</span></td>
                         </tr>
@@ -1607,6 +1377,7 @@ export default function Cortesias() {
     ? (filtroGrupoAdmin === 'todos' ? null : filtroGrupoAdmin)
     : grupoDoPerfil
   const gruposLivrosVisiveis = grupoLivros ? [grupoLivros] : null
+
   const [tab, setTab]             = useState('envios')
   const [parceiros, setParceiros] = useState([])
   const [livros, setLivros]       = useState([])
@@ -1628,7 +1399,7 @@ export default function Cortesias() {
         ))}
       </div>
       {tab==='envios'      && <EnviosTab       parceiros={parceiros} livros={livros} envios={envios} setEnvios={setEnvios} gruposLivrosVisiveis={gruposLivrosVisiveis}/>}
-      {tab==='livros'      && <LivrosTab/>}
+      {tab==='livros'      && <LivrosTab        gruposLivrosVisiveis={gruposLivrosVisiveis} grupo={grupoLivros}/>}
       {tab==='divulgacoes' && <DivulgacoesTab  envios={envios} setEnvios={setEnvios}/>}
       {tab==='relatorios'  && <RelatoriosTab   parceiros={parceiros} envios={envios}/>}
     </div>
