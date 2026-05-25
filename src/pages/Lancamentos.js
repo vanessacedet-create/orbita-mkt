@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useViewAs } from '../context/ViewAsContext'
+import { useAuth } from '../context/AuthContext'
 import { PERFIL_GRUPO } from '../context/AuthContext'
 import { getLivrosLancamento, importarLancamentos, updateLivro, deleteLivro } from '../lib/supabase'
 import { ChevronLeft, ChevronRight, Upload, X, Calendar, Pencil, Trash2, Download } from 'lucide-react'
@@ -239,7 +240,7 @@ function ModalImportar({ onImport, onClose , grupo }) {
     if (!preview.length) return
     setSaving(true)
     try {
-      const res = await importarLancamentos(preview, { grupo })
+      const res = await importarLancamentos(preview, { grupo: grupo || 'influencers' })
       setResultado(res)
       if (res.erros.length===0) setTimeout(()=>{onImport();onClose()},2000)
     } catch(e){console.error(e)} finally{setSaving(false)}
@@ -304,8 +305,21 @@ function ModalImportar({ onImport, onClose , grupo }) {
 
 // ── PÁGINA PRINCIPAL ───────────────────────────────────────
 export default function Lancamentos() {
+  const { usuario } = useAuth()
   const { perfilAtivo } = useViewAs()
-  const grupoLanc = PERFIL_GRUPO[perfilAtivo] || null
+
+  // Quando estiver em modo "Ver como", usa o perfil visualizado.
+  // Isso impede que um administrador vendo como Parceiras enxergue lançamentos de outros grupos.
+  const perfilEfetivo = perfilAtivo || usuario?.perfil
+  const ehAdminVisual = ['administrador', 'gerente'].includes(perfilEfetivo)
+  const grupoDoPerfil = PERFIL_GRUPO[perfilEfetivo] || null
+
+  const [filtroGrupoAdmin, setFiltroGrupoAdmin] = useState('todos')
+
+  const grupoLanc = ehAdminVisual
+    ? (filtroGrupoAdmin === 'todos' ? null : filtroGrupoAdmin)
+    : grupoDoPerfil
+
   const agora = new Date()
   const [ano, setAno]           = useState(agora.getFullYear())
   const [mes, setMes]           = useState(agora.getMonth()+1)
@@ -324,7 +338,7 @@ export default function Lancamentos() {
     catch(e){console.error(e)} finally{setLoading(false)}
   }
 
-  useEffect(()=>{ carregar(ano,mes) },[ano,mes,grupoLanc]) // eslint-disable-line
+  useEffect(()=>{ carregar(ano,mes) },[ano,mes,grupoLanc,perfilEfetivo]) // eslint-disable-line
 
   function navMes(delta) {
     let nm=mes+delta, na=ano
@@ -381,7 +395,7 @@ export default function Lancamentos() {
   return (
     <div>
       {/* Cabeçalho */}
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20,flexWrap:'wrap',gap:12}}>
         <div style={{display:'flex',alignItems:'center',gap:14}}>
           <Calendar size={22} color="var(--accent)"/>
           <div>
@@ -391,9 +405,21 @@ export default function Lancamentos() {
             </p>
           </div>
         </div>
-        <button className="btn btn-primary" onClick={()=>setModalImportar(true)}>
-          <Upload size={14}/> Importar planilha
-        </button>
+        <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+          {ehAdminVisual && (
+            <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}}
+              value={filtroGrupoAdmin} onChange={e=>setFiltroGrupoAdmin(e.target.value)}>
+              <option value="todos">Todos os grupos</option>
+              <option value="influencers">Influencers</option>
+              <option value="parceiras">Parceiras</option>
+              <option value="proprias">Próprias</option>
+              <option value="marketplaces">Marketplaces</option>
+            </select>
+          )}
+          <button className="btn btn-primary" onClick={()=>setModalImportar(true)}>
+            <Upload size={14}/> Importar planilha
+          </button>
+        </div>
       </div>
 
       {/* Navegação */}
