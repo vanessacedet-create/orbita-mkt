@@ -2519,21 +2519,23 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros, usuarios = [] 
 
 // ── LISTA DE CAMPANHAS ─────────────────────────────────────
 export default function Campanhas() {
- const { usuario } = useAuth()
+const { usuario } = useAuth()
 const { perfilAtivo } = useViewAs()
 
 const perfilEfetivo = perfilAtivo || usuario?.perfil
-const ehAdmin = ['administrador', 'gerente'].includes(usuario?.perfil)
+const ehAdminReal = ['administrador', 'gerente'].includes(usuario?.perfil)
+const ehAdminVisual = ['administrador', 'gerente'].includes(perfilEfetivo)
+
 const grupoDoPerfil = PERFIL_GRUPO[perfilEfetivo] || null
 
 const [filtroGrupoAdmin, setFiltroGrupoAdmin] = useState('todos')
 
-const grupoCampanhas = ehAdmin
+const grupoCampanhas = ehAdminVisual
   ? (filtroGrupoAdmin === 'todos' ? null : filtroGrupoAdmin)
   : grupoDoPerfil
 
 const gruposLivros = grupoCampanhas ? [grupoCampanhas] : null
-
+  
   const [campanhas, setCampanhas]   = useState([])
   const [dragId, setDragId]         = useState(null)
   const [dragOver, setDragOver]     = useState(null)
