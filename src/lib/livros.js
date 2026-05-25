@@ -1,13 +1,16 @@
 import { supabase } from './client'
 
-export async function getLivros({ page = 0, pageSize = 50, search = '', grupo } = {}) {
+export async function getLivros({ page = 0, pageSize = 50, search = '', grupos = null } = {}) {
   let query = supabase.from('livros').select('*', { count: 'exact' }).order('titulo')
-
-  if (grupo) query = query.eq('grupo', grupo)
 
   if (search && search.trim()) {
     const s = search.trim()
     query = query.or(`titulo.ilike.%${s}%,autor.ilike.%${s}%,isbn.ilike.%${s}%,sku.ilike.%${s}%`)
+  }
+
+  // Filtro por grupo (usado em Cortesias para separar acesso por perfil)
+  if (grupos && grupos.length > 0) {
+    query = query.in('grupo', grupos)
   }
 
   query = query.range(page * pageSize, (page + 1) * pageSize - 1)
@@ -216,13 +219,12 @@ export async function getStats() {
 }
 
 // ── LANÇAMENTOS (calendário) ───────────────────────────────
-export async function getLivrosLancamento({ ano, mes, grupo } = {}) {
+export async function getLivrosLancamento({ ano, mes } = {}) {
   let q = supabase
     .from('livros')
     .select('id, titulo, autor, editora, isbn, sku, data_lancamento')
     .not('data_lancamento', 'is', null)
     .order('data_lancamento', { ascending: true })
-  if (grupo) q = q.eq('grupo', grupo)
   if (ano && mes) {
     const ini = `${ano}-${String(mes).padStart(2,'0')}-01`
     const ultimoDia = new Date(ano, mes, 0).getDate()
@@ -234,7 +236,7 @@ export async function getLivrosLancamento({ ano, mes, grupo } = {}) {
   return data || []
 }
 
-export async function importarLancamentos(livros, { grupo } = {}) {
+export async function importarLancamentos(livros) {
   // Normaliza todos os dados antes de qualquer query
   const rows = livros.map(l => ({
     titulo:          l.titulo,
@@ -243,7 +245,6 @@ export async function importarLancamentos(livros, { grupo } = {}) {
     isbn:            l.isbn ? String(l.isbn).replace(/\.0$/, '').trim() : null,
     sku:             l.sku  ? String(l.sku).replace(/\.0$/, '').trim()  : null,
     data_lancamento: l.data_lancamento || null,
-    ...(grupo ? { grupo } : {}),
   }))
 
   const results = { atualizados: 0, criados: 0, erros: [] }
