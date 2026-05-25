@@ -1862,8 +1862,18 @@ export default function Tarefas() {
   async function handleSave(form, id) {
     if (id) {
       const { _checklistPendente: _cp, _livrosCampanhaPendentes: _lcp, ...formLimpo } = form
+      // sanitiza campos opcionais: string vazia → null (evita erro de UUID inválido no Supabase)
+      const payload = {
+        ...formLimpo,
+        responsavel_id:   formLimpo.responsavel_id   || null,
+        parceiro_id:      formLimpo.parceiro_id       || null,
+        data_prazo:       formLimpo.data_prazo        || null,
+        tipo_tarefa:      formLimpo.tipo_tarefa       || null,
+        recorrencia_tipo: formLimpo.recorrencia_tipo  || null,
+        grupo:            grupoDaTarefa(formLimpo),
+      }
       const tarefaAntes = tarefas.find(t => t.id === id)
-      const upd = await updateTarefa(id, { ...formLimpo, grupo: grupoDaTarefa(formLimpo) })
+      const upd = await updateTarefa(id, payload)
       // salva livros da campanha ao editar (adiciona os que não existem ainda)
       if (_lcp?.length) {
         const idsJaVinculados = (upd.tarefa_livros || []).map(tl => tl.livros?.id).filter(Boolean)
@@ -1896,7 +1906,12 @@ export default function Tarefas() {
       const { _checklistPendente, _livrosCampanhaPendentes, ...formLimpo } = form
       const nova = await createTarefa({
         ...formLimpo,
-        grupo: grupoDaTarefa(formLimpo),
+        responsavel_id:   formLimpo.responsavel_id   || null,
+        parceiro_id:      formLimpo.parceiro_id       || null,
+        data_prazo:       formLimpo.data_prazo        || null,
+        tipo_tarefa:      formLimpo.tipo_tarefa       || null,
+        recorrencia_tipo: formLimpo.recorrencia_tipo  || null,
+        grupo:            grupoDaTarefa(formLimpo),
       })
       // salva itens de checklist que foram adicionados antes de criar a tarefa
       if (_checklistPendente?.length) {
