@@ -5,7 +5,8 @@ import {
   addComentario, getUsuarios,
   addLivroTarefa, removeLivroTarefa, getLivros,
   importarTarefasLote, buscarLivroPorISBN,
-  gerarProximaOcorrencia, calcularProximoPrazo as calcularProximoPrazoFn
+  gerarProximaOcorrencia, calcularProximoPrazo as calcularProximoPrazoFn,
+  getParceirosAtivos,
 } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { PERFIL_GRUPO } from '../context/AuthContext'
@@ -47,6 +48,22 @@ const PRIORIDADE_MAP = {
   'média': 'media', 'media': 'media',
   'baixa': 'baixa',
 }
+
+const TIPOS_TAREFA = [
+  'Campanha de promoção',
+  'Newsletter',
+  'Conteúdo para redes sociais',
+  'Reels / Vídeo',
+  'Stories',
+  'Carrossel',
+  'E-mail marketing',
+  'Lançamento de livro',
+  'Envio de exemplares',
+  'Briefing',
+  'Relatório',
+  'Reunião / Alinhamento',
+  'Outro',
+]
 
 function useToast() {
   const [toast, setToast] = useState(null)
@@ -240,6 +257,156 @@ function SeletorLivros({ tarefaId, livrosVinculados, onChange }) {
   )
 }
 
+// ── SELETOR DE PARCEIRO ────────────────────────────────────
+function SeletorParceiro({ value, onChange }) {
+  const [parceiros, setParceiros] = useState([])
+  const [carregando, setCarregando] = useState(true)
+  const [busca, setBusca] = useState('')
+  const [aberto, setAberto] = useState(false)
+  const ref = useRef()
+
+  useEffect(() => {
+    getParceirosAtivos()
+      .then(data => setParceiros(data || []))
+      .catch(console.error)
+      .finally(() => setCarregando(false))
+  }, [])
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setAberto(false)
+    }
+    if (aberto) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [aberto])
+
+  const parceiroSelecionado = parceiros.find(p => p.id === value)
+
+  const filtrados = busca.trim().length === 0
+    ? parceiros
+    : parceiros.filter(p =>
+        (p.nome || '').toLowerCase().includes(busca.toLowerCase()) ||
+        (p.tipo_parceria || '').toLowerCase().includes(busca.toLowerCase()) ||
+        (p.livraria || '').toLowerCase().includes(busca.toLowerCase())
+      )
+
+  function tipoBadgeStyle(tipo) {
+    if (!tipo) return null
+    const t = tipo.toLowerCase()
+    if (t.includes('livraria')) return { bg: 'rgba(99,102,241,0.12)', color: '#6366f1', border: 'rgba(99,102,241,0.25)' }
+    if (t.includes('booktime')) return { bg: 'rgba(236,72,153,0.12)', color: '#ec4899', border: 'rgba(236,72,153,0.25)' }
+    return { bg: 'var(--surface-3)', color: 'var(--text-muted)', border: 'var(--border)' }
+  }
+
+  if (carregando) return <div style={{ fontSize:12, color:'var(--text-muted)', padding:'8px 0' }}>Carregando parceiros...</div>
+
+  return (
+    <div ref={ref} style={{ position:'relative' }}>
+      <button
+        type="button"
+        onClick={() => setAberto(a => !a)}
+        style={{
+          width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between',
+          padding:'8px 12px', borderRadius:8, border:'1px solid var(--border)',
+          background:'var(--surface)', cursor:'pointer', textAlign:'left',
+          transition:'border 0.15s',
+        }}
+        onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
+        onMouseLeave={e => { if (!aberto) e.currentTarget.style.borderColor = 'var(--border)' }}
+      >
+        {parceiroSelecionado ? (
+          <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0 }}>
+            <span style={{ fontSize:13, fontWeight:600, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+              {parceiroSelecionado.nome}
+            </span>
+            {parceiroSelecionado.tipo_parceria && (() => {
+              const s = tipoBadgeStyle(parceiroSelecionado.tipo_parceria)
+              return (
+                <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:99, background:s.bg, color:s.color, border:`1px solid ${s.border}`, whiteSpace:'nowrap', flexShrink:0 }}>
+                  {parceiroSelecionado.tipo_parceria}
+                </span>
+              )
+            })()}
+            {parceiroSelecionado.livraria && (
+              <span style={{ fontSize:10, color:'var(--text-muted)', whiteSpace:'nowrap', flexShrink:0 }}>
+                📚 {parceiroSelecionado.livraria}
+              </span>
+            )}
+          </div>
+        ) : (
+          <span style={{ fontSize:13, color:'var(--text-muted)' }}>Selecionar parceiro...</span>
+        )}
+        <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0, marginLeft:8 }}>
+          {value && (
+            <span
+              onClick={e => { e.stopPropagation(); onChange(''); setBusca('') }}
+              style={{ display:'flex', alignItems:'center', cursor:'pointer', color:'var(--text-muted)', opacity:0.6 }}
+            ><X size={12}/></span>
+          )}
+          <ChevronDown size={14} style={{ color:'var(--text-muted)', transform: aberto ? 'rotate(180deg)' : 'none', transition:'transform 0.15s' }}/>
+        </div>
+      </button>
+
+      {aberto && (
+        <div style={{
+          position:'absolute', top:'calc(100% + 4px)', left:0, right:0, zIndex:30,
+          background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10,
+          boxShadow:'0 8px 24px rgba(0,0,0,0.18)', maxHeight:300, display:'flex', flexDirection:'column',
+        }}>
+          <div style={{ padding:'8px 10px', borderBottom:'1px solid var(--border)' }}>
+            <div style={{ position:'relative' }}>
+              <Search size={13} style={{ position:'absolute', left:9, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)' }}/>
+              <input
+                autoFocus
+                className="form-input"
+                value={busca}
+                onChange={e => setBusca(e.target.value)}
+                placeholder="Buscar parceiro..."
+                style={{ paddingLeft:28, fontSize:12, padding:'6px 10px 6px 28px' }}
+              />
+            </div>
+          </div>
+          <div style={{ overflowY:'auto', maxHeight:230 }}>
+            {filtrados.length === 0 ? (
+              <div style={{ padding:'14px', fontSize:12, color:'var(--text-muted)', textAlign:'center' }}>Nenhum parceiro encontrado.</div>
+            ) : filtrados.map(p => {
+              const s = tipoBadgeStyle(p.tipo_parceria)
+              const selecionado = p.id === value
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => { onChange(p.id); setAberto(false); setBusca('') }}
+                  style={{
+                    width:'100%', padding:'9px 14px', textAlign:'left', border:'none', cursor:'pointer',
+                    background: selecionado ? 'var(--accent-glow)' : 'transparent',
+                    borderBottom:'1px solid var(--border)',
+                    display:'flex', flexDirection:'column', gap:3, transition:'background 0.1s',
+                  }}
+                  onMouseEnter={e => { if (!selecionado) e.currentTarget.style.background = 'var(--surface-2)' }}
+                  onMouseLeave={e => { if (!selecionado) e.currentTarget.style.background = 'transparent' }}
+                >
+                  <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
+                    <span style={{ fontSize:13, fontWeight:600, color: selecionado ? 'var(--accent)' : 'var(--text)' }}>{p.nome}</span>
+                    {p.tipo_parceria && s && (
+                      <span style={{ fontSize:10, fontWeight:700, padding:'1px 6px', borderRadius:99, background:s.bg, color:s.color, border:`1px solid ${s.border}` }}>
+                        {p.tipo_parceria}
+                      </span>
+                    )}
+                  </div>
+                  {p.livraria && (
+                    <span style={{ fontSize:11, color:'var(--text-muted)' }}>📚 {p.livraria}</span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── MODAL TAREFA ───────────────────────────────────────────
 
 // ── PAINEL DE RECORRÊNCIA ───────────────────────────────────────────────────
@@ -428,7 +595,8 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
   const { usuario } = useAuth()
   const storageKey = `orbita_modal_form_${tarefa?.id || 'new'}`
   const EMPTY = { titulo:'', descricao:'', status:'a_fazer', prioridade:'media', responsavel_id:'', data_prazo: tarefa?._dataPrazo || '',
-    recorrencia_ativa: false, recorrencia_tipo: '', recorrencia_config: {} }
+    recorrencia_ativa: false, recorrencia_tipo: '', recorrencia_config: {},
+    parceiro_id: '', tipo_tarefa: '' }
   const formInicial = tarefa && !tarefa._dataPrazo ? {
     titulo:               tarefa.titulo,
     descricao:            tarefa.descricao || '',
@@ -439,6 +607,8 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
     recorrencia_ativa:    tarefa.recorrencia_ativa || false,
     recorrencia_tipo:     tarefa.recorrencia_tipo || '',
     recorrencia_config:   tarefa.recorrencia_config || {},
+    parceiro_id:          tarefa.parceiro_id || '',
+    tipo_tarefa:          tarefa.tipo_tarefa || '',
   } : EMPTY
 
   // ── estado persistido ──────────────────────────────────────────────────────
@@ -637,6 +807,26 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
                 livrosVinculados={livrosVinculados}
                 onChange={setLivrosVinculados}
               />
+            </div>
+            <div className="form-row">
+              <div className="form-group" style={{ flex: 2 }}>
+                <label className="form-label">Parceiro (opcional)</label>
+                <SeletorParceiro
+                  value={form.parceiro_id}
+                  onChange={v => setForm(f => ({ ...f, parceiro_id: v }))}
+                />
+              </div>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label className="form-label">Tipo de tarefa (opcional)</label>
+                <select
+                  className="form-select"
+                  value={form.tipo_tarefa}
+                  onChange={e => setForm(f => ({ ...f, tipo_tarefa: e.target.value }))}
+                >
+                  <option value="">Selecionar tipo...</option>
+                  {TIPOS_TAREFA.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
             </div>
             <RecorrenciaPanel form={form} setForm={setForm}/>
           </div>
