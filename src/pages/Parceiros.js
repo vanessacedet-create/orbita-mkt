@@ -517,10 +517,7 @@ export default function Parceiros() {
                     </td>
                     <td style={{cursor:'pointer'}} onClick={()=>p.pontuacao&&setModalPontuacao(p)}>
                       {p.pontuacao
-                        ? <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
-                            <NotaCirculo nota={p.pontuacao.nota}/>
-                            <BadgeNivel nivel={p.pontuacao.nivel}/>
-                          </div>
+                        ? <NotaCirculo nota={p.pontuacao.nota}/>
                         : <span style={{fontSize:11,color:'var(--text-muted)'}}>Sem histórico</span>
                       }
                     </td>
