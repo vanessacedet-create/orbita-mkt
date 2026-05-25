@@ -1367,16 +1367,32 @@ function RelatoriosTab({ parceiros, envios }) {
 }
 
 // ── MAIN ───────────────────────────────────────────────────
+// ── MAIN ───────────────────────────────────────────────────
 export default function Cortesias() {
   const { usuario } = useAuth()
   const { perfilAtivo } = useViewAs()
-  const ehAdmin = usuario?.perfil === 'administrador' || usuario?.perfil === 'gerente'
-  const grupoDoPerfil = PERFIL_GRUPO[perfilAtivo] || null
+
+  // Quando estiver em modo "Ver como", usa o perfil visualizado.
+  // Isso impede que um administrador vendo como Influencers use permissões reais de admin.
+  const perfilEfetivo = perfilAtivo || usuario?.perfil
+  const ehAdminVisual = ['administrador', 'gerente'].includes(perfilEfetivo)
+  const grupoDoPerfil = PERFIL_GRUPO[perfilEfetivo] || null
+
   const [filtroGrupoAdmin, setFiltroGrupoAdmin] = useState('todos')
-  const grupoLivros = ehAdmin
+
+  const grupoLivros = ehAdminVisual
     ? (filtroGrupoAdmin === 'todos' ? null : filtroGrupoAdmin)
     : grupoDoPerfil
-  const gruposLivrosVisiveis = grupoLivros ? [grupoLivros] : null
+
+  // Regra específica: o grupo de Influencers pode visualizar o catálogo de Próprias.
+  // Não é necessário duplicar livros no banco com grupo = 'influencers'.
+  const gruposLivrosVisiveis = grupoLivros === 'influencers'
+    ? ['influencers', 'proprias']
+    : grupoLivros
+      ? [grupoLivros]
+      : null
+
+  const gruposLivrosKey = gruposLivrosVisiveis ? gruposLivrosVisiveis.join('|') : 'todos'
 
   const [tab, setTab]             = useState('envios')
   const [parceiros, setParceiros] = useState([])
@@ -1385,9 +1401,14 @@ export default function Cortesias() {
 
   useEffect(() => {
     getParceirosAtivos().then(setParceiros).catch(console.error)
-    getLivros({ page:0, pageSize:5000, grupos: gruposLivrosVisiveis }).then(r => setLivros(r.data || [])).catch(console.error)
     getEnvios().then(r => setEnvios(r.data || [])).catch(console.error)
   }, [])
+
+  useEffect(() => {
+    getLivros({ page: 0, pageSize: 5000, grupos: gruposLivrosVisiveis })
+      .then(r => setLivros(r.data || []))
+      .catch(console.error)
+  }, [gruposLivrosKey])
 
   return (
     <div>
