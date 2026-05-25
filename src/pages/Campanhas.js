@@ -2518,24 +2518,27 @@ function DetalheCampanha({ campanhaId, onBack, livros, parceiros, usuarios = [] 
 
 
 // ── LISTA DE CAMPANHAS ─────────────────────────────────────
+// ── LISTA DE CAMPANHAS ─────────────────────────────────────
 export default function Campanhas() {
-const { usuario } = useAuth()
-const { perfilAtivo } = useViewAs()
+  const { usuario } = useAuth()
+  const { perfilAtivo } = useViewAs()
 
-const perfilEfetivo = perfilAtivo || usuario?.perfil
-const ehAdminReal = ['administrador', 'gerente'].includes(usuario?.perfil)
-const ehAdminVisual = ['administrador', 'gerente'].includes(perfilEfetivo)
+  // IMPORTANTE:
+  // Quando estiver em "modo visualização", o sistema deve usar o perfil visualizado,
+  // e não o perfil real do administrador logado.
+  const perfilEfetivo = perfilAtivo || usuario?.perfil
 
-const grupoDoPerfil = PERFIL_GRUPO[perfilEfetivo] || null
+  const ehAdminVisual = ['administrador', 'gerente'].includes(perfilEfetivo)
+  const grupoDoPerfil = PERFIL_GRUPO[perfilEfetivo] || null
 
-const [filtroGrupoAdmin, setFiltroGrupoAdmin] = useState('todos')
+  const [filtroGrupoAdmin, setFiltroGrupoAdmin] = useState('todos')
 
-const grupoCampanhas = ehAdminVisual
-  ? (filtroGrupoAdmin === 'todos' ? null : filtroGrupoAdmin)
-  : grupoDoPerfil
+  const grupoCampanhas = ehAdminVisual
+    ? (filtroGrupoAdmin === 'todos' ? null : filtroGrupoAdmin)
+    : grupoDoPerfil
 
-const gruposLivros = grupoCampanhas ? [grupoCampanhas] : null
-  
+  const gruposLivros = grupoCampanhas ? [grupoCampanhas] : null
+
   const [campanhas, setCampanhas]   = useState([])
   const [dragId, setDragId]         = useState(null)
   const [dragOver, setDragOver]     = useState(null)
@@ -2553,41 +2556,47 @@ const gruposLivros = grupoCampanhas ? [grupoCampanhas] : null
     const [cs, ps, ls, us] = await Promise.all([
       getCampanhas({ grupo: grupoCampanhas }),
       getParceirosAtivos(),
-      getLivros({ page:0, pageSize:5000, grupos: gruposLivros }),
+      getLivros({ page: 0, pageSize: 5000, grupos: gruposLivros }),
       getUsuarios(),
     ])
 
-    const campanhasFiltradas = ehAdmin
-  ? cs
-  : cs.filter(c => canAccessGroup(perfilEfetivo, c.grupo || 'influencers'))
+    const campanhasFiltradas = ehAdminVisual
+      ? cs
+      : cs.filter(c => canAccessGroup(perfilEfetivo, c.grupo || 'influencers'))
 
     setCampanhas(campanhasFiltradas)
     setParceiros(ps)
     setLivros(ls)
-    setUsuarios(us||[])
+    setUsuarios(us || [])
   }
 
   useEffect(() => { 
-    reload().finally(()=>setLoading(false)) 
-  }, [grupoCampanhas, usuario?.perfil])
+    setLoading(true)
+    reload().finally(() => setLoading(false)) 
+  }, [grupoCampanhas, perfilEfetivo])
 
   async function handleCreate(form) {
     const { parceiro_ids = [], ...rest } = form
-   const grupoNovaCampanha = ehAdmin
-  ? (grupoCampanhas || 'influencers')
-  : grupoDoPerfil
 
-const campanha = await createCampanha({
-  ...rest,
-  grupo: grupoNovaCampanha
-})
+    const grupoNovaCampanha = ehAdminVisual
+      ? (grupoCampanhas || 'influencers')
+      : grupoDoPerfil
+
+    const campanha = await createCampanha({
+      ...rest,
+      grupo: grupoNovaCampanha
+    })
+
     for (const pid of parceiro_ids) {
       await addParceiroCampanha(campanha.id, pid)
     }
+
     await reload()
+
     const autoLivros = campanha._livrosAutoAdicionados || 0
+
     if (autoLivros > 0) {
-      showToast(`Campanha criada! ${autoLivros} livro${autoLivros!==1?'s':''} do período adicionado${autoLivros!==1?'s':''} automaticamente.`)
+      showToast(`Campanha criada! ${autoLivros} livro${autoLivros !== 1 ? 's' : ''} do período adicionado${autoLivros !== 1 ? 's' : ''} automaticamente.`)
     } else {
       showToast('Campanha criada!')
     }
@@ -2596,82 +2605,160 @@ const campanha = await createCampanha({
   async function handleDelete(id) {
     if (!window.confirm('Excluir esta campanha?')) return
     await deleteCampanha(id)
-    setCampanhas(prev=>prev.filter(c=>c.id!==id))
+    setCampanhas(prev => prev.filter(c => c.id !== id))
     showToast('Excluída!')
   }
 
   async function handleDragEnd(fromId, toId) {
-    if (!fromId || !toId || fromId === toId) { setDragId(null); setDragOver(null); return }
+    if (!fromId || !toId || fromId === toId) {
+      setDragId(null)
+      setDragOver(null)
+      return
+    }
+
     const allIds = campanhas.map(c => c.id)
     const fromIdx = allIds.indexOf(fromId)
     const toIdx = allIds.indexOf(toId)
-    if (fromIdx < 0 || toIdx < 0) { setDragId(null); setDragOver(null); return }
+
+    if (fromIdx < 0 || toIdx < 0) {
+      setDragId(null)
+      setDragOver(null)
+      return
+    }
+
     const reordenadas = [...campanhas]
     const [moved] = reordenadas.splice(fromIdx, 1)
+
     reordenadas.splice(toIdx, 0, moved)
+
     setCampanhas(reordenadas)
-    setDragId(null); setDragOver(null)
-    const ordens = reordenadas.map((c, i) => ({ id: c.id, ordem: i }))
-    try { await reordenarCampanhas(ordens) } catch(e) { console.error(e) }
+    setDragId(null)
+    setDragOver(null)
+
+    const ordens = reordenadas.map((c, i) => ({
+      id: c.id,
+      ordem: i
+    }))
+
+    try {
+      await reordenarCampanhas(ordens)
+    } catch (e) {
+      console.error(e)
+    }
   }
 
   const filtradas = campanhas
-    .filter(c => filtroStatus==='todos' || c.status===filtroStatus)
+    .filter(c => filtroStatus === 'todos' || c.status === filtroStatus)
     .filter(c => {
       const q = search.toLowerCase()
+
       return c.nome.toLowerCase().includes(q) ||
-        (c.tipo||'').toLowerCase().includes(q) ||
-        (c.campanha_livros||[]).some(cl=>(cl.livros?.titulo||'').toLowerCase().includes(q))
+        (c.tipo || '').toLowerCase().includes(q) ||
+        (c.campanha_livros || []).some(cl =>
+          (cl.livros?.titulo || '').toLowerCase().includes(q)
+        )
     })
 
-  if (detalhe) return (
-    <DetalheCampanha
-      campanhaId={detalhe}
-      onBack={()=>setDetalhe(null)}
-      livros={livros}
-      parceiros={parceiros}
-      usuarios={usuarios}
-    />
-  )
+  if (detalhe) {
+    return (
+      <DetalheCampanha
+        campanhaId={detalhe}
+        onBack={() => setDetalhe(null)}
+        livros={livros}
+        parceiros={parceiros}
+        usuarios={usuarios}
+      />
+    )
+  }
 
   return (
     <>
       <div className="page-header">
         <div>
           <h1 className="page-title">Campanhas</h1>
-          <p className="page-subtitle">{campanhas.length} campanha{campanhas.length!==1?'s':''} · {campanhas.filter(c=>c.status==='em_andamento').length} em andamento</p>
+          <p className="page-subtitle">
+            {campanhas.length} campanha{campanhas.length !== 1 ? 's' : ''} · {campanhas.filter(c => c.status === 'em_andamento').length} em andamento
+          </p>
         </div>
-        <div style={{display:'flex',gap:8,alignItems:'center'}}>
-          {(['administrador', 'gerente', 'estagiario_parceiras', 'analista_parceiras', 'supervisor_parceiras'].includes(usuario?.perfil)) && (
-            <button className="btn btn-primary" onClick={()=>setModal(true)}><Plus size={16}/> Nova Campanha</button>
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {([
+            'administrador',
+            'gerente',
+            'estagiario_parceiras',
+            'analista_parceiras',
+            'supervisor_parceiras',
+            'estagiario_influencers',
+            'analista_influencers',
+            'supervisor_influencers',
+            'estagiario_marketplaces',
+            'analista_marketplaces',
+            'supervisor_marketplaces',
+            'estagiario_proprias',
+            'analista_proprias',
+            'supervisor_proprias',
+          ].includes(perfilEfetivo)) && (
+            <button className="btn btn-primary" onClick={() => setModal(true)}>
+              <Plus size={16} /> Nova Campanha
+            </button>
           )}
         </div>
       </div>
 
-      <div style={{display:'flex',gap:8,marginBottom:20,flexWrap:'wrap',alignItems:'center'}}>
-        <div style={{display:'flex',gap:6}}>
-          <button className={`btn btn-sm ${filtroStatus==='todos'?'btn-primary':'btn-ghost'}`} onClick={()=>setFiltroStatus('todos')}>Todas</button>
-          {STATUS_CAMPANHA.map(s=>(
-            <button key={s.value} className={`btn btn-sm ${filtroStatus===s.value?'btn-primary':'btn-ghost'}`} onClick={()=>setFiltroStatus(s.value)}>{s.label}</button>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            className={`btn btn-sm ${filtroStatus === 'todos' ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => setFiltroStatus('todos')}
+          >
+            Todas
+          </button>
+
+          {STATUS_CAMPANHA.map(s => (
+            <button
+              key={s.value}
+              className={`btn btn-sm ${filtroStatus === s.value ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setFiltroStatus(s.value)}
+            >
+              {s.label}
+            </button>
           ))}
         </div>
-        <input className="search-input" style={{marginLeft:'auto'}} placeholder="Buscar campanha..." value={search} onChange={e=>setSearch(e.target.value)}/>
+
+        <input
+          className="search-input"
+          style={{ marginLeft: 'auto' }}
+          placeholder="Buscar campanha..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
       </div>
 
       {loading ? (
-        <div className="loading"><div className="spinner"/></div>
+        <div className="loading">
+          <div className="spinner" />
+        </div>
       ) : filtradas.length === 0 ? (
-        <div className="empty-state" style={{marginTop:40}}><p>Nenhuma campanha encontrada.</p></div>
+        <div className="empty-state" style={{ marginTop: 40 }}>
+          <p>Nenhuma campanha encontrada.</p>
+        </div>
       ) : (
-        // Aqui vai o conteúdo original de renderização dos cards que você tinha
         (() => {
           const ORDEM_TIPOS = ['Promoção', 'Lançamento', 'Geral']
+
           const grupos = ORDEM_TIPOS.map(tipo => ({
             tipo,
             items: filtradas.filter(c => c.tipo === tipo)
           })).filter(g => g.items.length > 0)
+
           const semTipo = filtradas.filter(c => !ORDEM_TIPOS.includes(c.tipo))
-          if (semTipo.length > 0) grupos.push({ tipo: 'Outros', items: semTipo })
+
+          if (semTipo.length > 0) {
+            grupos.push({
+              tipo: 'Outros',
+              items: semTipo
+            })
+          }
 
           function renderCard(c) {
             const sc = STATUS_CAMPANHA.find(s => s.value === c.status) || STATUS_CAMPANHA[0]
@@ -2682,6 +2769,7 @@ const campanha = await createCampanha({
             const isOver = dragOver === c.id
 
             const livrosCampanha = c.campanha_livros || []
+
             const parceirosDiretos = cps
               .map(cp => cp.parceiro_id || cp.parceiros?.id)
               .filter(Boolean)
@@ -2691,7 +2779,11 @@ const campanha = await createCampanha({
               .map(lp => lp.parceiro_id || lp.parceiros?.id)
               .filter(Boolean)
 
-            const totalParceiros = new Set([...parceirosDiretos, ...parceirosLancamento]).size || cps.length
+            const totalParceiros = new Set([
+              ...parceirosDiretos,
+              ...parceirosLancamento
+            ]).size || cps.length
+
             const publicados = cps.filter(cp => cp.status === 'publicado').length
             const confirmados = cps.filter(cp => ['confirmado', 'publicado'].includes(cp.status)).length
 
@@ -2699,11 +2791,24 @@ const campanha = await createCampanha({
               <div
                 key={c.id}
                 draggable
-                onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; setDragId(c.id) }}
-                onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOver(c.id) }}
+                onDragStart={e => {
+                  e.dataTransfer.effectAllowed = 'move'
+                  setDragId(c.id)
+                }}
+                onDragOver={e => {
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = 'move'
+                  setDragOver(c.id)
+                }}
                 onDragLeave={() => setDragOver(null)}
-                onDrop={e => { e.preventDefault(); handleDragEnd(dragId, c.id) }}
-                onDragEnd={() => { setDragId(null); setDragOver(null) }}
+                onDrop={e => {
+                  e.preventDefault()
+                  handleDragEnd(dragId, c.id)
+                }}
+                onDragEnd={() => {
+                  setDragId(null)
+                  setDragOver(null)
+                }}
                 className="table-card"
                 style={{
                   padding: '18px 20px',
@@ -2723,6 +2828,7 @@ const campanha = await createCampanha({
                     <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)', marginBottom: 7, lineHeight: 1.35 }}>
                       {c.nome}
                     </div>
+
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <span className={`badge ${sc.cls}`}>{sc.label}</span>
                       {urgente && <span className="badge badge-red">⚠ Vencida</span>}
@@ -2732,7 +2838,10 @@ const campanha = await createCampanha({
                   <button
                     className="btn btn-danger btn-icon btn-sm"
                     title="Excluir campanha"
-                    onClick={e => { e.stopPropagation(); handleDelete(c.id) }}
+                    onClick={e => {
+                      e.stopPropagation()
+                      handleDelete(c.id)
+                    }}
                   >
                     <Trash2 size={13} />
                   </button>
@@ -2805,17 +2914,20 @@ const campanha = await createCampanha({
           return (
             <div>
               {grupos.map(grupo => (
-                <div key={grupo.tipo} style={{marginBottom:32}}>
-                  <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
-                    <h2 style={{fontSize:13,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'var(--text-muted)',margin:0}}>
+                <div key={grupo.tipo} style={{ marginBottom: 32 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                    <h2 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', margin: 0 }}>
                       {grupo.tipo}
                     </h2>
-                    <span style={{fontSize:12,color:'var(--text-muted)',background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:20,padding:'1px 8px'}}>
+
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 20, padding: '1px 8px' }}>
                       {grupo.items.length}
                     </span>
-                    <div style={{flex:1,height:'1px',background:'var(--border)'}}/>
+
+                    <div style={{ flex: 1, height: '1px', background: 'var(--border)' }} />
                   </div>
-                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(340px,1fr))',gap:16}}>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(340px,1fr))', gap: 16 }}>
                     {grupo.items.map(renderCard)}
                   </div>
                 </div>
@@ -2825,7 +2937,15 @@ const campanha = await createCampanha({
         })()
       )}
 
-      {modal && <ModalCampanha livros={livros} parceiros={parceiros} onSave={handleCreate} onClose={()=>setModal(false)}/>} 
+      {modal && (
+        <ModalCampanha
+          livros={livros}
+          parceiros={parceiros}
+          onSave={handleCreate}
+          onClose={() => setModal(false)}
+        />
+      )}
+
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
     </>
   )
