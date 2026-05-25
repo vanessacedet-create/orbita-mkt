@@ -166,11 +166,11 @@ function ModalCampanha({ campanha, livros, parceiros, onSave, onClose }) {
   }
 
   return (
-    <div className="modal-backdrop" onClick={()=>{}}>
-      <div className="modal" style={{maxWidth:560}}>
-        <div className="modal-header">
-          <h2 className="modal-title">{campanha?'Editar Campanha':'Nova Campanha'}</h2>
-          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
+          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+          {/* Admin, Gerente e todo o time de Parceiras podem criar */}
+          {ehAdmin || ['estagiario_parceiras', 'analista_parceiras', 'supervisor_parceiras'].includes(usuario?.perfil) ? (
+            <button className="btn btn-primary" onClick={()=>setModal(true)}><Plus size={16}/> Nova Campanha</button>
+          ) : null}
         </div>
         <div className="form-grid">
           <div className="form-group">
