@@ -109,132 +109,344 @@ function ModalCampanha({ campanha, livros, parceiros, onSave, onClose }) {
   const { perfilAtivo: _pa } = useViewAs()
   const _g = PERFIL_GRUPO[_pa] || null
   const gruposLivros = _g ? [_g] : null
-  const EMPTY = { nome:'', tipo:'', status:'planejamento', data_inicio:'', data_fim:'', descricao:'', livro_ids:[], parceiro_ids:[], adicionar_lancamentos_auto: false }
-  const [form, setForm]         = useState(campanha ? {
-    nome: campanha.nome, tipo: campanha.tipo||'', status: campanha.status,
-    data_inicio: campanha.data_inicio||'', data_fim: campanha.data_fim||'',
-    descricao: campanha.descricao||'',
-    livro_ids: (campanha.campanha_livros||[]).map(cl => cl.livros?.id).filter(Boolean),
-    parceiro_ids: (campanha.campanha_parceiros||[]).map(cp => cp.parceiros?.id).filter(Boolean),
-    adicionar_lancamentos_auto: false
-  } : EMPTY)
-  const [livroSearch, setLivroSearch]       = useState('')
-  const [livroResults, setLivroResults]     = useState([])
-  const [livroOpen, setLivroOpen]           = useState(false)
-  const [parceiroSearch, setParceiroSearch] = useState('')
-  const [parceiroOpen, setParceiroOpen]     = useState(false)
-  const [saving, setSaving]     = useState(false)
-  const [toast, showToast]      = useToast()
 
-  // Busca dinâmica de livros
+  const EMPTY = {
+    nome: '',
+    tipo: '',
+    status: 'planejamento',
+    data_inicio: '',
+    data_fim: '',
+    descricao: '',
+    livro_ids: [],
+    parceiro_ids: [],
+    adicionar_lancamentos_auto: false
+  }
+
+  const livrosCadastrados = Array.isArray(livros?.data) ? livros.data : Array.isArray(livros) ? livros : []
+  const parceirosCadastrados = Array.isArray(parceiros) ? parceiros : []
+
+  const [form, setForm] = useState(campanha ? {
+    nome: campanha.nome || '',
+    tipo: campanha.tipo || '',
+    status: campanha.status || 'planejamento',
+    data_inicio: campanha.data_inicio || '',
+    data_fim: campanha.data_fim || '',
+    descricao: campanha.descricao || '',
+    livro_ids: (campanha.campanha_livros || []).map(cl => cl.livros?.id || cl.livro_id).filter(Boolean),
+    parceiro_ids: (campanha.campanha_parceiros || []).map(cp => cp.parceiros?.id || cp.parceiro_id).filter(Boolean),
+    adicionar_lancamentos_auto: false,
+    _livroCache: Object.fromEntries(
+      (campanha.campanha_livros || [])
+        .map(cl => cl.livros)
+        .filter(Boolean)
+        .map(l => [l.id, l])
+    )
+  } : EMPTY)
+
+  const [livroSearch, setLivroSearch] = useState('')
+  const [livroResults, setLivroResults] = useState([])
+  const [livroOpen, setLivroOpen] = useState(false)
+  const [parceiroSearch, setParceiroSearch] = useState('')
+  const [parceiroOpen, setParceiroOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [toast, showToast] = useToast()
+
   useEffect(() => {
-    if (!livroSearch || livroSearch.length < 2) { setLivroResults([]); setLivroOpen(false); return }
+    if (!livroSearch || livroSearch.length < 2) {
+      setLivroResults([])
+      setLivroOpen(false)
+      return
+    }
+
     const t = setTimeout(async () => {
       try {
-        const { data } = await getLivros({ page:0, pageSize:50, search: livroSearch, grupos: gruposLivros })
+        const { data } = await getLivros({
+          page: 0,
+          pageSize: 50,
+          search: livroSearch,
+          grupos: gruposLivros
+        })
         setLivroResults(data || [])
         setLivroOpen(true)
-      } catch {}
+      } catch {
+        setLivroResults([])
+      }
     }, 300)
+
     return () => clearTimeout(t)
-  }, [livroSearch])
+  }, [livroSearch, _pa])
 
   function toggleLivro(id) {
-    const livroObj = livroResults.find(x=>x.id===id)
+    const livroObj =
+      livroResults.find(x => x.id === id) ||
+      livrosCadastrados.find(x => x.id === id)
+
     setForm(f => ({
       ...f,
-      livro_ids: f.livro_ids.includes(id) ? f.livro_ids.filter(x=>x!==id) : [...f.livro_ids, id],
-      _livroCache: { ...(f._livroCache||{}), ...(livroObj ? {[id]: livroObj} : {}) }
+      livro_ids: f.livro_ids.includes(id)
+        ? f.livro_ids.filter(x => x !== id)
+        : [...f.livro_ids, id],
+      _livroCache: {
+        ...(f._livroCache || {}),
+        ...(livroObj ? { [id]: livroObj } : {})
+      }
     }))
   }
 
   function toggleParceiro(id) {
     setForm(f => ({
       ...f,
-      parceiro_ids: f.parceiro_ids.includes(id) ? f.parceiro_ids.filter(x=>x!==id) : [...f.parceiro_ids, id]
+      parceiro_ids: f.parceiro_ids.includes(id)
+        ? f.parceiro_ids.filter(x => x !== id)
+        : [...f.parceiro_ids, id]
     }))
   }
 
+  function getLivroSelecionado(id) {
+    return (
+      form._livroCache?.[id] ||
+      livrosCadastrados.find(l => l.id === id) ||
+      null
+    )
+  }
+
+  const parceirosFiltrados = parceirosCadastrados.filter(p =>
+    normalizar(p.nome).includes(normalizar(parceiroSearch))
+  )
+
   async function save() {
-    if (!form.nome.trim()) return
+    if (!form.nome.trim()) {
+      showToast('Informe o nome da campanha.', 'error')
+      return
+    }
+
     setSaving(true)
     try {
-      await onSave(form)
+      await onSave({
+        ...form,
+        data_inicio: form.data_inicio || null,
+        data_fim: form.data_fim || null
+      })
       onClose()
-    } catch { showToast('Erro ao salvar','error') }
-    finally { setSaving(false) }
+    } catch (e) {
+      console.error(e)
+      showToast('Erro ao salvar', 'error')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
-    <>
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Campanhas</h1>
-          <p className="page-subtitle">{campanhas.length} campanha{campanhas.length!==1?'s':''} · {campanhas.filter(c=>c.status==='em_andamento').length} em andamento</p>
+    <div className="modal-backdrop" style={{ zIndex: 1000 }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 720, maxHeight: '90vh', overflowY: 'auto' }}>
+        <div className="modal-header" style={{ position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 10 }}>
+          <h2 className="modal-title">{campanha ? 'Editar campanha' : 'Nova campanha'}</h2>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}>
+            <X size={16} />
+          </button>
         </div>
-        <div style={{display:'flex',gap:8,alignItems:'center'}}>
-          {/* Permite criar para Admin, Gerente e time de Parceiras */}
-          {(['administrador', 'gerente', 'estagiario_parceiras', 'analista_parceiras', 'supervisor_parceiras'].includes(usuario?.perfil)) && (
-            <button className="btn btn-primary" onClick={()=>setModal(true)}><Plus size={16}/> Nova Campanha</button>
+
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">Nome da campanha *</label>
+            <input
+              className="form-input"
+              value={form.nome}
+              onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
+              placeholder="Ex.: Black Maio"
+              autoFocus
+            />
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Tipo</label>
+              <select
+                className="form-select"
+                value={form.tipo}
+                onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}
+              >
+                <option value="">Selecionar...</option>
+                {TIPOS_CAMPANHA.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Status</label>
+              <select
+                className="form-select"
+                value={form.status}
+                onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+              >
+                {STATUS_CAMPANHA.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Data de início</label>
+              <input
+                className="form-input"
+                type="date"
+                value={form.data_inicio || ''}
+                onChange={e => setForm(f => ({ ...f, data_inicio: e.target.value }))}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Data de fim</label>
+              <input
+                className="form-input"
+                type="date"
+                value={form.data_fim || ''}
+                onChange={e => setForm(f => ({ ...f, data_fim: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Descrição</label>
+            <textarea
+              className="form-textarea"
+              rows={3}
+              value={form.descricao}
+              onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+              placeholder="Observações, objetivo da campanha, orientações internas..."
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Livros vinculados</label>
+            <div style={{ position: 'relative' }}>
+              <input
+                className="form-input"
+                value={livroSearch}
+                onChange={e => setLivroSearch(e.target.value)}
+                placeholder="Buscar livro por título, ISBN ou SKU..."
+                autoComplete="off"
+              />
+
+              {livroOpen && livroResults.length > 0 && (
+                <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:250, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, boxShadow:'0 8px 24px rgba(0,0,0,0.3)', maxHeight:220, overflowY:'auto' }}>
+                  {livroResults.map(l => {
+                    const selected = form.livro_ids.includes(l.id)
+                    return (
+                      <div
+                        key={l.id}
+                        onClick={() => toggleLivro(l.id)}
+                        style={{ padding:'10px 14px', cursor:'pointer', borderBottom:'1px solid var(--border)', background:selected ? 'var(--accent-glow)' : 'transparent' }}
+                        onMouseEnter={e=>e.currentTarget.style.background=selected?'var(--accent-glow)':'var(--surface-2)'}
+                        onMouseLeave={e=>e.currentTarget.style.background=selected?'var(--accent-glow)':'transparent'}
+                      >
+                        <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{selected ? '✓ ' : ''}{l.titulo}</div>
+                        <div style={{ fontSize:11, color:'var(--text-muted)' }}>{l.autor}{l.isbn ? ` · ${l.isbn}` : ''}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {form.livro_ids.length > 0 && (
+              <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:8 }}>
+                {form.livro_ids.map(id => {
+                  const livro = getLivroSelecionado(id)
+                  return (
+                    <span key={id} className="badge badge-indigo" style={{ display:'inline-flex', alignItems:'center', gap:5 }}>
+                      {livro?.titulo || 'Livro selecionado'}
+                      <button
+                        type="button"
+                        onClick={() => toggleLivro(id)}
+                        style={{ background:'none', border:'none', color:'inherit', cursor:'pointer', padding:0, display:'flex' }}
+                      >
+                        <X size={11} />
+                      </button>
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Parceiros participantes</label>
+            <div style={{ position: 'relative' }}>
+              <input
+                className="form-input"
+                value={parceiroSearch}
+                onChange={e => { setParceiroSearch(e.target.value); setParceiroOpen(true) }}
+                onFocus={() => setParceiroOpen(true)}
+                placeholder="Buscar parceiro..."
+                autoComplete="off"
+              />
+
+              {parceiroOpen && parceiroSearch && (
+                <div style={{ position:'absolute', top:'100%', left:0, right:0, zIndex:250, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, boxShadow:'0 8px 24px rgba(0,0,0,0.3)', maxHeight:220, overflowY:'auto' }}>
+                  {parceirosFiltrados.length === 0 ? (
+                    <div style={{ padding:'10px 14px', fontSize:13, color:'var(--text-muted)' }}>Nenhum parceiro encontrado.</div>
+                  ) : parceirosFiltrados.map(p => {
+                    const selected = form.parceiro_ids.includes(p.id)
+                    return (
+                      <div
+                        key={p.id}
+                        onClick={() => toggleParceiro(p.id)}
+                        style={{ padding:'10px 14px', cursor:'pointer', borderBottom:'1px solid var(--border)', background:selected ? 'var(--accent-glow)' : 'transparent' }}
+                        onMouseEnter={e=>e.currentTarget.style.background=selected?'var(--accent-glow)':'var(--surface-2)'}
+                        onMouseLeave={e=>e.currentTarget.style.background=selected?'var(--accent-glow)':'transparent'}
+                      >
+                        <div style={{ fontSize:13, fontWeight:700, color:'var(--text)' }}>{selected ? '✓ ' : ''}{p.nome}</div>
+                        {p.tipo_parceria && <div style={{ fontSize:11, color:'var(--text-muted)' }}>{p.tipo_parceria}</div>}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {form.parceiro_ids.length > 0 && (
+              <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:8 }}>
+                {form.parceiro_ids.map(id => {
+                  const parceiro = parceirosCadastrados.find(p => p.id === id)
+                  return (
+                    <span key={id} className="badge badge-green" style={{ display:'inline-flex', alignItems:'center', gap:5 }}>
+                      {parceiro?.nome || 'Parceiro selecionado'}
+                      <button
+                        type="button"
+                        onClick={() => toggleParceiro(id)}
+                        style={{ background:'none', border:'none', color:'inherit', cursor:'pointer', padding:0, display:'flex' }}
+                      >
+                        <X size={11} />
+                      </button>
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {!campanha && (
+            <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, color:'var(--text-muted)', cursor:'pointer' }}>
+              <input
+                type="checkbox"
+                checked={!!form.adicionar_lancamentos_auto}
+                onChange={e => setForm(f => ({ ...f, adicionar_lancamentos_auto: e.target.checked }))}
+              />
+              Adicionar lançamentos automaticamente conforme o período da campanha
+            </label>
           )}
         </div>
-      </div>
 
-      {/* Filtros */}
-      <div style={{display:'flex',gap:8,marginBottom:20,flexWrap:'wrap',alignItems:'center'}}>
-        <div style={{display:'flex',gap:6}}>
-          <button className={`btn btn-sm ${filtroStatus==='todos'?'btn-primary':'btn-ghost'}`} onClick={()=>setFiltroStatus('todos')}>Todas</button>
-          {STATUS_CAMPANHA.map(s=>(
-            <button key={s.value} className={`btn btn-sm ${filtroStatus===s.value?'btn-primary':'btn-ghost'}`} onClick={()=>setFiltroStatus(s.value)}>{s.label}</button>
-          ))}
+        <div className="form-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving || !form.nome.trim()}>
+            {saving ? 'Salvando...' : 'Salvar campanha'}
+          </button>
         </div>
-        <input className="search-input" style={{marginLeft:'auto'}} placeholder="Buscar campanha..." value={search} onChange={e=>setSearch(e.target.value)}/>
+
+        {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
       </div>
-
-      {loading
-        ? <div className="loading"><div className="spinner"/></div>
-        : filtradas.length === 0
-          ? <div className="empty-state" style={{marginTop:40}}><p>Nenhuma campanha encontrada.</p></div>
-          : (() => {
-              const ORDEM_TIPOS = ['Promoção', 'Lançamento', 'Geral']
-              const grupos = ORDEM_TIPOS.map(tipo => ({
-                tipo,
-                items: filtradas.filter(c => c.tipo === tipo)
-              })).filter(g => g.items.length > 0)
-              const semTipo = filtradas.filter(c => !ORDEM_TIPOS.includes(c.tipo))
-              if (semTipo.length > 0) grupos.push({ tipo: 'Outros', items: semTipo })
-
-              function renderCard(c) {
-                // ... seu renderCard original ...
-                // (mantenha exatamente como estava antes)
-              }
-
-              return (
-                <div>
-                  {grupos.map(grupo => (
-                    <div key={grupo.tipo} style={{marginBottom:32}}>
-                      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
-                        <h2 style={{fontSize:13,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.08em',color:'var(--text-muted)',margin:0}}>
-                          {grupo.tipo}
-                        </h2>
-                        <span style={{fontSize:12,color:'var(--text-muted)',background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:20,padding:'1px 8px'}}>
-                          {grupo.items.length}
-                        </span>
-                        <div style={{flex:1,height:'1px',background:'var(--border)'}}/>
-                      </div>
-                      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(340px,1fr))',gap:16}}>
-                        {grupo.items.map(renderCard)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
-            })()
-      }
-
-      {modal && <ModalCampanha livros={livros} parceiros={parceiros} onSave={handleCreate} onClose={()=>setModal(false)}/>}
-      {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
-    </>
+    </div>
   )
 }
 
@@ -2450,39 +2662,130 @@ export default function Campanhas() {
           if (semTipo.length > 0) grupos.push({ tipo: 'Outros', items: semTipo })
 
           function renderCard(c) {
-            const sc = STATUS_CAMPANHA.find(s=>s.value===c.status)||STATUS_CAMPANHA[0]
-            const cps = c.campanha_parceiros||[]
-            const hoje = new Date().toISOString().slice(0,10)
+            const sc = STATUS_CAMPANHA.find(s => s.value === c.status) || STATUS_CAMPANHA[0]
+            const cps = c.campanha_parceiros || []
+            const hoje = new Date().toISOString().slice(0, 10)
             const urgente = c.data_fim && c.data_fim <= hoje && c.status === 'em_andamento'
             const isDragging = dragId === c.id
             const isOver = dragOver === c.id
+
+            const livrosCampanha = c.campanha_livros || []
+            const parceirosDiretos = cps
+              .map(cp => cp.parceiro_id || cp.parceiros?.id)
+              .filter(Boolean)
+
+            const parceirosLancamento = (c.lancamento_livros || [])
+              .flatMap(ll => ll.lancamento_parceiros || [])
+              .map(lp => lp.parceiro_id || lp.parceiros?.id)
+              .filter(Boolean)
+
+            const totalParceiros = new Set([...parceirosDiretos, ...parceirosLancamento]).size || cps.length
+            const publicados = cps.filter(cp => cp.status === 'publicado').length
+            const confirmados = cps.filter(cp => ['confirmado', 'publicado'].includes(cp.status)).length
+
             return (
-              <div key={c.id}
+              <div
+                key={c.id}
                 draggable
-                onDragStart={e=>{ e.dataTransfer.effectAllowed='move'; setDragId(c.id) }}
-                onDragOver={e=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; setDragOver(c.id) }}
-                onDragLeave={()=>setDragOver(null)}
-                onDrop={e=>{ e.preventDefault(); handleDragEnd(dragId, c.id) }}
-                onDragEnd={()=>{ setDragId(null); setDragOver(null) }}
+                onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; setDragId(c.id) }}
+                onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOver(c.id) }}
+                onDragLeave={() => setDragOver(null)}
+                onDrop={e => { e.preventDefault(); handleDragEnd(dragId, c.id) }}
+                onDragEnd={() => { setDragId(null); setDragOver(null) }}
                 className="table-card"
                 style={{
-                  padding:'18px 20px', cursor:'grab',
-                  border: isOver ? '2px solid var(--accent)' : urgente ? '1px solid rgba(245,101,101,0.3)' : '1px solid var(--border)',
+                  padding: '18px 20px',
+                  cursor: 'grab',
+                  border: isOver
+                    ? '2px solid var(--accent)'
+                    : urgente
+                      ? '1px solid rgba(245,101,101,0.3)'
+                      : '1px solid var(--border)',
                   opacity: isDragging ? 0.4 : 1,
+                  minHeight: 118
                 }}
-                onClick={()=>!dragId&&setDetalhe(c.id)}>
-                {/* Todo o conteúdo do card que você tinha originalmente */}
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:10}}>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontWeight:700,fontSize:15,color:'var(--text)',marginBottom:4}}>{c.nome}</div>
-                    <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                onClick={() => !dragId && setDetalhe(c.id)}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)', marginBottom: 7, lineHeight: 1.35 }}>
+                      {c.nome}
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <span className={`badge ${sc.cls}`}>{sc.label}</span>
                       {urgente && <span className="badge badge-red">⚠ Vencida</span>}
                     </div>
                   </div>
-                  <button className="btn btn-danger btn-icon btn-sm" onClick={e=>{e.stopPropagation();handleDelete(c.id)}}><Trash2 size={13}/></button>
+
+                  <button
+                    className="btn btn-danger btn-icon btn-sm"
+                    title="Excluir campanha"
+                    onClick={e => { e.stopPropagation(); handleDelete(c.id) }}
+                  >
+                    <Trash2 size={13} />
+                  </button>
                 </div>
-                {/* Adicione aqui o resto do card (livros, datas, progresso) do seu código original */}
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                    gap: 8,
+                    marginBottom: 12
+                  }}
+                >
+                  <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px' }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>
+                      Início
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
+                      {c.data_inicio ? fmtDate(c.data_inicio, 'dd/MM/yy', { locale: ptBR }) : '—'}
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px' }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>
+                      Fim
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: urgente ? 'var(--red)' : 'var(--text)' }}>
+                      {c.data_fim ? fmtDate(c.data_fim, 'dd/MM/yy', { locale: ptBR }) : '—'}
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px' }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3 }}>
+                      Parceiros
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
+                      {totalParceiros}
+                    </div>
+                  </div>
+                </div>
+
+                {livrosCampanha.length > 0 && (
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <BookOpen size={12} />
+                    {livrosCampanha.length} livro{livrosCampanha.length !== 1 ? 's' : ''} vinculado{livrosCampanha.length !== 1 ? 's' : ''}
+                  </div>
+                )}
+
+                {cps.length > 0 ? (
+                  <ProgressoParceiros parceiros={cps} />
+                ) : totalParceiros > 0 ? (
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    {totalParceiros} parceiro{totalParceiros !== 1 ? 's' : ''} vinculado{totalParceiros !== 1 ? 's' : ''} aos livros da campanha.
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    Nenhum parceiro vinculado ainda.
+                  </div>
+                )}
+
+                {(confirmados > 0 || publicados > 0) && (
+                  <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+                    {confirmados} confirmado{confirmados !== 1 ? 's' : ''} · {publicados} publicado{publicados !== 1 ? 's' : ''}
+                  </div>
+                )}
               </div>
             )
           }
@@ -2510,7 +2813,7 @@ export default function Campanhas() {
         })()
       )}
 
-      {modal && <ModalCampanha livros={livros} parceiros={parceiros} onSave={handleCreate} onClose={()=>setModal(false)}/>}
+      {modal && <ModalCampanha livros={livros} parceiros={parceiros} onSave={handleCreate} onClose={()=>setModal(false)}/>} 
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
     </>
   )
