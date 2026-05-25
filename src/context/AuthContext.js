@@ -11,7 +11,7 @@ export const MODULOS_PERMISSOES = {
   crm_parceiras: ['administrador', 'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
   calculadora: ['administrador', 'gerente', 'estagiario_proprias', 'analista_proprias', 'supervisor_proprias', 'estagiario_influencers', 'analista_influencers'],
   cortesias: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
-  campanhas: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  campanhas: [   'administrador',   'gerente',    'estagiario_influencers',   'analista_influencers',   'supervisor_influencers',    'estagiario_parceiras',   'analista_parceiras',   'supervisor_parceiras',    'estagiario_marketplaces',   'analista_marketplaces',    'estagiario_proprias',   'analista_proprias',   'supervisor_proprias', ],
   monitoramento: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
   lancamentos: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
   tarefas: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers', 'analista_marketplaces', 'estagiario_marketplaces', 'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
