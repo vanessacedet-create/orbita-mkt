@@ -858,7 +858,9 @@ function LivrosTab({ gruposLivrosVisiveis, grupo }) {
     finally { setLoading(false) }
   }
 
-  const gruposLivrosKey = gruposLivrosVisiveis ? gruposLivrosVisiveis.join('|') : 'todos'  useEffect(() => {   fetchLivros(page, pageSize, search) }, [page, pageSize, search, gruposLivrosKey])
+  const gruposLivrosKey = gruposLivrosVisiveis ? gruposLivrosVisiveis.join('|') : 'todos'
+
+  useEffect(() => { fetchLivros(page, pageSize, search) }, [page, pageSize, search, gruposLivrosKey])
 
   useEffect(() => {
     const t = setTimeout(() => { setSearch(searchInput); setPage(0) }, 400)
