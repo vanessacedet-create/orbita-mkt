@@ -500,8 +500,10 @@ export default function Parceiros() {
                   <th>Nota</th>
                   <th>Classe</th>
                   <th>Tipo de Parceria</th>
+                  <th>Status</th>
                   <th>Livraria</th>
                   <th>Canal</th>
+                  <th>Responsável</th>
                   <th>Temas</th>
                   <th></th>
                 </tr>
@@ -522,19 +524,32 @@ export default function Parceiros() {
                         : <span style={{fontSize:11,color:'var(--text-muted)'}}>Sem histórico</span>
                       }
                     </td>
-                    <td><BadgeClasse classe={p.classe}/></td>
-                    <td>{p.tipo_parceria?<span className="badge badge-indigo">{p.tipo_parceria}</span>:<span className="td-muted">—</span>}</td>
+                    <td>
+                      {p.classe && CLASSES_PARCEIRO[p.classe]
+                        ? <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:26,height:26,borderRadius:'50%',fontSize:12,fontWeight:800,color:CLASSES_PARCEIRO[p.classe].cor,background:CLASSES_PARCEIRO[p.classe].bg,border:`1px solid ${CLASSES_PARCEIRO[p.classe].border}`}}>{p.classe}</span>
+                        : <span className="td-muted">—</span>}
+                    </td>
+                    <td>
+                      {p.tipo_parceria
+                        ? <span className="badge badge-indigo" style={{whiteSpace:'nowrap'}}>
+                            {p.tipo_parceria === 'Livraria de influencer' ? 'Influencer'
+                              : p.tipo_parceria === 'Booktime' ? 'Booktime'
+                              : p.tipo_parceria === 'Divulgação editoras próprias' ? 'Ed. próprias'
+                              : p.tipo_parceria}
+                          </span>
+                        : <span className="td-muted">—</span>}
+                    </td>
                     <td><span className={`badge ${p.status==='inativo'?'badge-red':'badge-green'}`} style={{fontSize:10}}>{p.status==='inativo'?'Inativo':'Ativo'}</span></td>
                     <td style={{fontSize:12}}>{p.livraria||<span className="td-muted">—</span>}</td>
                     <td style={{fontSize:12}}>
-                      {p.canal_comunicacao
+                      {p.canal_comunicacao||p.canal
                         ? <span className="badge badge-amber" style={{fontSize:10}}>{p.canal||p.canal_comunicacao}</span>
                         : <span className="td-muted">—</span>}
                     </td>
                     <td style={{fontSize:12,color:'var(--text-muted)'}}>
                       {usuarios.find(u=>u.id===p.responsavel_interno_id)?.nome || <span className="td-muted">—</span>}
                     </td>
-                    <td style={{fontSize:12,maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                    <td style={{fontSize:12,maxWidth:180,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:'var(--text-muted)'}}>
                       {p.temas||<span className="td-muted">—</span>}
                     </td>
                     <td>
