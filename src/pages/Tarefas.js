@@ -257,6 +257,114 @@ function SeletorLivros({ tarefaId, livrosVinculados, onChange }) {
   )
 }
 
+// ── SELETOR DE LIVROS DA CAMPANHA (funciona antes de salvar) ──────────────
+const TIPOS_COM_LIVRO_CAMPANHA = ['E-mail marketing', 'Newsletter']
+
+function SeletorLivrosCampanha({ livros, onChange }) {
+  const [busca, setBusca] = useState('')
+  const [resultados, setResultados] = useState([])
+  const [buscando, setBuscando] = useState(false)
+  const [showResults, setShowResults] = useState(false)
+  const buscaTimeout = useRef(null)
+
+  const idsVinculados = livros.map(l => l.id)
+
+  useEffect(() => {
+    if (buscaTimeout.current) clearTimeout(buscaTimeout.current)
+    if (!busca.trim() || busca.trim().length < 2) { setResultados([]); return }
+    buscaTimeout.current = setTimeout(async () => {
+      setBuscando(true)
+      try {
+        const { data } = await getLivros({ page: 0, pageSize: 10, search: busca.trim() })
+        setResultados(data || [])
+      } catch (e) { console.error(e) }
+      finally { setBuscando(false) }
+    }, 300)
+    return () => clearTimeout(buscaTimeout.current)
+  }, [busca])
+
+  function adicionar(livro) {
+    if (idsVinculados.includes(livro.id)) return
+    onChange([...livros, { id: livro.id, titulo: livro.titulo, autor: livro.autor, isbn: livro.isbn }])
+    setBusca(''); setResultados([]); setShowResults(false)
+  }
+
+  function remover(id) { onChange(livros.filter(l => l.id !== id)) }
+
+  const filtrados = resultados.filter(r => !idsVinculados.includes(r.id))
+
+  return (
+    <div style={{ marginTop: 2 }}>
+      {livros.length > 0 && (
+        <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom:8 }}>
+          {livros.map(l => (
+            <div key={l.id} style={{
+              display:'inline-flex', alignItems:'center', gap:6,
+              padding:'4px 10px', borderRadius:99,
+              background:'rgba(236,72,153,0.1)', border:'1px solid rgba(236,72,153,0.3)',
+              fontSize:11, color:'#ec4899', fontWeight:600
+            }}>
+              <Book size={11}/>
+              <span style={{ maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                {l.titulo}
+              </span>
+              <button onClick={() => remover(l.id)} style={{
+                background:'none', border:'none', cursor:'pointer', padding:0,
+                display:'flex', alignItems:'center', color:'#ec4899', opacity:0.7
+              }}><X size={11}/></button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ position:'relative' }}>
+        <div style={{ position:'relative' }}>
+          <Search size={14} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)' }}/>
+          <input
+            className="form-input"
+            value={busca}
+            onChange={e => { setBusca(e.target.value); setShowResults(true) }}
+            onFocus={() => setShowResults(true)}
+            onBlur={() => setTimeout(() => setShowResults(false), 200)}
+            placeholder="Buscar livro por título, autor ou ISBN..."
+            style={{ paddingLeft:32, fontSize:12 }}
+          />
+        </div>
+        {showResults && busca.trim().length >= 2 && (
+          <div style={{
+            position:'absolute', top:'calc(100% + 4px)', left:0, right:0,
+            background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8,
+            boxShadow:'0 4px 16px rgba(0,0,0,0.15)', zIndex:20, maxHeight:240, overflowY:'auto'
+          }}>
+            {buscando && <div style={{ padding:'12px 14px', fontSize:12, color:'var(--text-muted)' }}>Buscando...</div>}
+            {!buscando && filtrados.length === 0 && (
+              <div style={{ padding:'12px 14px', fontSize:12, color:'var(--text-muted)' }}>
+                {resultados.length > 0 ? 'Todos os livros encontrados já foram adicionados.' : 'Nenhum livro encontrado.'}
+              </div>
+            )}
+            {!buscando && filtrados.map(livro => (
+              <button key={livro.id} onClick={() => adicionar(livro)} style={{
+                width:'100%', padding:'8px 12px', textAlign:'left',
+                background:'transparent', border:'none', cursor:'pointer',
+                display:'flex', flexDirection:'column', gap:2,
+                borderBottom:'1px solid var(--border)'
+              }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                <span style={{ fontSize:12, fontWeight:600, color:'var(--text)' }}>{livro.titulo}</span>
+                <span style={{ fontSize:10, color:'var(--text-muted)' }}>
+                  {livro.autor || 'Sem autor'} {livro.isbn ? `· ISBN ${livro.isbn}` : ''}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── SELETOR DE PARCEIRO ────────────────────────────────────
 function SeletorParceiro({ value, onChange }) {
   const [parceiros, setParceiros] = useState([])
@@ -664,6 +772,13 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
 
   const [comentarios, setComentarios] = useState(tarefa?.tarefa_comentarios || [])
   const [livrosVinculados, setLivrosVinculados] = useState(tarefa?.tarefa_livros || [])
+  const [livrosCampanha, setLivrosCampanha] = useState(() => {
+    // ao editar, recarrega os livros da campanha que já estavam salvos
+    return (tarefa?.tarefa_livros || [])
+      .filter(tl => tl._campanha)
+      .map(tl => ({ id: tl.livros?.id, titulo: tl.livros?.titulo, autor: tl.livros?.autor, isbn: tl.livros?.isbn }))
+      .filter(l => l.id)
+  })
   const [novoItem, setNovoItem]       = useState('')
   const [novoComent, setNovoComent]   = useState('')
   const [saving, setSaving]           = useState(false)
@@ -673,7 +788,6 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
     if (!form.titulo.trim()) return
     setSaving(true)
     try {
-      // itens locais (sem id real) são enviados junto para o pai salvar no banco
       const itensPendentes = checklist.filter(x => x._local)
       await onSave({
         ...form,
@@ -681,6 +795,7 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
         data_prazo:     form.data_prazo || null,
         created_by:     tarefa ? undefined : usuario?.id,
         _checklistPendente: itensPendentes.map(x => x.texto),
+        _livrosCampanhaPendentes: TIPOS_COM_LIVRO_CAMPANHA.includes(form.tipo_tarefa) ? livrosCampanha.map(l => l.id) : [],
       }, tarefa?.id)
       limparRascunho()
       onClose()
@@ -828,6 +943,21 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
                 </select>
               </div>
             </div>
+            {TIPOS_COM_LIVRO_CAMPANHA.includes(form.tipo_tarefa) && (
+              <div className="form-group" style={{
+                background:'rgba(236,72,153,0.06)',
+                border:'1px solid rgba(236,72,153,0.2)',
+                borderRadius:10, padding:'12px 14px',
+              }}>
+                <label className="form-label" style={{ display:'flex', alignItems:'center', gap:6, color:'#ec4899' }}>
+                  <Book size={13}/> Livros desta {form.tipo_tarefa} (opcional)
+                </label>
+                <SeletorLivrosCampanha
+                  livros={livrosCampanha}
+                  onChange={setLivrosCampanha}
+                />
+              </div>
+            )}
             <RecorrenciaPanel form={form} setForm={setForm}/>
           </div>
         )}
@@ -1330,9 +1460,14 @@ export default function Tarefas() {
 
   async function handleSave(form, id) {
     if (id) {
-      const { _checklistPendente: _cp, ...formLimpo } = form
+      const { _checklistPendente: _cp, _livrosCampanhaPendentes: _lcp, ...formLimpo } = form
       const tarefaAntes = tarefas.find(t => t.id === id)
       const upd = await updateTarefa(id, { ...formLimpo, grupo: grupoDaTarefa(formLimpo) })
+      // salva livros da campanha ao editar (adiciona os que não existem ainda)
+      if (_lcp?.length) {
+        const idsJaVinculados = (upd.tarefa_livros || []).map(tl => tl.livros?.id).filter(Boolean)
+        await Promise.all(_lcp.filter(lid => !idsJaVinculados.includes(lid)).map(lid => addLivroTarefa(id, lid)))
+      }
       setTarefas(prev => prev.map(t => t.id === upd.id ? upd : t))
 
       // Se concluiu uma tarefa recorrente, gera a próxima ocorrência
@@ -1357,7 +1492,7 @@ export default function Tarefas() {
         showToast('Tarefa atualizada!')
       }
     } else {
-      const { _checklistPendente, ...formLimpo } = form
+      const { _checklistPendente, _livrosCampanhaPendentes, ...formLimpo } = form
       const nova = await createTarefa({
         ...formLimpo,
         grupo: grupoDaTarefa(formLimpo),
@@ -1365,6 +1500,10 @@ export default function Tarefas() {
       // salva itens de checklist que foram adicionados antes de criar a tarefa
       if (_checklistPendente?.length) {
         await Promise.all(_checklistPendente.map(texto => addChecklistItem(nova.id, texto)))
+      }
+      // salva livros da campanha (newsletter / e-mail marketing)
+      if (_livrosCampanhaPendentes?.length) {
+        await Promise.all(_livrosCampanhaPendentes.map(lid => addLivroTarefa(nova.id, lid)))
       }
       setTarefas(prev => [nova, ...prev])
       showToast('Tarefa criada!')
