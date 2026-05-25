@@ -29,6 +29,23 @@ const NIVEIS = {
   atencao: { label:'Atenção', emoji:'⚠️', cor:'#ef4444', bg:'rgba(239,68,68,0.12)'   },
 }
 
+const CLASSES_PARCEIRO = {
+  A: { label:'Classe A', cor:'#6366f1', bg:'rgba(99,102,241,0.12)', border:'rgba(99,102,241,0.3)', descricao:'Newsletter e e-mail semanal' },
+  B: { label:'Classe B', cor:'#14b8a6', bg:'rgba(20,184,166,0.12)', border:'rgba(20,184,166,0.3)', descricao:'Comunicação quinzenal' },
+  C: { label:'Classe C', cor:'#f97316', bg:'rgba(249,115,22,0.12)', border:'rgba(249,115,22,0.3)', descricao:'Comunicação mensal' },
+  D: { label:'Classe D', cor:'#9ca3af', bg:'rgba(156,163,175,0.12)', border:'rgba(156,163,175,0.3)', descricao:'Comunicação esporádica' },
+}
+
+function BadgeClasse({ classe }) {
+  if (!classe || !CLASSES_PARCEIRO[classe]) return <span style={{fontSize:11,color:'var(--text-muted)'}}>—</span>
+  const c = CLASSES_PARCEIRO[classe]
+  return (
+    <span style={{display:'inline-flex',alignItems:'center',gap:4,background:c.bg,border:`1px solid ${c.border}`,borderRadius:20,padding:'2px 10px',fontSize:11,fontWeight:800,color:c.cor}}>
+      {c.label}
+    </span>
+  )
+}
+
 function BadgeNivel({ nivel }) {
   if (!nivel) return <span style={{fontSize:11,color:'var(--text-muted)'}}>—</span>
   const n = NIVEIS[nivel] || NIVEIS.atencao
@@ -287,6 +304,7 @@ export default function Parceiros() {
   const [filtroCanal, setFiltroCanal]     = useState('')
   const [filtroResp, setFiltroResp]       = useState('')
   const [filtroNivel, setFiltroNivel]     = useState('')
+  const [filtroClasse, setFiltroClasse]   = useState('')
   const [saving, setSaving]       = useState(false)
   const [toast, showToast]        = useToast()
   const [editoras, setEditoras]   = useState([])
@@ -294,7 +312,7 @@ export default function Parceiros() {
   const [usuarios, setUsuarios]     = useState([])
   const [abaAtiva, setAbaAtiva]     = useState('parceiros')
 
-  const EMPTY = { nome:'', tipo_parceria:'', cpf:'', livraria:'', canal_comunicacao:'', editoras_divulga:[], temas:'', responsavel_interno_id:'', status:'ativo', notes:'' }
+  const EMPTY = { nome:'', tipo_parceria:'', cpf:'', livraria:'', canal_comunicacao:'', editoras_divulga:[], temas:'', responsavel_interno_id:'', status:'ativo', notes:'', classe:'' }
   const [form, setForm] = useState(EMPTY)
 
   async function reload() {
@@ -329,6 +347,7 @@ export default function Parceiros() {
       editoras_divulga:  p.editoras_divulga ? p.editoras_divulga.split(',').map(e=>e.trim()).filter(Boolean) : [],
       temas:             p.temas||'',
       notes:             p.notes||'',
+      classe:            p.classe||'',
     })
     setModal(true)
   }
@@ -388,6 +407,7 @@ export default function Parceiros() {
       if (filtroCanal && (p.canal||p.canal_comunicacao) !== filtroCanal) return false
       if (filtroResp  && p.responsavel_interno_id !== filtroResp) return false
       if (filtroNivel && p.pontuacao?.nivel !== filtroNivel) return false
+      if (filtroClasse && p.classe !== filtroClasse) return false
       return true
     })
     .sort((a,b) => {
@@ -396,7 +416,7 @@ export default function Parceiros() {
       if (na !== nb) return nb - na
       return a.nome.localeCompare(b.nome, 'pt-BR')
     })
-  const temFiltro = filtroTipo || filtroCanal || filtroResp || filtroNivel
+  const temFiltro = filtroTipo || filtroCanal || filtroResp || filtroNivel || filtroClasse
 
   return (
     <div>
@@ -453,8 +473,12 @@ export default function Parceiros() {
           <option value="bronze">🥉 Bronze</option>
           <option value="atencao">⚠️ Atenção</option>
         </select>
+        <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroClasse} onChange={e=>setFiltroClasse(e.target.value)}>
+          <option value="">Todas as classes</option>
+          {Object.entries(CLASSES_PARCEIRO).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+        </select>
         {temFiltro && (
-          <button className="btn btn-ghost btn-sm" onClick={()=>{setFiltroTipo('');setFiltroCanal('');setFiltroResp('');setFiltroNivel('')}}>
+          <button className="btn btn-ghost btn-sm" onClick={()=>{setFiltroTipo('');setFiltroCanal('');setFiltroResp('');setFiltroNivel('');setFiltroClasse('')}}>
             <X size={12}/> Limpar
           </button>
         )}
@@ -474,6 +498,7 @@ export default function Parceiros() {
                 <tr>
                   <th>Nome</th>
                   <th>Nota</th>
+                  <th>Classe</th>
                   <th>Tipo de Parceria</th>
                   <th>Livraria</th>
                   <th>Canal</th>
@@ -497,6 +522,7 @@ export default function Parceiros() {
                         : <span style={{fontSize:11,color:'var(--text-muted)'}}>Sem histórico</span>
                       }
                     </td>
+                    <td><BadgeClasse classe={p.classe}/></td>
                     <td>{p.tipo_parceria?<span className="badge badge-indigo">{p.tipo_parceria}</span>:<span className="td-muted">—</span>}</td>
                     <td><span className={`badge ${p.status==='inativo'?'badge-red':'badge-green'}`} style={{fontSize:10}}>{p.status==='inativo'?'Inativo':'Ativo'}</span></td>
                     <td style={{fontSize:12}}>{p.livraria||<span className="td-muted">—</span>}</td>
@@ -557,6 +583,15 @@ export default function Parceiros() {
                   <select className="form-select" value={form.tipo_parceria} onChange={e=>setForm(f=>({...f,tipo_parceria:e.target.value}))}>
                     <option value="">Selecionar...</option>
                     {TIPOS_PARCERIA.map(t=><option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Classe</label>
+                  <select className="form-select" value={form.classe} onChange={e=>setForm(f=>({...f,classe:e.target.value}))}>
+                    <option value="">Sem classificação</option>
+                    {Object.entries(CLASSES_PARCEIRO).map(([k,v])=>(
+                      <option key={k} value={k}>{v.label} — {v.descricao}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="form-group">
