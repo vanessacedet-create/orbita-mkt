@@ -3,61 +3,75 @@ import { supabase, getUsuarioPerfil } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 
-// Permissões por módulo e perfil
-// Perfis disponíveis:
-// administrador, gerente
-// estagiario_proprias, analista_proprias, supervisor_proprias
-// estagiario_influencers, analista_influencers
-// estagiario_marketplaces, analista_marketplaces
-// estagiario_parceiras, analista_parceiras, supervisor_parceiras
-
+// ==================== PERMISSÕES POR MÓDULO ====================
 export const MODULOS_PERMISSOES = {
-  dashboard:      ['administrador', 'gerente', 'analista_influencers', 'estagiario_influencers', 'estagiario_proprias', 'analista_proprias', 'supervisor_proprias', 'estagiario_marketplaces', 'analista_marketplaces'],
-  parceiros:      ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  dashboard: ['administrador', 'gerente', 'analista_influencers', 'estagiario_influencers', 'estagiario_proprias', 'analista_proprias', 'supervisor_proprias', 'estagiario_marketplaces', 'analista_marketplaces'],
+  parceiros: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
   crm_influencers: ['administrador', 'analista_influencers', 'estagiario_influencers'],
-  crm_parceiras:   ['administrador', 'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
-  calculadora:    ['administrador', 'gerente',
-                   'estagiario_proprias', 'analista_proprias', 'supervisor_proprias',
-                   'estagiario_influencers', 'analista_influencers'],
-  cortesias:      ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
-  campanhas:      ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
-  monitoramento:  ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
-  lancamentos:    ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
-  tarefas:        ['administrador', 'gerente',
-                   'estagiario_influencers', 'analista_influencers',
-                   'analista_marketplaces', 'estagiario_marketplaces',
-                   'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
-  eventos:        ['administrador', 'gerente', 'estagiario_marketplaces', 'analista_marketplaces'],
-  rh:             ['administrador'],
-  treinamentos:   ['administrador', 'gerente', 'supervisor_proprias'],
-  usuarios:       ['administrador'],
+  crm_parceiras: ['administrador', 'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
+  calculadora: ['administrador', 'gerente', 'estagiario_proprias', 'analista_proprias', 'supervisor_proprias', 'estagiario_influencers', 'analista_influencers'],
+  cortesias: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  campanhas: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  monitoramento: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  lancamentos: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  tarefas: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers', 'analista_marketplaces', 'estagiario_marketplaces', 'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
+  eventos: ['administrador', 'gerente', 'estagiario_marketplaces', 'analista_marketplaces'],
+  rh: ['administrador'],
+  treinamentos: ['administrador', 'gerente', 'supervisor_proprias'],
+  usuarios: ['administrador'],
   guia_parcerias: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
 }
 
-// Mapeamento de perfil para grupo (usado para isolamento de tarefas)
+// ==================== MAPEAMENTO DE GRUPO ====================
 export const PERFIL_GRUPO = {
-  estagiario_influencers:  'influencers',
-  analista_influencers:    'influencers',
+  estagiario_influencers: 'influencers',
+  analista_influencers: 'influencers',
+  supervisor_influencers: 'influencers',     // ← adicionei (caso exista)
+  
+  estagiario_parceiras: 'parceiras',
+  analista_parceiras: 'parceiras',
+  supervisor_parceiras: 'parceiras',
+  
   estagiario_marketplaces: 'marketplaces',
-  analista_marketplaces:   'marketplaces',
-  estagiario_proprias:     'proprias',
-  analista_proprias:       'proprias',
-  supervisor_proprias:     'proprias',
-  estagiario_parceiras:    'parceiras',
-  analista_parceiras:      'parceiras',
-  supervisor_parceiras:    'parceiras',
-  // administrador e gerente ficam sem grupo (veem tudo)
-}
+  analista_marketplaces: 'marketplaces',
+  
+  estagiario_proprias: 'proprias',
+  analista_proprias: 'proprias',
+  supervisor_proprias: 'proprias',
+  
+  // admin e gerente veem tudo
+  administrador: 'admin',
+  gerente: 'admin',
+};
 
+// ==================== FUNÇÕES DE PERMISSÃO ====================
 export function canAccess(perfil, modulo) {
   if (!perfil || !modulo) return false
   return (MODULOS_PERMISSOES[modulo] || []).includes(perfil)
 }
 
+export function getUserGroup(perfil) {
+  if (!perfil) return null;
+  return PERFIL_GRUPO[perfil] || null;
+}
+
+export function canAccessGroup(userPerfil, targetGroup) {
+  if (!userPerfil) return false;
+  
+  // Admin e Gerente veem tudo
+  if (['administrador', 'gerente'].includes(userPerfil)) {
+    return true;
+  }
+
+  const userGroup = getUserGroup(userPerfil);
+  return userGroup === targetGroup;
+}
+
+// ==================== PROVIDER ====================
 export function AuthProvider({ children }) {
-  const [session, setSession]   = useState(null)
-  const [usuario, setUsuario]   = useState(null)
-  const [loading, setLoading]   = useState(true)
+  const [session, setSession] = useState(null)
+  const [usuario, setUsuario] = useState(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -69,7 +83,10 @@ export function AuthProvider({ children }) {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       if (session) loadPerfil(session.user.id)
-      else { setUsuario(null); setLoading(false) }
+      else { 
+        setUsuario(null); 
+        setLoading(false) 
+      }
     })
 
     return () => listener.subscription.unsubscribe()
@@ -87,7 +104,13 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ session, usuario, loading, setUsuario, abasExtras: usuario?.abas_extras || [] }}>
+    <AuthContext.Provider value={{ 
+      session, 
+      usuario, 
+      loading, 
+      setUsuario, 
+      abasExtras: usuario?.abas_extras || [] 
+    }}>
       {children}
     </AuthContext.Provider>
   )
