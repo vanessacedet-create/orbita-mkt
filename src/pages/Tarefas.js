@@ -16,7 +16,7 @@ import {
   Calendar, Flag, User, ChevronDown, List, Columns, Clock,
   AlertCircle, ArrowUp, Minus, CheckCircle2, Circle, LayoutList,
   CalendarDays, ChevronLeft, ChevronRight, Book, Search,
-  Upload, Download, FileSpreadsheet, ChevronUp, Users
+  Upload, Download, FileSpreadsheet, ChevronUp, Users, Layers
 } from 'lucide-react'
 import { format, isPast, isToday, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -1356,6 +1356,376 @@ function menuItemStyle() {
   return { width:'100%', padding:'8px 12px', textAlign:'left', background:'transparent', border:'none', cursor:'pointer', display:'flex', alignItems:'center', gap:10, fontSize:13, color:'var(--text)', borderRadius:6, transition:'background 0.1s' }
 }
 
+// ── MODAL CRIAR EM LOTE ────────────────────────────────────
+const CLASSES_PARCEIRO_LOTE = {
+  A: { label: 'Classe A', cor: '#6366f1', bg: 'rgba(99,102,241,0.12)', border: 'rgba(99,102,241,0.3)' },
+  B: { label: 'Classe B', cor: '#14b8a6', bg: 'rgba(20,184,166,0.12)', border: 'rgba(20,184,166,0.3)' },
+  C: { label: 'Classe C', cor: '#f97316', bg: 'rgba(249,115,22,0.12)', border: 'rgba(249,115,22,0.3)' },
+  D: { label: 'Classe D', cor: '#9ca3af', bg: 'rgba(156,163,175,0.12)', border: 'rgba(156,163,175,0.3)' },
+}
+
+function ModalCriarLote({ usuarios, grupoPrincipal, onClose, onCreate }) {
+  const [passo, setPasso] = useState(1) // 1=configurar, 2=revisar, 3=sucesso
+  const [classesSelecionadas, setClassesSelecionadas] = useState([])
+  const [tipoTarefa, setTipoTarefa] = useState('')
+  const [prioridade, setPrioridade] = useState('media')
+  const [dataPrazo, setDataPrazo] = useState('')
+  const [responsavelId, setResponsavelId] = useState('')
+  const [parceiros, setParceiros] = useState([])
+  const [carregando, setCarregando] = useState(false)
+  const [criando, setCriando] = useState(false)
+  const [progresso, setProgresso] = useState(0)
+  const [parceirosExcluidos, setParceirosExcluidos] = useState(new Set())
+
+  function toggleClasse(c) {
+    setClassesSelecionadas(prev =>
+      prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c]
+    )
+  }
+
+  async function buscarParceiros() {
+    if (!classesSelecionadas.length || !tipoTarefa) return
+    setCarregando(true)
+    try {
+      const data = await getParceirosAtivos()
+      const filtrados = data.filter(p => classesSelecionadas.includes(p.classe))
+      setParceiros(filtrados)
+      setPasso(2)
+    } catch (e) { console.error(e) }
+    finally { setCarregando(false) }
+  }
+
+  function toggleExcluir(id) {
+    setParceirosExcluidos(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const parceirosAtivos = parceiros.filter(p => !parceirosExcluidos.has(p.id))
+
+  async function criarTarefas() {
+    if (!parceirosAtivos.length) return
+    setCriando(true)
+    setProgresso(0)
+    let criadas = 0
+    for (const parceiro of parceirosAtivos) {
+      try {
+        await createTarefa({
+          titulo: `${tipoTarefa} — ${parceiro.livraria || parceiro.nome}`,
+          status: 'a_fazer',
+          prioridade,
+          data_prazo: dataPrazo || null,
+          responsavel_id: responsavelId || null,
+          parceiro_id: parceiro.id,
+          tipo_tarefa: tipoTarefa,
+          grupo: grupoPrincipal,
+        })
+        criadas++
+        setProgresso(Math.round((criadas / parceirosAtivos.length) * 100))
+      } catch (e) { console.error(e) }
+    }
+    setPasso(3)
+    setCriando(false)
+    onCreate(criadas)
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal" style={{ maxWidth: 560 }}>
+        <div className="modal-header" style={{ position:'sticky', top:0, background:'var(--surface)', zIndex:10 }}>
+          <h2 className="modal-title" style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <Layers size={16} color="var(--accent)"/>
+            Criar tarefas em lote
+          </h2>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
+        </div>
+
+        {/* Indicador de passo */}
+        <div style={{ display:'flex', gap:0, marginBottom:20, borderBottom:'1px solid var(--border)' }}>
+          {['Configurar', 'Revisar parceiros', 'Concluído'].map((l, i) => (
+            <div key={i} style={{ flex:1, padding:'8px 0', textAlign:'center', fontSize:12, fontWeight: passo === i+1 ? 700 : 400,
+              color: passo === i+1 ? 'var(--accent)' : passo > i+1 ? 'var(--green)' : 'var(--text-muted)',
+              borderBottom: passo === i+1 ? '2px solid var(--accent)' : '2px solid transparent' }}>
+              {passo > i+1 ? '✓ ' : ''}{l}
+            </div>
+          ))}
+        </div>
+
+        {/* PASSO 1 — Configurar */}
+        {passo === 1 && (
+          <div className="form-grid">
+            <div className="form-group">
+              <label className="form-label">Classe dos parceiros *</label>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                {Object.entries(CLASSES_PARCEIRO_LOTE).map(([k, v]) => (
+                  <button key={k} type="button" onClick={() => toggleClasse(k)} style={{
+                    padding:'6px 16px', borderRadius:99, fontSize:12, fontWeight:700, cursor:'pointer',
+                    border: `1px solid ${classesSelecionadas.includes(k) ? v.cor : 'var(--border)'}`,
+                    background: classesSelecionadas.includes(k) ? v.bg : 'transparent',
+                    color: classesSelecionadas.includes(k) ? v.cor : 'var(--text-muted)',
+                    transition:'all 0.15s',
+                  }}>{v.label}</button>
+                ))}
+              </div>
+              {classesSelecionadas.length > 0 && (
+                <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:4 }}>
+                  {classesSelecionadas.length} classe{classesSelecionadas.length > 1 ? 's' : ''} selecionada{classesSelecionadas.length > 1 ? 's' : ''}
+                </div>
+              )}
+            </div>
+            <div className="form-group">
+              <label className="form-label">Tipo de tarefa *</label>
+              <select className="form-select" value={tipoTarefa} onChange={e => setTipoTarefa(e.target.value)}>
+                <option value="">Selecionar tipo...</option>
+                {TIPOS_TAREFA.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            {tipoTarefa && classesSelecionadas.length > 0 && (
+              <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'10px 14px', fontSize:12, color:'var(--text-muted)' }}>
+                Título gerado: <strong style={{ color:'var(--text)' }}>{tipoTarefa} — [nome do parceiro]</strong>
+              </div>
+            )}
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Prioridade</label>
+                <select className="form-select" value={prioridade} onChange={e => setPrioridade(e.target.value)}>
+                  {PRIORIDADE.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Prazo</label>
+                <input className="form-input" type="date" value={dataPrazo} onChange={e => setDataPrazo(e.target.value)}/>
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Responsável</label>
+              <select className="form-select" value={responsavelId} onChange={e => setResponsavelId(e.target.value)}>
+                <option value="">Sem responsável</option>
+                {usuarios.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
+              </select>
+            </div>
+            <div className="form-actions">
+              <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+              <button className="btn btn-primary" onClick={buscarParceiros}
+                disabled={!classesSelecionadas.length || !tipoTarefa || carregando}>
+                {carregando ? 'Buscando...' : 'Ver parceiros →'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* PASSO 2 — Revisar parceiros */}
+        {passo === 2 && (
+          <div>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+              <p style={{ fontSize:13, color:'var(--text-muted)', margin:0 }}>
+                <strong style={{ color:'var(--text)' }}>{parceirosAtivos.length}</strong> tarefa{parceirosAtivos.length !== 1 ? 's' : ''} serão criadas.
+                {parceirosExcluidos.size > 0 && <span style={{ color:'var(--text-muted)' }}> ({parceirosExcluidos.size} excluído{parceirosExcluidos.size > 1 ? 's' : ''})</span>}
+              </p>
+              <button className="btn btn-ghost btn-sm" onClick={() => setParceirosExcluidos(new Set())} style={{ fontSize:11 }}>
+                Incluir todos
+              </button>
+            </div>
+            <div style={{ border:'1px solid var(--border)', borderRadius:8, overflow:'hidden', maxHeight:320, overflowY:'auto', marginBottom:16 }}>
+              {parceiros.length === 0
+                ? <div style={{ padding:'20px', textAlign:'center', fontSize:13, color:'var(--text-muted)' }}>
+                    Nenhum parceiro ativo encontrado nas classes selecionadas.
+                  </div>
+                : parceiros.map(p => {
+                    const excluido = parceirosExcluidos.has(p.id)
+                    const cl = CLASSES_PARCEIRO_LOTE[p.classe]
+                    return (
+                      <div key={p.id} style={{
+                        display:'flex', alignItems:'center', gap:10, padding:'10px 14px',
+                        borderBottom:'1px solid var(--border)',
+                        background: excluido ? 'var(--surface-2)' : 'transparent',
+                        opacity: excluido ? 0.5 : 1, transition:'all 0.15s',
+                      }}>
+                        <input type="checkbox" checked={!excluido} onChange={() => toggleExcluir(p.id)}
+                          style={{ width:15, height:15, cursor:'pointer', accentColor:'var(--accent)' }}/>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:13, fontWeight:600, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                            {tipoTarefa} — {p.livraria || p.nome}
+                          </div>
+                          <div style={{ fontSize:11, color:'var(--text-muted)' }}>{p.nome}</div>
+                        </div>
+                        {cl && (
+                          <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:99,
+                            background:cl.bg, color:cl.cor, border:`1px solid ${cl.border}`, flexShrink:0 }}>
+                            {p.classe}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })
+              }
+            </div>
+            {criando && (
+              <div style={{ marginBottom:12 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'var(--text-muted)', marginBottom:4 }}>
+                  <span>Criando tarefas...</span><span>{progresso}%</span>
+                </div>
+                <div style={{ height:4, borderRadius:99, background:'var(--surface-3)' }}>
+                  <div style={{ height:'100%', width:`${progresso}%`, background:'var(--accent)', borderRadius:99, transition:'width 0.2s' }}/>
+                </div>
+              </div>
+            )}
+            <div className="form-actions">
+              <button className="btn btn-ghost" onClick={() => setPasso(1)} disabled={criando}>← Voltar</button>
+              <button className="btn btn-primary" onClick={criarTarefas}
+                disabled={criando || parceirosAtivos.length === 0}>
+                {criando ? 'Criando...' : `Criar ${parceirosAtivos.length} tarefa${parceirosAtivos.length !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* PASSO 3 — Sucesso */}
+        {passo === 3 && (
+          <div style={{ textAlign:'center', padding:'20px 0' }}>
+            <CheckCircle2 size={48} color="var(--green)" style={{ marginBottom:12 }}/>
+            <h3 style={{ fontSize:16, fontWeight:700, marginBottom:8 }}>Tarefas criadas!</h3>
+            <p style={{ fontSize:13, color:'var(--text-muted)', marginBottom:20 }}>
+              {parceirosAtivos.length} tarefa{parceirosAtivos.length !== 1 ? 's' : ''} de <strong>{tipoTarefa}</strong> foram criadas com sucesso.
+            </p>
+            <button className="btn btn-primary" onClick={onClose}>Ver tarefas</button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── MODAL EDITAR EM LOTE ───────────────────────────────────
+function ModalEditarLote({ tarefasSelecionadas, usuarios, onSave, onClose }) {
+  const [campos, setCampos] = useState({
+    responsavel_id: '', data_prazo: '', prioridade: '', status: '', tipo_tarefa: '',
+  })
+  const [ativados, setAtivados] = useState({
+    responsavel_id: false, data_prazo: false, prioridade: false, status: false, tipo_tarefa: false,
+  })
+  const [salvando, setSalvando] = useState(false)
+  const [progresso, setProgresso] = useState(0)
+
+  function toggleAtivado(campo) {
+    setAtivados(prev => ({ ...prev, [campo]: !prev[campo] }))
+  }
+
+  const camposAtivados = Object.keys(ativados).filter(k => ativados[k])
+  const payload = {}
+  camposAtivados.forEach(k => { payload[k] = campos[k] || null })
+
+  async function salvar() {
+    if (!camposAtivados.length) return
+    setSalvando(true)
+    setProgresso(0)
+    let done = 0
+    for (const t of tarefasSelecionadas) {
+      try {
+        await updateTarefa(t.id, payload)
+        done++
+        setProgresso(Math.round((done / tarefasSelecionadas.length) * 100))
+      } catch (e) { console.error(e) }
+    }
+    setSalvando(false)
+    onSave()
+  }
+
+  function CampoToggle({ campo, label, children }) {
+    return (
+      <div style={{ borderRadius:8, border:`1px solid ${ativados[campo] ? 'var(--accent)' : 'var(--border)'}`,
+        padding:'10px 14px', transition:'border 0.15s', background: ativados[campo] ? 'var(--accent-glow)' : 'transparent' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: ativados[campo] ? 10 : 0 }}>
+          <label style={{ fontSize:13, fontWeight:600, color: ativados[campo] ? 'var(--accent)' : 'var(--text)', cursor:'pointer' }}
+            onClick={() => toggleAtivado(campo)}>{label}</label>
+          <button type="button" onClick={() => toggleAtivado(campo)} style={{
+            width:34, height:18, borderRadius:10, border:'none', cursor:'pointer', padding:0,
+            background: ativados[campo] ? 'var(--accent)' : 'var(--surface-3)', position:'relative', flexShrink:0,
+          }}>
+            <span style={{ position:'absolute', top:2, left: ativados[campo] ? 17 : 2, width:14, height:14,
+              borderRadius:'50%', background:'#fff', transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.2)' }}/>
+          </button>
+        </div>
+        {ativados[campo] && children}
+      </div>
+    )
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal" style={{ maxWidth: 480 }}>
+        <div className="modal-header">
+          <h2 className="modal-title" style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <Layers size={16} color="var(--accent)"/>
+            Editar {tarefasSelecionadas.length} tarefa{tarefasSelecionadas.length !== 1 ? 's' : ''} em lote
+          </h2>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
+        </div>
+
+        <p style={{ fontSize:12, color:'var(--text-muted)', marginBottom:16 }}>
+          Ative os campos que quer alterar. Apenas os campos ativados serão atualizados.
+        </p>
+
+        <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:20 }}>
+          <CampoToggle campo="responsavel_id" label="Responsável">
+            <select className="form-select" value={campos.responsavel_id} onChange={e => setCampos(f => ({ ...f, responsavel_id: e.target.value }))}>
+              <option value="">Sem responsável</option>
+              {usuarios.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
+            </select>
+          </CampoToggle>
+
+          <CampoToggle campo="data_prazo" label="Prazo">
+            <input className="form-input" type="date" value={campos.data_prazo}
+              onChange={e => setCampos(f => ({ ...f, data_prazo: e.target.value }))}/>
+          </CampoToggle>
+
+          <CampoToggle campo="prioridade" label="Prioridade">
+            <select className="form-select" value={campos.prioridade} onChange={e => setCampos(f => ({ ...f, prioridade: e.target.value }))}>
+              <option value="">Selecionar...</option>
+              {PRIORIDADE.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
+          </CampoToggle>
+
+          <CampoToggle campo="status" label="Status">
+            <select className="form-select" value={campos.status} onChange={e => setCampos(f => ({ ...f, status: e.target.value }))}>
+              <option value="">Selecionar...</option>
+              {STATUS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
+          </CampoToggle>
+
+          <CampoToggle campo="tipo_tarefa" label="Tipo de tarefa">
+            <select className="form-select" value={campos.tipo_tarefa} onChange={e => setCampos(f => ({ ...f, tipo_tarefa: e.target.value }))}>
+              <option value="">Selecionar...</option>
+              {TIPOS_TAREFA.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </CampoToggle>
+        </div>
+
+        {salvando && (
+          <div style={{ marginBottom:12 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'var(--text-muted)', marginBottom:4 }}>
+              <span>Atualizando tarefas...</span><span>{progresso}%</span>
+            </div>
+            <div style={{ height:4, borderRadius:99, background:'var(--surface-3)' }}>
+              <div style={{ height:'100%', width:`${progresso}%`, background:'var(--accent)', borderRadius:99, transition:'width 0.2s' }}/>
+            </div>
+          </div>
+        )}
+
+        <div className="form-actions">
+          <button className="btn btn-ghost" onClick={onClose} disabled={salvando}>Cancelar</button>
+          <button className="btn btn-primary" onClick={salvar}
+            disabled={salvando || !camposAtivados.length}>
+            {salvando ? 'Salvando...' : `Aplicar a ${tarefasSelecionadas.length} tarefa${tarefasSelecionadas.length !== 1 ? 's' : ''}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── PÁGINA PRINCIPAL ───────────────────────────────────────
 export default function Tarefas() {
   const { usuario } = useAuth()
@@ -1376,6 +1746,9 @@ export default function Tarefas() {
   const [loading, setLoading]       = useState(true)
   const [modal, setModal]           = useState(null)
   const [showImportar, setShowImportar] = useState(false)
+  const [showCriarLote, setShowCriarLote] = useState(false)
+  const [showEditarLote, setShowEditarLote] = useState(false)
+  const [selecionadas, setSelecionadas] = useState(new Set())
   const [showMenuNova, setShowMenuNova] = useState(false)
   const [view, setView]             = usePersistedState('view', 'kanban')
   const [filtroStatus, setFiltroStatus]         = usePersistedState('filtroStatus', 'todos')
@@ -1621,6 +1994,9 @@ export default function Tarefas() {
                 <button onClick={()=>{ setShowMenuNova(false); abrirModal('new') }} style={menuItemStyle()} onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                   <Plus size={13}/> Criar manualmente
                 </button>
+                <button onClick={()=>{ setShowMenuNova(false); setShowCriarLote(true) }} style={menuItemStyle()} onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                  <Layers size={13}/> Criar em lote por classe
+                </button>
                 <button onClick={()=>{ setShowMenuNova(false); setShowImportar(true) }} style={menuItemStyle()} onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'} onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                   <FileSpreadsheet size={13}/> Importar planilha
                 </button>
@@ -1711,11 +2087,36 @@ export default function Tarefas() {
       {/* LISTA */}
       {view === 'lista' && (
         <div className="table-card">
+          {selecionadas.size > 0 && (
+            <div style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 16px',
+              background:'var(--accent-glow)', borderBottom:'1px solid var(--accent)', borderRadius:'8px 8px 0 0' }}>
+              <span style={{ fontSize:13, fontWeight:700, color:'var(--accent)' }}>
+                {selecionadas.size} selecionada{selecionadas.size !== 1 ? 's' : ''}
+              </span>
+              <button className="btn btn-primary btn-sm" onClick={() => setShowEditarLote(true)}
+                style={{ display:'flex', alignItems:'center', gap:6 }}>
+                <Layers size={13}/> Editar em lote
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setSelecionadas(new Set())}>
+                <X size={12}/> Limpar seleção
+              </button>
+            </div>
+          )}
           {tarefasFiltradas.length === 0
             ? <div className="empty-state"><p>Nenhuma tarefa {abaView === 'concluidas' ? 'concluída ' : ''}encontrada.</p></div>
             : <table>
                 <thead>
                   <tr>
+                    <th style={{ width:36 }}>
+                      <input type="checkbox"
+                        style={{ cursor:'pointer', accentColor:'var(--accent)' }}
+                        checked={selecionadas.size === tarefasOrdenadas.length && tarefasOrdenadas.length > 0}
+                        onChange={e => {
+                          if (e.target.checked) setSelecionadas(new Set(tarefasOrdenadas.map(t => t.id)))
+                          else setSelecionadas(new Set())
+                        }}
+                      />
+                    </th>
                     {[
                       { col:'titulo',      label:'Tarefa' },
                       { col:'status',      label:'Status' },
@@ -1729,7 +2130,7 @@ export default function Tarefas() {
                         onMouseLeave={e=>e.currentTarget.style.color=sortCol===col?'var(--accent)':'var(--text-muted)'}>
                         <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}>
                           {label}
-                          {sortCol === col ? sortDir === 'asc' ? <ChevronUp size={12}/> : <ChevronDown size={12}/> : <ChevronUp size={12} style={{ opacity:0.2 }}/>} 
+                          {sortCol === col ? sortDir === 'asc' ? <ChevronUp size={12}/> : <ChevronDown size={12}/> : <ChevronUp size={12} style={{ opacity:0.2 }}/>}
                         </span>
                       </th>
                     ))}
@@ -1743,23 +2144,36 @@ export default function Tarefas() {
                     const checkTotal = t.tarefa_checklist?.length || 0
                     const checkDone  = t.tarefa_checklist?.filter(x=>x.concluido).length || 0
                     const livrosCount = t.tarefa_livros?.length || 0
+                    const isSel = selecionadas.has(t.id)
                     return (
-                      <tr key={t.id} style={{ cursor:'pointer' }} onClick={()=>abrirModal(t)}
+                      <tr key={t.id} style={{ cursor:'pointer', background: isSel ? 'var(--accent-glow)' : undefined }}
                         title={t.recorrencia_ativa ? 'Tarefa recorrente' : ''}>
-                        <td>
+                        <td onClick={e => e.stopPropagation()}>
+                          <input type="checkbox" checked={isSel}
+                            style={{ cursor:'pointer', accentColor:'var(--accent)' }}
+                            onChange={() => {
+                              setSelecionadas(prev => {
+                                const next = new Set(prev)
+                                next.has(t.id) ? next.delete(t.id) : next.add(t.id)
+                                return next
+                              })
+                            }}
+                          />
+                        </td>
+                        <td onClick={()=>abrirModal(t)}>
                           <div style={{ fontSize:13, fontWeight:600, color:'var(--text)' }}>{t.titulo}</div>
                           {t.descricao && <div style={{ fontSize:11.5, color:'var(--text-muted)', marginTop:2, overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis', maxWidth:280 }}>{t.descricao}</div>}
                         </td>
-                        <td><StatusBadge value={t.status}/></td>
-                        <td><PrioridadeBadge value={t.prioridade}/></td>
-                        <td style={{ fontSize:12, color:'var(--text-muted)' }}>{t.responsavel?.nome || '—'}</td>
-                        <td><PrazoBadge data_prazo={t.data_prazo} status={t.status}/></td>
+                        <td onClick={()=>abrirModal(t)}><StatusBadge value={t.status}/></td>
+                        <td onClick={()=>abrirModal(t)}><PrioridadeBadge value={t.prioridade}/></td>
+                        <td onClick={()=>abrirModal(t)} style={{ fontSize:12, color:'var(--text-muted)' }}>{t.responsavel?.nome || '—'}</td>
+                        <td onClick={()=>abrirModal(t)}><PrazoBadge data_prazo={t.data_prazo} status={t.status}/></td>
                         {algumaTemLivros && (
-                          <td style={{ fontSize:12, color:'var(--text-muted)' }}>
+                          <td onClick={()=>abrirModal(t)} style={{ fontSize:12, color:'var(--text-muted)' }}>
                             {livrosCount > 0 ? <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}><Book size={11}/> {livrosCount}</span> : '—'}
                           </td>
                         )}
-                        <td style={{ minWidth:80 }}>
+                        <td onClick={()=>abrirModal(t)} style={{ minWidth:80 }}>
                           {checkTotal > 0 ? (
                             <div>
                               <div style={{ fontSize:10, color:'var(--text-muted)', marginBottom:2 }}>{checkDone}/{checkTotal}</div>
@@ -1811,6 +2225,24 @@ export default function Tarefas() {
 
       {showImportar && (
         <ModalImportar usuarios={usuariosVisiveis} onClose={()=>setShowImportar(false)} onImported={()=>{ carregar(); showToast('Tarefas importadas!') }}/>
+      )}
+
+      {showCriarLote && (
+        <ModalCriarLote
+          usuarios={usuariosVisiveis}
+          grupoPrincipal={grupoPrincipal}
+          onClose={() => setShowCriarLote(false)}
+          onCreate={(n) => { carregar(); showToast(`${n} tarefa${n !== 1 ? 's' : ''} criada${n !== 1 ? 's' : ''}! 🎉`) }}
+        />
+      )}
+
+      {showEditarLote && (
+        <ModalEditarLote
+          tarefasSelecionadas={tarefasOrdenadas.filter(t => selecionadas.has(t.id))}
+          usuarios={usuariosVisiveis}
+          onClose={() => setShowEditarLote(false)}
+          onSave={() => { setShowEditarLote(false); setSelecionadas(new Set()); carregar(); showToast('Tarefas atualizadas!') }}
+        />
       )}
 
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
