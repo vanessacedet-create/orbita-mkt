@@ -78,3 +78,12 @@ export {
 export {
   getCRMStatusConfig, saveCRMStatusConfig, corParaBg,
 } from './crm-status'
+
+export {
+  getMarcas,
+  getConversas, getConversa, upsertConversa, updateConversa, vincularParceiro,
+  getMensagens, addMensagem, marcarLidas, getContagemNaoLidas,
+  enviarMensagemMeta,
+  subscribeConversa, subscribeConversas,
+} from './inbox'
+
