@@ -6,7 +6,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const SUPABASE_URL       = Deno.env.get('SUPABASE_URL')!
-const SUPABASE_KEY       = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+const SUPABASE_KEY = Deno.env.get('SERVICE_ROLE_KEY')!
 const VERIFY_TOKEN       = Deno.env.get('META_VERIFY_TOKEN')!   // você define este valor
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
