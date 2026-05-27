@@ -533,7 +533,25 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
   useEffect(() => {
     getEditoras().then(setEditoras).catch(console.error)
     getUsuarios().then(setUsuarios).catch(console.error)
-    getLivros({ pageSize: 5000, grupos: null }).then(r => setLivros(r.data || [])).catch(console.error)
+    // Busca todos os livros paginando (Supabase limita a 1000 por chamada)
+    ;(async () => {
+      try {
+        const todos = []
+        let pagina = 0
+        const tamanho = 1000
+        while (true) {
+          const r = await getLivros({ page: pagina, pageSize: tamanho, grupos: null })
+          const lote = r.data || []
+          todos.push(...lote)
+          if (lote.length < tamanho) break
+          pagina++
+          if (pagina > 20) break // segurança contra loop infinito
+        }
+        setLivros(todos)
+      } catch (e) {
+        console.error('Erro ao carregar livros:', e)
+      }
+    })()
   }, [])
 
   function togglePlat(p) {
