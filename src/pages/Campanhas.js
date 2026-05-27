@@ -1333,18 +1333,31 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
 
   // Busca de livros para adicionar
   useEffect(() => {
-    if (!livroSearch || livroSearch.length < 2) { setLivroResults([]); setLivroOpen(false); return }
+    if (!livroSearch || livroSearch.length < 2) {
+      setLivroResults([])
+      setLivroOpen(false)
+      return
+    }
+    let cancelled = false
     const t = setTimeout(async () => {
       try {
-        const { data } = await getLivros({ page:0, pageSize:1000, search: livroSearch, grupos: gruposLivros })
-        setLivroResults(data || [])
-        setLivroOpen(true)
-      } catch(e) {
-        console.error('Erro ao buscar livros:', e)
-        setLivroResults([])
+        const res = await getLivros({ page: 0, pageSize: 50, search: livroSearch, grupos: gruposLivros })
+        if (cancelled) return
+        const lista = res?.data || []
+        setLivroResults(lista)
+        setLivroOpen(lista.length > 0)
+        if (lista.length === 0) {
+          console.log('[Campanhas] Busca sem resultados para:', livroSearch, 'grupos:', gruposLivros)
+        }
+      } catch (e) {
+        console.error('[Campanhas] Erro ao buscar livros:', e)
+        if (!cancelled) {
+          setLivroResults([])
+          setLivroOpen(false)
+        }
       }
-    }, 300)
-    return () => clearTimeout(t)
+    }, 250)
+    return () => { cancelled = true; clearTimeout(t) }
   }, [livroSearch, _pa])
 
   async function handleAddLivro(livro) {
@@ -1500,7 +1513,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
           {livroOpen && livroResults.length > 0 && (
             <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:200,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,boxShadow:'0 4px 16px rgba(0,0,0,0.3)',maxHeight:220,overflowY:'auto'}}>
               {livroResults.map(l=>(
-                <div key={l.id} onClick={()=>handleAddLivro(l)}
+                <div key={l.id} onMouseDown={(e)=>{ e.preventDefault(); handleAddLivro(l) }}
                   style={{padding:'10px 14px',cursor:'pointer',borderBottom:'1px solid var(--border)'}}
                   onMouseEnter={e=>e.currentTarget.style.background='var(--surface-2)'}
                   onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
@@ -1508,6 +1521,11 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
                   <div style={{fontSize:11,color:'var(--text-muted)'}}>{l.autor}{l.isbn?` · ISBN: ${l.isbn}`:''}</div>
                 </div>
               ))}
+            </div>
+          )}
+          {livroSearch.length >= 2 && livroResults.length === 0 && (
+            <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:200,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,padding:'10px 14px',fontSize:12,color:'var(--text-muted)'}}>
+              Nenhum livro encontrado para "{livroSearch}"
             </div>
           )}
           </div>
