@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   getParceiros, getParceirosAtivos, getEditoras, getUsuarios,
   getCRMParceiros, updateParceiroCRM, getStatusHistory, addStatusHistory, createParceiroCRM, deleteParceiro,
-  getCRMStatusConfig, saveCRMStatusConfig, corParaBg,
+  getCRMStatusConfig, saveCRMStatusConfig, corParaBg, getLivros,
 } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import {
@@ -526,10 +526,14 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
   const [editoras, setEditoras] = useState([])
   const [editoraSearch, setEditoraSearch] = useState('')
   const [usuarios, setUsuarios] = useState([])
+  const [livros, setLivros] = useState([])
+  const [livroSearch, setLivroSearch] = useState('')
+  const [livrosConvidados, setLivrosConvidados] = useState([])
 
   useEffect(() => {
     getEditoras().then(setEditoras).catch(console.error)
     getUsuarios().then(setUsuarios).catch(console.error)
+    getLivros({ pageSize: 200 }).then(r => setLivros(r.data || [])).catch(console.error)
   }, [])
 
   function togglePlat(p) {
@@ -557,9 +561,15 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
         responsavel_interno_id: form.responsavel_interno_id||null,
         notes: form.notes||null,
         editoras_sugeridas: form.editoras_sugeridas.length ? form.editoras_sugeridas.join(',') : null,
+        livros_propostos: livrosConvidados.length ? livrosConvidados.map(l => ({
+          livro: l.titulo,
+          livro_id: l.id,
+          status: 'proposto',
+          data: new Date().toLocaleDateString('pt-BR'),
+        })) : null,
       }
       const novo = await createParceiroCRM({ ...payload, grupo }, statusInicial)
-      onSave({ ...novo, current_status: statusInicial })
+      onSave({ ...novo, current_status: statusInicial, livros_propostos: payload.livros_propostos || [] })
       onClose()
     } catch(e) { console.error(e) } finally { setSaving(false) }
   }
@@ -672,6 +682,48 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
                         onMouseEnter={ev=>ev.currentTarget.style.background='var(--surface-3)'}
                         onMouseLeave={ev=>ev.currentTarget.style.background='transparent'}>
                         {e}
+                      </div>
+                    ))
+                }
+              </div>
+            )}
+          </div>
+
+          {/* Livro convidado */}
+          <div className="form-group">
+            <label className="form-label">Livro convidado para divulgar</label>
+            {livrosConvidados.length > 0 && (
+              <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:8}}>
+                {livrosConvidados.map(l=>(
+                  <div key={l.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:'var(--accent-glow)',border:'1px solid var(--accent)',borderRadius:8,padding:'6px 12px'}}>
+                    <div style={{minWidth:0}}>
+                      <span style={{fontSize:13,fontWeight:600,color:'var(--accent)',display:'block',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{l.titulo}</span>
+                      {l.autor && <span style={{fontSize:11,color:'var(--text-muted)'}}>{l.autor}</span>}
+                    </div>
+                    <button onClick={()=>setLivrosConvidados(prev=>prev.filter(x=>x.id!==l.id))} style={{background:'none',border:'none',cursor:'pointer',color:'var(--accent)',padding:'0 0 0 8px',display:'flex',flexShrink:0}}><X size={13}/></button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <input className="form-input" value={livroSearch} onChange={e=>setLivroSearch(e.target.value)} placeholder="Buscar livro pelo título ou autor..."/>
+            {livroSearch.trim() && (
+              <div style={{border:'1px solid var(--border)',borderRadius:8,marginTop:4,maxHeight:160,overflowY:'auto',background:'var(--surface-2)'}}>
+                {livros.filter(l=>
+                  (l.titulo||'').toLowerCase().includes(livroSearch.toLowerCase()) ||
+                  (l.autor||'').toLowerCase().includes(livroSearch.toLowerCase())
+                ).filter(l=>!livrosConvidados.find(x=>x.id===l.id)).slice(0,20).length === 0
+                  ? <div style={{padding:'10px 14px',fontSize:12,color:'var(--text-muted)'}}>Nenhum livro encontrado</div>
+                  : livros.filter(l=>
+                      (l.titulo||'').toLowerCase().includes(livroSearch.toLowerCase()) ||
+                      (l.autor||'').toLowerCase().includes(livroSearch.toLowerCase())
+                    ).filter(l=>!livrosConvidados.find(x=>x.id===l.id)).slice(0,20).map(l=>(
+                      <div key={l.id}
+                        onClick={()=>{setLivrosConvidados(prev=>[...prev,l]);setLivroSearch('')}}
+                        style={{padding:'8px 14px',cursor:'pointer',borderBottom:'1px solid var(--border)'}}
+                        onMouseEnter={ev=>ev.currentTarget.style.background='var(--surface-3)'}
+                        onMouseLeave={ev=>ev.currentTarget.style.background='transparent'}>
+                        <div style={{fontSize:13,fontWeight:600,color:'var(--text)'}}>{l.titulo}</div>
+                        {l.autor && <div style={{fontSize:11,color:'var(--text-muted)'}}>{l.autor}{l.editora ? ` · ${l.editora}` : ''}</div>}
                       </div>
                     ))
                 }
