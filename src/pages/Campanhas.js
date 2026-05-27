@@ -1341,7 +1341,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
     let cancelled = false
     const t = setTimeout(async () => {
       try {
-        const res = await getLivros({ page: 0, pageSize: 50, search: livroSearch, grupos: gruposLivros })
+        const res = await getLivros({ page: 0, pageSize: 500, search: livroSearch, grupos: gruposLivros })
         if (cancelled) return
         const lista = res?.data || []
         setLivroResults(lista)
