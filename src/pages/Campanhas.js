@@ -162,9 +162,9 @@ function ModalCampanha({ campanha, livros, parceiros, onSave, onClose }) {
       try {
         const { data } = await getLivros({
           page: 0,
-          pageSize: 50,
+          pageSize: 500,
           search: livroSearch,
-          grupos: gruposLivros
+          grupos: null
         })
         setLivroResults(data || [])
         setLivroOpen(true)
@@ -174,7 +174,7 @@ function ModalCampanha({ campanha, livros, parceiros, onSave, onClose }) {
     }, 300)
 
     return () => clearTimeout(t)
-  }, [livroSearch, _pa])
+  }, [livroSearch])
 
   function toggleLivro(id) {
     const livroObj =
@@ -808,7 +808,7 @@ function BuscaLivro({ livroId, livroTitulo, onChange, placeholder }) {
   useEffect(() => {
     if (!search || search.length < 2) { setResults([]); return }
     const t = setTimeout(async () => {
-      try { const { data } = await getLivros({ page:0, pageSize:50, search, grupos: gruposLivros }); setResults(data||[]); setOpen(true) } catch {}
+      try { const { data } = await getLivros({ page:0, pageSize:500, search, grupos: null }); setResults(data||[]); setOpen(true) } catch {}
     }, 300)
     return () => clearTimeout(t)
   }, [search])
@@ -1331,7 +1331,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
     }
   }, [campanhaId, tipoCampanha])
 
-  // Busca de livros para adicionar
+  // Busca de livros para adicionar (sem filtro de grupo — qualquer livro pode ser adicionado)
   useEffect(() => {
     if (!livroSearch || livroSearch.length < 2) {
       setLivroResults([])
@@ -1341,14 +1341,11 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
     let cancelled = false
     const t = setTimeout(async () => {
       try {
-        const res = await getLivros({ page: 0, pageSize: 500, search: livroSearch, grupos: gruposLivros })
+        const res = await getLivros({ page: 0, pageSize: 500, search: livroSearch, grupos: null })
         if (cancelled) return
         const lista = res?.data || []
         setLivroResults(lista)
         setLivroOpen(lista.length > 0)
-        if (lista.length === 0) {
-          console.log('[Campanhas] Busca sem resultados para:', livroSearch, 'grupos:', gruposLivros)
-        }
       } catch (e) {
         console.error('[Campanhas] Erro ao buscar livros:', e)
         if (!cancelled) {
@@ -1358,7 +1355,7 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
       }
     }, 250)
     return () => { cancelled = true; clearTimeout(t) }
-  }, [livroSearch, _pa])
+  }, [livroSearch])
 
   async function handleAddLivro(livro) {
     if (lancamentoLivros.find(ll => ll.livro_id === livro.id)) {
@@ -1918,7 +1915,7 @@ function ModalImportarLivros({ campanhaId, livrosExistentes, onImport, onClose }
       // Busca cada ISBN no banco
       const resultados = await Promise.all(isbns.map(async isbn => {
         try {
-          const { data: livros } = await getLivros({ page:0, pageSize:5, search: isbn, grupos: gruposLivros })
+          const { data: livros } = await getLivros({ page:0, pageSize:5, search: isbn, grupos: null })
           const encontrado = livros?.find(l => (l.isbn||'').replace(/\D/g,'') === isbn || (l.sku||'') === isbn)
           return { isbn, titulo: encontrado?.titulo || null, id: encontrado?.id || null, encontrado: !!encontrado }
         } catch { return { isbn, titulo: null, id: null, encontrado: false } }
@@ -2579,7 +2576,7 @@ export default function Campanhas() {
     const [cs, ps, ls, us] = await Promise.all([
       getCampanhas({ grupo: grupoCampanhas }),
       getParceirosAtivos(),
-      getLivros({ page: 0, pageSize: 5000, grupos: gruposLivros }),
+      getLivros({ page: 0, pageSize: 5000, grupos: null }),
       getUsuarios(),
     ])
 
