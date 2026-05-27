@@ -533,7 +533,7 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
   useEffect(() => {
     getEditoras().then(setEditoras).catch(console.error)
     getUsuarios().then(setUsuarios).catch(console.error)
-    getLivros({ pageSize: 200 }).then(r => setLivros(r.data || [])).catch(console.error)
+    getLivros({ pageSize: 5000, grupos: null }).then(r => setLivros(r.data || [])).catch(console.error)
   }, [])
 
   function togglePlat(p) {
@@ -705,17 +705,21 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
                 ))}
               </div>
             )}
-            <input className="form-input" value={livroSearch} onChange={e=>setLivroSearch(e.target.value)} placeholder="Buscar livro pelo título ou autor..."/>
+            <input className="form-input" value={livroSearch} onChange={e=>setLivroSearch(e.target.value)} placeholder="Buscar livro pelo título, autor, ISBN ou SKU..."/>
             {livroSearch.trim() && (
               <div style={{border:'1px solid var(--border)',borderRadius:8,marginTop:4,maxHeight:160,overflowY:'auto',background:'var(--surface-2)'}}>
                 {livros.filter(l=>
                   (l.titulo||'').toLowerCase().includes(livroSearch.toLowerCase()) ||
-                  (l.autor||'').toLowerCase().includes(livroSearch.toLowerCase())
+                  (l.autor||'').toLowerCase().includes(livroSearch.toLowerCase()) ||
+                  (l.isbn||'').toLowerCase().includes(livroSearch.toLowerCase()) ||
+                  (l.sku||'').toLowerCase().includes(livroSearch.toLowerCase())
                 ).filter(l=>!livrosConvidados.find(x=>x.id===l.id)).slice(0,20).length === 0
                   ? <div style={{padding:'10px 14px',fontSize:12,color:'var(--text-muted)'}}>Nenhum livro encontrado</div>
                   : livros.filter(l=>
                       (l.titulo||'').toLowerCase().includes(livroSearch.toLowerCase()) ||
-                      (l.autor||'').toLowerCase().includes(livroSearch.toLowerCase())
+                      (l.autor||'').toLowerCase().includes(livroSearch.toLowerCase()) ||
+                      (l.isbn||'').toLowerCase().includes(livroSearch.toLowerCase()) ||
+                      (l.sku||'').toLowerCase().includes(livroSearch.toLowerCase())
                     ).filter(l=>!livrosConvidados.find(x=>x.id===l.id)).slice(0,20).map(l=>(
                       <div key={l.id}
                         onClick={()=>{setLivrosConvidados(prev=>[...prev,l]);setLivroSearch('')}}
