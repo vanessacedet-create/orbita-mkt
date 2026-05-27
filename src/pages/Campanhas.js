@@ -2576,7 +2576,7 @@ export default function Campanhas() {
   }, [grupoCampanhas, perfilEfetivo])
 
   async function handleCreate(form) {
-    const { parceiro_ids = [], ...rest } = form
+    const { parceiro_ids = [], livro_ids = [], ...rest } = form
 
     const grupoNovaCampanha = ehAdminVisual
       ? (grupoCampanhas || 'influencers')
@@ -2589,6 +2589,10 @@ export default function Campanhas() {
 
     for (const pid of parceiro_ids) {
       await addParceiroCampanha(campanha.id, pid)
+    }
+
+    for (const lid of livro_ids) {
+      await addLivroCampanha(campanha.id, lid)
     }
 
     await reload()
