@@ -322,7 +322,7 @@ export default function Lancamentos() {
   const EDITORAS_PROPRIAS = [
     'Vide Editorial', 'Ecclesiae', 'Auster', 'Kírion', 'Kumon',
     'Sétimo Selo', 'Texugo', 'Edições Livre', 'Editora Papillon',
-    'Compostela', 'Mori', 'Editora Axia'
+    'Compostela', 'Mori', 'Editora Axia', 'O Mínimo'
   ]
   const normalizar = (s) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
   const editorasProprias = EDITORAS_PROPRIAS.map(normalizar)
