@@ -702,7 +702,8 @@ function RecorrenciaPanel({ form, setForm }) {
 function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
   const { usuario } = useAuth()
   const storageKey = `orbita_modal_form_${tarefa?.id || 'new'}`
-  const EMPTY = { titulo:'', descricao:'', status:'a_fazer', prioridade:'media', responsavel_id:'', data_prazo: tarefa?._dataPrazo || '',
+  const EMPTY = { titulo:'', descricao:'', status:'a_fazer', prioridade:'media', responsavel_id:'', responsavel_id_2:'', data_prazo: tarefa?._dataPrazo || '',
+    tempo_estimado_min: '',
     recorrencia_ativa: false, recorrencia_tipo: '', recorrencia_config: {},
     parceiro_id: '', tipo_tarefa: '' }
   const formInicial = tarefa && !tarefa._dataPrazo ? {
@@ -711,6 +712,8 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
     status:               tarefa.status,
     prioridade:           tarefa.prioridade,
     responsavel_id:       tarefa.responsavel_id || '',
+    responsavel_id_2:     '', // sempre vazio ao editar — segundo responsável só na criação
+    tempo_estimado_min:   tarefa.tempo_estimado_min ?? '',
     data_prazo:           tarefa.data_prazo || '',
     recorrencia_ativa:    tarefa.recorrencia_ativa || false,
     recorrencia_tipo:     tarefa.recorrencia_tipo || '',
@@ -794,9 +797,11 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
         ...form,
         responsavel_id: form.responsavel_id || null,
         data_prazo:     form.data_prazo || null,
+        tempo_estimado_min: form.tempo_estimado_min ? Number(form.tempo_estimado_min) : null,
         created_by:     tarefa ? undefined : usuario?.id,
         _checklistPendente: itensPendentes.map(x => x.texto),
         _livrosCampanhaPendentes: TIPOS_COM_LIVRO_CAMPANHA.includes(form.tipo_tarefa) ? livrosCampanha.map(l => l.id) : [],
+        _segundoResponsavel: !tarefa && form.responsavel_id_2 ? form.responsavel_id_2 : null,
       }, tarefa?.id)
       limparRascunho()
       onClose()
@@ -930,6 +935,45 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
               <div className="form-group">
                 <label className="form-label">Prazo</label>
                 <input className="form-input" type="date" value={form.data_prazo} onChange={e=>setForm(f=>({...f,data_prazo:e.target.value}))}/>
+              </div>
+            </div>
+            {!tarefa && form.responsavel_id && (
+              <div className="form-group">
+                <label className="form-label" style={{ display:'flex', alignItems:'center', gap:6 }}>
+                  Segundo responsável (opcional)
+                  <span style={{ fontSize:10, fontWeight:500, color:'var(--text-muted)' }}>· cria uma cópia da tarefa</span>
+                </label>
+                <select className="form-select"
+                  value={form.responsavel_id_2}
+                  onChange={e=>setForm(f=>({...f,responsavel_id_2:e.target.value}))}>
+                  <option value="">Sem segundo responsável</option>
+                  {usuarios.filter(u => u.id !== form.responsavel_id).map(u=><option key={u.id} value={u.id}>{u.nome}</option>)}
+                </select>
+              </div>
+            )}
+            <div className="form-group">
+              <label className="form-label">Tempo estimado (opcional)</label>
+              <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                <input className="form-input" type="number" min="0" step="1"
+                  style={{ width: 80 }}
+                  value={Math.floor((Number(form.tempo_estimado_min) || 0) / 60) || ''}
+                  onChange={e => {
+                    const h = parseInt(e.target.value) || 0
+                    const min = (Number(form.tempo_estimado_min) || 0) % 60
+                    setForm(f => ({ ...f, tempo_estimado_min: h * 60 + min || '' }))
+                  }}
+                  placeholder="0"/>
+                <span style={{ fontSize:12, color:'var(--text-muted)' }}>h</span>
+                <input className="form-input" type="number" min="0" max="59" step="1"
+                  style={{ width: 80 }}
+                  value={(Number(form.tempo_estimado_min) || 0) % 60 || ''}
+                  onChange={e => {
+                    const min = parseInt(e.target.value) || 0
+                    const h = Math.floor((Number(form.tempo_estimado_min) || 0) / 60)
+                    setForm(f => ({ ...f, tempo_estimado_min: h * 60 + min || '' }))
+                  }}
+                  placeholder="0"/>
+                <span style={{ fontSize:12, color:'var(--text-muted)' }}>min</span>
               </div>
             </div>
             <div className="form-group">
@@ -1378,6 +1422,13 @@ function CardKanban({ tarefa, onClick, onDragStart, onDragEnd, isDragging }) {
           {checkTotal > 0 && <span style={{ fontSize:11, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:3 }}><CheckSquare size={11}/> {checkDone}/{checkTotal}</span>}
           {(tarefa.tarefa_comentarios?.length||0) > 0 && <span style={{ fontSize:11, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:3 }}><MessageSquare size={11}/> {tarefa.tarefa_comentarios.length}</span>}
           {livrosCount > 0 && <span style={{ fontSize:11, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:3 }}><Book size={11}/> {livrosCount}</span>}
+          {tarefa.tempo_estimado_min > 0 && (
+            <span style={{ fontSize:11, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:3 }} title="Tempo estimado">
+              <Clock size={11}/>
+              {Math.floor(tarefa.tempo_estimado_min / 60) > 0 && `${Math.floor(tarefa.tempo_estimado_min / 60)}h`}
+              {tarefa.tempo_estimado_min % 60 > 0 && `${tarefa.tempo_estimado_min % 60}min`}
+            </span>
+          )}
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           <PrazoBadge data_prazo={tarefa.data_prazo} status={tarefa.status}/>
@@ -1892,16 +1943,17 @@ export default function Tarefas() {
 
   async function handleSave(form, id) {
     if (id) {
-      const { _checklistPendente: _cp, _livrosCampanhaPendentes: _lcp, ...formLimpo } = form
+      const { _checklistPendente: _cp, _livrosCampanhaPendentes: _lcp, _segundoResponsavel: _sr, responsavel_id_2: _r2, ...formLimpo } = form
       // sanitiza campos opcionais: string vazia → null (evita erro de UUID inválido no Supabase)
       const payload = {
         ...formLimpo,
-        responsavel_id:   formLimpo.responsavel_id   || null,
-        parceiro_id:      formLimpo.parceiro_id       || null,
-        data_prazo:       formLimpo.data_prazo        || null,
-        tipo_tarefa:      formLimpo.tipo_tarefa       || null,
-        recorrencia_tipo: formLimpo.recorrencia_tipo  || null,
-        grupo:            grupoDaTarefa(formLimpo),
+        responsavel_id:     formLimpo.responsavel_id   || null,
+        parceiro_id:        formLimpo.parceiro_id       || null,
+        data_prazo:         formLimpo.data_prazo        || null,
+        tipo_tarefa:        formLimpo.tipo_tarefa       || null,
+        recorrencia_tipo:   formLimpo.recorrencia_tipo  || null,
+        tempo_estimado_min: formLimpo.tempo_estimado_min ?? null,
+        grupo:              grupoDaTarefa(formLimpo),
       }
       const tarefaAntes = tarefas.find(t => t.id === id)
       const upd = await updateTarefa(id, payload)
@@ -1934,26 +1986,47 @@ export default function Tarefas() {
         showToast('Tarefa atualizada!')
       }
     } else {
-      const { _checklistPendente, _livrosCampanhaPendentes, ...formLimpo } = form
-      const nova = await createTarefa({
+      const { _checklistPendente, _livrosCampanhaPendentes, _segundoResponsavel, responsavel_id_2, ...formLimpo } = form
+      const basePayload = {
         ...formLimpo,
-        responsavel_id:   formLimpo.responsavel_id   || null,
-        parceiro_id:      formLimpo.parceiro_id       || null,
-        data_prazo:       formLimpo.data_prazo        || null,
-        tipo_tarefa:      formLimpo.tipo_tarefa       || null,
-        recorrencia_tipo: formLimpo.recorrencia_tipo  || null,
-        grupo:            grupoDaTarefa(formLimpo),
+        parceiro_id:        formLimpo.parceiro_id       || null,
+        data_prazo:         formLimpo.data_prazo        || null,
+        tipo_tarefa:        formLimpo.tipo_tarefa       || null,
+        recorrencia_tipo:   formLimpo.recorrencia_tipo  || null,
+        tempo_estimado_min: formLimpo.tempo_estimado_min ?? null,
+        grupo:              grupoDaTarefa(formLimpo),
+      }
+
+      // cria a tarefa para o responsável principal
+      const nova = await createTarefa({
+        ...basePayload,
+        responsavel_id: formLimpo.responsavel_id || null,
       })
-      // salva itens de checklist que foram adicionados antes de criar a tarefa
       if (_checklistPendente?.length) {
         await Promise.all(_checklistPendente.map(texto => addChecklistItem(nova.id, texto)))
       }
-      // salva livros da campanha (newsletter / e-mail marketing)
       if (_livrosCampanhaPendentes?.length) {
         await Promise.all(_livrosCampanhaPendentes.map(lid => addLivroTarefa(nova.id, lid)))
       }
       setTarefas(prev => [nova, ...prev])
-      showToast('Tarefa criada!')
+
+      // se tem um segundo responsável, cria cópia idêntica para ele
+      if (_segundoResponsavel) {
+        const copia = await createTarefa({
+          ...basePayload,
+          responsavel_id: _segundoResponsavel,
+        })
+        if (_checklistPendente?.length) {
+          await Promise.all(_checklistPendente.map(texto => addChecklistItem(copia.id, texto)))
+        }
+        if (_livrosCampanhaPendentes?.length) {
+          await Promise.all(_livrosCampanhaPendentes.map(lid => addLivroTarefa(copia.id, lid)))
+        }
+        setTarefas(prev => [copia, ...prev])
+        showToast('2 tarefas criadas (uma para cada responsável)!')
+      } else {
+        showToast('Tarefa criada!')
+      }
     }
   }
 
