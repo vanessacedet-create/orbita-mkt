@@ -29,7 +29,7 @@ function fmtData(d) {
   return `${dia}/${m}/${a}`
 }
 
-const STAGES = [20, 40, 60, 80, 100]
+const STAGES = [0, 20, 40, 60, 80, 100]
 
 // ── SUPABASE HELPERS ───────────────────────────────────────
 
@@ -740,7 +740,7 @@ function DetalhePlano({ planoId, supervisorNome, onSupervisorChange, onBack, sho
             {isOpen && (
               <>
                 {/* Header das colunas */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) repeat(5,44px) 100px', padding: '7px 20px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) repeat(6,44px) 36px', padding: '7px 20px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
                   <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Tarefa</span>
                   {STAGES.map(s => (
                     <span key={s} style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textAlign: 'center', textTransform: 'uppercase' }}>{s}%</span>
@@ -756,7 +756,7 @@ function DetalhePlano({ planoId, supervisorNome, onSupervisorChange, onBack, sho
                   const rowBg = tarefa.progresso === 100 ? 'var(--green-light)' : ''
                   return (
                     <div key={tarefa.id}>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) repeat(5,44px) 100px', padding: '10px 20px', borderBottom: (!isLast || noteIsOpen) ? '1px solid var(--border)' : 'none', alignItems: 'center', background: rowBg }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) repeat(6,44px) 36px', padding: '10px 20px', borderBottom: (!isLast || noteIsOpen) ? '1px solid var(--border)' : 'none', alignItems: 'center', background: rowBg }}>
                         {/* Texto */}
                         <div style={{ paddingRight: 12 }}>
                           {editingTarefa?.id === tarefa.id
@@ -796,13 +796,13 @@ function DetalhePlano({ planoId, supervisorNome, onSupervisorChange, onBack, sho
 
                         {/* Botões de progresso */}
                         {STAGES.map(stage => {
-                          const done = tarefa.progresso >= stage
+                          const done = stage === 0 ? tarefa.progresso === 0 : tarefa.progresso >= stage
                           const complete = tarefa.progresso === 100
                           return (
                             <div key={stage} style={{ display: 'flex', justifyContent: 'center' }}>
                               <button
-                                onClick={() => handleStage(tarefa, sec, stage)}
-                                title={`Validar ${stage}%`}
+                                onClick={() => stage === 0 ? handleZerarTarefa(tarefa, sec) : handleStage(tarefa, sec, stage)}
+                                title={stage === 0 ? 'Marcar como 0%' : `Validar ${stage}%`}
                                 style={{
                                   width: 24, height: 24, borderRadius: 5,
                                   border: `1px solid ${done ? 'transparent' : 'var(--border)'}`,
@@ -819,19 +819,6 @@ function DetalhePlano({ planoId, supervisorNome, onSupervisorChange, onBack, sho
 
                         {/* Botão de observação + zerar */}
                         <div style={{ display: 'flex', justifyContent: 'center', gap: 3 }}>
-                          {tarefa.progresso > 0 && (
-                            <button
-                              onClick={() => handleZerarTarefa(tarefa, sec)}
-                              title="Zerar para 0%"
-                              style={{
-                                width: 28, height: 28, borderRadius: 6,
-                                border: '1px solid var(--red)',
-                                background: 'none',
-                                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: 9, fontWeight: 700, color: 'var(--red)',
-                              }}
-                            >0%</button>
-                          )}
                           <button
                             onClick={() => {
                               setNoteText(n => ({ ...n, [tarefa.id]: tarefa.observacao || '' }))
