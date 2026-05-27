@@ -315,6 +315,8 @@ export default function Lancamentos() {
   const grupoDoPerfil = PERFIL_GRUPO[perfilEfetivo] || null
 
   const [filtroGrupoAdmin, setFiltroGrupoAdmin] = useState('todos')
+  // Filtro de tipo de editora — visível para todos os usuários
+  const [filtroTipoEditora, setFiltroTipoEditora] = useState('todos') // 'todos' | 'proprias' | 'parceiras'
 
   const grupoLanc = ehAdminVisual
     ? (filtroGrupoAdmin === 'todos' ? null : filtroGrupoAdmin)
@@ -374,8 +376,16 @@ export default function Lancamentos() {
   const grid = gerarGrid(ano,mes)
   const hj   = hojeKey()
 
+  // Aplica o filtro de tipo de editora (próprias vs parceiras)
+  const livrosFiltrados = livros.filter(l => {
+    if (filtroTipoEditora === 'todos') return true
+    if (filtroTipoEditora === 'proprias') return l.grupo === 'proprias'
+    if (filtroTipoEditora === 'parceiras') return l.grupo === 'parceiras'
+    return true
+  })
+
   const porDia = {}
-  for (const l of livros) {
+  for (const l of livrosFiltrados) {
     if (!l.data_lancamento) continue
     if (!porDia[l.data_lancamento]) porDia[l.data_lancamento]=[]
     porDia[l.data_lancamento].push(l)
@@ -389,7 +399,7 @@ export default function Lancamentos() {
   }
 
   // Cores únicas por editora — construídas uma vez por mês para não variar
-  const todasEditoras = [...new Set(livros.map(l=>l.editora).filter(Boolean))].sort()
+  const todasEditoras = [...new Set(livrosFiltrados.map(l=>l.editora).filter(Boolean))].sort()
   const coresEditoras = buildCores(todasEditoras)
 
   return (
@@ -401,11 +411,18 @@ export default function Lancamentos() {
           <div>
             <h1 className="page-title" style={{margin:0}}>Lançamentos</h1>
             <p style={{fontSize:12,color:'var(--text-muted)',margin:0}}>
-              {livros.length} lançamento{livros.length!==1?'s':''} em {MESES[mes-1].toLowerCase()} {ano}
+              {livrosFiltrados.length} lançamento{livrosFiltrados.length!==1?'s':''} em {MESES[mes-1].toLowerCase()} {ano}
             </p>
           </div>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+          {/* Filtro de tipo de editora — visível para todos */}
+          <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}}
+            value={filtroTipoEditora} onChange={e=>setFiltroTipoEditora(e.target.value)}>
+            <option value="todos">Todas as editoras</option>
+            <option value="proprias">Apenas editoras próprias</option>
+            <option value="parceiras">Apenas editoras parceiras</option>
+          </select>
           {ehAdminVisual && (
             <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}}
               value={filtroGrupoAdmin} onChange={e=>setFiltroGrupoAdmin(e.target.value)}>
