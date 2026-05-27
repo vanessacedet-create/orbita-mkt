@@ -366,6 +366,7 @@ function DetalhePlano({ planoId, supervisorNome, onSupervisorChange, onBack, sho
   const [editingSupervisor, setEditingSupervisor] = useState(false)
   const [newSupervisor, setNewSupervisor] = useState('')
   const [importingSecao, setImportingSecao] = useState(null)
+  const [editingTarefa, setEditingTarefa] = useState(null) // { id, texto }
   const importFileRef = useRef()
 
   useEffect(() => {
@@ -422,6 +423,42 @@ function DetalhePlano({ planoId, supervisorNome, onSupervisorChange, onBack, sho
       const n = await criarNotificacao(plano.id, `${supervisorNome} validou "${short(tarefa.texto, 45)}" a ${novo}%`)
       setPlano(p => ({ ...p, planos_notificacoes: [n, ...(p.planos_notificacoes || [])] }))
     }
+  }
+
+  async function handleZerarTarefa(tarefa, sec) {
+    const prev = tarefa.progresso
+    if (prev === 0) return
+    const updated = await atualizarTarefa(tarefa.id, { progresso: 0, validado_em: null })
+    setPlano(p => ({
+      ...p,
+      planos_secoes: p.planos_secoes.map(s => s.id !== sec.id ? s : {
+        ...s,
+        planos_tarefas: s.planos_tarefas.map(t => t.id !== tarefa.id ? t : updated)
+      })
+    }))
+    const h = await registrarHistorico(plano.id, 'adjust',
+      `Zerou (0%) "${short(tarefa.texto, 50)}"`, sec.titulo, short(tarefa.texto, 55), supervisorNome)
+    setPlano(p => ({ ...p, planos_historico: [h, ...(p.planos_historico || [])] }))
+    showToast('Tarefa zerada.')
+  }
+
+  async function handleSaveEditTarefa(tarefa, sec) {
+    if (!editingTarefa || editingTarefa.id !== tarefa.id) return
+    const texto = editingTarefa.texto.trim()
+    if (!texto || texto === tarefa.texto) { setEditingTarefa(null); return }
+    const updated = await atualizarTarefa(tarefa.id, { texto })
+    setPlano(p => ({
+      ...p,
+      planos_secoes: p.planos_secoes.map(s => s.id !== sec.id ? s : {
+        ...s,
+        planos_tarefas: s.planos_tarefas.map(t => t.id !== tarefa.id ? t : updated)
+      })
+    }))
+    const h = await registrarHistorico(plano.id, 'adjust',
+      `Editou texto da tarefa: "${short(texto, 55)}"`, sec.titulo, short(texto, 55), supervisorNome)
+    setPlano(p => ({ ...p, planos_historico: [h, ...(p.planos_historico || [])] }))
+    setEditingTarefa(null)
+    showToast('Tarefa atualizada!')
   }
 
   async function handleSaveNote(tarefa, sec) {
@@ -722,9 +759,23 @@ function DetalhePlano({ planoId, supervisorNome, onSupervisorChange, onBack, sho
                       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) repeat(5,44px) 36px', padding: '10px 20px', borderBottom: (!isLast || noteIsOpen) ? '1px solid var(--border)' : 'none', alignItems: 'center', background: rowBg }}>
                         {/* Texto */}
                         <div style={{ paddingRight: 12 }}>
-                          <p style={{ margin: '0 0 4px', fontSize: 13, lineHeight: 1.5, color: tarefa.progresso === 100 ? 'var(--green)' : 'var(--text)' }}>
-                            {tarefa.texto}
-                          </p>
+                          {editingTarefa?.id === tarefa.id
+                            ? <input
+                                autoFocus
+                                value={editingTarefa.texto}
+                                onChange={e => setEditingTarefa(prev => ({ ...prev, texto: e.target.value }))}
+                                onBlur={() => handleSaveEditTarefa(tarefa, sec)}
+                                onKeyDown={e => { if (e.key === 'Enter') handleSaveEditTarefa(tarefa, sec); if (e.key === 'Escape') setEditingTarefa(null) }}
+                                style={{ width: '100%', fontSize: 13, background: 'transparent', border: 'none', borderBottom: '1px solid var(--accent)', outline: 'none', color: 'var(--text)', padding: '2px 0', marginBottom: 4 }}
+                              />
+                            : <p
+                                onClick={() => setEditingTarefa({ id: tarefa.id, texto: tarefa.texto })}
+                                title="Clique para editar"
+                                style={{ margin: '0 0 4px', fontSize: 13, lineHeight: 1.5, color: tarefa.progresso === 100 ? 'var(--green)' : 'var(--text)', cursor: 'text' }}
+                              >
+                                {tarefa.texto}
+                              </p>
+                          }
                           <div style={{ height: 3, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden', marginBottom: tarefa.observacao || tarefa.validado_em ? 4 : 0 }}>
                             <div style={{ height: '100%', width: `${tarefa.progresso}%`, background: tarefa.progresso === 100 ? 'var(--green)' : 'var(--accent)', borderRadius: 99, transition: 'width 0.2s' }} />
                           </div>
@@ -766,8 +817,21 @@ function DetalhePlano({ planoId, supervisorNome, onSupervisorChange, onBack, sho
                           )
                         })}
 
-                        {/* Botão de observação */}
+                        {/* Botão de observação + zerar */}
                         <div style={{ display: 'flex', justifyContent: 'center', gap: 3 }}>
+                          {tarefa.progresso > 0 && (
+                            <button
+                              onClick={() => handleZerarTarefa(tarefa, sec)}
+                              title="Zerar para 0%"
+                              style={{
+                                width: 28, height: 28, borderRadius: 6,
+                                border: '1px solid var(--red)',
+                                background: 'none',
+                                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: 9, fontWeight: 700, color: 'var(--red)',
+                              }}
+                            >0%</button>
+                          )}
                           <button
                             onClick={() => {
                               setNoteText(n => ({ ...n, [tarefa.id]: tarefa.observacao || '' }))
