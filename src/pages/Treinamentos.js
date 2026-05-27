@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import {
   GraduationCap, Plus, ChevronDown, X, Trash2, Bell,
   CheckCircle, MessageSquare, Clock, Users, ArrowLeft,
-  Pencil, FileSpreadsheet
+  Pencil, FileSpreadsheet, Copy
 } from 'lucide-react'
 
 // ── UTILITÁRIOS ────────────────────────────────────────────
@@ -234,9 +234,62 @@ function ModalNovoPano({ colaboradores, supervisorNome, onSave, onClose }) {
   )
 }
 
+
+// ── MODAL DUPLICAR PLANO ───────────────────────────────────
+
+function ModalDuplicar({ plano, colaboradores, supervisorNome, onSave, onClose }) {
+  const [funcionarioId, setFuncionarioId] = useState('')
+  const [saving, setSaving] = useState(false)
+  const colab = colaboradores.find(c => c.id === funcionarioId)
+
+  async function save() {
+    if (!funcionarioId) return
+    setSaving(true)
+    try { await onSave(funcionarioId, colab) } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal" style={{ maxWidth: 480 }}>
+        <div className="modal-header">
+          <h2 className="modal-title">Duplicar Treinamento</h2>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', background: 'var(--surface-2)', borderRadius: 8, padding: '10px 14px', marginBottom: 16 }}>
+          Copiando estrutura de <strong style={{ color: 'var(--text)' }}>{plano.rh_colaboradores?.nome}</strong> — {plano.planos_secoes?.length || 0} seções e todas as tarefas (sem progresso)
+        </div>
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">Funcionária destino *</label>
+            <select className="form-select" value={funcionarioId}
+              onChange={e => setFuncionarioId(e.target.value)}>
+              <option value="">Selecionar...</option>
+              {colaboradores.filter(c => c.id !== plano.funcionario_id).map(c => (
+                <option key={c.id} value={c.id}>{c.nome} — {c.cargo}</option>
+              ))}
+            </select>
+          </div>
+          {colab && (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', background: 'var(--surface-2)', borderRadius: 8, padding: '8px 12px' }}>
+              Cargo: <strong style={{ color: 'var(--text)' }}>{colab.cargo}</strong>
+              {colab.rh_grupos?.nome && <> · Grupo: <strong style={{ color: 'var(--accent)' }}>{colab.rh_grupos.nome}</strong></>}
+            </div>
+          )}
+        </div>
+        <div className="form-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={save} disabled={saving || !funcionarioId}>
+            {saving ? 'Duplicando...' : 'Duplicar treinamento'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── CARD DE PLANO (LISTA) ──────────────────────────────────
 
-function CardPlano({ plano, onClick, onDelete }) {
+function CardPlano({ plano, onClick, onDelete, onDuplicate }) {
   const total = (plano._total_tarefas || 0)
   const concluidas = (plano._concluidas || 0)
   const pct = total > 0 ? Math.round((concluidas / total) * 100) : 0
@@ -281,10 +334,16 @@ function CardPlano({ plano, onClick, onDelete }) {
         <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
           Supervisor: {plano.supervisor_nome || '—'} · v{plano.versao} · {fmtData(plano.created_at?.slice(0, 10))}
         </div>
-        <button className="btn btn-danger btn-icon btn-sm"
-          onClick={e => { e.stopPropagation(); onDelete(plano.id) }}>
-          <Trash2 size={12} />
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button className="btn btn-ghost btn-icon btn-sm" title="Duplicar para outra funcionária"
+            onClick={e => { e.stopPropagation(); onDuplicate(plano) }}>
+            <Copy size={12} />
+          </button>
+          <button className="btn btn-danger btn-icon btn-sm"
+            onClick={e => { e.stopPropagation(); onDelete(plano.id) }}>
+            <Trash2 size={12} />
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -871,6 +930,7 @@ export default function Treinamentos() {
   const [loading, setLoading] = useState(true)
   const [planoAtivo, setPlanoAtivo] = useState(null) // id do plano aberto
   const [modalNovo, setModalNovo] = useState(false)
+  const [modalDuplicar, setModalDuplicar] = useState(null) // plano a duplicar
   const [busca, setBusca] = useState('')
   const [toast, showToast] = useToast()
 
@@ -907,6 +967,36 @@ export default function Treinamentos() {
     await deletarPlano(id)
     setPlanos(ps => ps.filter(p => p.id !== id))
     showToast('Plano removido!')
+  }
+
+  async function handleDuplicar(planoOrigem, funcionarioDestino, colabDestino) {
+    // Busca o plano completo com seções e tarefas
+    const planoCompleto = await getPlanoCompleto(planoOrigem.id)
+    // Cria o novo plano
+    const novo = await criarPlano({
+      funcionario_id: funcionarioDestino,
+      supervisor_nome: supervisorNome,
+      versao: '01',
+      cargo_atual: colabDestino?.cargo || '',
+      cargo_alvo: planoOrigem.cargo_alvo || '',
+    })
+    // Duplica seções e tarefas (sem progresso/validações)
+    for (const sec of (planoCompleto.planos_secoes || [])) {
+      const novaSec = await criarSecao(novo.id, sec.titulo, sec.ordem)
+      if (sec.planos_tarefas?.length) {
+        const rows = sec.planos_tarefas.map(t => ({
+          secao_id: novaSec.id,
+          texto: t.texto,
+          progresso: 0,
+          ordem: t.ordem,
+        }))
+        await supabase.from('planos_tarefas').insert(rows)
+      }
+    }
+    setModalDuplicar(null)
+    showToast('Treinamento duplicado com sucesso!')
+    await carregar()
+    setPlanoAtivo(novo.id)
   }
 
   const planosFiltrados = planos.filter(p => {
@@ -966,11 +1056,21 @@ export default function Treinamentos() {
           {planosFiltrados.map(p => (
             <CardPlano key={p.id} plano={p}
               onClick={() => setPlanoAtivo(p.id)}
-              onDelete={handleDeletar} />
+              onDelete={handleDeletar}
+              onDuplicate={setModalDuplicar} />
           ))}
         </div>
       )}
 
+      {modalDuplicar && (
+        <ModalDuplicar
+          plano={modalDuplicar}
+          colaboradores={colaboradores}
+          supervisorNome={supervisorNome}
+          onSave={(funcId, colab) => handleDuplicar(modalDuplicar, funcId, colab)}
+          onClose={() => setModalDuplicar(null)}
+        />
+      )}
       {modalNovo && (
         <ModalNovoPano
           colaboradores={colaboradores}
