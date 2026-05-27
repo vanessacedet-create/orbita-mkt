@@ -564,10 +564,14 @@ export default function VitrinePublica() {
   const [parceiro, setParceiro] = useState(null);
 
   // ── Vitrine ──
+  const _urlParams = new URLSearchParams(window.location.search);
+  const _editoraUrl = _urlParams.get('editora') || '';
+  const editoraLocked = !!_editoraUrl; // quando veio da URL, bloqueia filtro
+
   const [livros, setLivros] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState('');
-  const [editoraFiltro, setEditoraFiltro] = useState('');
+  const [editoraFiltro, setEditoraFiltro] = useState(_editoraUrl);
   const [categoriaFiltro, setCategoriaFiltro] = useState('');
   const [showFiltros, setShowFiltros] = useState(false);
   const [selecionados, setSelecionados] = useState({});
@@ -789,11 +793,11 @@ export default function VitrinePublica() {
 
   function limparFiltros() {
     setBusca('');
-    setEditoraFiltro('');
+    if (!editoraLocked) setEditoraFiltro('');
     setCategoriaFiltro('');
   }
 
-  const temFiltroAtivo = busca || editoraFiltro || categoriaFiltro;
+  const temFiltroAtivo = busca || (!editoraLocked && editoraFiltro) || categoriaFiltro;
 
   // ── Login ──
   if (!parceiro) return <TelaLogin onLogin={handleLogin} />;
@@ -962,7 +966,7 @@ export default function VitrinePublica() {
               onBlur={e => e.target.style.borderColor = COLORS.border}
             />
           </div>
-          <button
+          {!editoraLocked && <button
             onClick={() => setShowFiltros(!showFiltros)}
             style={{
               background: showFiltros || temFiltroAtivo ? COLORS.primary : COLORS.white,
@@ -985,22 +989,36 @@ export default function VitrinePublica() {
                 {[busca, editoraFiltro, categoriaFiltro].filter(Boolean).length}
               </span>
             )}
-          </button>
+          </button>}
         </div>
 
-        {showFiltros && (
+        {editoraLocked && (
+          <div style={{
+            background: `${COLORS.accent}12`, border: `1.5px solid ${COLORS.accent}40`,
+            borderRadius: 10, padding: '8px 14px', marginBottom: 8,
+            display: 'flex', alignItems: 'center', gap: 8, fontSize: 13,
+            color: COLORS.accent, fontWeight: 600,
+          }}>
+            <Filter size={14} />
+            Mostrando apenas livros de: <strong>{editoraFiltro}</strong>
+          </div>
+        )}
+
+        {!editoraLocked && showFiltros && (
           <div style={{
             background: COLORS.white, border: `1.5px solid ${COLORS.border}`,
             borderRadius: 14, padding: 20, marginBottom: 12,
             display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end',
           }}>
-            <div style={{ flex: '1 1 200px' }}>
-              <label style={labelStyle}>Editora</label>
-              <select value={editoraFiltro} onChange={e => setEditoraFiltro(e.target.value)} style={selectStyle}>
-                <option value="">Todas as editoras</option>
-                {editoras.map(e => <option key={e} value={e}>{e}</option>)}
-              </select>
-            </div>
+            {!editoraLocked && (
+              <div style={{ flex: '1 1 200px' }}>
+                <label style={labelStyle}>Editora</label>
+                <select value={editoraFiltro} onChange={e => setEditoraFiltro(e.target.value)} style={selectStyle}>
+                  <option value="">Todas as editoras</option>
+                  {editoras.map(e => <option key={e} value={e}>{e}</option>)}
+                </select>
+              </div>
+            )}
             {categorias.length > 0 && (
               <div style={{ flex: '1 1 200px' }}>
                 <label style={labelStyle}>Categoria</label>
