@@ -23,6 +23,18 @@ function now() {
 
 function short(t, n = 55) { return t && t.length > n ? t.substring(0, n) + '…' : (t || '') }
 
+// Cor da barra/texto/fundo conforme o progresso
+//   0–20%  → vermelho
+//   21–60% → laranja
+//   61–79% → amarelo (transição)
+//   80%+   → verde
+function corPorProgresso(pct) {
+  if (pct >= 80) return { color: 'var(--green)',   bg: 'rgba(34, 197, 94, 0.08)' }
+  if (pct >= 61) return { color: '#EAB308',         bg: 'rgba(234, 179, 8, 0.08)' }
+  if (pct >= 21) return { color: 'var(--accent)',  bg: 'rgba(249, 115, 22, 0.08)' }
+  return { color: 'var(--red)',                      bg: 'rgba(239, 68, 68, 0.08)' }
+}
+
 function fmtData(d) {
   if (!d) return '—'
   const [a, m, dia] = d.split('-')
@@ -293,7 +305,7 @@ function CardPlano({ plano, onClick, onDelete, onDuplicate }) {
   const total = (plano._total_tarefas || 0)
   const concluidas = (plano._concluidas || 0)
   const pct = total > 0 ? Math.round((concluidas / total) * 100) : 0
-  const barColor = pct === 100 ? 'var(--green)' : 'var(--accent)'
+  const barColor = corPorProgresso(pct).color
 
   return (
     <div className="table-card" style={{ padding: '16px 20px', cursor: 'pointer' }}
@@ -584,7 +596,7 @@ function DetalhePlano({ planoId, supervisorNome, onSupervisorChange, onBack, sho
     }))
   }
 
-  const barColor = pctGeral === 100 ? 'var(--green)' : 'var(--accent)'
+  const barColor = corPorProgresso(pctGeral).color
   const colab = plano.rh_colaboradores || {}
 
   // ── Ícone e cor por tipo de histórico ─────────────────
@@ -753,7 +765,7 @@ function DetalhePlano({ planoId, supervisorNome, onSupervisorChange, onBack, sho
                   const isLast = ti === (sec.planos_tarefas?.length || 0) - 1
                   const noteIsOpen = noteOpen[tarefa.id]
                   const noteVal = noteText[tarefa.id] ?? tarefa.observacao ?? ''
-                  const rowBg = tarefa.progresso === 100 ? 'var(--green-light)' : ''
+                  const rowBg = corPorProgresso(tarefa.progresso).bg
                   return (
                     <div key={tarefa.id}>
                       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) repeat(6,44px) 36px', padding: '10px 20px', borderBottom: (!isLast || noteIsOpen) ? '1px solid var(--border)' : 'none', alignItems: 'center', background: rowBg }}>
@@ -771,13 +783,13 @@ function DetalhePlano({ planoId, supervisorNome, onSupervisorChange, onBack, sho
                             : <p
                                 onClick={() => setEditingTarefa({ id: tarefa.id, texto: tarefa.texto })}
                                 title="Clique para editar"
-                                style={{ margin: '0 0 4px', fontSize: 13, lineHeight: 1.5, color: tarefa.progresso === 100 ? 'var(--green)' : 'var(--text)', cursor: 'text' }}
+                                style={{ margin: '0 0 4px', fontSize: 13, lineHeight: 1.5, color: tarefa.progresso >= 80 ? 'var(--green)' : 'var(--text)', cursor: 'text' }}
                               >
                                 {tarefa.texto}
                               </p>
                           }
                           <div style={{ height: 3, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden', marginBottom: tarefa.observacao || tarefa.validado_em ? 4 : 0 }}>
-                            <div style={{ height: '100%', width: `${tarefa.progresso}%`, background: tarefa.progresso === 100 ? 'var(--green)' : 'var(--accent)', borderRadius: 99, transition: 'width 0.2s' }} />
+                            <div style={{ height: '100%', width: `${tarefa.progresso}%`, background: corPorProgresso(tarefa.progresso).color, borderRadius: 99, transition: 'width 0.2s' }} />
                           </div>
                           {tarefa.progresso === 100 && tarefa.validado_em && (
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, padding: '2px 7px', borderRadius: 20, background: 'var(--green-light)', color: 'var(--green)' }}>
