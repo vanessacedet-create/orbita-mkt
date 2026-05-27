@@ -782,6 +782,7 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
   const [novoItem, setNovoItem]       = useState('')
   const [novoComent, setNovoComent]   = useState('')
   const [saving, setSaving]           = useState(false)
+  const [editandoItem, setEditandoItem] = useState(null) // { id, texto }
   const checkInputRef = useRef()
 
   async function salvar() {
@@ -833,6 +834,22 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
     if (item?._local) { setChecklist(prev => prev.filter(x => x.id !== id)); return }
     await deleteChecklistItem(id)
     setChecklist(prev => prev.filter(x => x.id !== id))
+  }
+
+  async function salvarEdicaoItem() {
+    if (!editandoItem) return
+    const { id, texto } = editandoItem
+    const textoFinal = texto.trim()
+    if (!textoFinal) { setEditandoItem(null); return }
+    const item = checklist.find(x => x.id === id)
+    if (!item) { setEditandoItem(null); return }
+    if (item._local) {
+      setChecklist(prev => prev.map(x => x.id === id ? { ...x, texto: textoFinal } : x))
+    } else {
+      const upd = await updateChecklistItem(id, { texto: textoFinal })
+      setChecklist(prev => prev.map(x => x.id === upd.id ? upd : x))
+    }
+    setEditandoItem(null)
   }
 
   async function enviarComentario() {
@@ -993,7 +1010,21 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
                   <button onClick={()=>toggleItem(item)} style={{ background:'none', border:'none', cursor:'pointer', color: item.concluido ? 'var(--green)' : 'var(--text-muted)', padding:0, display:'flex', flexShrink:0 }}>
                     {item.concluido ? <CheckSquare size={16}/> : <Square size={16}/>}
                   </button>
-                  <span style={{ flex:1, fontSize:13, color: item.concluido ? 'var(--text-muted)' : 'var(--text)', textDecoration: item.concluido ? 'line-through' : 'none' }}>{item.texto}</span>
+                  {editandoItem?.id === item.id
+                    ? <input
+                        autoFocus
+                        value={editandoItem.texto}
+                        onChange={e => setEditandoItem(prev => ({ ...prev, texto: e.target.value }))}
+                        onBlur={salvarEdicaoItem}
+                        onKeyDown={e => { if (e.key === 'Enter') salvarEdicaoItem(); if (e.key === 'Escape') setEditandoItem(null) }}
+                        style={{ flex:1, fontSize:13, background:'transparent', border:'none', borderBottom:'1px solid var(--accent)', outline:'none', color:'var(--text)', padding:'1px 0' }}
+                      />
+                    : <span
+                        onClick={() => setEditandoItem({ id: item.id, texto: item.texto })}
+                        title="Clique para editar"
+                        style={{ flex:1, fontSize:13, color: item.concluido ? 'var(--text-muted)' : 'var(--text)', textDecoration: item.concluido ? 'line-through' : 'none', cursor:'text' }}
+                      >{item.texto}</span>
+                  }
                   <button onClick={()=>removeItem(item.id)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', padding:0, display:'flex', opacity:0.5 }}><X size={12}/></button>
                 </div>
               ))}
