@@ -575,6 +575,7 @@ export default function VitrinePublica() {
   const [categoriaFiltro, setCategoriaFiltro] = useState('');
   const [showFiltros, setShowFiltros] = useState(false);
   const [selecionados, setSelecionados] = useState({});
+  const [livrosUsadosMes, setLivrosUsadosMes] = useState(0); // livros já pedidos no ciclo atual
   const [showCarrinho, setShowCarrinho] = useState(false);
   const [showHistorico, setShowHistorico] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -635,9 +636,28 @@ export default function VitrinePublica() {
     }));
   }
 
+  async function buscarLivrosUsadosMes(parceiroData) {
+    const agora = new Date();
+    const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1).toISOString();
+    const fimMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 0, 23, 59, 59).toISOString();
+    const cpfNorm = normalizeCpf(parceiroData.cpf);
+
+    const { data: pedidosMes } = await supabase
+      .from('vitrine_pedidos')
+      .select('vitrine_pedido_itens(quantidade)')
+      .or(`cpf.eq.${parceiroData.cpf},cpf.eq.${cpfNorm},email.ilike.${parceiroData.email}`)
+      .gte('created_at', inicioMes)
+      .lte('created_at', fimMes);
+
+    const total = (pedidosMes || []).reduce((soma, p) =>
+      soma + (p.vitrine_pedido_itens || []).reduce((s, i) => s + (i.quantidade || 1), 0), 0);
+    setLivrosUsadosMes(total);
+  }
+
   function handleLogin(parceiroData) {
     setParceiro(parceiroData);
     preencherUltimoPedido(parceiroData);
+    buscarLivrosUsadosMes(parceiroData);
   }
 
   // ── Filtros ──
@@ -669,7 +689,8 @@ export default function VitrinePublica() {
   // ── Seleção ──
   const totalTitulos = Object.keys(selecionados).length;
   const totalSelecionados = Object.values(selecionados).reduce((a, b) => a + b, 0);
-  const limite = limiteDoGrupo(parceiro?.grupo);
+  const limiteTotal = limiteDoGrupo(parceiro?.grupo);
+  const limite = limiteTotal === Infinity ? Infinity : Math.max(0, limiteTotal - livrosUsadosMes);
 
   function toggleSelecao(livro) {
     setSelecionados(prev => {
@@ -775,6 +796,7 @@ export default function VitrinePublica() {
         console.warn(`[Vitrine→Monitoramento] Parceiro "${parceiro.nome}" não encontrado no CRM. Registro não criado.`);
       }
 
+      setLivrosUsadosMes(prev => prev + Object.values(selecionados).reduce((a, b) => a + b, 0));
       setEnviado(true);
       setSelecionados({});
       setForm(prev => ({ ...prev, dataDivulgacao: '', obs: '' }));
@@ -857,7 +879,7 @@ export default function VitrinePublica() {
                   fontSize: 11, fontWeight: 700, letterSpacing: '.04em',
                 }}>
                   Grupo {parceiro.grupo}
-                  {limite < Infinity ? ` · ${totalTitulos}/${limite} livros` : ` · ${totalTitulos} livros`}
+                  {limiteTotal < Infinity ? ` · ${totalTitulos}/${limite} livro${limite !== 1 ? 's' : ''} restante${limite !== 1 ? 's' : ''} em ${new Date().toLocaleDateString('pt-BR', {month:'long'})}` : ` · ${totalTitulos} livros`}
                 </span>
               )}
             </p>
@@ -991,6 +1013,21 @@ export default function VitrinePublica() {
             )}
           </button>}
         </div>
+
+        {limiteTotal < Infinity && (
+          <div style={{
+            background: limite === 0 ? '#FEF2F2' : '#F0FDF4',
+            border: `1.5px solid ${limite === 0 ? '#FCA5A5' : '#86EFAC'}`,
+            borderRadius: 10, padding: '8px 14px', marginBottom: 8,
+            display: 'flex', alignItems: 'center', gap: 8, fontSize: 13,
+            color: limite === 0 ? '#DC2626' : '#16A34A', fontWeight: 600,
+          }}>
+            {limite === 0
+              ? `✗ Você já utilizou seu limite de ${limiteTotal} livro${limiteTotal !== 1 ? 's' : ''} em ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}. Seu ciclo renova em ${new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toLocaleDateString('pt-BR')}.`
+              : `✓ Você pode solicitar ainda ${limite} livro${limite !== 1 ? 's' : ''} em ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} (${livrosUsadosMes} de ${limiteTotal} usados).`
+            }
+          </div>
+        )}
 
         {editoraLocked && (
           <div style={{
