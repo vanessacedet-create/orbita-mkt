@@ -740,7 +740,7 @@ function DetalhePlano({ planoId, supervisorNome, onSupervisorChange, onBack, sho
             {isOpen && (
               <>
                 {/* Header das colunas */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) repeat(5,44px) 36px', padding: '7px 20px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) repeat(5,44px) 100px', padding: '7px 20px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', alignItems: 'center' }}>
                   <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Tarefa</span>
                   {STAGES.map(s => (
                     <span key={s} style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textAlign: 'center', textTransform: 'uppercase' }}>{s}%</span>
@@ -756,7 +756,7 @@ function DetalhePlano({ planoId, supervisorNome, onSupervisorChange, onBack, sho
                   const rowBg = tarefa.progresso === 100 ? 'var(--green-light)' : ''
                   return (
                     <div key={tarefa.id}>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) repeat(5,44px) 36px', padding: '10px 20px', borderBottom: (!isLast || noteIsOpen) ? '1px solid var(--border)' : 'none', alignItems: 'center', background: rowBg }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) repeat(5,44px) 100px', padding: '10px 20px', borderBottom: (!isLast || noteIsOpen) ? '1px solid var(--border)' : 'none', alignItems: 'center', background: rowBg }}>
                         {/* Texto */}
                         <div style={{ paddingRight: 12 }}>
                           {editingTarefa?.id === tarefa.id
