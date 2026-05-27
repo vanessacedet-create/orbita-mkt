@@ -318,7 +318,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
             <div style={{marginBottom:20}}>
               <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:8,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}}>Status atual</div>
               <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
-                {PIPELINE.map((s,i)=>(
+                {pipeline.map((s,i)=>(
                   <div key={s.value} style={{display:'flex',alignItems:'center',gap:4}}>
                     <div style={{
                       padding:'6px 14px',borderRadius:20,fontSize:12,fontWeight:700,
@@ -326,7 +326,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                       color: statusAtual===s.value ? '#fff' : s.cor,
                       border:`2px solid ${s.cor}`,
                     }}>{s.label}</div>
-                    {i < PIPELINE.length-1 && <ChevronRight size={14} color="var(--border)"/>}
+                    {i < pipeline.length-1 && <ChevronRight size={14} color="var(--border)"/>}
                   </div>
                 ))}
               </div>
@@ -339,7 +339,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                   <label className="form-label">Novo status</label>
                   <select className="form-select" value={novoStatus} onChange={e=>setNovoStatus(e.target.value)}>
                     <option value="">Selecionar...</option>
-                    {PIPELINE.filter(s=>s.value!==statusAtual).map(s=>(
+                    {pipeline.filter(s=>s.value!==statusAtual).map(s=>(
                       <option key={s.value} value={s.value}>{s.label}</option>
                     ))}
                   </select>
@@ -683,7 +683,7 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
           <div className="form-group">
             <label className="form-label">Status inicial no pipeline</label>
             <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
-              {PIPELINE.map(s=>(
+              {pipeline.map(s=>(
                 <button key={s.value} type="button" onClick={()=>setStatusInicial(s.value)}
                   style={{padding:'4px 12px',borderRadius:20,fontSize:12,fontWeight:600,cursor:'pointer',border:`2px solid ${s.cor}`,
                     background:statusInicial===s.value?s.cor:'transparent',
