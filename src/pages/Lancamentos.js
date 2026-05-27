@@ -318,6 +318,16 @@ export default function Lancamentos() {
   // Filtro de tipo de editora — visível para todos os usuários
   const [filtroTipoEditora, setFiltroTipoEditora] = useState('todos') // 'todos' | 'proprias' | 'parceiras'
 
+  // Lista de editoras próprias da empresa (case-insensitive, sem acentos)
+  const EDITORAS_PROPRIAS = [
+    'Vide Editorial', 'Ecclesiae', 'Auster', 'Kírion', 'Kumon',
+    'Sétimo Selo', 'Texugo', 'Edições Livre', 'Editora Papillon',
+    'Compostela', 'Mori', 'Editora Axia'
+  ]
+  const normalizar = (s) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+  const editorasProprias = EDITORAS_PROPRIAS.map(normalizar)
+  const ehEditoraPropria = (nome) => editorasProprias.includes(normalizar(nome))
+
   const grupoLanc = ehAdminVisual
     ? (filtroGrupoAdmin === 'todos' ? null : filtroGrupoAdmin)
     : grupoDoPerfil
@@ -376,11 +386,11 @@ export default function Lancamentos() {
   const grid = gerarGrid(ano,mes)
   const hj   = hojeKey()
 
-  // Aplica o filtro de tipo de editora (próprias vs parceiras)
+  // Aplica o filtro de tipo de editora (próprias vs parceiras) baseado no nome da editora
   const livrosFiltrados = livros.filter(l => {
     if (filtroTipoEditora === 'todos') return true
-    if (filtroTipoEditora === 'proprias') return l.grupo === 'proprias'
-    if (filtroTipoEditora === 'parceiras') return l.grupo === 'parceiras'
+    if (filtroTipoEditora === 'proprias') return ehEditoraPropria(l.editora)
+    if (filtroTipoEditora === 'parceiras') return !ehEditoraPropria(l.editora)
     return true
   })
 
