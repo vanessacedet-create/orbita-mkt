@@ -1333,16 +1333,19 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
 
   // Busca de livros para adicionar
   useEffect(() => {
-    if (!livroSearch || livroSearch.length < 2) { setLivroResults([]); return }
+    if (!livroSearch || livroSearch.length < 2) { setLivroResults([]); setLivroOpen(false); return }
     const t = setTimeout(async () => {
       try {
         const { data } = await getLivros({ page:0, pageSize:1000, search: livroSearch, grupos: gruposLivros })
         setLivroResults(data || [])
         setLivroOpen(true)
-      } catch {}
+      } catch(e) {
+        console.error('Erro ao buscar livros:', e)
+        setLivroResults([])
+      }
     }, 300)
     return () => clearTimeout(t)
-  }, [livroSearch])
+  }, [livroSearch, _pa])
 
   async function handleAddLivro(livro) {
     if (lancamentoLivros.find(ll => ll.livro_id === livro.id)) {
@@ -1491,6 +1494,8 @@ function DetalheLancamento({ campanhaId, tipoCampanha, lancamentoLivros, setLanc
               onChange={e=>setLivroSearch(e.target.value)}
               placeholder="🔍 Adicionar livro por título, ISBN ou SKU..."
               autoComplete="off"
+              onBlur={() => setTimeout(() => setLivroOpen(false), 200)}
+              onFocus={() => livroResults.length > 0 && setLivroOpen(true)}
             />
           {livroOpen && livroResults.length > 0 && (
             <div style={{position:'absolute',top:'100%',left:0,right:0,zIndex:200,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:8,boxShadow:'0 4px 16px rgba(0,0,0,0.3)',maxHeight:220,overflowY:'auto'}}>
