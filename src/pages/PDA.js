@@ -181,11 +181,11 @@ function useToast() {
 }
 
 // ── MODAIS ─────────────────────────────────────────────────
-function ModalNovaIniciativa({ area, grupos, onSave, onClose }) {
+function ModalNovaIniciativa({ area, grupos, preset, onSave, onClose }) {
   const [titulo, setTitulo] = useState('')
   const [responsavel, setResponsavel] = useState('')
-  const [tipo, setTipo] = useState('avulsa') // 'avulsa' | 'grupo' | 'em_grupo'
-  const [grupoId, setGrupoId] = useState('')
+  const [tipo, setTipo] = useState(preset?.tipo || 'avulsa') // 'avulsa' | 'grupo' | 'em_grupo'
+  const [grupoId, setGrupoId] = useState(preset?.grupoId || '')
   const [saving, setSaving] = useState(false)
 
   async function save() {
@@ -535,6 +535,15 @@ function VisaoMatriz({
               {grupo.titulo}
             </div>
           )}
+          <button onClick={() => onNovaIniciativa({ tipo: 'em_grupo', grupoId: grupo.id })}
+            title={`Adicionar iniciativa a "${grupo.titulo}"`}
+            style={{
+              background: 'var(--accent)', color: 'white', border: 'none',
+              fontSize: 10, fontWeight: 600, padding: '4px 8px', borderRadius: 4,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3,
+            }}>
+            <Plus size={11} /> Adicionar
+          </button>
           <button onClick={() => { if (window.confirm(`Remover o grupo "${grupo.titulo}"?\n\nAs iniciativas dentro dele NÃO serão deletadas — só sairão do grupo.`)) onDeletarIniciativa(grupo.id) }}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex', opacity: 0.4 }}>
             <Trash2 size={11} />
@@ -598,9 +607,15 @@ function VisaoMatriz({
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
             Nenhuma iniciativa em {AREAS.find(a => a.value === area)?.label} ainda.
           </p>
-          <button className="btn btn-primary" onClick={onNovaIniciativa}>
-            <Plus size={14} /> Nova iniciativa
-          </button>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+            <button className="btn btn-primary" onClick={() => onNovaIniciativa({ tipo: 'avulsa' })}>
+              <Plus size={14} /> Nova iniciativa
+            </button>
+            <button className="btn btn-ghost" onClick={() => onNovaIniciativa({ tipo: 'grupo' })}
+              style={{ border: '1px dashed var(--accent)', color: 'var(--accent)' }}>
+              <Plus size={14} /> Novo grupo
+            </button>
+          </div>
         </div>
       ) : (
         <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
@@ -659,9 +674,15 @@ function VisaoMatriz({
       )}
 
       {iniciativas.length > 0 && (
-        <button className="btn btn-ghost btn-sm" style={{ marginTop: 12 }} onClick={onNovaIniciativa}>
-          <Plus size={12} /> Nova iniciativa em {AREAS.find(a => a.value === area)?.label}
-        </button>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <button className="btn btn-primary btn-sm" onClick={() => onNovaIniciativa({ tipo: 'avulsa' })}>
+            <Plus size={12} /> Nova iniciativa avulsa
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={() => onNovaIniciativa({ tipo: 'grupo' })}
+            style={{ border: '1px dashed var(--accent)', color: 'var(--accent)' }}>
+            <Plus size={12} /> Novo grupo
+          </button>
+        </div>
       )}
     </div>
   )
@@ -948,7 +969,7 @@ export default function PDA() {
   const [area, setArea] = useState('geral')
   const [iniciativas, setIniciativas] = useState([])
   const [loading, setLoading] = useState(true)
-  const [modalNovo, setModalNovo] = useState(false)
+  const [modalNovo, setModalNovo] = useState(null) // null | { tipo, grupoId? }
   const [modalSemestre, setModalSemestre] = useState(false)
   const [editandoCelula, setEditandoCelula] = useState(null)
   const [editandoTitulo, setEditandoTitulo] = useState(null)
@@ -993,7 +1014,7 @@ export default function PDA() {
     const proximaOrdem = (iniciativas[iniciativas.length - 1]?.ordem || 0) + 1
     const nova = await criarIniciativa({ semestre_id: semestreId, area, ...form, ordem: proximaOrdem })
     setIniciativas(prev => [...prev, nova])
-    setModalNovo(false)
+    setModalNovo(null)
     showToast('Iniciativa criada!')
   }
 
@@ -1181,7 +1202,7 @@ export default function PDA() {
           onSalvarTitulo={handleSalvarTitulo}
           onSalvarCelula={handleSalvarCelula}
           onDeletarIniciativa={handleDeletarIniciativa}
-          onNovaIniciativa={() => setModalNovo(true)}
+          onNovaIniciativa={(preset) => setModalNovo(preset || { tipo: 'avulsa' })}
           onReordenarGrupos={handleReordenarGrupos}
           area={area}
         />
@@ -1197,7 +1218,7 @@ export default function PDA() {
         />
       )}
 
-      {modalNovo && <ModalNovaIniciativa area={area} grupos={iniciativas.filter(i => i.eh_grupo)} onSave={handleCriarIniciativa} onClose={() => setModalNovo(false)} />}
+      {modalNovo && <ModalNovaIniciativa area={area} grupos={iniciativas.filter(i => i.eh_grupo)} preset={modalNovo} onSave={handleCriarIniciativa} onClose={() => setModalNovo(null)} />}
       {modalSemestre && <ModalNovoSemestre onSave={handleCriarSemestre} onClose={() => setModalSemestre(false)} />}
 
       {toast && (
