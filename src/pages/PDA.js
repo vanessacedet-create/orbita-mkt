@@ -6,7 +6,7 @@ import {
 } from '../lib/pda'
 import {
   Target, Plus, Trash2, X, Check, Clock, AlertCircle, Square,
-  Grid3x3, FileText, ChevronLeft, ChevronRight, Printer
+  Grid3x3, FileText, ChevronLeft, ChevronRight, ChevronDown, Printer
 } from 'lucide-react'
 
 // ── ÁREAS ──────────────────────────────────────────────────
@@ -79,6 +79,7 @@ function proximoStatus(s) {
 function calcularStats(iniciativas, semanasFiltro = null) {
   let total = 0, feitas = 0, em = 0, atr = 0
   for (const ini of iniciativas) {
+    if (ini.eh_grupo) continue // grupos não contam (não têm células próprias)
     for (const c of (ini.pda_celulas || [])) {
       if (semanasFiltro && !semanasFiltro.includes(c.semana)) continue
       total++
@@ -90,6 +91,46 @@ function calcularStats(iniciativas, semanasFiltro = null) {
   return { total, feitas, em, atr, pct: total ? Math.round(feitas / total * 100) : 0 }
 }
 
+// Organiza iniciativas em uma estrutura agrupada que respeita ordem:
+// [{ tipo: 'grupo', grupo, filhas: [...] }, { tipo: 'avulsa', iniciativa }, ...]
+function agruparIniciativas(iniciativas) {
+  const grupos = new Map() // grupo_id → { grupo, filhas }
+  const ordemRender = []
+
+  // Primeiro passe: identifica grupos
+  for (const ini of iniciativas) {
+    if (ini.eh_grupo) {
+      grupos.set(ini.id, { grupo: ini, filhas: [] })
+      ordemRender.push({ tipo: 'grupo', id: ini.id })
+    }
+  }
+
+  // Segundo passe: atribui filhas e identifica avulsas
+  for (const ini of iniciativas) {
+    if (ini.eh_grupo) continue
+    if (ini.grupo_id && grupos.has(ini.grupo_id)) {
+      grupos.get(ini.grupo_id).filhas.push(ini)
+    } else {
+      ordemRender.push({ tipo: 'avulsa', iniciativa: ini })
+    }
+  }
+
+  // Monta o resultado na ordem de render
+  return ordemRender.map(item => {
+    if (item.tipo === 'grupo') {
+      const g = grupos.get(item.id)
+      return { tipo: 'grupo', grupo: g.grupo, filhas: g.filhas }
+    }
+    return item
+  })
+}
+
+// Acha o grupo pai de uma iniciativa (para uso no Status Report)
+function grupoDe(iniciativa, todas) {
+  if (!iniciativa.grupo_id) return null
+  return todas.find(i => i.id === iniciativa.grupo_id && i.eh_grupo) || null
+}
+
 // ── TOAST ──────────────────────────────────────────────────
 function useToast() {
   const [t, setT] = useState(null)
@@ -98,16 +139,27 @@ function useToast() {
 }
 
 // ── MODAIS ─────────────────────────────────────────────────
-function ModalNovaIniciativa({ area, onSave, onClose }) {
+function ModalNovaIniciativa({ area, grupos, onSave, onClose }) {
   const [titulo, setTitulo] = useState('')
   const [responsavel, setResponsavel] = useState('')
+  const [tipo, setTipo] = useState('avulsa') // 'avulsa' | 'grupo' | 'em_grupo'
+  const [grupoId, setGrupoId] = useState('')
   const [saving, setSaving] = useState(false)
+
   async function save() {
     if (!titulo.trim()) return
+    if (tipo === 'em_grupo' && !grupoId) return
     setSaving(true)
-    try { await onSave({ titulo: titulo.trim(), responsavel: responsavel.trim() || null }) }
-    finally { setSaving(false) }
+    try {
+      await onSave({
+        titulo: titulo.trim(),
+        responsavel: responsavel.trim() || null,
+        eh_grupo: tipo === 'grupo',
+        grupo_id: tipo === 'em_grupo' ? grupoId : null,
+      })
+    } finally { setSaving(false) }
   }
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
@@ -117,21 +169,67 @@ function ModalNovaIniciativa({ area, onSave, onClose }) {
         </div>
         <div className="form-grid">
           <div className="form-group">
+            <label className="form-label">Tipo</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button type="button" onClick={() => setTipo('avulsa')}
+                style={{
+                  flex: 1, padding: '8px 10px', fontSize: 12, fontWeight: 600,
+                  border: `1px solid ${tipo === 'avulsa' ? 'var(--accent)' : 'var(--border)'}`,
+                  background: tipo === 'avulsa' ? 'rgba(249, 115, 22, 0.1)' : 'transparent',
+                  color: tipo === 'avulsa' ? 'var(--accent)' : 'var(--text)',
+                  borderRadius: 6, cursor: 'pointer',
+                }}>Iniciativa avulsa</button>
+              <button type="button" onClick={() => setTipo('grupo')}
+                style={{
+                  flex: 1, padding: '8px 10px', fontSize: 12, fontWeight: 600,
+                  border: `1px solid ${tipo === 'grupo' ? 'var(--accent)' : 'var(--border)'}`,
+                  background: tipo === 'grupo' ? 'rgba(249, 115, 22, 0.1)' : 'transparent',
+                  color: tipo === 'grupo' ? 'var(--accent)' : 'var(--text)',
+                  borderRadius: 6, cursor: 'pointer',
+                }}>Novo grupo</button>
+              <button type="button" onClick={() => setTipo('em_grupo')} disabled={!grupos || grupos.length === 0}
+                style={{
+                  flex: 1, padding: '8px 10px', fontSize: 12, fontWeight: 600,
+                  border: `1px solid ${tipo === 'em_grupo' ? 'var(--accent)' : 'var(--border)'}`,
+                  background: tipo === 'em_grupo' ? 'rgba(249, 115, 22, 0.1)' : 'transparent',
+                  color: tipo === 'em_grupo' ? 'var(--accent)' : 'var(--text)',
+                  borderRadius: 6, cursor: 'pointer',
+                  opacity: (!grupos || grupos.length === 0) ? 0.4 : 1,
+                }}>Dentro de grupo</button>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+              {tipo === 'avulsa' && 'Iniciativa independente, com células de semana próprias.'}
+              {tipo === 'grupo' && 'Cabeçalho que agrupa outras iniciativas. Não tem células de semana.'}
+              {tipo === 'em_grupo' && 'Iniciativa que faz parte de um grupo existente.'}
+            </div>
+          </div>
+          {tipo === 'em_grupo' && (
+            <div className="form-group">
+              <label className="form-label">Grupo *</label>
+              <select className="form-select" value={grupoId} onChange={e => setGrupoId(e.target.value)}>
+                <option value="">Selecione...</option>
+                {(grupos || []).map(g => <option key={g.id} value={g.id}>{g.titulo}</option>)}
+              </select>
+            </div>
+          )}
+          <div className="form-group">
             <label className="form-label">Título *</label>
             <input className="form-input" autoFocus value={titulo}
               onChange={e => setTitulo(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && save()} />
           </div>
-          <div className="form-group">
-            <label className="form-label">Responsável</label>
-            <input className="form-input" value={responsavel}
-              onChange={e => setResponsavel(e.target.value)}
-              placeholder="Ex: Vanessa, João Gabriel..." />
-          </div>
+          {tipo !== 'grupo' && (
+            <div className="form-group">
+              <label className="form-label">Responsável</label>
+              <input className="form-input" value={responsavel}
+                onChange={e => setResponsavel(e.target.value)}
+                placeholder="Ex: Vanessa, João Gabriel..." />
+            </div>
+          )}
         </div>
         <div className="form-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={save} disabled={saving || !titulo.trim()}>
+          <button className="btn btn-primary" onClick={save} disabled={saving || !titulo.trim() || (tipo === 'em_grupo' && !grupoId)}>
             {saving ? 'Salvando...' : 'Criar'}
           </button>
         </div>
@@ -199,9 +297,180 @@ function VisaoMatriz({
 }) {
   const mes = MESES[mesIdx]
   const semanasDoMes = mes.semanas
+  const [gruposColapsados, setGruposColapsados] = useState(new Set())
+
+  function toggleGrupo(id) {
+    setGruposColapsados(prev => {
+      const novo = new Set(prev)
+      if (novo.has(id)) novo.delete(id)
+      else novo.add(id)
+      return novo
+    })
+  }
+
+  const estrutura = useMemo(() => agruparIniciativas(iniciativas), [iniciativas])
 
   function getCelula(ini, semana) {
     return (ini.pda_celulas || []).find(c => c.semana === semana)
+  }
+
+  // Renderiza uma linha de iniciativa (não-grupo)
+  function renderLinhaIniciativa(ini, ehFilha = false) {
+    return (
+      <div key={ini.id} style={{
+        display: 'grid',
+        gridTemplateColumns: `260px repeat(${semanasDoMes.length}, 1fr)`,
+        borderBottom: '1px solid var(--border-light, rgba(255,255,255,0.05))',
+        minHeight: 42,
+      }}>
+        {/* TÍTULO */}
+        <div style={{ padding: '8px 14px', paddingLeft: ehFilha ? 32 : 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+          {editandoTitulo?.id === ini.id ? (
+            <input
+              autoFocus
+              value={editandoTitulo.titulo}
+              onChange={e => setEditandoTitulo(p => ({ ...p, titulo: e.target.value }))}
+              onBlur={onSalvarTitulo}
+              onKeyDown={e => { if (e.key === 'Enter') onSalvarTitulo(); if (e.key === 'Escape') setEditandoTitulo(null) }}
+              style={{ flex: 1, fontSize: 12, background: 'transparent', border: 'none', borderBottom: '1px solid var(--accent)', outline: 'none', color: 'var(--text)' }}
+            />
+          ) : (
+            <div
+              onClick={() => setEditandoTitulo({ id: ini.id, titulo: ini.titulo, responsavel: ini.responsavel || '' })}
+              style={{ flex: 1, cursor: 'text', overflow: 'hidden' }}
+              title={ini.titulo}>
+              <div style={{ fontSize: 12, color: 'var(--text)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {ini.titulo}
+              </div>
+              {ini.responsavel && (
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{ini.responsavel}</div>
+              )}
+            </div>
+          )}
+          <button onClick={() => { if (window.confirm(`Remover "${ini.titulo}"?`)) onDeletarIniciativa(ini.id) }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex', opacity: 0.3 }}>
+            <Trash2 size={11} />
+          </button>
+        </div>
+        {/* CÉLULAS */}
+        {semanasDoMes.map(semana => {
+          const celula = getCelula(ini, semana)
+          const stInfo = STATUS_INFO[celula?.status || 'a_fazer']
+          const isEdit = editandoCelula?.iniciativaId === ini.id && editandoCelula?.semana === semana
+          const ehSemAtual = semana === semanaAtualIdx
+          return (
+            <div key={semana} style={{
+              borderLeft: '1px solid var(--border-light, rgba(255,255,255,0.05))',
+              background: celula ? stInfo.bg : (ehSemAtual ? 'rgba(249, 115, 22, 0.04)' : 'transparent'),
+              position: 'relative',
+              minHeight: 42,
+            }}>
+              {isEdit ? (
+                <input
+                  autoFocus
+                  value={editandoCelula.texto}
+                  onChange={e => setEditandoCelula(p => ({ ...p, texto: e.target.value }))}
+                  onBlur={async () => {
+                    await onSalvarCelula(ini.id, semana, editandoCelula.texto, celula?.status || 'a_fazer')
+                    setEditandoCelula(null)
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') e.currentTarget.blur()
+                    if (e.key === 'Escape') setEditandoCelula(null)
+                  }}
+                  style={{ width: '100%', height: '100%', padding: '6px 8px', fontSize: 11, background: 'var(--surface)', border: '1px solid var(--accent)', outline: 'none', color: 'var(--text)' }}
+                />
+              ) : (
+                <div
+                  onClick={() => setEditandoCelula({ iniciativaId: ini.id, semana, texto: celula?.texto || '' })}
+                  style={{ padding: '6px 8px', fontSize: 11, color: stInfo.text, cursor: 'text', minHeight: 30, lineHeight: 1.25, fontWeight: celula?.status === 'feito' ? 600 : 400, textAlign: 'center' }}>
+                  {celula?.texto || ''}
+                </div>
+              )}
+              {celula && celula.texto && (
+                <button
+                  onClick={async e => {
+                    e.stopPropagation()
+                    await onSalvarCelula(ini.id, semana, celula.texto, proximoStatus(celula.status))
+                  }}
+                  title={`Status: ${stInfo.label} (clique para mudar)`}
+                  style={{
+                    position: 'absolute', top: 2, right: 2,
+                    width: 14, height: 14, padding: 0,
+                    background: stInfo.border, color: 'white',
+                    border: 'none', borderRadius: 3,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                  <stInfo.icon size={9} />
+                </button>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  // Renderiza um cabeçalho de grupo
+  function renderCabecalhoGrupo(grupo, filhas) {
+    const colapsado = gruposColapsados.has(grupo.id)
+    // Stats do grupo: conta células das filhas
+    const stats = calcularStats(filhas)
+    const corBarra = stats.atr > 0 ? 'var(--red)' : (stats.pct === 100 && stats.total > 0 ? 'var(--green)' : 'var(--accent)')
+    return (
+      <div key={grupo.id} style={{
+        display: 'grid',
+        gridTemplateColumns: `260px 1fr`,
+        background: 'rgba(249, 115, 22, 0.06)',
+        borderTop: '1px solid var(--accent)',
+        borderBottom: '1px solid var(--border)',
+      }}>
+        <div style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={() => toggleGrupo(grupo.id)}
+            style={{ background: 'none', border: 'none', padding: 0, display: 'flex', cursor: 'pointer', color: 'var(--accent)' }}>
+            {colapsado ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+          </button>
+          {editandoTitulo?.id === grupo.id ? (
+            <input
+              autoFocus
+              value={editandoTitulo.titulo}
+              onChange={e => setEditandoTitulo(p => ({ ...p, titulo: e.target.value }))}
+              onBlur={onSalvarTitulo}
+              onKeyDown={e => { if (e.key === 'Enter') onSalvarTitulo(); if (e.key === 'Escape') setEditandoTitulo(null) }}
+              style={{ flex: 1, fontSize: 13, fontWeight: 700, background: 'transparent', border: 'none', borderBottom: '1px solid var(--accent)', outline: 'none', color: 'var(--text)' }}
+            />
+          ) : (
+            <div
+              onClick={() => setEditandoTitulo({ id: grupo.id, titulo: grupo.titulo, responsavel: grupo.responsavel || '' })}
+              style={{ flex: 1, fontSize: 13, fontWeight: 700, color: 'var(--text)', cursor: 'text', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: 0.3 }}
+              title={grupo.titulo}>
+              {grupo.titulo}
+            </div>
+          )}
+          <button onClick={() => { if (window.confirm(`Remover o grupo "${grupo.titulo}"?\n\nAs iniciativas dentro dele NÃO serão deletadas — só sairão do grupo.`)) onDeletarIniciativa(grupo.id) }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex', opacity: 0.4 }}>
+            <Trash2 size={11} />
+          </button>
+        </div>
+        <div style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, fontSize: 11 }}>
+          <span style={{ color: 'var(--text-muted)' }}>
+            {filhas.length} iniciativa{filhas.length !== 1 ? 's' : ''}
+          </span>
+          {stats.total > 0 && (
+            <>
+              <span style={{ color: 'var(--green)', fontWeight: 600 }} title="Feitas">✓ {stats.feitas}</span>
+              {stats.em > 0 && <span style={{ color: '#854F0B', fontWeight: 600 }} title="Em andamento">◐ {stats.em}</span>}
+              {stats.atr > 0 && <span style={{ color: 'var(--red)', fontWeight: 600 }} title="Atrasadas">! {stats.atr}</span>}
+              <span style={{ color: 'var(--text-muted)' }}>de {stats.total}</span>
+              <div style={{ width: 60, height: 6, background: 'var(--border)', borderRadius: 99, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${stats.pct}%`, background: corBarra }} />
+              </div>
+              <span style={{ color: 'var(--text)', fontWeight: 700, minWidth: 38, textAlign: 'right' }}>{stats.pct}%</span>
+            </>
+          )}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -271,100 +540,19 @@ function VisaoMatriz({
               )
             })}
           </div>
-          {/* LINHAS */}
-          {iniciativas.map((ini, idx) => (
-            <div key={ini.id} style={{
-              display: 'grid',
-              gridTemplateColumns: `260px repeat(${semanasDoMes.length}, 1fr)`,
-              borderBottom: idx === iniciativas.length - 1 ? 'none' : '1px solid var(--border-light, rgba(255,255,255,0.05))',
-              minHeight: 42,
-            }}>
-              {/* TÍTULO */}
-              <div style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 6 }}>
-                {editandoTitulo?.id === ini.id ? (
-                  <input
-                    autoFocus
-                    value={editandoTitulo.titulo}
-                    onChange={e => setEditandoTitulo(p => ({ ...p, titulo: e.target.value }))}
-                    onBlur={onSalvarTitulo}
-                    onKeyDown={e => { if (e.key === 'Enter') onSalvarTitulo(); if (e.key === 'Escape') setEditandoTitulo(null) }}
-                    style={{ flex: 1, fontSize: 12, background: 'transparent', border: 'none', borderBottom: '1px solid var(--accent)', outline: 'none', color: 'var(--text)' }}
-                  />
-                ) : (
-                  <div
-                    onClick={() => setEditandoTitulo({ id: ini.id, titulo: ini.titulo, responsavel: ini.responsavel || '' })}
-                    style={{ flex: 1, cursor: 'text', overflow: 'hidden' }}
-                    title={ini.titulo}>
-                    <div style={{ fontSize: 12, color: 'var(--text)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {ini.titulo}
-                    </div>
-                    {ini.responsavel && (
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{ini.responsavel}</div>
-                    )}
-                  </div>
-                )}
-                <button onClick={() => { if (window.confirm(`Remover "${ini.titulo}"?`)) onDeletarIniciativa(ini.id) }}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex', opacity: 0.3 }}>
-                  <Trash2 size={11} />
-                </button>
-              </div>
-              {/* CÉLULAS */}
-              {semanasDoMes.map(semana => {
-                const celula = getCelula(ini, semana)
-                const stInfo = STATUS_INFO[celula?.status || 'a_fazer']
-                const isEdit = editandoCelula?.iniciativaId === ini.id && editandoCelula?.semana === semana
-                const ehSemAtual = semana === semanaAtualIdx
-                return (
-                  <div key={semana} style={{
-                    borderLeft: '1px solid var(--border-light, rgba(255,255,255,0.05))',
-                    background: celula ? stInfo.bg : (ehSemAtual ? 'rgba(249, 115, 22, 0.04)' : 'transparent'),
-                    position: 'relative',
-                    minHeight: 42,
-                  }}>
-                    {isEdit ? (
-                      <input
-                        autoFocus
-                        value={editandoCelula.texto}
-                        onChange={e => setEditandoCelula(p => ({ ...p, texto: e.target.value }))}
-                        onBlur={async () => {
-                          await onSalvarCelula(ini.id, semana, editandoCelula.texto, celula?.status || 'a_fazer')
-                          setEditandoCelula(null)
-                        }}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') e.currentTarget.blur()
-                          if (e.key === 'Escape') setEditandoCelula(null)
-                        }}
-                        style={{ width: '100%', height: '100%', padding: '6px 8px', fontSize: 11, background: 'var(--surface)', border: '1px solid var(--accent)', outline: 'none', color: 'var(--text)' }}
-                      />
-                    ) : (
-                      <div
-                        onClick={() => setEditandoCelula({ iniciativaId: ini.id, semana, texto: celula?.texto || '' })}
-                        style={{ padding: '6px 8px', fontSize: 11, color: stInfo.text, cursor: 'text', minHeight: 30, lineHeight: 1.25, fontWeight: celula?.status === 'feito' ? 600 : 400, textAlign: 'center' }}>
-                        {celula?.texto || ''}
-                      </div>
-                    )}
-                    {celula && celula.texto && (
-                      <button
-                        onClick={async e => {
-                          e.stopPropagation()
-                          await onSalvarCelula(ini.id, semana, celula.texto, proximoStatus(celula.status))
-                        }}
-                        title={`Status: ${stInfo.label} (clique para mudar)`}
-                        style={{
-                          position: 'absolute', top: 2, right: 2,
-                          width: 14, height: 14, padding: 0,
-                          background: stInfo.border, color: 'white',
-                          border: 'none', borderRadius: 3,
-                          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                        <stInfo.icon size={9} />
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          ))}
+          {/* LINHAS AGRUPADAS */}
+          {estrutura.map(item => {
+            if (item.tipo === 'grupo') {
+              const colapsado = gruposColapsados.has(item.grupo.id)
+              return (
+                <div key={item.grupo.id}>
+                  {renderCabecalhoGrupo(item.grupo, item.filhas)}
+                  {!colapsado && item.filhas.map(filha => renderLinhaIniciativa(filha, true))}
+                </div>
+              )
+            }
+            return renderLinhaIniciativa(item.iniciativa, false)
+          })}
         </div>
       )}
 
@@ -507,6 +695,7 @@ function VisaoStatusReport({
                   celula={celula}
                   stInfo={g.info}
                   semana={semanaSel}
+                  grupo={grupoDe(ini, iniciativas)}
                   editandoCelula={editandoCelula}
                   setEditandoCelula={setEditandoCelula}
                   onSalvarCelula={onSalvarCelula}
@@ -550,7 +739,7 @@ function VisaoStatusReport({
   )
 }
 
-function CardSemanal({ ini, celula, stInfo, semana, editandoCelula, setEditandoCelula, onSalvarCelula }) {
+function CardSemanal({ ini, celula, stInfo, semana, grupo, editandoCelula, setEditandoCelula, onSalvarCelula }) {
   const isEdit = editandoCelula?.iniciativaId === ini.id && editandoCelula?.semana === semana
 
   return (
@@ -564,6 +753,11 @@ function CardSemanal({ ini, celula, stInfo, semana, editandoCelula, setEditandoC
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
         <div style={{ flex: 1 }}>
+          {grupo && (
+            <div style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
+              {grupo.titulo}
+            </div>
+          )}
           <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>
             {ini.titulo}
           </div>
@@ -842,7 +1036,7 @@ export default function PDA() {
         />
       )}
 
-      {modalNovo && <ModalNovaIniciativa area={area} onSave={handleCriarIniciativa} onClose={() => setModalNovo(false)} />}
+      {modalNovo && <ModalNovaIniciativa area={area} grupos={iniciativas.filter(i => i.eh_grupo)} onSave={handleCriarIniciativa} onClose={() => setModalNovo(false)} />}
       {modalSemestre && <ModalNovoSemestre onSave={handleCriarSemestre} onClose={() => setModalSemestre(false)} />}
 
       {toast && (
