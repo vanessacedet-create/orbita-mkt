@@ -18,6 +18,7 @@ export const MODULOS_PERMISSOES = {
   tarefas: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers', 'analista_marketplaces', 'estagiario_marketplaces', 'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
   eventos: ['administrador', 'gerente', 'estagiario_marketplaces', 'analista_marketplaces'],
   rh: ['administrador'],
+  pda: ['administrador'],
   treinamentos: ['administrador', 'gerente', 'supervisor_proprias'],
   usuarios: ['administrador'],
   guia_parcerias: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
