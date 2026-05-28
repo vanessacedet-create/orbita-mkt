@@ -8,7 +8,7 @@ import {
   LayoutDashboard, BookOpen, Users, LogOut,
   Orbit, ShieldAlert, Megaphone, CalendarDays, CheckSquare, UserRound, Eye,
   Network, Calculator, HeartHandshake, CalendarCheck, GraduationCap,
-  Store, FileText, SwitchCamera, X, Search, ChevronDown, Inbox
+  Store, FileText, SwitchCamera, X, Search, ChevronDown, Inbox, Target
 } from 'lucide-react'
 import './App.css'
 
@@ -28,6 +28,7 @@ const Calculadora    = lazy(() => import('./pages/Calculadora'))
 const RH             = lazy(() => import('./pages/RH'))
 const Eventos        = lazy(() => import('./pages/Eventos'))
 const Treinamentos   = lazy(() => import('./pages/Treinamentos'))
+const PDA            = lazy(() => import('./pages/PDA'))
 const VitrinePublica = lazy(() => import('./pages/VitrinePublica'))
 const VitrineAdmin   = lazy(() => import('./pages/VitrineAdmin'))
 const GuiaParcerias  = lazy(() => import('./pages/GuiaParcerias'))
@@ -47,6 +48,7 @@ const MENU = [
   { path: '/lancamentos',      label: 'Lançamentos',       icon: CalendarDays,    modulo: 'lancamentos'     },
   { path: '/tarefas',          label: 'Tarefas',           icon: CheckSquare,     modulo: 'tarefas'         },
   { path: '/rh',               label: 'RH',                icon: HeartHandshake,  modulo: 'rh'              },
+  { path: '/pda',              label: 'PDA',               icon: Target,          modulo: 'pda'             },
   { path: '/treinamentos',     label: 'Treinamentos',      icon: GraduationCap,   modulo: 'treinamentos'    },
   { path: '/eventos',          label: 'Eventos',           icon: CalendarCheck,   modulo: 'eventos'         },
   { path: '/vitrine-admin',    label: 'Vitrine',           icon: Store,           modulo: 'parceiros'       },
@@ -553,6 +555,7 @@ function Shell() {
               <Route path="/lancamentos"     element={<RequireAuth modulo="lancamentos"><Lancamentos /></RequireAuth>} />
               <Route path="/tarefas"         element={<RequireAuth modulo="tarefas"><Tarefas /></RequireAuth>} />
               <Route path="/treinamentos"    element={<RequireAuth modulo="treinamentos"><Treinamentos /></RequireAuth>} />
+              <Route path="/pda"             element={<RequireAuth modulo="pda"><PDA /></RequireAuth>} />
               <Route path="/vitrine-admin"   element={<RequireAuth modulo="parceiros"><VitrineAdmin /></RequireAuth>} />
               <Route path="/guia-parcerias"  element={<RequireAuth modulo="guia_parcerias"><GuiaParcerias /></RequireAuth>} />
             </Routes>
