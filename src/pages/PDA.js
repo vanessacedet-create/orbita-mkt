@@ -20,12 +20,13 @@ const AREAS = [
 
 // ── STATUS COM CORES ───────────────────────────────────────
 const STATUS_INFO = {
-  a_fazer:      { label: 'A fazer',      bg: 'transparent',              text: 'var(--text-muted)',  border: 'var(--border)',  icon: Square },
-  em_andamento: { label: 'Em andamento', bg: 'rgba(234, 179, 8, 0.18)',  text: '#854F0B',            border: '#EAB308',        icon: Clock },
-  feito:        { label: 'Feito',        bg: 'rgba(34, 197, 94, 0.18)',  text: '#0F6E56',            border: 'var(--green)',   icon: Check },
-  atrasado:     { label: 'Atrasado',     bg: 'rgba(239, 68, 68, 0.18)',  text: '#A32D2D',            border: 'var(--red)',     icon: AlertCircle },
+  a_fazer:        { label: 'A fazer',               bg: 'transparent',              text: 'var(--text-muted)',  border: 'var(--border)',  icon: Square },
+  em_andamento:   { label: 'Em andamento',          bg: 'rgba(234, 179, 8, 0.18)',  text: '#854F0B',            border: '#EAB308',        icon: Clock },
+  feito:          { label: 'Feito',                 bg: 'rgba(34, 197, 94, 0.18)',  text: '#0F6E56',            border: 'var(--green)',   icon: Check },
+  feito_atrasado: { label: 'Concluído fora do prazo', bg: 'rgba(34, 197, 94, 0.18)', text: '#0F6E56',           border: '#EF9F27',        icon: Check },
+  atrasado:       { label: 'Atrasado',              bg: 'rgba(239, 68, 68, 0.18)',  text: '#A32D2D',            border: 'var(--red)',     icon: AlertCircle },
 }
-const STATUS_CICLO = ['a_fazer', 'em_andamento', 'feito', 'atrasado']
+const STATUS_CICLO = ['a_fazer', 'em_andamento', 'feito', 'feito_atrasado', 'atrasado']
 
 // ── SEMANAS ────────────────────────────────────────────────
 const SEMANA_LABELS = [
@@ -77,18 +78,19 @@ function proximoStatus(s) {
 }
 
 function calcularStats(iniciativas, semanasFiltro = null) {
-  let total = 0, feitas = 0, em = 0, atr = 0
+  let total = 0, feitas = 0, em = 0, atr = 0, feitoAtr = 0
   for (const ini of iniciativas) {
     if (ini.eh_grupo) continue // grupos não contam (não têm células próprias)
     for (const c of (ini.pda_celulas || [])) {
       if (semanasFiltro && !semanasFiltro.includes(c.semana)) continue
       total++
       if (c.status === 'feito') feitas++
+      else if (c.status === 'feito_atrasado') feitoAtr++
       else if (c.status === 'em_andamento') em++
       else if (c.status === 'atrasado') atr++
     }
   }
-  return { total, feitas, em, atr, pct: total ? Math.round(feitas / total * 100) : 0 }
+  return { total, feitas, feitoAtr, em, atr, pct: total ? Math.round(feitas / total * 100) : 0 }
 }
 
 // Organiza iniciativas em uma estrutura agrupada que respeita ordem:
@@ -459,6 +461,7 @@ function VisaoMatriz({
           {stats.total > 0 && (
             <>
               <span style={{ color: 'var(--green)', fontWeight: 600 }} title="Feitas">✓ {stats.feitas}</span>
+              {stats.feitoAtr > 0 && <span style={{ color: '#EF9F27', fontWeight: 600 }} title="Concluído fora do prazo">⚑ {stats.feitoAtr}</span>}
               {stats.em > 0 && <span style={{ color: '#854F0B', fontWeight: 600 }} title="Em andamento">◐ {stats.em}</span>}
               {stats.atr > 0 && <span style={{ color: 'var(--red)', fontWeight: 600 }} title="Atrasadas">! {stats.atr}</span>}
               <span style={{ color: 'var(--text-muted)' }}>de {stats.total}</span>
@@ -608,7 +611,7 @@ function VisaoStatusReport({
   }
 
   // Agrupa por status (Feito → Em andamento → Atrasado → A fazer)
-  const ordemStatus = ['feito', 'em_andamento', 'atrasado', 'a_fazer']
+  const ordemStatus = ['feito', 'feito_atrasado', 'em_andamento', 'atrasado', 'a_fazer']
   const agrupado = ordemStatus.map(st => ({
     status: st,
     info: STATUS_INFO[st],
@@ -669,11 +672,12 @@ function VisaoStatusReport({
       </div>
 
       {/* INDICADORES */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 20 }}>
         <ResumoMini color="var(--green)" label="Feito" valor={stats.feitas} icon={Check} />
+        <ResumoMini color="#EF9F27" label="Fora do prazo" valor={stats.feitoAtr} icon={Check} borderExtra="var(--green)" />
         <ResumoMini color="#EAB308" label="Em andamento" valor={stats.em} icon={Clock} />
         <ResumoMini color="var(--red)" label="Atrasado" valor={stats.atr} icon={AlertCircle} />
-        <ResumoMini color="var(--text-muted)" label="Total na semana" valor={stats.total} icon={Square} />
+        <ResumoMini color="var(--text-muted)" label="Total" valor={stats.total} icon={Square} />
       </div>
 
       {/* INICIATIVAS DA SEMANA */}
@@ -811,10 +815,12 @@ function CardSemanal({ ini, celula, stInfo, semana, grupo, editandoCelula, setEd
   )
 }
 
-function ResumoMini({ color, label, valor, icon: Icon }) {
+function ResumoMini({ color, label, valor, icon: Icon, borderExtra }) {
   return (
     <div style={{
-      background: 'var(--surface)', border: `1px solid var(--border)`,
+      background: 'var(--surface)',
+      border: `1px solid ${borderExtra || 'var(--border)'}`,
+      borderLeft: borderExtra ? `4px solid ${color}` : `1px solid var(--border)`,
       borderRadius: 10, padding: '12px 14px',
       display: 'flex', alignItems: 'center', gap: 10,
     }}>
