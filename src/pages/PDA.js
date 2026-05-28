@@ -6,7 +6,7 @@ import {
 } from '../lib/pda'
 import {
   Target, Plus, Trash2, X, Check, Clock, AlertCircle, Square,
-  Grid3x3, FileText, ChevronLeft, ChevronRight, ChevronDown, Printer
+  Grid3x3, FileText, ChevronLeft, ChevronRight, ChevronDown, Printer, GripVertical
 } from 'lucide-react'
 
 // ── ÁREAS ──────────────────────────────────────────────────
@@ -335,11 +335,13 @@ function VisaoMatriz({
   iniciativas, mesIdx, setMesIdx, semanaAtualIdx,
   editandoCelula, setEditandoCelula,
   editandoTitulo, setEditandoTitulo,
-  onSalvarTitulo, onSalvarCelula, onDeletarIniciativa, onNovaIniciativa, area,
+  onSalvarTitulo, onSalvarCelula, onDeletarIniciativa, onNovaIniciativa, onReordenarGrupos, area,
 }) {
   const mes = MESES[mesIdx]
   const semanasDoMes = mes.semanas
   const [gruposColapsados, setGruposColapsados] = useState(new Set())
+  const [draggingId, setDraggingId] = useState(null)
+  const [dragOverId, setDragOverId] = useState(null)
 
   function toggleGrupo(id) {
     setGruposColapsados(prev => {
@@ -348,6 +350,36 @@ function VisaoMatriz({
       else novo.add(id)
       return novo
     })
+  }
+
+  function handleDragStart(e, grupoId) {
+    setDraggingId(grupoId)
+    e.dataTransfer.effectAllowed = 'move'
+    // alguns navegadores precisam disso
+    e.dataTransfer.setData('text/plain', grupoId)
+  }
+
+  function handleDragOver(e, grupoId) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (grupoId !== draggingId) setDragOverId(grupoId)
+  }
+
+  function handleDragLeave() {
+    setDragOverId(null)
+  }
+
+  function handleDrop(e, alvoId) {
+    e.preventDefault()
+    if (!draggingId || draggingId === alvoId) {
+      setDraggingId(null); setDragOverId(null); return
+    }
+    onReordenarGrupos(draggingId, alvoId)
+    setDraggingId(null); setDragOverId(null)
+  }
+
+  function handleDragEnd() {
+    setDraggingId(null); setDragOverId(null)
   }
 
   const estrutura = useMemo(() => agruparIniciativas(iniciativas), [iniciativas])
@@ -461,14 +493,27 @@ function VisaoMatriz({
     const concluidas = stats.feitas + stats.feitoAtr
     const corBarra = stats.atr > 0 ? 'var(--red)' : (stats.pct === 100 && stats.total > 0 ? 'var(--green)' : 'var(--accent)')
     return (
-      <div key={grupo.id} style={{
+      <div key={grupo.id}
+        draggable
+        onDragStart={e => handleDragStart(e, grupo.id)}
+        onDragOver={e => handleDragOver(e, grupo.id)}
+        onDragLeave={handleDragLeave}
+        onDrop={e => handleDrop(e, grupo.id)}
+        onDragEnd={handleDragEnd}
+        style={{
         display: 'grid',
         gridTemplateColumns: `260px 1fr`,
-        background: 'rgba(249, 115, 22, 0.06)',
-        borderTop: '1px solid var(--accent)',
+        background: draggingId === grupo.id ? 'rgba(249, 115, 22, 0.18)' : 'rgba(249, 115, 22, 0.06)',
+        borderTop: dragOverId === grupo.id ? '2px solid var(--accent)' : '1px solid var(--accent)',
         borderBottom: '1px solid var(--border)',
+        opacity: draggingId === grupo.id ? 0.5 : 1,
+        cursor: draggingId === grupo.id ? 'grabbing' : 'default',
+        transition: 'background 0.15s',
       }}>
         <div style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ cursor: 'grab', color: 'var(--text-muted)', display: 'flex', opacity: 0.4 }} title="Arraste para reordenar">
+            <GripVertical size={14} />
+          </div>
           <button onClick={() => toggleGrupo(grupo.id)}
             style={{ background: 'none', border: 'none', padding: 0, display: 'flex', cursor: 'pointer', color: 'var(--accent)' }}>
             {colapsado ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
@@ -972,6 +1017,53 @@ export default function PDA() {
     setEditandoTitulo(null)
   }
 
+  async function handleReordenarGrupos(idArrastado, idAlvo) {
+    // Reordena os grupos visualmente e propaga ordem nova para filhos também.
+    // Estratégia: pega a estrutura agrupada, move o bloco arrastado para a posição do alvo,
+    // depois reatribui `ordem` sequencialmente em todas as iniciativas.
+    const estrutura = agruparIniciativas(iniciativas)
+    const idxArr = estrutura.findIndex(it => it.tipo === 'grupo' && it.grupo.id === idArrastado)
+    const idxAlvo = estrutura.findIndex(it => it.tipo === 'grupo' && it.grupo.id === idAlvo)
+    if (idxArr === -1 || idxAlvo === -1) return
+
+    // Move o bloco
+    const novaEstrutura = [...estrutura]
+    const [movido] = novaEstrutura.splice(idxArr, 1)
+    novaEstrutura.splice(idxAlvo, 0, movido)
+
+    // Reatribui ordem sequencialmente
+    const updates = []
+    let ordem = 1
+    for (const item of novaEstrutura) {
+      if (item.tipo === 'grupo') {
+        updates.push({ id: item.grupo.id, ordem })
+        ordem++
+        for (const f of item.filhas) {
+          updates.push({ id: f.id, ordem })
+          ordem++
+        }
+      } else {
+        updates.push({ id: item.iniciativa.id, ordem })
+        ordem++
+      }
+    }
+
+    // Atualiza estado local imediatamente (otimista)
+    const mapOrdem = new Map(updates.map(u => [u.id, u.ordem]))
+    setIniciativas(prev => prev
+      .map(i => mapOrdem.has(i.id) ? { ...i, ordem: mapOrdem.get(i.id) } : i)
+      .sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
+    )
+
+    // Persiste no banco em paralelo
+    try {
+      await Promise.all(updates.map(u => atualizarIniciativa(u.id, { ordem: u.ordem })))
+    } catch (e) {
+      console.error('Erro ao reordenar:', e)
+      showToast('Erro ao salvar nova ordem', 'error')
+    }
+  }
+
   async function handleSalvarCelula(iniciativaId, semana, novoTexto, novoStatus) {
     const ini = iniciativas.find(i => i.id === iniciativaId)
     if (!ini) return
@@ -1090,6 +1182,7 @@ export default function PDA() {
           onSalvarCelula={handleSalvarCelula}
           onDeletarIniciativa={handleDeletarIniciativa}
           onNovaIniciativa={() => setModalNovo(true)}
+          onReordenarGrupos={handleReordenarGrupos}
           area={area}
         />
       ) : (
