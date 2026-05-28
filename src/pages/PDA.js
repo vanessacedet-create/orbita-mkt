@@ -413,7 +413,7 @@ function VisaoMatriz({
               onClick={() => setEditandoTitulo({ id: ini.id, titulo: ini.titulo, responsavel: ini.responsavel || '' })}
               style={{ flex: 1, cursor: 'text', overflow: 'hidden' }}
               title={ini.titulo}>
-              <div style={{ fontSize: 12, color: 'var(--text)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div style={{ fontSize: 12, color: 'var(--text)', fontWeight: 500, wordBreak: 'break-word', lineHeight: 1.3 }}>
                 {ini.titulo}
               </div>
               {ini.responsavel && (
@@ -538,11 +538,10 @@ function VisaoMatriz({
           <button onClick={() => onNovaIniciativa({ tipo: 'em_grupo', grupoId: grupo.id })}
             title={`Adicionar iniciativa a "${grupo.titulo}"`}
             style={{
-              background: 'var(--accent)', color: 'white', border: 'none',
-              fontSize: 10, fontWeight: 600, padding: '4px 8px', borderRadius: 4,
-              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3,
+              background: 'none', color: 'var(--accent)', border: 'none',
+              padding: 2, cursor: 'pointer', display: 'flex', opacity: 0.6,
             }}>
-            <Plus size={11} /> Adicionar
+            <Plus size={13} />
           </button>
           <button onClick={() => { if (window.confirm(`Remover o grupo "${grupo.titulo}"?\n\nAs iniciativas dentro dele NÃO serão deletadas — só sairão do grupo.`)) onDeletarIniciativa(grupo.id) }}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex', opacity: 0.4 }}>
