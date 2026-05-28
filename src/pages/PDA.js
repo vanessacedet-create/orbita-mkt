@@ -93,6 +93,46 @@ function calcularStats(iniciativas, semanasFiltro = null) {
   return { total, feitas, feitoAtr, em, atr, pct: total ? Math.round(feitas / total * 100) : 0 }
 }
 
+// Classifica uma iniciativa (linha) com base nas células dela
+// Hierarquia: feito > feito_atrasado > em_andamento > atrasado > nao_iniciada
+function statusDaLinha(ini, semanasFiltro = null) {
+  const celulas = (ini.pda_celulas || [])
+    .filter(c => !semanasFiltro || semanasFiltro.includes(c.semana))
+    .filter(c => c.texto) // só células com conteúdo
+  if (celulas.length === 0) return 'nao_iniciada'
+  // Se alguma célula está verde, a linha foi concluída
+  if (celulas.some(c => c.status === 'feito')) return 'feita'
+  // Se alguma está "feita fora do prazo", a linha foi concluída (com atraso)
+  if (celulas.some(c => c.status === 'feito_atrasado')) return 'feita_atrasado'
+  // Se tem vermelha (e nenhuma verde), está atrasada de verdade
+  if (celulas.some(c => c.status === 'atrasado')) return 'atrasada'
+  // Se só tem amarela ou a_fazer com conteúdo, está em andamento
+  if (celulas.some(c => c.status === 'em_andamento')) return 'em_andamento'
+  return 'nao_iniciada'
+}
+
+// Calcula estatísticas POR LINHA (iniciativa), não por célula
+function calcularStatsPorLinha(iniciativas, semanasFiltro = null) {
+  let total = 0, feitas = 0, feitoAtr = 0, em = 0, atr = 0, naoIniciadas = 0
+  for (const ini of iniciativas) {
+    if (ini.eh_grupo) continue
+    // Filtro de semana: só considera linhas que TÊM alguma célula nas semanas dadas
+    if (semanasFiltro) {
+      const temCelulaNaSemana = (ini.pda_celulas || []).some(c => semanasFiltro.includes(c.semana) && c.texto)
+      if (!temCelulaNaSemana) continue
+    }
+    total++
+    const st = statusDaLinha(ini, semanasFiltro)
+    if (st === 'feita') feitas++
+    else if (st === 'feita_atrasado') feitoAtr++
+    else if (st === 'em_andamento') em++
+    else if (st === 'atrasada') atr++
+    else naoIniciadas++
+  }
+  const concluidasTotal = feitas + feitoAtr
+  return { total, feitas, feitoAtr, em, atr, naoIniciadas, pct: total ? Math.round(concluidasTotal / total * 100) : 0 }
+}
+
 // Organiza iniciativas em uma estrutura agrupada que respeita ordem:
 // [{ tipo: 'grupo', grupo, filhas: [...] }, { tipo: 'avulsa', iniciativa }, ...]
 function agruparIniciativas(iniciativas) {
@@ -416,8 +456,9 @@ function VisaoMatriz({
   // Renderiza um cabeçalho de grupo
   function renderCabecalhoGrupo(grupo, filhas) {
     const colapsado = gruposColapsados.has(grupo.id)
-    // Stats do grupo: conta células das filhas
-    const stats = calcularStats(filhas)
+    // Stats por LINHA: cada sub-iniciativa conta como 1, classificada pelo estado dela
+    const stats = calcularStatsPorLinha(filhas)
+    const concluidas = stats.feitas + stats.feitoAtr
     const corBarra = stats.atr > 0 ? 'var(--red)' : (stats.pct === 100 && stats.total > 0 ? 'var(--green)' : 'var(--accent)')
     return (
       <div key={grupo.id} style={{
@@ -460,12 +501,12 @@ function VisaoMatriz({
           </span>
           {stats.total > 0 && (
             <>
-              <span style={{ color: 'var(--green)', fontWeight: 600 }} title="Feitas">✓ {stats.feitas}</span>
-              {stats.feitoAtr > 0 && <span style={{ color: '#EF9F27', fontWeight: 600 }} title="Concluído fora do prazo">⚑ {stats.feitoAtr}</span>}
-              {stats.em > 0 && <span style={{ color: '#854F0B', fontWeight: 600 }} title="Em andamento">◐ {stats.em}</span>}
-              {stats.atr > 0 && <span style={{ color: 'var(--red)', fontWeight: 600 }} title="Atrasadas">! {stats.atr}</span>}
+              <span style={{ color: 'var(--green)', fontWeight: 600 }} title="Iniciativas concluídas (no prazo)">✓ {stats.feitas}</span>
+              {stats.feitoAtr > 0 && <span style={{ color: '#EF9F27', fontWeight: 600 }} title="Iniciativas concluídas fora do prazo">⚑ {stats.feitoAtr}</span>}
+              {stats.em > 0 && <span style={{ color: '#854F0B', fontWeight: 600 }} title="Iniciativas em andamento">◐ {stats.em}</span>}
+              {stats.atr > 0 && <span style={{ color: 'var(--red)', fontWeight: 600 }} title="Iniciativas atrasadas">! {stats.atr}</span>}
               <span style={{ color: 'var(--text-muted)' }}>de {stats.total}</span>
-              <div style={{ width: 60, height: 6, background: 'var(--border)', borderRadius: 99, overflow: 'hidden' }}>
+              <div style={{ width: 60, height: 6, background: 'var(--border)', borderRadius: 99, overflow: 'hidden' }} title={`${concluidas} de ${stats.total} concluídas`}>
                 <div style={{ height: '100%', width: `${stats.pct}%`, background: corBarra }} />
               </div>
               <span style={{ color: 'var(--text)', fontWeight: 700, minWidth: 38, textAlign: 'right' }}>{stats.pct}%</span>
@@ -605,6 +646,7 @@ function VisaoStatusReport({
   }
 
   const stats = calcularStats(iniciativas, [semanaSel])
+  const statsLinha = calcularStatsPorLinha(iniciativas, [semanaSel])
 
   function handleExportar() {
     window.print()
@@ -671,13 +713,32 @@ function VisaoStatusReport({
         </div>
       </div>
 
-      {/* INDICADORES */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10, marginBottom: 20 }}>
-        <ResumoMini color="var(--green)" label="Feito" valor={stats.feitas} icon={Check} />
-        <ResumoMini color="#EF9F27" label="Fora do prazo" valor={stats.feitoAtr} icon={Check} borderExtra="var(--green)" />
-        <ResumoMini color="#EAB308" label="Em andamento" valor={stats.em} icon={Clock} />
-        <ResumoMini color="var(--red)" label="Atrasado" valor={stats.atr} icon={AlertCircle} />
-        <ResumoMini color="var(--text-muted)" label="Total" valor={stats.total} icon={Square} />
+      {/* INDICADORES POR LINHA (INICIATIVA) */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, fontWeight: 600 }}>
+          Por iniciativa <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, fontStyle: 'italic' }}>· status real do projeto</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+          <ResumoMini color="var(--green)" label="Concluídas" valor={statsLinha.feitas} icon={Check} />
+          <ResumoMini color="#EF9F27" label="Fora do prazo" valor={statsLinha.feitoAtr} icon={Check} borderExtra="var(--green)" />
+          <ResumoMini color="#EAB308" label="Em andamento" valor={statsLinha.em} icon={Clock} />
+          <ResumoMini color="var(--red)" label="Atrasadas" valor={statsLinha.atr} icon={AlertCircle} />
+          <ResumoMini color="var(--text-muted)" label="Total" valor={statsLinha.total} icon={Square} />
+        </div>
+      </div>
+
+      {/* INDICADORES POR CÉLULA */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, fontWeight: 600 }}>
+          Por ação <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, fontStyle: 'italic' }}>· detalhe de cada célula</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+          <ResumoMini color="var(--green)" label="Feito" valor={stats.feitas} icon={Check} />
+          <ResumoMini color="#EF9F27" label="Fora do prazo" valor={stats.feitoAtr} icon={Check} borderExtra="var(--green)" />
+          <ResumoMini color="#EAB308" label="Em andamento" valor={stats.em} icon={Clock} />
+          <ResumoMini color="var(--red)" label="Atrasado" valor={stats.atr} icon={AlertCircle} />
+          <ResumoMini color="var(--text-muted)" label="Total" valor={stats.total} icon={Square} />
+        </div>
       </div>
 
       {/* INICIATIVAS DA SEMANA */}
@@ -926,7 +987,8 @@ export default function PDA() {
     }))
   }
 
-  const statsGerais = useMemo(() => calcularStats(iniciativas), [iniciativas])
+  const statsGeraisPorLinha = useMemo(() => calcularStatsPorLinha(iniciativas), [iniciativas])
+  const statsGeraisPorCelula = useMemo(() => calcularStats(iniciativas), [iniciativas])
 
   // ── Sem semestre cadastrado ──
   if (semestres.length === 0 && !loading) {
@@ -956,7 +1018,7 @@ export default function PDA() {
           <div>
             <h1 className="page-title" style={{ margin: 0 }}>PDA — Plano de Ação</h1>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-              {iniciativas.length} iniciativa{iniciativas.length !== 1 ? 's' : ''} · {statsGerais.feitas}/{statsGerais.total} ações concluídas ({statsGerais.pct}%)
+              {iniciativas.length} iniciativa{iniciativas.length !== 1 ? 's' : ''} · {statsGeraisPorLinha.feitas + statsGeraisPorLinha.feitoAtr}/{statsGeraisPorLinha.total} concluídas ({statsGeraisPorLinha.pct}%)
             </p>
           </div>
         </div>
