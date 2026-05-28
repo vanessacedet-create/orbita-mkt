@@ -39,10 +39,10 @@ export async function getIniciativas(semestreId, area = null) {
   return data || []
 }
 
-export async function criarIniciativa({ semestre_id, area, titulo, responsavel = null, ordem = 0 }) {
+export async function criarIniciativa({ semestre_id, area, titulo, responsavel = null, ordem = 0, grupo_id = null, eh_grupo = false }) {
   const { data, error } = await supabase
     .from('pda_iniciativas')
-    .insert([{ semestre_id, area, titulo, responsavel, ordem }])
+    .insert([{ semestre_id, area, titulo, responsavel, ordem, grupo_id, eh_grupo }])
     .select().single()
   if (error) throw error
   return { ...data, pda_celulas: [] }
@@ -64,14 +64,12 @@ export async function deletarIniciativa(id) {
 // ── CÉLULAS (texto + status por semana) ────────────────────
 
 export async function upsertCelula({ iniciativa_id, semana, texto = null, status = 'a_fazer' }) {
-  // tenta atualizar primeiro (existe?); senão insere
   const { data: existente } = await supabase
     .from('pda_celulas').select('id')
     .eq('iniciativa_id', iniciativa_id).eq('semana', semana).maybeSingle()
 
   if (existente) {
     if (!texto && status === 'a_fazer') {
-      // célula vazia → apaga
       const { error } = await supabase.from('pda_celulas').delete().eq('id', existente.id)
       if (error) throw error
       return null
