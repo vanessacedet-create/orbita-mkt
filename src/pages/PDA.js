@@ -6,7 +6,7 @@ import {
 } from '../lib/pda'
 import {
   Target, Plus, Trash2, X, Check, Clock, AlertCircle, Square,
-  ChevronDown, ChevronRight, Maximize2, Minimize2
+  Grid3x3, FileText, ChevronLeft, ChevronRight, Printer
 } from 'lucide-react'
 
 // ── ÁREAS ──────────────────────────────────────────────────
@@ -20,14 +20,14 @@ const AREAS = [
 
 // ── STATUS COM CORES ───────────────────────────────────────
 const STATUS_INFO = {
-  a_fazer:      { label: 'A fazer',      bg: 'transparent',              border: 'var(--border)',  color: 'var(--text-muted)', icon: Square },
-  em_andamento: { label: 'Em andamento', bg: 'rgba(234, 179, 8, 0.15)',  border: '#EAB308',        color: '#EAB308',           icon: Clock },
-  feito:        { label: 'Feito',        bg: 'rgba(34, 197, 94, 0.15)',  border: 'var(--green)',   color: 'var(--green)',      icon: Check },
-  atrasado:     { label: 'Atrasado',     bg: 'rgba(239, 68, 68, 0.15)',  border: 'var(--red)',     color: 'var(--red)',        icon: AlertCircle },
+  a_fazer:      { label: 'A fazer',      bg: 'transparent',              text: 'var(--text-muted)',  border: 'var(--border)',  icon: Square },
+  em_andamento: { label: 'Em andamento', bg: 'rgba(234, 179, 8, 0.18)',  text: '#854F0B',            border: '#EAB308',        icon: Clock },
+  feito:        { label: 'Feito',        bg: 'rgba(34, 197, 94, 0.18)',  text: '#0F6E56',            border: 'var(--green)',   icon: Check },
+  atrasado:     { label: 'Atrasado',     bg: 'rgba(239, 68, 68, 0.18)',  text: '#A32D2D',            border: 'var(--red)',     icon: AlertCircle },
 }
 const STATUS_CICLO = ['a_fazer', 'em_andamento', 'feito', 'atrasado']
 
-// ── SEMANAS — labels iguais à planilha original ────────────
+// ── SEMANAS ────────────────────────────────────────────────
 const SEMANA_LABELS = [
   '1 a 3',   '4 a 10',  '11 a 17', '18 a 24', '25-31',
   '1 a 7',   '8 a 14',  '15 a 21', '22 a 28',
@@ -37,17 +37,17 @@ const SEMANA_LABELS = [
   '7 a 13',  '14 a 20', '21 a 27', '28 a 4/Jul',
   '5 a 11',
 ]
-const SEMANA_MES = [
-  'Jan','Jan','Jan','Jan','Jan',
-  'Fev','Fev','Fev','Fev',
-  'Mar','Mar','Mar','Mar','Mar',
-  'Abr','Abr','Abr','Abr',
-  'Mai','Mai','Mai','Mai','Mai',
-  'Jun','Jun','Jun','Jun',
-  'Jul',
+// Mapeamento de mês → semanas (1-indexed)
+const MESES = [
+  { nome: 'Janeiro',   sigla: 'Jan', semanas: [1, 2, 3, 4, 5] },
+  { nome: 'Fevereiro', sigla: 'Fev', semanas: [6, 7, 8, 9] },
+  { nome: 'Março',     sigla: 'Mar', semanas: [10, 11, 12, 13, 14] },
+  { nome: 'Abril',     sigla: 'Abr', semanas: [15, 16, 17, 18] },
+  { nome: 'Maio',      sigla: 'Mai', semanas: [19, 20, 21, 22, 23] },
+  { nome: 'Junho',     sigla: 'Jun', semanas: [24, 25, 26, 27] },
+  { nome: 'Julho',     sigla: 'Jul', semanas: [28] },
 ]
 const SEMANA_DATA = [
-  // [ano, mês, diaInicio] aproximados (1S 2026)
   [2026,1,1],[2026,1,4],[2026,1,11],[2026,1,18],[2026,1,25],
   [2026,2,1],[2026,2,8],[2026,2,15],[2026,2,22],
   [2026,3,1],[2026,3,8],[2026,3,15],[2026,3,22],[2026,3,29],
@@ -62,45 +62,32 @@ function semanaAtual() {
   const hoje = new Date()
   for (let i = SEMANA_DATA.length - 1; i >= 0; i--) {
     const [a, m, d] = SEMANA_DATA[i]
-    const dataInicio = new Date(a, m - 1, d)
-    if (hoje >= dataInicio) return i + 1
+    if (hoje >= new Date(a, m - 1, d)) return i + 1
   }
   return 1
 }
 
-function ehSubItem(titulo) {
-  // sub-itens começam com "Nº-" ou "Nº -" ou números
-  return /^\s*\d+\s*-/.test(titulo || '')
+function mesDaSemana(semana) {
+  return MESES.findIndex(m => m.semanas.includes(semana))
 }
 
-function agruparIniciativas(iniciativas) {
-  // Agrupa: cada iniciativa "pai" (sem prefixo numérico) recebe seus sub-itens em sequência
-  const grupos = []
-  let grupoAtual = null
-
-  for (const ini of iniciativas) {
-    if (!ehSubItem(ini.titulo)) {
-      grupoAtual = { pai: ini, filhos: [] }
-      grupos.push(grupoAtual)
-    } else {
-      if (grupoAtual) grupoAtual.filhos.push(ini)
-      else grupos.push({ pai: ini, filhos: [] }) // sub-item órfão = vira pai sozinho
-    }
-  }
-  return grupos
+function proximoStatus(s) {
+  const idx = STATUS_CICLO.indexOf(s || 'a_fazer')
+  return STATUS_CICLO[(idx + 1) % STATUS_CICLO.length]
 }
 
-function calcularProgresso(iniciativas) {
-  let total = 0, feitas = 0, emAndamento = 0, atrasadas = 0
+function calcularStats(iniciativas, semanasFiltro = null) {
+  let total = 0, feitas = 0, em = 0, atr = 0
   for (const ini of iniciativas) {
     for (const c of (ini.pda_celulas || [])) {
+      if (semanasFiltro && !semanasFiltro.includes(c.semana)) continue
       total++
       if (c.status === 'feito') feitas++
-      else if (c.status === 'em_andamento') emAndamento++
-      else if (c.status === 'atrasado') atrasadas++
+      else if (c.status === 'em_andamento') em++
+      else if (c.status === 'atrasado') atr++
     }
   }
-  return { total, feitas, emAndamento, atrasadas, pct: total ? Math.round(feitas / total * 100) : 0 }
+  return { total, feitas, em, atr, pct: total ? Math.round(feitas / total * 100) : 0 }
 }
 
 // ── TOAST ──────────────────────────────────────────────────
@@ -201,191 +188,389 @@ function ModalNovoSemestre({ onSave, onClose }) {
   )
 }
 
-// ── CARD DE INICIATIVA ─────────────────────────────────────
-function CardIniciativa({
-  grupo, semanasVisiveis, editandoCelula, setEditandoCelula,
+// ═══════════════════════════════════════════════════════════
+// VISÃO 1 — MATRIZ MENSAL (uso diário)
+// ═══════════════════════════════════════════════════════════
+function VisaoMatriz({
+  iniciativas, mesIdx, setMesIdx, semanaAtualIdx,
+  editandoCelula, setEditandoCelula,
   editandoTitulo, setEditandoTitulo,
-  onSalvarTitulo, onSalvarCelula, onDeletarIniciativa, onProximoStatus,
-  semanaAtualIdx,
+  onSalvarTitulo, onSalvarCelula, onDeletarIniciativa, onNovaIniciativa, area,
 }) {
-  const { pai, filhos } = grupo
-  const todasIniciativas = [pai, ...filhos]
-  const progresso = calcularProgresso(todasIniciativas)
-  const [expandido, setExpandido] = useState(true)
+  const mes = MESES[mesIdx]
+  const semanasDoMes = mes.semanas
 
-  // borda/cor do card baseada no progresso
-  const corBorda = progresso.pct === 0
-    ? 'var(--border)'
-    : progresso.pct === 100
-      ? 'var(--green)'
-      : progresso.atrasadas > 0
-        ? 'var(--red)'
-        : 'var(--accent)'
+  function getCelula(ini, semana) {
+    return (ini.pda_celulas || []).find(c => c.semana === semana)
+  }
 
   return (
-    <div style={{
-      background: 'var(--surface)',
-      border: `1px solid ${corBorda}`,
-      borderRadius: 12,
-      marginBottom: 12,
-      overflow: 'hidden',
-    }}>
-      {/* CABEÇALHO DO CARD */}
-      <div
-        onClick={() => setExpandido(v => !v)}
-        style={{
-          padding: '12px 16px',
-          display: 'flex', alignItems: 'center', gap: 12,
-          cursor: 'pointer',
-          background: 'var(--surface-2)',
-          borderBottom: expandido ? '1px solid var(--border)' : 'none',
-        }}>
-        <button style={{ background: 'none', border: 'none', padding: 0, display: 'flex', color: 'var(--text-muted)' }}>
-          {expandido ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+    <div>
+      {/* NAVEGAÇÃO DE MÊS */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 16 }}>
+        <button className="btn btn-ghost btn-sm"
+          onClick={() => setMesIdx(Math.max(0, mesIdx - 1))}
+          disabled={mesIdx === 0}>
+          <ChevronLeft size={14} />
         </button>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {editandoTitulo?.id === pai.id ? (
-            <input
-              autoFocus
-              value={editandoTitulo.titulo}
-              onChange={e => setEditandoTitulo(p => ({ ...p, titulo: e.target.value }))}
-              onBlur={onSalvarTitulo}
-              onClick={e => e.stopPropagation()}
-              onKeyDown={e => { if (e.key === 'Enter') onSalvarTitulo(); if (e.key === 'Escape') setEditandoTitulo(null) }}
-              style={{ width: '100%', fontSize: 14, fontWeight: 600, background: 'transparent', border: 'none', borderBottom: '1px solid var(--accent)', outline: 'none', color: 'var(--text)' }}
-            />
-          ) : (
-            <h3
-              onClick={e => { e.stopPropagation(); setEditandoTitulo({ id: pai.id, titulo: pai.titulo, responsavel: pai.responsavel || '' }) }}
-              style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--text)', cursor: 'text' }}
-              title="Clique para editar">
-              {pai.titulo}
-            </h3>
-          )}
-          {pai.responsavel && (
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-              Responsável: <strong style={{ color: 'var(--text)' }}>{pai.responsavel}</strong>
-              {filhos.length > 0 && <span> · {filhos.length} sub-{filhos.length === 1 ? 'item' : 'itens'}</span>}
+        <div style={{ display: 'flex', gap: 4 }}>
+          {MESES.map((m, i) => (
+            <button key={m.sigla} onClick={() => setMesIdx(i)}
+              style={{
+                background: i === mesIdx ? 'var(--accent)' : 'transparent',
+                color: i === mesIdx ? 'white' : 'var(--text)',
+                border: '1px solid ' + (i === mesIdx ? 'var(--accent)' : 'var(--border)'),
+                padding: '4px 12px', fontSize: 12, fontWeight: 600,
+                borderRadius: 6, cursor: 'pointer',
+              }}>
+              {m.sigla}
+            </button>
+          ))}
+        </div>
+        <button className="btn btn-ghost btn-sm"
+          onClick={() => setMesIdx(Math.min(MESES.length - 1, mesIdx + 1))}
+          disabled={mesIdx === MESES.length - 1}>
+          <ChevronRight size={14} />
+        </button>
+      </div>
+
+      {/* MATRIZ */}
+      {iniciativas.length === 0 ? (
+        <div style={{ background: 'var(--surface-2)', borderRadius: 14, padding: 40, textAlign: 'center' }}>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+            Nenhuma iniciativa em {AREAS.find(a => a.value === area)?.label} ainda.
+          </p>
+          <button className="btn btn-primary" onClick={onNovaIniciativa}>
+            <Plus size={14} /> Nova iniciativa
+          </button>
+        </div>
+      ) : (
+        <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
+          {/* CABEÇALHO */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: `260px repeat(${semanasDoMes.length}, 1fr)`,
+            background: 'var(--surface-2)',
+            borderBottom: '1px solid var(--border)',
+          }}>
+            <div style={{ padding: '10px 14px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Iniciativa
             </div>
+            {semanasDoMes.map(s => {
+              const ehAtual = s === semanaAtualIdx
+              return (
+                <div key={s} style={{
+                  padding: '10px 4px', textAlign: 'center',
+                  fontSize: 11, fontWeight: ehAtual ? 700 : 500,
+                  color: ehAtual ? 'var(--accent)' : 'var(--text-muted)',
+                  borderLeft: '1px solid var(--border)',
+                }}>
+                  <div>{SEMANA_LABELS[s - 1]}</div>
+                  {ehAtual && <div style={{ fontSize: 9, marginTop: 2, textTransform: 'uppercase', opacity: 0.7 }}>· agora ·</div>}
+                </div>
+              )
+            })}
+          </div>
+          {/* LINHAS */}
+          {iniciativas.map((ini, idx) => (
+            <div key={ini.id} style={{
+              display: 'grid',
+              gridTemplateColumns: `260px repeat(${semanasDoMes.length}, 1fr)`,
+              borderBottom: idx === iniciativas.length - 1 ? 'none' : '1px solid var(--border-light, rgba(255,255,255,0.05))',
+              minHeight: 42,
+            }}>
+              {/* TÍTULO */}
+              <div style={{ padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                {editandoTitulo?.id === ini.id ? (
+                  <input
+                    autoFocus
+                    value={editandoTitulo.titulo}
+                    onChange={e => setEditandoTitulo(p => ({ ...p, titulo: e.target.value }))}
+                    onBlur={onSalvarTitulo}
+                    onKeyDown={e => { if (e.key === 'Enter') onSalvarTitulo(); if (e.key === 'Escape') setEditandoTitulo(null) }}
+                    style={{ flex: 1, fontSize: 12, background: 'transparent', border: 'none', borderBottom: '1px solid var(--accent)', outline: 'none', color: 'var(--text)' }}
+                  />
+                ) : (
+                  <div
+                    onClick={() => setEditandoTitulo({ id: ini.id, titulo: ini.titulo, responsavel: ini.responsavel || '' })}
+                    style={{ flex: 1, cursor: 'text', overflow: 'hidden' }}
+                    title={ini.titulo}>
+                    <div style={{ fontSize: 12, color: 'var(--text)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {ini.titulo}
+                    </div>
+                    {ini.responsavel && (
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{ini.responsavel}</div>
+                    )}
+                  </div>
+                )}
+                <button onClick={() => { if (window.confirm(`Remover "${ini.titulo}"?`)) onDeletarIniciativa(ini.id) }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex', opacity: 0.3 }}>
+                  <Trash2 size={11} />
+                </button>
+              </div>
+              {/* CÉLULAS */}
+              {semanasDoMes.map(semana => {
+                const celula = getCelula(ini, semana)
+                const stInfo = STATUS_INFO[celula?.status || 'a_fazer']
+                const isEdit = editandoCelula?.iniciativaId === ini.id && editandoCelula?.semana === semana
+                const ehSemAtual = semana === semanaAtualIdx
+                return (
+                  <div key={semana} style={{
+                    borderLeft: '1px solid var(--border-light, rgba(255,255,255,0.05))',
+                    background: celula ? stInfo.bg : (ehSemAtual ? 'rgba(249, 115, 22, 0.04)' : 'transparent'),
+                    position: 'relative',
+                    minHeight: 42,
+                  }}>
+                    {isEdit ? (
+                      <input
+                        autoFocus
+                        value={editandoCelula.texto}
+                        onChange={e => setEditandoCelula(p => ({ ...p, texto: e.target.value }))}
+                        onBlur={async () => {
+                          await onSalvarCelula(ini.id, semana, editandoCelula.texto, celula?.status || 'a_fazer')
+                          setEditandoCelula(null)
+                        }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') e.currentTarget.blur()
+                          if (e.key === 'Escape') setEditandoCelula(null)
+                        }}
+                        style={{ width: '100%', height: '100%', padding: '6px 8px', fontSize: 11, background: 'var(--surface)', border: '1px solid var(--accent)', outline: 'none', color: 'var(--text)' }}
+                      />
+                    ) : (
+                      <div
+                        onClick={() => setEditandoCelula({ iniciativaId: ini.id, semana, texto: celula?.texto || '' })}
+                        style={{ padding: '6px 8px', fontSize: 11, color: stInfo.text, cursor: 'text', minHeight: 30, lineHeight: 1.25, fontWeight: celula?.status === 'feito' ? 600 : 400, textAlign: 'center' }}>
+                        {celula?.texto || ''}
+                      </div>
+                    )}
+                    {celula && celula.texto && (
+                      <button
+                        onClick={async e => {
+                          e.stopPropagation()
+                          await onSalvarCelula(ini.id, semana, celula.texto, proximoStatus(celula.status))
+                        }}
+                        title={`Status: ${stInfo.label} (clique para mudar)`}
+                        style={{
+                          position: 'absolute', top: 2, right: 2,
+                          width: 14, height: 14, padding: 0,
+                          background: stInfo.border, color: 'white',
+                          border: 'none', borderRadius: 3,
+                          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                        <stInfo.icon size={9} />
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* LEGENDA */}
+      {iniciativas.length > 0 && (
+        <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+          {Object.entries(STATUS_INFO).filter(([k]) => k !== 'a_fazer').map(([k, info]) => (
+            <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ display: 'inline-block', width: 10, height: 10, background: info.bg, border: `1px solid ${info.border}`, borderRadius: 2 }}></span>
+              {info.label}
+            </span>
+          ))}
+          <span style={{ marginLeft: 'auto', fontStyle: 'italic' }}>Clique na célula para editar · clique no quadradinho para mudar status</span>
+        </div>
+      )}
+
+      {iniciativas.length > 0 && (
+        <button className="btn btn-ghost btn-sm" style={{ marginTop: 12 }} onClick={onNovaIniciativa}>
+          <Plus size={12} /> Nova iniciativa em {AREAS.find(a => a.value === area)?.label}
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════
+// VISÃO 2 — STATUS REPORT SEMANAL (apresentação)
+// ═══════════════════════════════════════════════════════════
+function VisaoStatusReport({
+  iniciativas, semanaSel, setSemanaSel, semanaAtualIdx,
+  editandoCelula, setEditandoCelula,
+  onSalvarCelula,
+}) {
+  // Para a semana selecionada, agrupa iniciativas com células nessa semana
+  const iniciativasDaSemana = iniciativas
+    .map(ini => ({ ini, celula: (ini.pda_celulas || []).find(c => c.semana === semanaSel) }))
+    .filter(x => x.celula && x.celula.texto)
+
+  // Próximas 4 semanas para mini-timeline
+  const proximas4 = []
+  for (let i = 0; i < 4; i++) {
+    const s = semanaSel + i
+    if (s > 28) break
+    const count = iniciativas.reduce((acc, ini) =>
+      acc + ((ini.pda_celulas || []).filter(c => c.semana === s && c.texto).length), 0)
+    proximas4.push({ semana: s, count })
+  }
+
+  const stats = calcularStats(iniciativas, [semanaSel])
+
+  function handleExportar() {
+    window.print()
+  }
+
+  // Agrupa por status (Feito → Em andamento → Atrasado → A fazer)
+  const ordemStatus = ['feito', 'em_andamento', 'atrasado', 'a_fazer']
+  const agrupado = ordemStatus.map(st => ({
+    status: st,
+    info: STATUS_INFO[st],
+    items: iniciativasDaSemana.filter(x => (x.celula.status || 'a_fazer') === st),
+  })).filter(g => g.items.length > 0)
+
+  return (
+    <div className="pda-status-report">
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .pda-status-report, .pda-status-report * { visibility: visible; }
+          .pda-status-report { position: absolute; left: 0; top: 0; width: 100%; }
+          .no-print { display: none !important; }
+        }
+      `}</style>
+
+      {/* NAVEGAÇÃO DE SEMANA */}
+      <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button className="btn btn-ghost btn-sm" disabled={semanaSel === 1} onClick={() => setSemanaSel(s => Math.max(1, s - 1))}>
+            <ChevronLeft size={14} /> Anterior
+          </button>
+          <select className="form-select" style={{ width: 'auto', fontSize: 12, padding: '6px 10px' }}
+            value={semanaSel} onChange={e => setSemanaSel(parseInt(e.target.value))}>
+            {SEMANA_LABELS.map((label, i) => {
+              const s = i + 1
+              const mes = MESES[mesDaSemana(s)]
+              return (
+                <option key={s} value={s}>
+                  Sem {s} · {mes.sigla} · {label} {s === semanaAtualIdx ? '(atual)' : ''}
+                </option>
+              )
+            })}
+          </select>
+          <button className="btn btn-ghost btn-sm" disabled={semanaSel === 28} onClick={() => setSemanaSel(s => Math.min(28, s + 1))}>
+            Próxima <ChevronRight size={14} />
+          </button>
+          {semanaSel !== semanaAtualIdx && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setSemanaSel(semanaAtualIdx)}>
+              Voltar à semana atual
+            </button>
           )}
         </div>
-        {/* Mini stats */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
-          {progresso.total > 0 && (
-            <>
-              <span style={{ color: 'var(--green)', fontWeight: 600 }} title="Feitas">✓ {progresso.feitas}</span>
-              {progresso.emAndamento > 0 && <span style={{ color: '#EAB308', fontWeight: 600 }} title="Em andamento">◐ {progresso.emAndamento}</span>}
-              {progresso.atrasadas > 0 && <span style={{ color: 'var(--red)', fontWeight: 600 }} title="Atrasadas">! {progresso.atrasadas}</span>}
-              <span style={{ color: 'var(--text-muted)' }}>/ {progresso.total}</span>
-              <div style={{ width: 50, height: 6, background: 'var(--border)', borderRadius: 99, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${progresso.pct}%`, background: corBorda, transition: 'width 0.3s' }} />
-              </div>
-              <span style={{ color: 'var(--text)', fontWeight: 600, minWidth: 36, textAlign: 'right' }}>{progresso.pct}%</span>
-            </>
-          )}
-          <button
-            onClick={e => { e.stopPropagation(); if (window.confirm(`Remover "${pai.titulo}" e seus sub-itens?`)) onDeletarIniciativa(pai.id) }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, display: 'flex', opacity: 0.4 }}
-            title="Remover">
-            <Trash2 size={13} />
-          </button>
+        <button className="btn btn-primary btn-sm" onClick={handleExportar}>
+          <Printer size={12} /> Exportar / Imprimir
+        </button>
+      </div>
+
+      {/* CABEÇALHO DO REPORT */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Status report</div>
+          <div style={{ fontSize: 18, fontWeight: 600, marginTop: 2 }}>
+            Semana {semanaSel} · {MESES[mesDaSemana(semanaSel)].nome} · {SEMANA_LABELS[semanaSel - 1]}
+          </div>
         </div>
       </div>
 
-      {/* CONTEÚDO EXPANDIDO */}
-      {expandido && (
-        <div style={{ padding: '8px 0' }}>
-          {todasIniciativas.map(ini => (
-            <LinhaIniciativa
-              key={ini.id}
-              iniciativa={ini}
-              ehFilho={ini.id !== pai.id}
-              semanasVisiveis={semanasVisiveis}
-              editandoCelula={editandoCelula}
-              setEditandoCelula={setEditandoCelula}
-              editandoTitulo={editandoTitulo}
-              setEditandoTitulo={setEditandoTitulo}
-              onSalvarTitulo={onSalvarTitulo}
-              onSalvarCelula={onSalvarCelula}
-              onDeletarIniciativa={onDeletarIniciativa}
-              onProximoStatus={onProximoStatus}
-              semanaAtualIdx={semanaAtualIdx}
-            />
+      {/* INDICADORES */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+        <ResumoMini color="var(--green)" label="Feito" valor={stats.feitas} icon={Check} />
+        <ResumoMini color="#EAB308" label="Em andamento" valor={stats.em} icon={Clock} />
+        <ResumoMini color="var(--red)" label="Atrasado" valor={stats.atr} icon={AlertCircle} />
+        <ResumoMini color="var(--text-muted)" label="Total na semana" valor={stats.total} icon={Square} />
+      </div>
+
+      {/* INICIATIVAS DA SEMANA */}
+      {iniciativasDaSemana.length === 0 ? (
+        <div style={{ background: 'var(--surface-2)', borderRadius: 12, padding: 32, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+          Nenhuma ação prevista nesta semana.
+        </div>
+      ) : (
+        <div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>
+            Iniciativas desta semana
+          </div>
+          {agrupado.map(g => (
+            <div key={g.status} style={{ marginBottom: 10 }}>
+              {g.items.map(({ ini, celula }) => (
+                <CardSemanal
+                  key={ini.id}
+                  ini={ini}
+                  celula={celula}
+                  stInfo={g.info}
+                  semana={semanaSel}
+                  editandoCelula={editandoCelula}
+                  setEditandoCelula={setEditandoCelula}
+                  onSalvarCelula={onSalvarCelula}
+                />
+              ))}
+            </div>
           ))}
+        </div>
+      )}
+
+      {/* MINI-TIMELINE PRÓXIMAS 4 SEMANAS */}
+      {proximas4.length > 1 && (
+        <div style={{ background: 'var(--surface-2)', borderRadius: 10, padding: '12px 14px', marginTop: 16 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+            Próximas semanas
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${proximas4.length}, 1fr)`, gap: 8 }}>
+            {proximas4.map((p, i) => {
+              const ehAtual = i === 0
+              return (
+                <div key={p.semana}
+                  onClick={() => setSemanaSel(p.semana)}
+                  style={{
+                    textAlign: 'center', padding: 10, borderRadius: 6,
+                    background: ehAtual ? 'rgba(249, 115, 22, 0.1)' : 'transparent',
+                    border: ehAtual ? '1px solid var(--accent)' : '1px solid transparent',
+                    cursor: 'pointer',
+                  }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>SEM {p.semana} {ehAtual ? '· agora' : ''}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{SEMANA_LABELS[p.semana - 1]}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, marginTop: 4, color: p.count > 0 ? 'var(--text)' : 'var(--text-muted)' }}>
+                    {p.count} ação{p.count !== 1 ? 'ões' : ''}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>
   )
 }
 
-// ── LINHA DA INICIATIVA (pai ou filho) ─────────────────────
-function LinhaIniciativa({
-  iniciativa, ehFilho, semanasVisiveis,
-  editandoCelula, setEditandoCelula,
-  editandoTitulo, setEditandoTitulo,
-  onSalvarTitulo, onSalvarCelula, onDeletarIniciativa, onProximoStatus,
-  semanaAtualIdx,
-}) {
-  const ini = iniciativa
-  function getCelula(semana) {
-    return (ini.pda_celulas || []).find(c => c.semana === semana)
-  }
+function CardSemanal({ ini, celula, stInfo, semana, editandoCelula, setEditandoCelula, onSalvarCelula }) {
+  const isEdit = editandoCelula?.iniciativaId === ini.id && editandoCelula?.semana === semana
 
   return (
     <div style={{
-      display: 'grid',
-      gridTemplateColumns: `${ehFilho ? '24px ' : ''}260px repeat(${semanasVisiveis.length}, 1fr)`,
-      alignItems: 'stretch',
-      borderBottom: '1px solid var(--border-light, rgba(255,255,255,0.04))',
-      minHeight: 36,
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      borderLeft: `4px solid ${stInfo.border}`,
+      borderRadius: 8,
+      padding: '12px 14px',
+      marginBottom: 8,
     }}>
-      {ehFilho && <div />}
-      {/* TÍTULO */}
-      <div style={{
-        padding: '6px 12px',
-        display: 'flex', alignItems: 'center', gap: 6,
-        background: ehFilho ? 'transparent' : 'var(--surface)',
-      }}>
-        {editandoTitulo?.id === ini.id ? (
-          <input
-            autoFocus
-            value={editandoTitulo.titulo}
-            onChange={e => setEditandoTitulo(p => ({ ...p, titulo: e.target.value }))}
-            onBlur={onSalvarTitulo}
-            onKeyDown={e => { if (e.key === 'Enter') onSalvarTitulo(); if (e.key === 'Escape') setEditandoTitulo(null) }}
-            style={{ flex: 1, fontSize: 12, background: 'transparent', border: 'none', borderBottom: '1px solid var(--accent)', outline: 'none', color: 'var(--text)' }}
-          />
-        ) : (
-          <span
-            onClick={() => setEditandoTitulo({ id: ini.id, titulo: ini.titulo, responsavel: ini.responsavel || '' })}
-            title={ini.titulo}
-            style={{ flex: 1, fontSize: 12, color: ehFilho ? 'var(--text-muted)' : 'var(--text)', cursor: 'text', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>
             {ini.titulo}
-          </span>
-        )}
-        {ehFilho && (
-          <button
-            onClick={() => { if (window.confirm(`Remover sub-item "${ini.titulo}"?`)) onDeletarIniciativa(ini.id) }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex', opacity: 0.3 }}
-            title="Remover">
-            <Trash2 size={10} />
-          </button>
-        )}
-      </div>
-      {/* CÉLULAS DAS SEMANAS */}
-      {semanasVisiveis.map(semana => {
-        const celula = getCelula(semana)
-        const stInfo = STATUS_INFO[celula?.status || 'a_fazer']
-        const isEditando = editandoCelula?.iniciativaId === ini.id && editandoCelula?.semana === semana
-        const ehSemanaAtual = semana === semanaAtualIdx
-        return (
-          <div key={semana} style={{
-            background: celula ? stInfo.bg : (ehSemanaAtual ? 'rgba(249, 115, 22, 0.04)' : 'transparent'),
-            borderLeft: ehSemanaAtual && !celula ? '2px solid var(--accent)' : (celula ? `2px solid ${stInfo.border}` : '1px solid var(--border-light, rgba(255,255,255,0.03))'),
-            position: 'relative',
-            minHeight: 36,
-          }}>
-            {isEditando ? (
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            {ini.responsavel ? <>{ini.responsavel} · </> : null}
+            esta semana:{' '}
+            {isEdit ? (
               <input
                 autoFocus
                 value={editandoCelula.texto}
@@ -398,40 +583,59 @@ function LinhaIniciativa({
                   if (e.key === 'Enter') e.currentTarget.blur()
                   if (e.key === 'Escape') setEditandoCelula(null)
                 }}
-                style={{ width: '100%', height: '100%', padding: '4px 6px', fontSize: 10, background: 'var(--surface)', border: '1px solid var(--accent)', outline: 'none', color: 'var(--text)' }}
+                style={{ fontSize: 12, background: 'transparent', border: 'none', borderBottom: '1px solid var(--accent)', outline: 'none', color: stInfo.text, fontWeight: 600, width: '60%' }}
               />
             ) : (
-              <div
-                onClick={() => setEditandoCelula({ iniciativaId: ini.id, semana, texto: celula?.texto || '' })}
-                style={{ padding: '4px 6px', fontSize: 10, color: stInfo.color, cursor: 'text', minHeight: 28, lineHeight: 1.2, fontWeight: celula?.status === 'feito' ? 600 : 400 }}>
-                {celula?.texto || ''}
-              </div>
-            )}
-            {celula && celula.texto && (
-              <button
-                onClick={async (e) => {
-                  e.stopPropagation()
-                  await onSalvarCelula(ini.id, semana, celula.texto, onProximoStatus(celula.status))
-                }}
-                title={`Status: ${stInfo.label} (clique para mudar)`}
-                style={{
-                  position: 'absolute', top: 2, right: 2,
-                  width: 14, height: 14, padding: 0,
-                  background: stInfo.border, color: 'white',
-                  border: 'none', borderRadius: 3,
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                <stInfo.icon size={9} />
-              </button>
+              <span
+                onClick={() => setEditandoCelula({ iniciativaId: ini.id, semana, texto: celula.texto })}
+                style={{ color: stInfo.text, fontWeight: 600, cursor: 'text' }}
+                title="Clique para editar">
+                {celula.texto}
+              </span>
             )}
           </div>
-        )
-      })}
+        </div>
+        <button
+          onClick={async () => {
+            await onSalvarCelula(ini.id, semana, celula.texto, proximoStatus(celula.status))
+          }}
+          title={`Status: ${stInfo.label} (clique para mudar)`}
+          style={{
+            background: stInfo.bg,
+            color: stInfo.text,
+            border: `1px solid ${stInfo.border}`,
+            fontSize: 11, fontWeight: 600,
+            padding: '4px 10px', borderRadius: 99,
+            cursor: 'pointer', whiteSpace: 'nowrap',
+            display: 'flex', alignItems: 'center', gap: 4,
+          }}>
+          <stInfo.icon size={11} />
+          {stInfo.label}
+        </button>
+      </div>
     </div>
   )
 }
 
-// ── PÁGINA PRINCIPAL ───────────────────────────────────────
+function ResumoMini({ color, label, valor, icon: Icon }) {
+  return (
+    <div style={{
+      background: 'var(--surface)', border: `1px solid var(--border)`,
+      borderRadius: 10, padding: '12px 14px',
+      display: 'flex', alignItems: 'center', gap: 10,
+    }}>
+      <div style={{ color, display: 'flex' }}><Icon size={18} /></div>
+      <div>
+        <div style={{ fontSize: 22, fontWeight: 700, color, lineHeight: 1 }}>{valor}</div>
+        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: 2 }}>{label}</div>
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════
+// PÁGINA PRINCIPAL
+// ═══════════════════════════════════════════════════════════
 export default function PDA() {
   const [semestres, setSemestres] = useState([])
   const [semestreId, setSemestreId] = useState(null)
@@ -442,18 +646,12 @@ export default function PDA() {
   const [modalSemestre, setModalSemestre] = useState(false)
   const [editandoCelula, setEditandoCelula] = useState(null)
   const [editandoTitulo, setEditandoTitulo] = useState(null)
-  const [verSemestreInteiro, setVerSemestreInteiro] = useState(false)
+  const [visao, setVisao] = useState('matriz') // 'matriz' | 'status'
   const [toast, showToast] = useToast()
 
   const semanaAtualIdx = useMemo(() => semanaAtual(), [])
-
-  // Semanas visíveis: foco no agora (próximas 12) ou semestre inteiro
-  const semanasVisiveis = useMemo(() => {
-    if (verSemestreInteiro) return Array.from({ length: 28 }, (_, i) => i + 1)
-    const inicio = Math.max(1, semanaAtualIdx - 1)
-    const fim = Math.min(28, inicio + 11)
-    return Array.from({ length: fim - inicio + 1 }, (_, i) => inicio + i)
-  }, [verSemestreInteiro, semanaAtualIdx])
+  const [mesIdx, setMesIdx] = useState(mesDaSemana(semanaAtualIdx))
+  const [semanaSel, setSemanaSel] = useState(semanaAtualIdx)
 
   useEffect(() => {
     (async () => {
@@ -528,14 +726,7 @@ export default function PDA() {
     }))
   }
 
-  function proximoStatus(s) {
-    const idx = STATUS_CICLO.indexOf(s || 'a_fazer')
-    return STATUS_CICLO[(idx + 1) % STATUS_CICLO.length]
-  }
-
-  // ── Estatísticas ──
-  const stats = useMemo(() => calcularProgresso(iniciativas), [iniciativas])
-  const grupos = useMemo(() => agruparIniciativas(iniciativas), [iniciativas])
+  const statsGerais = useMemo(() => calcularStats(iniciativas), [iniciativas])
 
   // ── Sem semestre cadastrado ──
   if (semestres.length === 0 && !loading) {
@@ -559,20 +750,17 @@ export default function PDA() {
   return (
     <div style={{ padding: 24 }}>
       {/* CABEÇALHO */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+      <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Target size={22} color="var(--accent)" />
           <div>
             <h1 className="page-title" style={{ margin: 0 }}>PDA — Plano de Ação</h1>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-              {grupos.length} iniciativa{grupos.length !== 1 ? 's' : ''} · {stats.feitas}/{stats.total} ações concluídas ({stats.pct}%)
+              {iniciativas.length} iniciativa{iniciativas.length !== 1 ? 's' : ''} · {statsGerais.feitas}/{statsGerais.total} ações concluídas ({statsGerais.pct}%)
             </p>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <button className="btn btn-ghost btn-sm" onClick={() => setVerSemestreInteiro(v => !v)} title={verSemestreInteiro ? 'Voltar ao foco no agora' : 'Ver semestre inteiro'}>
-            {verSemestreInteiro ? <><Minimize2 size={12} /> Focar no agora</> : <><Maximize2 size={12} /> Ver semestre inteiro</>}
-          </button>
           <select className="form-select" style={{ width: 'auto', fontSize: 12, padding: '6px 10px' }}
             value={semestreId || ''} onChange={e => setSemestreId(e.target.value)}>
             {semestres.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
@@ -583,16 +771,32 @@ export default function PDA() {
         </div>
       </div>
 
-      {/* RESUMO */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-        <ResumoCard color="var(--green)" label="Feito" valor={stats.feitas} icon={Check} />
-        <ResumoCard color="#EAB308" label="Em andamento" valor={stats.emAndamento} icon={Clock} />
-        <ResumoCard color="var(--red)" label="Atrasado" valor={stats.atrasadas} icon={AlertCircle} />
-        <ResumoCard color="var(--text-muted)" label="Total" valor={stats.total} icon={Square} />
+      {/* TOGGLE DE VISÃO */}
+      <div className="no-print" style={{ display: 'flex', gap: 4, marginBottom: 16, background: 'var(--surface-2)', padding: 4, borderRadius: 8, width: 'fit-content' }}>
+        <button onClick={() => setVisao('matriz')}
+          style={{
+            background: visao === 'matriz' ? 'var(--surface)' : 'transparent',
+            color: visao === 'matriz' ? 'var(--text)' : 'var(--text-muted)',
+            border: 'none', padding: '8px 14px', borderRadius: 6,
+            fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+          <Grid3x3 size={14} /> Matriz mensal
+        </button>
+        <button onClick={() => setVisao('status')}
+          style={{
+            background: visao === 'status' ? 'var(--surface)' : 'transparent',
+            color: visao === 'status' ? 'var(--text)' : 'var(--text-muted)',
+            border: 'none', padding: '8px 14px', borderRadius: 6,
+            fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+          <FileText size={14} /> Status report semanal
+        </button>
       </div>
 
-      {/* TABS */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
+      {/* TABS DE ÁREA */}
+      <div className="no-print" style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
         {AREAS.map(a => (
           <button key={a.value} onClick={() => setArea(a.value)}
             style={{
@@ -607,97 +811,48 @@ export default function PDA() {
         ))}
       </div>
 
-      {/* HEADER DE SEMANAS — fica fixo acima dos cards */}
-      {iniciativas.length > 0 && (
-        <div style={{
-          display: 'grid', gridTemplateColumns: `260px repeat(${semanasVisiveis.length}, 1fr)`,
-          background: 'var(--surface-2)', borderRadius: 8,
-          padding: '6px 0', marginBottom: 12, fontSize: 10,
-        }}>
-          <div style={{ padding: '0 12px', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>
-            {verSemestreInteiro ? 'Semestre inteiro' : 'Foco no agora'}
-          </div>
-          {semanasVisiveis.map(s => {
-            const ehAtual = s === semanaAtualIdx
-            return (
-              <div key={s} style={{
-                padding: '2px 4px', textAlign: 'center',
-                color: ehAtual ? 'var(--accent)' : 'var(--text-muted)',
-                fontWeight: ehAtual ? 700 : 500,
-              }}>
-                <div style={{ fontSize: 9, textTransform: 'uppercase', opacity: 0.7 }}>{SEMANA_MES[s - 1]}</div>
-                <div>{SEMANA_LABELS[s - 1]}</div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
       {/* CONTEÚDO */}
       {loading ? (
         <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Carregando...</div>
-      ) : iniciativas.length === 0 ? (
-        <div style={{ background: 'var(--surface-2)', borderRadius: 14, padding: 40, textAlign: 'center' }}>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-            Nenhuma iniciativa em {AREAS.find(a => a.value === area)?.label} ainda.
-          </p>
-          <button className="btn btn-primary" onClick={() => setModalNovo(true)}>
-            <Plus size={14} /> Nova iniciativa
-          </button>
-        </div>
+      ) : visao === 'matriz' ? (
+        <VisaoMatriz
+          iniciativas={iniciativas}
+          mesIdx={mesIdx}
+          setMesIdx={setMesIdx}
+          semanaAtualIdx={semanaAtualIdx}
+          editandoCelula={editandoCelula}
+          setEditandoCelula={setEditandoCelula}
+          editandoTitulo={editandoTitulo}
+          setEditandoTitulo={setEditandoTitulo}
+          onSalvarTitulo={handleSalvarTitulo}
+          onSalvarCelula={handleSalvarCelula}
+          onDeletarIniciativa={handleDeletarIniciativa}
+          onNovaIniciativa={() => setModalNovo(true)}
+          area={area}
+        />
       ) : (
-        <div>
-          {grupos.map(g => (
-            <CardIniciativa
-              key={g.pai.id}
-              grupo={g}
-              semanasVisiveis={semanasVisiveis}
-              editandoCelula={editandoCelula}
-              setEditandoCelula={setEditandoCelula}
-              editandoTitulo={editandoTitulo}
-              setEditandoTitulo={setEditandoTitulo}
-              onSalvarTitulo={handleSalvarTitulo}
-              onSalvarCelula={handleSalvarCelula}
-              onDeletarIniciativa={handleDeletarIniciativa}
-              onProximoStatus={proximoStatus}
-              semanaAtualIdx={semanaAtualIdx}
-            />
-          ))}
-          <button className="btn btn-ghost btn-sm" style={{ marginTop: 4 }} onClick={() => setModalNovo(true)}>
-            <Plus size={12} /> Nova iniciativa em {AREAS.find(a => a.value === area)?.label}
-          </button>
-        </div>
+        <VisaoStatusReport
+          iniciativas={iniciativas}
+          semanaSel={semanaSel}
+          setSemanaSel={setSemanaSel}
+          semanaAtualIdx={semanaAtualIdx}
+          editandoCelula={editandoCelula}
+          setEditandoCelula={setEditandoCelula}
+          onSalvarCelula={handleSalvarCelula}
+        />
       )}
 
-      {/* MODAIS */}
       {modalNovo && <ModalNovaIniciativa area={area} onSave={handleCriarIniciativa} onClose={() => setModalNovo(false)} />}
       {modalSemestre && <ModalNovoSemestre onSave={handleCriarSemestre} onClose={() => setModalSemestre(false)} />}
 
-      {/* TOAST */}
       {toast && (
-        <div style={{
+        <div className="no-print" style={{
           position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
           background: toast.type === 'error' ? 'var(--red)' : 'var(--green)',
           color: 'white', padding: '10px 16px', borderRadius: 8,
           fontSize: 13, fontWeight: 600, boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
         }}>{toast.msg}</div>
       )}
-    </div>
-  )
-}
-
-function ResumoCard({ color, label, valor, icon: Icon }) {
-  return (
-    <div style={{
-      background: 'var(--surface)', border: `1px solid var(--border)`,
-      borderRadius: 10, padding: '10px 14px',
-      display: 'flex', alignItems: 'center', gap: 10, minWidth: 120,
-    }}>
-      <div style={{ color, display: 'flex' }}><Icon size={16} /></div>
-      <div>
-        <div style={{ fontSize: 18, fontWeight: 700, color, lineHeight: 1 }}>{valor}</div>
-        <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{label}</div>
-      </div>
     </div>
   )
 }
