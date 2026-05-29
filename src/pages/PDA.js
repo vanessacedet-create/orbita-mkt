@@ -6,7 +6,7 @@ import {
 } from '../lib/pda'
 import {
   Target, Plus, Trash2, X, Check, Clock, AlertCircle, Square,
-  Grid3x3, FileText, ChevronLeft, ChevronRight, ChevronDown, Printer, GripVertical, Info
+  Grid3x3, FileText, ChevronLeft, ChevronRight, ChevronDown, Printer, GripVertical, Info, Calendar
 } from 'lucide-react'
 
 // ── ÁREAS ──────────────────────────────────────────────────
@@ -21,12 +21,13 @@ const AREAS = [
 // ── STATUS COM CORES ───────────────────────────────────────
 const STATUS_INFO = {
   a_fazer:        { label: 'A fazer',               curto: 'A fazer',        bg: 'transparent',              text: 'var(--text-muted)',  border: 'var(--border)',  icon: Square },
+  planejada:      { label: 'Planejada',             curto: 'Planejada',      bg: 'rgba(59, 130, 246, 0.18)', text: '#1E4FA3',            border: '#3B82F6',        icon: Calendar },
   em_andamento:   { label: 'Em andamento',          curto: 'Em andamento',   bg: 'rgba(234, 179, 8, 0.18)',  text: '#854F0B',            border: '#EAB308',        icon: Clock },
   feito:          { label: 'Feito',                 curto: 'Feito',          bg: 'rgba(34, 197, 94, 0.18)',  text: '#0F6E56',            border: 'var(--green)',   icon: Check },
   feito_atrasado: { label: 'Concluído fora do prazo', curto: 'Fora do prazo', bg: 'rgba(34, 197, 94, 0.18)', text: '#0F6E56',           border: '#EF9F27',        icon: Check },
   atrasado:       { label: 'Atrasado',              curto: 'Atrasado',       bg: 'rgba(239, 68, 68, 0.18)',  text: '#A32D2D',            border: 'var(--red)',     icon: AlertCircle },
 }
-const STATUS_CICLO = ['a_fazer', 'em_andamento', 'feito', 'feito_atrasado', 'atrasado']
+const STATUS_CICLO = ['a_fazer', 'planejada', 'em_andamento', 'feito', 'feito_atrasado', 'atrasado']
 
 // Uma célula só "conta" (aparece preenchida) se tiver um status de verdade,
 // ou seja, diferente de "a fazer". Texto antigo deixado no banco é ignorado —
@@ -108,11 +109,12 @@ function statusDaLinha(ini, semanasFiltro = null) {
   if (celulas.some(c => c.status === 'feito_atrasado')) return 'feita_atrasado'
   if (celulas.some(c => c.status === 'atrasado')) return 'atrasada'
   if (celulas.some(c => c.status === 'em_andamento')) return 'em_andamento'
+  if (celulas.some(c => c.status === 'planejada')) return 'planejada'
   return 'nao_iniciada'
 }
 
 function calcularStatsPorLinha(iniciativas, semanasFiltro = null) {
-  let total = 0, feitas = 0, feitoAtr = 0, em = 0, atr = 0, naoIniciadas = 0
+  let total = 0, feitas = 0, feitoAtr = 0, em = 0, atr = 0, planejadas = 0, naoIniciadas = 0
   for (const ini of iniciativas) {
     if (ini.eh_grupo) continue
     if (semanasFiltro) {
@@ -125,10 +127,11 @@ function calcularStatsPorLinha(iniciativas, semanasFiltro = null) {
     else if (st === 'feita_atrasado') feitoAtr++
     else if (st === 'em_andamento') em++
     else if (st === 'atrasada') atr++
+    else if (st === 'planejada') planejadas++
     else naoIniciadas++
   }
   const concluidasTotal = feitas + feitoAtr
-  return { total, feitas, feitoAtr, em, atr, naoIniciadas, pct: total ? Math.round(concluidasTotal / total * 100) : 0 }
+  return { total, feitas, feitoAtr, em, atr, planejadas, naoIniciadas, pct: total ? Math.round(concluidasTotal / total * 100) : 0 }
 }
 
 function itensDeAtencao(iniciativas, semanaAtualIdx) {
@@ -209,6 +212,7 @@ function PdaVisaoGeral({ stats }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <SituacaoCelula cor="var(--green)" n={concluidas} t="Concluídas" />
           <SituacaoCelula cor="#EAB308" n={stats.em} t="Em andamento" />
+          <SituacaoCelula cor="#3B82F6" n={stats.planejadas} t="Planejadas" />
           <SituacaoCelula cor="var(--text-muted)" n={stats.naoIniciadas} t="Não iniciadas" />
           <SituacaoCelula cor="var(--red)" n={stats.atr} t="Atrasadas" />
         </div>
@@ -608,9 +612,10 @@ function VisaoMatriz({
               </button>
             </div>
           )}
-          <button onClick={() => { if (window.confirm(`Remover "${ini.titulo}"?`)) onDeletarIniciativa(ini.id) }}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex', opacity: 0.3 }}>
-            <Trash2 size={11} />
+          <button onClick={() => { if (window.confirm(`Excluir a iniciativa "${ini.titulo}"?\n\nEsta ação não pode ser desfeita.`)) onDeletarIniciativa(ini.id) }}
+            title="Excluir iniciativa"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', padding: 2, display: 'flex', opacity: 0.55, flexShrink: 0 }}>
+            <Trash2 size={13} />
           </button>
         </div>
         {/* CÉLULAS DA MATRIZ — só status, sem texto */}
@@ -694,8 +699,14 @@ function VisaoMatriz({
             </div>
           )}
           <button onClick={() => onNovaIniciativa({ tipo: 'em_grupo', grupoId: grupo.id })}
+            title={`Adicionar iniciativa a "${grupo.titulo}"`}
             style={{ background: 'none', color: 'var(--accent)', border: 'none', padding: 2, cursor: 'pointer', display: 'flex', opacity: 0.6 }}>
             <Plus size={13} />
+          </button>
+          <button onClick={() => { if (window.confirm(`Excluir o grupo "${grupo.titulo}"?\n\nAs iniciativas dentro dele NÃO serão apagadas — apenas sairão do grupo e voltarão a ser avulsas.`)) onDeletarIniciativa(grupo.id) }}
+            title="Excluir grupo"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex', opacity: 0.4 }}>
+            <Trash2 size={12} />
           </button>
         </div>
         <div style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, fontSize: 11 }}>
@@ -805,6 +816,7 @@ function VisaoGantt({ iniciativas, semanaAtualIdx, onVerDetalhes }) {
     feita_atrasado: '#EF9F27',
     atrasada: 'var(--red)',
     em_andamento: '#EAB308',
+    planejada: '#3B82F6',
     nao_iniciada: 'var(--text-muted)',
   }
 
@@ -907,6 +919,7 @@ function VisaoGantt({ iniciativas, semanaAtualIdx, onVerDetalhes }) {
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 10, borderRadius: 3, background: 'var(--green)' }} /> Concluída</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 10, borderRadius: 3, background: '#EF9F27' }} /> Fora do prazo</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 10, borderRadius: 3, background: '#EAB308' }} /> Em andamento</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 10, borderRadius: 3, background: '#3B82F6' }} /> Planejada</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 10, borderRadius: 3, background: 'var(--red)' }} /> Atrasada</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 10, borderRadius: 3, background: 'var(--text-muted)' }} /> Não iniciada</span>
         <span style={{ marginLeft: 'auto', fontStyle: 'italic' }}>A barra vai da 1ª à última semana preenchida na matriz · clique para ver detalhes</span>
