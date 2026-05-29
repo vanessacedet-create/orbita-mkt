@@ -768,8 +768,19 @@ function VisaoMatriz({
           <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>Nenhuma iniciativa cadastrada.</p>
         </div>
       ) : (
-        <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: `260px repeat(${semanasDoMes.length}, 1fr)`, background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', overflow: 'visible' }}>
+          {/* CABEÇALHO STICKY — acompanha a rolagem da página */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: `260px repeat(${semanasDoMes.length}, 1fr)`,
+            background: 'var(--surface-2)',
+            borderBottom: '1px solid var(--border)',
+            position: 'sticky',
+            top: 0,
+            zIndex: 20,
+            borderTopLeftRadius: 12,
+            borderTopRightRadius: 12,
+          }}>
             <div style={{ padding: '10px 14px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Iniciativa (What)</div>
             {semanasDoMes.map(s => {
               const ehAtual = s === semanaAtualIdx
