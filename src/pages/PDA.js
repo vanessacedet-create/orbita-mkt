@@ -259,7 +259,7 @@ function PdaAtencao({ iniciativas, semanaAtualIdx, onVerDetalhes }) {
   )
 }
 
-// ── MODAL DETALHES 5W2H (OPÇÃO A) ──────────────────────────
+// ── MODAL DETALHES 5W2H (EXIBIÇÃO COM PRAZO INCLUSO) ───────
 function ModalDetalhes5W2H({ iniciativa, onClose }) {
   if (!iniciativa) return null
 
@@ -307,8 +307,12 @@ function ModalDetalhes5W2H({ iniciativa, onClose }) {
               <p style={{ margin: '4px 0 0 0', fontSize: 13, color: 'var(--text-muted)' }}>Plataforma Órbita MKT</p>
             </div>
             <div>
-              <strong style={{ color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>Quando (When)</strong>
-              <p style={{ margin: '4px 0 0 0', fontSize: 13, color: 'var(--accent)', fontWeight: 600 }}>Distribuído nas semanas da Matriz</p>
+              <strong style={{ color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>Quando / Prazo Final (When)</strong>
+              <p style={{ margin: '4px 0 0 0', fontSize: 13, color: 'var(--accent)', fontWeight: 600 }}>
+                📅 {iniciativa.prazo_final 
+                  ? new Date(iniciativa.prazo_final).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) 
+                  : 'Sem prazo macro definido'}
+              </p>
             </div>
           </div>
         </div>
@@ -317,12 +321,13 @@ function ModalDetalhes5W2H({ iniciativa, onClose }) {
   )
 }
 
-// ── MODAL NOVA INICIATIVA (CAMPOS EXPANDIDOS) ──────────────
+// ── MODAL NOVA INICIATIVA (CAMPO PRAZO INTEGRADO) ──────────
 function ModalNovaIniciativa({ area, grupos, preset, onSave, onClose }) {
   const [titulo, setTitulo] = useState('')
   const [responsavel, setResponsavel] = useState('')
   const [justificativa, setJustificativa] = useState('')
   const [comoFazer, setComoFazer] = useState('')
+  const [prazoFinal, setPrazoFinal] = useState('')
   const [tipo, setTipo] = useState(preset?.tipo || 'avulsa')
   const [grupoId, setGrupoId] = useState(preset?.grupoId || '')
   const [saving, setSaving] = useState(false)
@@ -337,6 +342,7 @@ function ModalNovaIniciativa({ area, grupos, preset, onSave, onClose }) {
         responsavel: responsavel.trim() || null,
         justificativa: justificativa.trim() || null,
         como_fazer: comoFazer.trim() || null,
+        prazo_final: prazoFinal || null,
         eh_grupo: tipo === 'grupo',
         grupo_id: tipo === 'em_grupo' ? grupoId : null,
       })
@@ -406,9 +412,12 @@ function ModalNovaIniciativa({ area, grupos, preset, onSave, onClose }) {
               </div>
               <div className="form-group">
                 <label className="form-label">Como fazer (How) — Principais Passos</label>
-                <textarea className="form-input" rows={3} value={comoFazer} onChange={e => setComoFazer(e.target.value)} 
-                          placeholder="Ex:&#10;1. Coletar dados&#10;2. Desenhar telas&#10;3. Validar e entregar"
-                          style={{ resize: 'vertical', minHeight: 60, padding: 8 }} />
+                <textarea className="form-input" rows={2} value={comoFazer} onChange={e => setComoFazer(e.target.value)} 
+                          placeholder="Ex: 1. Alinhamento; 2. Desenvolvimento" style={{ resize: 'vertical', minHeight: 50, padding: 8 }} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">📅 Prazo Final de Conclusão (When)</label>
+                <input type="date" className="form-input" value={prazoFinal} onChange={e => setPrazoFinal(e.target.value)} style={{ colorScheme: 'dark' }} />
               </div>
             </>
           )}
@@ -528,7 +537,7 @@ function VisaoMatriz({
         borderBottom: '1px solid var(--border-light, rgba(255,255,255,0.05))',
         minHeight: 46,
       }}>
-        {/* TÍTULO DA LINHA */}
+        {/* TÍTULO DA LINHA + PRAZO MACRO EDITÁVEL */}
         <div style={{ padding: '8px 14px', paddingLeft: ehFilha ? 32 : 14, display: 'flex', alignItems: 'center', gap: 6 }}>
           {editandoTitulo?.id === ini.id ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
@@ -543,23 +552,37 @@ function VisaoMatriz({
                 value={editandoTitulo.responsavel}
                 onChange={e => setEditandoTitulo(p => ({ ...p, responsavel: e.target.value }))}
                 placeholder="Responsável (Who)"
-                onBlur={onSalvarTitulo}
-                onKeyDown={e => { if (e.key === 'Enter') onSalvarTitulo(); if (e.key === 'Escape') setEditandoTitulo(null) }}
                 style={{ fontSize: 10, background: 'var(--surface-2)', border: 'none', outline: 'none', color: 'var(--text-muted)', padding: '2px 4px' }}
               />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>Prazo:</span>
+                <input
+                  type="date"
+                  value={editandoTitulo.prazo_final || ''}
+                  onChange={e => setEditandoTitulo(p => ({ ...p, prazo_final: e.target.value }))}
+                  onBlur={onSalvarTitulo}
+                  onKeyDown={e => { if (e.key === 'Enter') onSalvarTitulo(); if (e.key === 'Escape') setEditandoTitulo(null) }}
+                  style={{ fontSize: 10, background: 'var(--surface-2)', border: 'none', color: 'var(--accent)', outline: 'none', colorScheme: 'dark' }}
+                />
+              </div>
             </div>
           ) : (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', overflow: 'hidden' }}>
               <div
-                onClick={() => setEditandoTitulo({ id: ini.id, titulo: ini.titulo, responsavel: ini.responsavel || '', justificativa: ini.justificativa || '', como_fazer: ini.como_fazer || '' })}
+                onClick={() => setEditandoTitulo({ id: ini.id, titulo: ini.titulo, responsavel: ini.responsavel || '', justificativa: ini.justificativa || '', como_fazer: ini.como_fazer || '', prazo_final: ini.prazo_final || '' })}
                 style={{ flex: 1, cursor: 'text', overflow: 'hidden' }}
-                title="Clique duplo/Edite as infos básicas">
+                title="Clique para editar as propriedades">
                 <div style={{ fontSize: 12, color: 'var(--text)', fontWeight: 500, wordBreak: 'break-word', lineHeight: 1.3 }}>
                   {ini.titulo}
                 </div>
-                {ini.responsavel && (
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>👤 {ini.responsavel}</div>
-                )}
+                <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+                  {ini.responsavel && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>👤 {ini.responsavel}</div>}
+                  {ini.prazo_final && (
+                    <div style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 500 }}>
+                      📅 {new Date(ini.prazo_final).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                    </div>
+                  )}
+                </div>
               </div>
               <button 
                 onClick={() => onVerDetalhes(ini)}
@@ -778,9 +801,6 @@ function VisaoStatusReport({ iniciativas, semanaSel, setSemanaSel, semanaAtualId
     .map(ini => ({ ini, celula: (ini.pda_celulas || []).find(c => c.semana === semanaSel) }))
     .filter(x => x.celula && x.celula.texto)
 
-  const statsLinha = calcularStatsPorLinha(iniciativas, [semanaSel])
-  const stats = calcularStats(iniciativas, [semanaSel])
-
   const ordemStatus = ['feito', 'feito_atrasado', 'em_andamento', 'atrasado', 'a_fazer']
   const agrupado = ordemStatus.map(st => ({
     status: st,
@@ -809,6 +829,7 @@ function VisaoStatusReport({ iniciativas, semanaSel, setSemanaSel, semanaAtualId
                 <div style={{ fontWeight: 600, fontSize: 13 }}>{ini.titulo}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
                   👤 {ini.responsavel || 'Sem responsável'} | Etapa atual: <span style={{ color: 'var(--text)' }}>{celula.texto}</span>
+                  {ini.prazo_final && ` | 📅 Prazo: ${new Date(ini.prazo_final).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}`}
                 </div>
               </div>
             ))}
@@ -830,7 +851,7 @@ export default function PDA() {
   const [loading, setLoading] = useState(true)
   const [modalNovo, setModalNovo] = useState(null)
   const [modalSemestre, setModalSemestre] = useState(false)
-  const [detalhe5W2H, setDetalhe5W2H] = useState(null) // Para controlar o modal do Raio-X
+  const [detalhe5W2H, setDetalhe5W2H] = useState(null)
   const [editandoCelula, setEditandoCelula] = useState(null)
   const [editandoTitulo, setEditandoTitulo] = useState(null)
   const [visao, setVisao] = useState('matriz')
@@ -884,7 +905,7 @@ export default function PDA() {
 
   async function handleSalvarTitulo() {
     if (!editandoTitulo) return
-    const { id, titulo, responsavel, justificativa, como_fazer } = editandoTitulo
+    const { id, titulo, responsavel, justificativa, como_fazer, prazo_final } = editandoTitulo
     const t = titulo.trim()
     if (!t) { setEditandoTitulo(null); return }
     
@@ -892,7 +913,8 @@ export default function PDA() {
       titulo: t, 
       responsavel: responsavel.trim() || null,
       justificativa: justificativa?.trim() || null,
-      como_fazer: como_fazer?.trim() || null
+      como_fazer: como_fazer?.trim() || null,
+      prazo_final: prazo_final || null
     })
     setIniciativas(prev => prev.map(i => i.id === id ? { ...i, ...upd } : i))
     setEditandoTitulo(null)
@@ -905,7 +927,7 @@ export default function PDA() {
     const idxAlvo = estrutura.findIndex(it => it.tipo === 'grupo' && it.grupo.id === idAlvo)
     if (idxArr === -1 || idxAlvo === -1) return
 
-    const novaEstrutura = [...gridStructure]
+    const novaEstrutura = [...estrutura]
     const [movido] = novaEstrutura.splice(idxArr, 1)
     novaEstrutura.splice(idxAlvo, 0, movido)
 
@@ -929,7 +951,6 @@ export default function PDA() {
     catch (e) { console.error(e) }
   }
 
-  // ── ESTEIRA DE ETAPAS (LOGICA SOLICITADA) ──────────────────
   async function handleSalvarCelula(iniciativaId, semana, novoTexto, novoStatus) {
     const ini = iniciativas.find(i => i.id === iniciativaId)
     if (!ini) return
@@ -937,9 +958,7 @@ export default function PDA() {
     const texto = novoTexto?.trim() || null
     const status = novoStatus || celulaExistente?.status || 'a_fazer'
     
-    // 1. Salva a célula modificada pelo fluxo padrão
     const r = await upsertCelula({ iniciativa_id: iniciativaId, semana, texto, status })
-    
     let celulasAtualizadas = []
 
     setIniciativas(prev => prev.map(i => {
@@ -949,13 +968,11 @@ export default function PDA() {
       return { ...i, pda_celulas: celulasAtualizadas }
     }))
 
-    // 2. Se mudou para "feito", dispara a esteira para a próxima semana
     if (status === 'feito' || status === 'feito_atrasado') {
       const proximaSemana = semana + 1
       const jaTemProxima = celulasAtualizadas.some(c => c.semana === proximaSemana)
       
       if (!jaTemProxima && proximaSemana <= 28) {
-        // Inicializa a casa seguinte no fluxo como "Em andamento"
         const rProxima = await upsertCelula({ 
           iniciativa_id: iniciativaId, 
           semana: proximaSemana, 
