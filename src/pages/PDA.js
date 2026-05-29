@@ -214,6 +214,52 @@ function agruparIniciativas(iniciativas) {
   })
 }
 
+
+// ── SEPARAÇÃO ENTRE PDA ATIVOS E CONCLUÍDOS ────────────────
+function celulasAtivasDaIniciativa(ini) {
+  return (ini.pda_celulas || []).filter(celulaAtiva)
+}
+
+function iniciativaConcluida(ini) {
+  if (ini.eh_grupo) return false
+  const celulas = celulasAtivasDaIniciativa(ini)
+  if (celulas.length === 0) return false
+  return celulas.every(c => c.status === 'feito' || c.status === 'feito_atrasado')
+}
+
+function grupoConcluido(grupo, filhas) {
+  if (!grupo?.eh_grupo) return false
+  if (!filhas || filhas.length === 0) return false
+  return filhas.every(iniciativaConcluida)
+}
+
+function separarPdaPorSituacao(iniciativas) {
+  const estrutura = agruparIniciativas(iniciativas)
+  const ativos = []
+  const concluidos = []
+
+  for (const item of estrutura) {
+    if (item.tipo === 'grupo') {
+      if (grupoConcluido(item.grupo, item.filhas)) {
+        concluidos.push(item.grupo, ...item.filhas)
+      } else {
+        ativos.push(item.grupo, ...item.filhas)
+      }
+      continue
+    }
+
+    if (iniciativaConcluida(item.iniciativa)) concluidos.push(item.iniciativa)
+    else ativos.push(item.iniciativa)
+  }
+
+  return { ativos, concluidos }
+}
+
+function contarProjetosEAvulsas(iniciativasFiltradas) {
+  const estrutura = agruparIniciativas(iniciativasFiltradas)
+  return estrutura.length
+}
+
 function grupoDe(iniciativa, todas) {
   if (!iniciativa.grupo_id) return null
   return todas.find(i => i.id === iniciativa.grupo_id && i.eh_grupo) || null
@@ -1026,6 +1072,7 @@ export default function PDA() {
   const [editandoCelula, setEditandoCelula] = useState(null)
   const [editandoTitulo, setEditandoTitulo] = useState(null)
   const [visao, setVisao] = useState('matriz')
+  const [pdaSituacao, setPdaSituacao] = useState('ativos')
   const [toast, showToast] = useToast()
 
   const semanaAtualIdx = useMemo(() => semanaAtual(), [])
@@ -1144,7 +1191,11 @@ export default function PDA() {
     }))
   }
 
-  const statsGeraisPorLinha = useMemo(() => calcularStatsPorLinha(iniciativas), [iniciativas])
+  const pdaPorSituacao = useMemo(() => separarPdaPorSituacao(iniciativas), [iniciativas])
+  const iniciativasVisiveis = pdaSituacao === 'concluidos' ? pdaPorSituacao.concluidos : pdaPorSituacao.ativos
+  const statsGeraisPorLinha = useMemo(() => calcularStatsPorLinha(iniciativasVisiveis), [iniciativasVisiveis])
+  const totalAtivos = useMemo(() => contarProjetosEAvulsas(pdaPorSituacao.ativos), [pdaPorSituacao])
+  const totalConcluidos = useMemo(() => contarProjetosEAvulsas(pdaPorSituacao.concluidos), [pdaPorSituacao])
 
   if (semestres.length === 0 && !loading) {
     return (
@@ -1164,7 +1215,7 @@ export default function PDA() {
           <div>
             <h1 className="page-title" style={{ margin: 0 }}>PDA — Plano de Ação</h1>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-              {statsGeraisPorLinha.feitas + statsGeraisPorLinha.feitoAtr}/{statsGeraisPorLinha.total} concluídas ({statsGeraisPorLinha.pct}%)
+              {pdaSituacao === 'ativos' ? 'PDA ativos' : 'PDA concluídos'} · {statsGeraisPorLinha.feitas + statsGeraisPorLinha.feitoAtr}/{statsGeraisPorLinha.total} iniciativas concluídas ({statsGeraisPorLinha.pct}%)
             </p>
           </div>
         </div>
@@ -1174,12 +1225,38 @@ export default function PDA() {
       </div>
 
       {/* DASHBOARDS */}
-      {!loading && iniciativas.length > 0 && (
+      {!loading && iniciativasVisiveis.length > 0 && (
         <div className="no-print">
           <PdaVisaoGeral stats={statsGeraisPorLinha} />
-          <PdaAtencao iniciativas={iniciativas} semanaAtualIdx={semanaAtualIdx} onVerDetalhes={(ini) => setDetalhe5W2H(ini)} />
+          {pdaSituacao === 'ativos' && (
+            <PdaAtencao iniciativas={iniciativasVisiveis} semanaAtualIdx={semanaAtualIdx} onVerDetalhes={(ini) => setDetalhe5W2H(ini)} />
+          )}
         </div>
       )}
+
+      {/* FILTRO ATIVOS / CONCLUÍDOS */}
+      <div className="no-print" style={{ display: 'flex', gap: 6, marginBottom: 16, background: 'var(--surface-2)', padding: 4, borderRadius: 10, width: 'fit-content' }}>
+        <button
+          onClick={() => setPdaSituacao('ativos')}
+          style={{
+            background: pdaSituacao === 'ativos' ? 'var(--accent)' : 'transparent',
+            color: pdaSituacao === 'ativos' ? 'white' : 'var(--text)',
+            border: 'none', padding: '8px 14px', borderRadius: 7,
+            fontSize: 13, fontWeight: 700, cursor: 'pointer',
+          }}>
+          PDA ativos ({totalAtivos})
+        </button>
+        <button
+          onClick={() => setPdaSituacao('concluidos')}
+          style={{
+            background: pdaSituacao === 'concluidos' ? 'var(--green)' : 'transparent',
+            color: pdaSituacao === 'concluidos' ? 'white' : 'var(--text)',
+            border: 'none', padding: '8px 14px', borderRadius: 7,
+            fontSize: 13, fontWeight: 700, cursor: 'pointer',
+          }}>
+          PDA concluídos ({totalConcluidos})
+        </button>
+      </div>
 
       {/* VIEWS TOGGLE */}
       <div className="no-print" style={{ display: 'flex', gap: 4, marginBottom: 16, background: 'var(--surface-2)', padding: 4, borderRadius: 8, width: 'fit-content' }}>
@@ -1208,7 +1285,7 @@ export default function PDA() {
         <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Carregando...</div>
       ) : visao === 'matriz' ? (
         <VisaoMatriz
-          iniciativas={iniciativas} mesIdx={mesIdx} setMesIdx={setMesIdx} semanaAtualIdx={semanaAtualIdx}
+          iniciativas={iniciativasVisiveis} mesIdx={mesIdx} setMesIdx={setMesIdx} semanaAtualIdx={semanaAtualIdx}
           editandoCelula={editandoCelula} setEditandoCelula={setEditandoCelula}
           editandoTitulo={editandoTitulo} setEditandoTitulo={setEditandoTitulo}
           onSalvarTitulo={handleSalvarTitulo} onSalvarCelula={handleSalvarCelula}
@@ -1218,12 +1295,12 @@ export default function PDA() {
         />
       ) : visao === 'gantt' ? (
         <VisaoGantt
-          iniciativas={iniciativas} semanaAtualIdx={semanaAtualIdx}
+          iniciativas={iniciativasVisiveis} semanaAtualIdx={semanaAtualIdx}
           onVerDetalhes={(ini) => setDetalhe5W2H(ini)}
         />
       ) : (
         <VisaoStatusReport
-          iniciativas={iniciativas} semanaSel={semanaSel} setSemanaSel={setSemanaSel} semanaAtualIdx={semanaAtualIdx}
+          iniciativas={iniciativasVisiveis} semanaSel={semanaSel} setSemanaSel={setSemanaSel} semanaAtualIdx={semanaAtualIdx}
           editandoCelula={editandoCelula} setEditandoCelula={setEditandoCelula} onSalvarCelula={handleSalvarCelula}
         />
       )}
