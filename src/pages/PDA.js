@@ -259,7 +259,7 @@ function PdaAtencao({ iniciativas, semanaAtualIdx, onVerDetalhes }) {
   )
 }
 
-// ── MODAL DETALHES 5W2H (EXIBIÇÃO COM PRAZO INCLUSO) ───────
+// ── MODAL DETALHES 5W2H ────────────────────────────────────
 function ModalDetalhes5W2H({ iniciativa, onClose }) {
   if (!iniciativa) return null
 
@@ -321,7 +321,7 @@ function ModalDetalhes5W2H({ iniciativa, onClose }) {
   )
 }
 
-// ── MODAL NOVA INICIATIVA (CAMPO PRAZO INTEGRADO) ──────────
+// ── MODAL NOVA INICIATIVA ──────────────────────────────────
 function ModalNovaIniciativa({ area, grupos, preset, onSave, onClose }) {
   const [titulo, setTitulo] = useState('')
   const [responsavel, setResponsavel] = useState('')
@@ -478,9 +478,7 @@ function ModalNovoSemestre({ onSave, onClose }) {
   )
 }
 
-// ═══════════════════════════════════════════════════════════
-// VISÃO 1 — MATRIZ MENSAL
-// ═══════════════════════════════════════════════════════════
+// ── VISÃO 1 — MATRIZ MENSAL
 function VisaoMatriz({
   iniciativas, mesIdx, setMesIdx, semanaAtualIdx,
   editandoCelula, setEditandoCelula,
@@ -537,33 +535,44 @@ function VisaoMatriz({
         borderBottom: '1px solid var(--border-light, rgba(255,255,255,0.05))',
         minHeight: 46,
       }}>
-        {/* TÍTULO DA LINHA + PRAZO MACRO EDITÁVEL */}
+        {/* TÍTULO DA LINHA CORRIGIDO COM BOTÕES SEGUROS DE SALVAMENTO */}
         <div style={{ padding: '8px 14px', paddingLeft: ehFilha ? 32 : 14, display: 'flex', alignItems: 'center', gap: 6 }}>
           {editandoTitulo?.id === ini.id ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, background: 'var(--surface-2)', padding: '6px', borderRadius: '6px', border: '1px solid var(--accent)' }}>
               <input
                 autoFocus
                 value={editandoTitulo.titulo}
                 onChange={e => setEditandoTitulo(p => ({ ...p, titulo: e.target.value }))}
+                onKeyDown={e => { if (e.key === 'Enter') onSalvarTitulo(); if (e.key === 'Escape') setEditandoTitulo(null) }}
                 placeholder="Título (What)"
-                style={{ fontSize: 12, background: 'var(--surface-2)', border: 'none', borderBottom: '1px solid var(--accent)', outline: 'none', color: 'var(--text)', padding: '2px 4px' }}
+                style={{ fontSize: 12, background: 'var(--surface)', border: '1px solid var(--border)', outline: 'none', color: 'var(--text)', padding: '4px 6px', borderRadius: '4px' }}
               />
               <input
-                value={editandoTitulo.responsavel}
+                value={editandoTitulo.responsavel || ''}
                 onChange={e => setEditandoTitulo(p => ({ ...p, responsavel: e.target.value }))}
+                onKeyDown={e => { if (e.key === 'Enter') onSalvarTitulo(); if (e.key === 'Escape') setEditandoTitulo(null) }}
                 placeholder="Responsável (Who)"
-                style={{ fontSize: 10, background: 'var(--surface-2)', border: 'none', outline: 'none', color: 'var(--text-muted)', padding: '2px 4px' }}
+                style={{ fontSize: 11, background: 'var(--surface)', border: '1px solid var(--border)', outline: 'none', color: 'var(--text)', padding: '4px 6px', borderRadius: '4px' }}
               />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>Prazo:</span>
-                <input
-                  type="date"
-                  value={editandoTitulo.prazo_final || ''}
-                  onChange={e => setEditandoTitulo(p => ({ ...p, prazo_final: e.target.value }))}
-                  onBlur={onSalvarTitulo}
-                  onKeyDown={e => { if (e.key === 'Enter') onSalvarTitulo(); if (e.key === 'Escape') setEditandoTitulo(null) }}
-                  style={{ fontSize: 10, background: 'var(--surface-2)', border: 'none', color: 'var(--accent)', outline: 'none', colorScheme: 'dark' }}
-                />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between', marginTop: 2 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Prazo:</span>
+                  <input
+                    type="date"
+                    value={editandoTitulo.prazo_final ? editandoTitulo.prazo_final.split('T')[0] : ''}
+                    onChange={e => setEditandoTitulo(p => ({ ...p, prazo_final: e.target.value }))}
+                    onKeyDown={e => { if (e.key === 'Enter') onSalvarTitulo(); if (e.key === 'Escape') setEditandoTitulo(null) }}
+                    style={{ fontSize: 11, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--accent)', outline: 'none', colorScheme: 'dark', padding: '2px 4px', borderRadius: '4px' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button onClick={(e) => { e.stopPropagation(); setEditandoTitulo(null); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2 }} title="Cancelar">
+                    <X size={14} />
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); onSalvarTitulo(); }} style={{ background: 'none', border: 'none', color: 'var(--green)', cursor: 'pointer', padding: 2 }} title="Salvar">
+                    <Check size={14} />
+                  </button>
+                </div>
               </div>
             </div>
           ) : (
@@ -571,7 +580,7 @@ function VisaoMatriz({
               <div
                 onClick={() => setEditandoTitulo({ id: ini.id, titulo: ini.titulo, responsavel: ini.responsavel || '', justificativa: ini.justificativa || '', como_fazer: ini.como_fazer || '', prazo_final: ini.prazo_final || '' })}
                 style={{ flex: 1, cursor: 'text', overflow: 'hidden' }}
-                title="Clique para editar as propriedades">
+                title="Clique para editar">
                 <div style={{ fontSize: 12, color: 'var(--text)', fontWeight: 500, wordBreak: 'break-word', lineHeight: 1.3 }}>
                   {ini.titulo}
                 </div>
@@ -909,16 +918,22 @@ export default function PDA() {
     const t = titulo.trim()
     if (!t) { setEditandoTitulo(null); return }
     
-    const upd = await atualizarIniciativa(id, { 
-      titulo: t, 
-      responsavel: responsavel.trim() || null,
-      justificativa: justificativa?.trim() || null,
-      como_fazer: como_fazer?.trim() || null,
-      prazo_final: prazo_final || null
-    })
-    setIniciativas(prev => prev.map(i => i.id === id ? { ...i, ...upd } : i))
-    setEditandoTitulo(null)
-    showToast('Iniciativa atualizada!')
+    try {
+      const upd = await atualizarIniciativa(id, { 
+        titulo: t, 
+        responsavel: responsavel?.trim() || null,
+        justificativa: justificativa?.trim() || null,
+        como_fazer: como_fazer?.trim() || null,
+        prazo_final: prazo_final || null
+      })
+      setIniciativas(prev => prev.map(i => i.id === id ? { ...i, ...upd } : i))
+      showToast('Iniciativa atualizada!')
+    } catch(e) {
+      console.error(e)
+      showToast('Erro ao atualizar.', 'error')
+    } finally {
+      setEditandoTitulo(null)
+    }
   }
 
   async function handleReordenarGrupos(idArrastado, idAlvo) {
