@@ -220,11 +220,24 @@ function celulasAtivasDaIniciativa(ini) {
   return (ini.pda_celulas || []).filter(celulaAtiva)
 }
 
+function ultimoStatusAtivo(ini) {
+  const celulas = celulasAtivasDaIniciativa(ini)
+    .sort((a, b) => a.semana - b.semana)
+
+  if (celulas.length === 0) return null
+
+  return celulas[celulas.length - 1].status
+}
+
 function iniciativaConcluida(ini) {
   if (ini.eh_grupo) return false
-  const celulas = celulasAtivasDaIniciativa(ini)
-  if (celulas.length === 0) return false
-  return celulas.every(c => c.status === 'feito' || c.status === 'feito_atrasado')
+
+  // A iniciativa é considerada concluída pelo último status ativo.
+  // Exemplo: se ela ficou "atrasada" em uma semana e depois foi marcada
+  // como "concluído fora do prazo", ela deve migrar para PDA concluídos.
+  const ultimoStatus = ultimoStatusAtivo(ini)
+
+  return ultimoStatus === 'feito' || ultimoStatus === 'feito_atrasado'
 }
 
 function grupoConcluido(grupo, filhas) {
