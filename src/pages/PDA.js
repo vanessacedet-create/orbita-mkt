@@ -133,6 +133,23 @@ function calcularStatsPorLinha(iniciativas, semanasFiltro = null) {
   return { total, feitas, feitoAtr, em, atr, naoIniciadas, pct: total ? Math.round(concluidasTotal / total * 100) : 0 }
 }
 
+// Itens que precisam de atenção, a partir do modelo de dados existente:
+// Atrasada     = linha cujo statusDaLinha === 'atrasada' (tem célula vermelha, nenhuma verde)
+// Esta semana  = linha com uma ação ABERTA (não-feita) na semana atual
+function itensDeAtencao(iniciativas, semanaAtualIdx) {
+  const atrasadas = []
+  const estaSemana = []
+  for (const ini of iniciativas) {
+    if (ini.eh_grupo) continue
+    if (statusDaLinha(ini) === 'atrasada') atrasadas.push(ini)
+    const cel = (ini.pda_celulas || []).find(c => c.semana === semanaAtualIdx && c.texto)
+    if (cel && cel.status !== 'feito' && cel.status !== 'feito_atrasado') {
+      estaSemana.push({ ini, cel })
+    }
+  }
+  return { atrasadas, estaSemana }
+}
+
 // Organiza iniciativas em uma estrutura agrupada que respeita ordem:
 // [{ tipo: 'grupo', grupo, filhas: [...] }, { tipo: 'avulsa', iniciativa }, ...]
 function agruparIniciativas(iniciativas) {
@@ -178,6 +195,86 @@ function useToast() {
   const [t, setT] = useState(null)
   function show(msg, type = 'success') { setT({ msg, type }); setTimeout(() => setT(null), 3000) }
   return [t, show]
+}
+
+// ── VISÃO GERAL (cards de resumo no topo) ──────────────────
+function PdaVisaoGeral({ stats }) {
+  const concluidas = stats.feitas + stats.feitoAtr
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16, marginBottom: 16 }}>
+      {/* Progresso geral */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '18px 20px' }}>
+        <div style={{ fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 14 }}>
+          Progresso geral
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12 }}>
+          <span style={{ fontSize: 34, fontWeight: 700, letterSpacing: -0.5, color: 'var(--text)' }}>{stats.pct}%</span>
+          <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>{concluidas} de {stats.total} iniciativas concluídas</span>
+        </div>
+        <div style={{ height: 8, background: 'var(--border)', borderRadius: 5, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: `${stats.pct}%`, background: 'var(--accent)', borderRadius: 5, transition: 'width .9s cubic-bezier(.4,0,.2,1)' }} />
+        </div>
+      </div>
+      {/* Por situação */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '18px 20px' }}>
+        <div style={{ fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 14 }}>
+          Por situação
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <SituacaoCelula cor="var(--green)" n={concluidas} t="Concluídas" />
+          <SituacaoCelula cor="#EAB308" n={stats.em} t="Em andamento" />
+          <SituacaoCelula cor="var(--text-muted)" n={stats.naoIniciadas} t="Não iniciadas" />
+          <SituacaoCelula cor="var(--red)" n={stats.atr} t="Atrasadas" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SituacaoCelula({ cor, n, t }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <span style={{ width: 10, height: 10, borderRadius: 3, background: cor, flexShrink: 0 }} />
+      <span style={{ fontSize: 20, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{n}</span>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t}</span>
+    </div>
+  )
+}
+
+// ── FAIXA "PRECISA DE ATENÇÃO" ─────────────────────────────
+function PdaAtencao({ iniciativas, semanaAtualIdx }) {
+  const { atrasadas, estaSemana } = itensDeAtencao(iniciativas, semanaAtualIdx)
+  if (atrasadas.length === 0 && estaSemana.length === 0) {
+    return (
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: '3px solid var(--green)', borderRadius: 10, padding: '12px 15px', marginBottom: 22, fontSize: 13, color: 'var(--text-muted)' }}>
+        ✓ Nada atrasado e nenhuma ação aberta para esta semana.
+      </div>
+    )
+  }
+  const cards = []
+  atrasadas.slice(0, 4).forEach(ini =>
+    cards.push({ tom: 'red', tag: '● Atrasada', nome: ini.titulo, meta: ini.responsavel || 'sem responsável' }))
+  estaSemana.slice(0, 6 - cards.length).forEach(({ ini, cel }) =>
+    cards.push({ tom: 'orange', tag: '● Vence esta semana', nome: ini.titulo, meta: cel.texto || (ini.responsavel || '') }))
+
+  const corDe = { red: 'var(--red)', orange: 'var(--accent)' }
+  return (
+    <div style={{ marginBottom: 22 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <AlertCircle size={16} color="var(--red)" />
+        <h2 style={{ fontSize: 14, fontWeight: 600, margin: 0 }}>Precisa de atenção</h2>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        {cards.map((c, i) => (
+          <div key={i} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: `3px solid ${corDe[c.tom]}`, borderRadius: 10, padding: '13px 15px' }}>
+            <div style={{ fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase', fontWeight: 600, color: corDe[c.tom], marginBottom: 6 }}>{c.tag}</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nome}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.meta}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 // ── MODAIS ─────────────────────────────────────────────────
@@ -530,7 +627,7 @@ function VisaoMatriz({
           ) : (
             <div
               onClick={() => setEditandoTitulo({ id: grupo.id, titulo: grupo.titulo, responsavel: grupo.responsavel || '' })}
-              style={{ flex: 1, fontSize: 13, fontWeight: 700, color: 'var(--text)', cursor: 'text', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: 0.3 }}
+              style={{ flex: 1, fontSize: 13, fontWeight: 700, color: 'var(--text)', cursor: 'text', whiteSpace: 'normal', lineHeight: 1.25, textTransform: 'uppercase', letterSpacing: 0.3 }}
               title={grupo.titulo}>
               {grupo.titulo}
             </div>
@@ -1144,6 +1241,14 @@ export default function PDA() {
           </button>
         </div>
       </div>
+
+      {/* VISÃO GERAL + ATENÇÃO (novos blocos) */}
+      {!loading && iniciativas.length > 0 && (
+        <div className="no-print">
+          <PdaVisaoGeral stats={statsGeraisPorLinha} />
+          <PdaAtencao iniciativas={iniciativas} semanaAtualIdx={semanaAtualIdx} />
+        </div>
+      )}
 
       {/* TOGGLE DE VISÃO */}
       <div className="no-print" style={{ display: 'flex', gap: 4, marginBottom: 16, background: 'var(--surface-2)', padding: 4, borderRadius: 8, width: 'fit-content' }}>
