@@ -20,13 +20,20 @@ const AREAS = [
 
 // ── STATUS COM CORES ───────────────────────────────────────
 const STATUS_INFO = {
-  a_fazer:        { label: 'A fazer',               bg: 'transparent',              text: 'var(--text-muted)',  border: 'var(--border)',  icon: Square },
-  em_andamento:   { label: 'Em andamento',          bg: 'rgba(234, 179, 8, 0.18)',  text: '#854F0B',            border: '#EAB308',        icon: Clock },
-  feito:          { label: 'Feito',                 bg: 'rgba(34, 197, 94, 0.18)',  text: '#0F6E56',            border: 'var(--green)',   icon: Check },
-  feito_atrasado: { label: 'Concluído fora do prazo', bg: 'rgba(34, 197, 94, 0.18)', text: '#0F6E56',           border: '#EF9F27',        icon: Check },
-  atrasado:       { label: 'Atrasado',              bg: 'rgba(239, 68, 68, 0.18)',  text: '#A32D2D',            border: 'var(--red)',     icon: AlertCircle },
+  a_fazer:        { label: 'A fazer',               curto: 'A fazer',        bg: 'transparent',              text: 'var(--text-muted)',  border: 'var(--border)',  icon: Square },
+  em_andamento:   { label: 'Em andamento',          curto: 'Em andamento',   bg: 'rgba(234, 179, 8, 0.18)',  text: '#854F0B',            border: '#EAB308',        icon: Clock },
+  feito:          { label: 'Feito',                 curto: 'Feito',          bg: 'rgba(34, 197, 94, 0.18)',  text: '#0F6E56',            border: 'var(--green)',   icon: Check },
+  feito_atrasado: { label: 'Concluído fora do prazo', curto: 'Fora do prazo', bg: 'rgba(34, 197, 94, 0.18)', text: '#0F6E56',           border: '#EF9F27',        icon: Check },
+  atrasado:       { label: 'Atrasado',              curto: 'Atrasado',       bg: 'rgba(239, 68, 68, 0.18)',  text: '#A32D2D',            border: 'var(--red)',     icon: AlertCircle },
 }
 const STATUS_CICLO = ['a_fazer', 'em_andamento', 'feito', 'feito_atrasado', 'atrasado']
+
+// Uma célula está "ativa" (preenchida) se tem texto OU um status diferente de "a fazer".
+// Como agora as células guardam só o status, isso é o que define se a semana "conta".
+function celulaAtiva(c) {
+  if (!c) return false
+  return !!c.texto || (c.status && c.status !== 'a_fazer')
+}
 
 // ── SEMANAS ────────────────────────────────────────────────
 const SEMANA_LABELS = [
@@ -95,7 +102,7 @@ function calcularStats(iniciativas, semanasFiltro = null) {
 function statusDaLinha(ini, semanasFiltro = null) {
   const celulas = (ini.pda_celulas || [])
     .filter(c => !semanasFiltro || semanasFiltro.includes(c.semana))
-    .filter(c => c.texto)
+    .filter(c => celulaAtiva(c))
   if (celulas.length === 0) return 'nao_iniciada'
   if (celulas.some(c => c.status === 'feito')) return 'feita'
   if (celulas.some(c => c.status === 'feito_atrasado')) return 'feita_atrasado'
@@ -109,7 +116,7 @@ function calcularStatsPorLinha(iniciativas, semanasFiltro = null) {
   for (const ini of iniciativas) {
     if (ini.eh_grupo) continue
     if (semanasFiltro) {
-      const temCelulaNaSemana = (ini.pda_celulas || []).some(c => semanasFiltro.includes(c.semana) && c.texto)
+      const temCelulaNaSemana = (ini.pda_celulas || []).some(c => semanasFiltro.includes(c.semana) && celulaAtiva(c))
       if (!temCelulaNaSemana) continue
     }
     total++
@@ -130,7 +137,7 @@ function itensDeAtencao(iniciativas, semanaAtualIdx) {
   for (const ini of iniciativas) {
     if (ini.eh_grupo) continue
     if (statusDaLinha(ini) === 'atrasada') atrasadas.push(ini)
-    const cel = (ini.pda_celulas || []).find(c => c.semana === semanaAtualIdx && c.texto)
+    const cel = (ini.pda_celulas || []).find(c => c.semana === semanaAtualIdx && celulaAtiva(c))
     if (cel && cel.status !== 'feito' && cel.status !== 'feito_atrasado') {
       estaSemana.push({ ini, cel })
     }
@@ -606,62 +613,35 @@ function VisaoMatriz({
             <Trash2 size={11} />
           </button>
         </div>
-        {/* CÉLULAS DA MATRIZ */}
+        {/* CÉLULAS DA MATRIZ — só status, sem texto */}
         {semanasDoMes.map(semana => {
           const celula = getCelula(ini, semana)
+          const ativa = celulaAtiva(celula)
           const stInfo = STATUS_INFO[celula?.status || 'a_fazer']
-          const isEdit = editandoCelula?.iniciativaId === ini.id && editandoCelula?.semana === semana
           const ehSemAtual = semana === semanaAtualIdx
           return (
             <div key={semana} style={{
               borderLeft: '1px solid var(--border-light, rgba(255,255,255,0.05))',
-              background: celula ? stInfo.bg : (ehSemAtual ? 'rgba(249, 115, 22, 0.04)' : 'transparent'),
-              position: 'relative',
+              background: ativa ? stInfo.bg : (ehSemAtual ? 'rgba(249, 115, 22, 0.04)' : 'transparent'),
               minHeight: 46,
               display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center'
+              alignItems: 'center',
+              justifyContent: 'center',
             }}>
-              {isEdit ? (
-                <input
-                  autoFocus
-                  value={editandoCelula.texto}
-                  onChange={e => setEditandoCelula(p => ({ ...p, texto: e.target.value }))}
-                  onBlur={async () => {
-                    await onSalvarCelula(ini.id, semana, editandoCelula.texto, celula?.status || 'a_fazer')
-                    setEditandoCelula(null)
-                  }}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') e.currentTarget.blur()
-                    if (e.key === 'Escape') setEditandoCelula(null)
-                  }}
-                  placeholder="Etapa (How)..."
-                  style={{ width: '100%', height: '100%', padding: '6px 8px', fontSize: 11, background: 'var(--surface)', border: '1px solid var(--accent)', outline: 'none', color: 'var(--text)' }}
-                />
-              ) : (
-                <div
-                  onClick={() => setEditandoCelula({ iniciativaId: ini.id, semana, texto: celula?.texto || '' })}
-                  style={{ padding: '6px 20px 6px 8px', fontSize: 11, color: stInfo.text, cursor: 'text', minHeight: 24, lineHeight: 1.25, fontWeight: celula?.status === 'feito' ? 600 : 400, textAlign: 'left', wordBreak: 'break-word' }}>
-                  {celula?.texto || <span style={{ opacity: 0.15, fontStyle: 'italic' }}>-</span>}
-                </div>
-              )}
-              {celula && celula.texto && (
-                <button
-                  onClick={async e => {
-                    e.stopPropagation()
-                    await onSalvarCelula(ini.id, semana, celula.texto, proximoStatus(celula.status))
-                  }}
-                  title={`Status: ${stInfo.label} (clique para mudar)`}
-                  style={{
-                    position: 'absolute', top: 4, right: 4,
-                    width: 14, height: 14, padding: 0,
-                    background: stInfo.border, color: 'white',
-                    border: 'none', borderRadius: 3,
-                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                  <stInfo.icon size={9} />
-                </button>
-              )}
+              <div
+                onClick={async () => {
+                  await onSalvarCelula(ini.id, semana, celula?.texto || null, proximoStatus(celula?.status))
+                }}
+                title="Clique para mudar o status"
+                style={{
+                  width: '100%', minHeight: 46,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', padding: '6px 4px',
+                  textAlign: 'center', fontSize: 11, fontWeight: 700, lineHeight: 1.2,
+                  color: ativa ? stInfo.text : 'var(--text-muted)',
+                }}>
+                {ativa ? stInfo.curto : ''}
+              </div>
             </div>
           )
         })}
@@ -842,7 +822,7 @@ function VisaoGantt({ iniciativas, semanaAtualIdx, onVerDetalhes }) {
   const hojePct = semanaParaPct(semanaAtualIdx, 0.5)
 
   function intervalo(ini) {
-    const ws = (ini.pda_celulas || []).filter(c => c.texto).map(c => c.semana)
+    const ws = (ini.pda_celulas || []).filter(c => celulaAtiva(c)).map(c => c.semana)
     if (!ws.length) return null
     return { ini: Math.min(...ws), fim: Math.max(...ws) }
   }
@@ -940,7 +920,7 @@ function VisaoGantt({ iniciativas, semanaAtualIdx, onVerDetalhes }) {
 function VisaoStatusReport({ iniciativas, semanaSel, setSemanaSel, semanaAtualIdx, editandoCelula, setEditandoCelula, onSalvarCelula }) {
   const iniciativasDaSemana = iniciativas
     .map(ini => ({ ini, celula: (ini.pda_celulas || []).find(c => c.semana === semanaSel) }))
-    .filter(x => x.celula && x.celula.texto)
+    .filter(x => celulaAtiva(x.celula))
 
   const ordemStatus = ['feito', 'feito_atrasado', 'em_andamento', 'atrasado', 'a_fazer']
   const agrupado = ordemStatus.map(st => ({
@@ -969,7 +949,7 @@ function VisaoStatusReport({ iniciativas, semanaSel, setSemanaSel, semanaAtualId
               <div key={ini.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: `4px solid ${g.info.border}`, borderRadius: 8, padding: 12, marginBottom: 6 }}>
                 <div style={{ fontWeight: 600, fontSize: 13 }}>{ini.titulo}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                  👤 {ini.responsavel || 'Sem responsável'} | Etapa atual: <span style={{ color: 'var(--text)' }}>{celula.texto}</span>
+                  👤 {ini.responsavel || 'Sem responsável'} | Situação: <span style={{ color: g.info.text, fontWeight: 600 }}>{celula.texto || g.info.label}</span>
                   {ini.prazo_final && ` | 📅 Prazo: ${new Date(ini.prazo_final).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}`}
                 </div>
               </div>
