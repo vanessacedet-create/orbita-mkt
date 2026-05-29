@@ -1,7 +1,6 @@
 import { supabase } from './client'
 
 // ── SEMESTRES ──────────────────────────────────────────────
-
 export async function getSemestres() {
   const { data, error } = await supabase
     .from('pda_semestres')
@@ -26,7 +25,6 @@ export async function deletarSemestre(id) {
 }
 
 // ── INICIATIVAS ────────────────────────────────────────────
-
 export async function getIniciativas(semestreId, area = null) {
   let q = supabase
     .from('pda_iniciativas')
@@ -39,10 +37,18 @@ export async function getIniciativas(semestreId, area = null) {
   return data || []
 }
 
-export async function criarIniciativa({ semestre_id, area, titulo, responsavel = null, ordem = 0, grupo_id = null, eh_grupo = false }) {
+export async function criarIniciativa({
+  semestre_id, area, titulo,
+  responsavel = null, ordem = 0, grupo_id = null, eh_grupo = false,
+  justificativa = null, como_fazer = null, prazo_final = null,
+}) {
   const { data, error } = await supabase
     .from('pda_iniciativas')
-    .insert([{ semestre_id, area, titulo, responsavel, ordem, grupo_id, eh_grupo }])
+    .insert([{
+      semestre_id, area, titulo,
+      responsavel, ordem, grupo_id, eh_grupo,
+      justificativa, como_fazer, prazo_final,
+    }])
     .select().single()
   if (error) throw error
   return { ...data, pda_celulas: [] }
@@ -62,12 +68,10 @@ export async function deletarIniciativa(id) {
 }
 
 // ── CÉLULAS (texto + status por semana) ────────────────────
-
 export async function upsertCelula({ iniciativa_id, semana, texto = null, status = 'a_fazer' }) {
   const { data: existente } = await supabase
     .from('pda_celulas').select('id')
     .eq('iniciativa_id', iniciativa_id).eq('semana', semana).maybeSingle()
-
   if (existente) {
     if (!texto && status === 'a_fazer') {
       const { error } = await supabase.from('pda_celulas').delete().eq('id', existente.id)
