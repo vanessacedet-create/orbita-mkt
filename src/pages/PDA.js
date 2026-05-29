@@ -813,6 +813,115 @@ function VisaoMatriz({
   )
 }
 
+// ── VISÃO 3 — LINHA DO TEMPO (GANTT)
+// Lê as células que já existem e desenha cada iniciativa como uma barra,
+// da primeira até a última semana preenchida. Não muda o banco.
+function VisaoGantt({ iniciativas, semanaAtualIdx, onVerDetalhes }) {
+  const estrutura = useMemo(() => agruparIniciativas(iniciativas), [iniciativas])
+  const NAME_W = 220
+  const WEEK_W = 44
+  const TOTAL = 28
+  const corDe = {
+    feita: 'var(--green)',
+    feita_atrasado: '#EF9F27',
+    atrasada: 'var(--red)',
+    em_andamento: '#EAB308',
+    nao_iniciada: 'var(--text-muted)',
+  }
+
+  function intervalo(ini) {
+    const ws = (ini.pda_celulas || []).filter(c => c.texto).map(c => c.semana)
+    if (!ws.length) return null
+    return { ini: Math.min(...ws), fim: Math.max(...ws) }
+  }
+
+  function Linha({ ini, ehFilha }) {
+    const iv = intervalo(ini)
+    const cor = corDe[statusDaLinha(ini)] || 'var(--text-muted)'
+    return (
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border-light, rgba(255,255,255,0.05))', minHeight: 38 }}>
+        <div style={{ position: 'sticky', left: 0, zIndex: 2, width: NAME_W, flexShrink: 0, background: 'var(--surface)', padding: ehFilha ? '8px 10px 8px 28px' : '8px 12px', borderRight: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+          <span style={{ fontSize: 12, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={ini.titulo}>{ini.titulo}</span>
+          <button onClick={() => onVerDetalhes(ini)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', opacity: 0.6, display: 'flex', flexShrink: 0, padding: 0 }} title="Ver Raio-X 5W2H"><Info size={12} /></button>
+        </div>
+        <div style={{ position: 'relative', width: TOTAL * WEEK_W, flexShrink: 0 }}>
+          <div style={{ position: 'absolute', top: 0, bottom: 0, left: (semanaAtualIdx - 1) * WEEK_W, width: WEEK_W, background: 'rgba(249, 115, 22, 0.06)' }} />
+          {iv && (
+            <div onClick={() => onVerDetalhes(ini)}
+              title={`${ini.titulo} · semanas ${iv.ini} a ${iv.fim}`}
+              style={{ position: 'absolute', top: 8, height: 22, left: (iv.ini - 1) * WEEK_W + 3, width: (iv.fim - iv.ini + 1) * WEEK_W - 6, background: cor, opacity: 0.85, borderRadius: 5, cursor: 'pointer' }} />
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', overflow: 'auto', maxHeight: 'calc(100vh - 220px)' }}>
+        {/* CABEÇALHO: meses + semanas (sticky no topo) */}
+        <div style={{ position: 'sticky', top: 0, zIndex: 5, background: 'var(--surface-2)' }}>
+          {/* linha dos meses */}
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ position: 'sticky', left: 0, zIndex: 6, width: NAME_W, flexShrink: 0, background: 'var(--surface-2)', borderRight: '1px solid var(--border)' }} />
+            {MESES.map(m => (
+              <div key={m.sigla} style={{ width: m.semanas.length * WEEK_W, flexShrink: 0, padding: '6px 0', textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, borderLeft: '1px solid var(--border)' }}>
+                {m.sigla}
+              </div>
+            ))}
+          </div>
+          {/* linha das semanas */}
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ position: 'sticky', left: 0, zIndex: 6, width: NAME_W, flexShrink: 0, background: 'var(--surface-2)', borderRight: '1px solid var(--border)', padding: '8px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+              Iniciativa
+            </div>
+            {Array.from({ length: TOTAL }, (_, i) => i + 1).map(s => {
+              const ehAtual = s === semanaAtualIdx
+              return (
+                <div key={s} style={{ width: WEEK_W, flexShrink: 0, padding: '8px 2px', textAlign: 'center', fontSize: 9, fontWeight: ehAtual ? 700 : 500, color: ehAtual ? 'var(--accent)' : 'var(--text-muted)', borderLeft: '1px solid var(--border)', lineHeight: 1.1 }}>
+                  {SEMANA_LABELS[s - 1]}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* LINHAS */}
+        {iniciativas.length === 0 ? (
+          <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Nenhuma iniciativa cadastrada.</div>
+        ) : (
+          estrutura.map(item => {
+            if (item.tipo === 'grupo') {
+              return (
+                <div key={item.grupo.id}>
+                  <div style={{ display: 'flex', background: 'rgba(249, 115, 22, 0.06)', borderTop: '1px solid var(--accent)', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ position: 'sticky', left: 0, zIndex: 2, width: NAME_W, flexShrink: 0, background: 'var(--surface-2)', padding: '8px 12px', borderRight: '1px solid var(--border)', fontSize: 12, fontWeight: 700, color: 'var(--text)', textTransform: 'uppercase', letterSpacing: 0.3, whiteSpace: 'normal', lineHeight: 1.25 }}>
+                      {item.grupo.titulo}
+                    </div>
+                    <div style={{ width: TOTAL * WEEK_W, flexShrink: 0 }} />
+                  </div>
+                  {item.filhas.map(filha => <Linha key={filha.id} ini={filha} ehFilha={true} />)}
+                </div>
+              )
+            }
+            return <Linha key={item.iniciativa.id} ini={item.iniciativa} ehFilha={false} />
+          })
+        )}
+      </div>
+
+      {/* LEGENDA */}
+      <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 10, borderRadius: 3, background: 'var(--green)' }} /> Concluída</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 10, borderRadius: 3, background: '#EF9F27' }} /> Fora do prazo</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 10, borderRadius: 3, background: '#EAB308' }} /> Em andamento</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 10, borderRadius: 3, background: 'var(--red)' }} /> Atrasada</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 10, borderRadius: 3, background: 'var(--text-muted)' }} /> Não iniciada</span>
+        <span style={{ marginLeft: 'auto', fontStyle: 'italic' }}>A barra vai da 1ª à última semana preenchida na matriz · clique para ver detalhes</span>
+      </div>
+    </div>
+  )
+}
+
 // ── VISÃO 2 — STATUS REPORT SEMANAL
 function VisaoStatusReport({ iniciativas, semanaSel, setSemanaSel, semanaAtualIdx, editandoCelula, setEditandoCelula, onSalvarCelula }) {
   const iniciativasDaSemana = iniciativas
@@ -1056,6 +1165,9 @@ export default function PDA() {
         <button onClick={() => setVisao('matriz')} style={{ background: visao === 'matriz' ? 'var(--surface)' : 'transparent', color: visao === 'matriz' ? 'var(--text)' : 'var(--text-muted)', border: 'none', padding: '8px 14px', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
           <Grid3x3 size={14} /> Matriz mensal
         </button>
+        <button onClick={() => setVisao('gantt')} style={{ background: visao === 'gantt' ? 'var(--surface)' : 'transparent', color: visao === 'gantt' ? 'var(--text)' : 'var(--text-muted)', border: 'none', padding: '8px 14px', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <ChevronRight size={14} /> Linha do tempo
+        </button>
         <button onClick={() => setVisao('status')} style={{ background: visao === 'status' ? 'var(--surface)' : 'transparent', color: visao === 'status' ? 'var(--text)' : 'var(--text-muted)', border: 'none', padding: '8px 14px', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
           <FileText size={14} /> Status report
         </button>
@@ -1082,6 +1194,11 @@ export default function PDA() {
           onDeletarIniciativa={handleDeletarIniciativa} onReordenarGrupos={handleReordenarGrupos}
           onNovaIniciativa={(preset) => setModalNovo(preset || { tipo: 'avulsa' })}
           onVerDetalhes={(ini) => setDetalhe5W2H(ini)} area={area}
+        />
+      ) : visao === 'gantt' ? (
+        <VisaoGantt
+          iniciativas={iniciativas} semanaAtualIdx={semanaAtualIdx}
+          onVerDetalhes={(ini) => setDetalhe5W2H(ini)}
         />
       ) : (
         <VisaoStatusReport
