@@ -38,13 +38,29 @@ function celulaAtiva(c) {
 
 // ── SEMANAS ────────────────────────────────────────────────
 const SEMANA_LABELS = [
-  '1 a 3',   '4 a 10',  '11 a 17', '18 a 24', '25-31',
+  '1 a 3',   '4 a 10',  '11 a 17', '18 a 24', '25 a 31',
+
   '1 a 7',   '8 a 14',  '15 a 21', '22 a 28',
+
   '1 a 7',   '8 a 14',  '15 a 21', '22 a 28', '29 a 4/Abr',
+
   '5 a 11',  '12 a 18', '19 a 25', '26 a 2/Mai',
+
   '3 a 9',   '10 a 16', '17 a 23', '24 a 30', '31 a 6/Jun',
+
   '7 a 13',  '14 a 20', '21 a 27', '28 a 4/Jul',
-  '5 a 11',
+
+  '5 a 11',  '12 a 18', '19 a 25', '26 a 1/Ago',
+
+  '2 a 8',   '9 a 15',  '16 a 22', '23 a 29', '30 a 5/Set',
+
+  '6 a 12',  '13 a 19', '20 a 26', '27 a 3/Out',
+
+  '4 a 10',  '11 a 17', '18 a 24', '25 a 31',
+
+  '1 a 7',   '8 a 14',  '15 a 21', '22 a 28', '29 a 5/Dez',
+
+  '6 a 12',  '13 a 19', '20 a 26', '27 a 31',
 ]
 const MESES = [
   { nome: 'Janeiro',   sigla: 'Jan', semanas: [1, 2, 3, 4, 5] },
@@ -53,16 +69,37 @@ const MESES = [
   { nome: 'Abril',     sigla: 'Abr', semanas: [15, 16, 17, 18] },
   { nome: 'Maio',      sigla: 'Mai', semanas: [19, 20, 21, 22, 23] },
   { nome: 'Junho',     sigla: 'Jun', semanas: [24, 25, 26, 27] },
-  { nome: 'Julho',     sigla: 'Jul', semanas: [28] },
+  { nome: 'Julho',     sigla: 'Jul', semanas: [28, 29, 30, 31] },
+  { nome: 'Agosto',    sigla: 'Ago', semanas: [32, 33, 34, 35, 36] },
+  { nome: 'Setembro',  sigla: 'Set', semanas: [37, 38, 39, 40] },
+  { nome: 'Outubro',   sigla: 'Out', semanas: [41, 42, 43, 44] },
+  { nome: 'Novembro',  sigla: 'Nov', semanas: [45, 46, 47, 48, 49] },
+  { nome: 'Dezembro',  sigla: 'Dez', semanas: [50, 51, 52, 53] },
 ]
 const SEMANA_DATA = [
   [2026,1,1],[2026,1,4],[2026,1,11],[2026,1,18],[2026,1,25],
+
   [2026,2,1],[2026,2,8],[2026,2,15],[2026,2,22],
+
   [2026,3,1],[2026,3,8],[2026,3,15],[2026,3,22],[2026,3,29],
+
   [2026,4,5],[2026,4,12],[2026,4,19],[2026,4,26],
+
   [2026,5,3],[2026,5,10],[2026,5,17],[2026,5,24],[2026,5,31],
+
   [2026,6,7],[2026,6,14],[2026,6,21],[2026,6,28],
-  [2026,7,5],
+
+  [2026,7,5],[2026,7,12],[2026,7,19],[2026,7,26],
+
+  [2026,8,2],[2026,8,9],[2026,8,16],[2026,8,23],[2026,8,30],
+
+  [2026,9,6],[2026,9,13],[2026,9,20],[2026,9,27],
+
+  [2026,10,4],[2026,10,11],[2026,10,18],[2026,10,25],
+
+  [2026,11,1],[2026,11,8],[2026,11,15],[2026,11,22],[2026,11,29],
+
+  [2026,12,6],[2026,12,13],[2026,12,20],[2026,12,27],
 ]
 
 // ── HELPERS ────────────────────────────────────────────────
@@ -820,7 +857,7 @@ function VisaoGantt({ iniciativas, semanaAtualIdx, onVerDetalhes }) {
     nao_iniciada: 'var(--text-muted)',
   }
 
-  // Converte uma semana (1-28) numa posição percentual (0-100) ao longo dos meses.
+  // Converte uma semana numa posição percentual (0-100) ao longo dos meses.
   // edge = 0 → início da semana; edge = 1 → fim da semana.
   function semanaParaPct(semana, edge) {
     let mi = MESES.findIndex(m => m.semanas.includes(semana))
@@ -935,7 +972,7 @@ function VisaoStatusReport({ iniciativas, semanaSel, setSemanaSel, semanaAtualId
     .map(ini => ({ ini, celula: (ini.pda_celulas || []).find(c => c.semana === semanaSel) }))
     .filter(x => celulaAtiva(x.celula))
 
-  const ordemStatus = ['feito', 'feito_atrasado', 'em_andamento', 'atrasado', 'a_fazer']
+  const ordemStatus = ['feito', 'feito_atrasado', 'em_andamento', 'planejada', 'atrasado', 'a_fazer']
   const agrupado = ordemStatus.map(st => ({
     status: st,
     info: STATUS_INFO[st],
@@ -951,7 +988,7 @@ function VisaoStatusReport({ iniciativas, semanaSel, setSemanaSel, semanaAtualId
             <option key={i+1} value={i+1}>Sem {i+1} · {label} {i+1 === semanaAtualIdx ? '(atual)' : ''}</option>
           ))}
         </select>
-        <button className="btn btn-ghost btn-sm" disabled={semanaSel === 28} onClick={() => setSemanaSel(s => Math.min(28, s + 1))}>Próxima <ChevronRight size={14} /></button>
+        <button className="btn btn-ghost btn-sm" disabled={semanaSel === SEMANA_LABELS.length} onClick={() => setSemanaSel(s => Math.min(SEMANA_LABELS.length, s + 1))}>Próxima <ChevronRight size={14} /></button>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
