@@ -28,11 +28,11 @@ const STATUS_INFO = {
 }
 const STATUS_CICLO = ['a_fazer', 'em_andamento', 'feito', 'feito_atrasado', 'atrasado']
 
-// Uma célula está "ativa" (preenchida) se tem texto OU um status diferente de "a fazer".
-// Como agora as células guardam só o status, isso é o que define se a semana "conta".
+// Uma célula só "conta" (aparece preenchida) se tiver um status de verdade,
+// ou seja, diferente de "a fazer". Texto antigo deixado no banco é ignorado —
+// a matriz agora é só status. Assim "A fazer" nunca aparece como estado fixo.
 function celulaAtiva(c) {
-  if (!c) return false
-  return !!c.texto || (c.status && c.status !== 'a_fazer')
+  return !!(c && c.status && c.status !== 'a_fazer')
 }
 
 // ── SEMANAS ────────────────────────────────────────────────
@@ -630,9 +630,9 @@ function VisaoMatriz({
             }}>
               <div
                 onClick={async () => {
-                  await onSalvarCelula(ini.id, semana, celula?.texto || null, proximoStatus(celula?.status))
+                  await onSalvarCelula(ini.id, semana, null, proximoStatus(celula?.status))
                 }}
-                title="Clique para mudar o status"
+                title="Clique para mudar o status (no último, limpa a célula)"
                 style={{
                   width: '100%', minHeight: 46,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
