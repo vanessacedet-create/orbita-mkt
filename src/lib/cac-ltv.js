@@ -348,7 +348,7 @@ export function calcularEvolucaoMensal(todosPedidos, gastos, loja, filtrosSituac
   }
   for (const g of gastos) {
     if (loja && g.loja !== loja) continue
-    const d = new Date(g.mes_referencia)
+    const d = new Date(g.mes_referencia + 'T12:00:00')
     meses.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
   }
 
@@ -364,7 +364,7 @@ export function calcularEvolucaoMensal(todosPedidos, gastos, loja, filtrosSituac
     const leitNovos = leitoresNovosPeriodo(leitoresMap, loja, inicio, fim)
     const gastosMes = gastos.filter(g => {
       if (loja && g.loja !== loja) return false
-      const gd = new Date(g.mes_referencia)
+      const gd = new Date(g.mes_referencia + 'T12:00:00')
       return gd.getFullYear() === ano && gd.getMonth() + 1 === m
     })
 
