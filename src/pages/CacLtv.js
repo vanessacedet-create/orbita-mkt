@@ -182,7 +182,7 @@ export default function CacLtv() {
   const gastosFiltrados = useMemo(() => {
     return gastos.filter(g => {
       if (lojaFiltro && g.loja !== lojaFiltro) return false
-      const gd = new Date(g.mes_referencia)
+      const gd = new Date(g.mes_referencia + 'T12:00:00')
       return gd >= periodo.inicio && gd <= periodo.fim
     })
   }, [gastos, lojaFiltro, periodo])
@@ -224,7 +224,7 @@ export default function CacLtv() {
   const gastosAnterior = useMemo(() => {
     return gastos.filter(g => {
       if (lojaFiltro && g.loja !== lojaFiltro) return false
-      const gd = new Date(g.mes_referencia)
+      const gd = new Date(g.mes_referencia + 'T12:00:00')
       return gd >= periodoAnterior.inicio && gd <= periodoAnterior.fim
     })
   }, [gastos, lojaFiltro, periodoAnterior])
