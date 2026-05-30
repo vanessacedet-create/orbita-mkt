@@ -182,10 +182,10 @@ export default function CacLtv() {
   const gastosFiltrados = useMemo(() => {
     return gastos.filter(g => {
       if (lojaFiltro && g.loja !== lojaFiltro) return false
-      const gd = new Date(g.mes_referencia + 'T12:00:00')
-      return gd >= periodo.inicio && gd <= periodo.fim
+      const gm = String(g.mes_referencia).slice(0, 10)
+      return gm >= dataInicio && gm <= dataFim
     })
-  }, [gastos, lojaFiltro, periodo])
+  }, [gastos, lojaFiltro, dataInicio, dataFim])
 
   const cacBlended = useMemo(() =>
     calcularCACBlended(gastosFiltrados, leitoresNovos),
@@ -222,10 +222,12 @@ export default function CacLtv() {
     [leitoresMap, lojaFiltro, periodoAnterior])
 
   const gastosAnterior = useMemo(() => {
+    const iniAnt = toISODate(periodoAnterior.inicio)
+    const fimAnt = toISODate(periodoAnterior.fim)
     return gastos.filter(g => {
       if (lojaFiltro && g.loja !== lojaFiltro) return false
-      const gd = new Date(g.mes_referencia + 'T12:00:00')
-      return gd >= periodoAnterior.inicio && gd <= periodoAnterior.fim
+      const gm = String(g.mes_referencia).slice(0, 10)
+      return gm >= iniAnt && gm <= fimAnt
     })
   }, [gastos, lojaFiltro, periodoAnterior])
 
