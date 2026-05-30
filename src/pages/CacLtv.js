@@ -9,7 +9,7 @@ import {
   listarTodosPedidos, listarGastos, listarLojas, listarImportacoes,
   inserirGasto, editarGasto, excluirGasto, excluirLoteImportacao,
   importarPedidos, getNumeroPedidosExistentes,
-  mapearColunas, processarLinhas,
+  mapearColunas, processarLinhas, parseValorBR,
   identificarLeitores, leitoresNovosPeriodo,
   calcularCACBlended, calcularLTV, calcularCACPorCupom, calcularEvolucaoMensal,
 } from '../lib/cac-ltv'
@@ -718,7 +718,7 @@ function TabGastos({ gastos, gastosFiltrados, lojas, lojaFiltro, periodo, onRefr
         mes_referencia: form.mes_referencia + '-01',
         categoria: form.categoria,
         descricao: form.descricao || null,
-        valor: parseFloat(form.valor.replace(',', '.')),
+        valor: parseValorBR(form.valor),
       }
       if (editando) {
         await editarGasto(editando.id, payload)
