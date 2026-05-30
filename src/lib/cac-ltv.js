@@ -394,25 +394,42 @@ function norm(str) {
 }
 
 const COLUMN_MAP = {
-  numero_pedido: ['npedido', 'numeropedido', 'pedido', 'numpedido', 'numerodopedido'],
+  numero_pedido: ['npedido', 'numeropedido', 'pedido', 'numpedido', 'numerodopedido', 'nropedido'],
   email: ['email', 'emailcliente', 'emaildocliente'],
-  data_pedido: ['datacriacao', 'data', 'datapedido', 'datadopedido', 'datacriacao'],
+  data_pedido: ['datacriacao', 'datapedido', 'datadopedido'],
   valor: ['valor', 'total', 'valortotal', 'valorpedido'],
-  loja: ['livraria', 'loja', 'nomeloja'],
+  loja: ['livraria', 'loja', 'nomeloja', 'nomelihvraria'],
   situacao: ['situacao', 'status', 'statusdopedido', 'situacaopedido'],
   cupom: ['cupom', 'codigocupom', 'voucher', 'codigodesconto'],
-  cidade_estado: ['cidadeestado', 'cidade', 'uf', 'estado', 'cidadeuf'],
-  metodo_pagamento: ['metodopag', 'pagamento', 'metodopagamento', 'formapagamento'],
+  cidade_estado: ['cidadeestado', 'cidadeuf'],
+  metodo_pagamento: ['metodopag', 'metodopagamento', 'formapagamento'],
 }
 
 export function mapearColunas(headers) {
   const map = {}
+  const usados = new Set() // evita mapear a mesma coluna para dois campos
+
   for (const [campo, aliases] of Object.entries(COLUMN_MAP)) {
-    const idx = headers.findIndex(h => {
+    // Primeiro tenta match exato (normalizado)
+    let idx = headers.findIndex((h, i) => {
+      if (usados.has(i)) return false
       const n = norm(h)
-      return aliases.some(a => n.includes(a) || a.includes(n))
+      return aliases.some(a => n === a)
     })
-    if (idx !== -1) map[campo] = idx
+
+    // Depois tenta: o header contém o alias (ex: "codigocupom" contém "cupom")
+    if (idx === -1) {
+      idx = headers.findIndex((h, i) => {
+        if (usados.has(i)) return false
+        const n = norm(h)
+        return aliases.some(a => n.includes(a))
+      })
+    }
+
+    if (idx !== -1) {
+      map[campo] = idx
+      usados.add(idx)
+    }
   }
   return map
 }
