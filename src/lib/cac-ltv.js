@@ -208,7 +208,7 @@ export function identificarLeitores(todosPedidos, filtrosSituacao = SITUACAO_ENT
 
   // Ordenar por data para facilitar
   const ordenados = [...todosPedidos].sort((a, b) =>
-    new Date(a.data_pedido) - new Date(b.data_pedido)
+    String(a.data_pedido).localeCompare(String(b.data_pedido))
   )
 
   for (const p of ordenados) {
@@ -223,9 +223,9 @@ export function identificarLeitores(todosPedidos, filtrosSituacao = SITUACAO_ENT
     }
     mapa[key].pedidos.push(p)
 
-    // Marca data da primeira compra entregue
+    // Marca data da primeira compra entregue (normalizada para YYYY-MM-DD)
     if (!mapa[key].dataPrimeira && situacaoConclui(p.situacao, filtrosSituacao)) {
-      mapa[key].dataPrimeira = p.data_pedido
+      mapa[key].dataPrimeira = String(p.data_pedido).slice(0, 10)
     }
   }
 
@@ -236,15 +236,15 @@ export function identificarLeitores(todosPedidos, filtrosSituacao = SITUACAO_ENT
  * Leitores novos no período (primeira compra entregue caiu no período)
  */
 export function leitoresNovosPeriodo(leitoresMap, loja, dataInicio, dataFim) {
-  const inicio = new Date(dataInicio)
-  const fim = new Date(dataFim)
-  fim.setHours(23, 59, 59, 999)
+  // Comparação por string ISO (YYYY-MM-DD) — evita problemas de timezone
+  const ini = String(dataInicio).slice(0, 10)
+  const fim = String(dataFim).slice(0, 10)
 
   return Object.values(leitoresMap).filter(l => {
     if (loja && l.loja !== loja) return false
     if (!l.dataPrimeira) return false
-    const d = new Date(l.dataPrimeira)
-    return d >= inicio && d <= fim
+    const dp = String(l.dataPrimeira).slice(0, 10)
+    return dp >= ini && dp <= fim
   })
 }
 
@@ -272,7 +272,8 @@ export function calcularLTV(leitoresNovos, todosPedidos, hoje = new Date()) {
   let imaturos = 0
 
   for (const leitor of leitoresNovos) {
-    const dataPrimeira = new Date(leitor.dataPrimeira)
+    const dpStr = String(leitor.dataPrimeira).slice(0, 10)
+    const dataPrimeira = new Date(dpStr + 'T12:00:00')
     const fimJanela = new Date(dataPrimeira.getTime() + JANELA_MS)
     const maturo = hoje >= fimJanela
 
@@ -281,7 +282,7 @@ export function calcularLTV(leitoresNovos, todosPedidos, hoje = new Date()) {
     // Soma receita de todos os pedidos deste leitor nesta loja nos 12 meses
     const receita = leitor.pedidos
       .filter(p => {
-        const dp = new Date(p.data_pedido)
+        const dp = new Date(String(p.data_pedido).slice(0, 10) + 'T12:00:00')
         return dp >= dataPrimeira && dp <= fimJanela
       })
       .reduce((s, p) => s + Number(p.valor), 0)
@@ -343,13 +344,13 @@ export function calcularEvolucaoMensal(todosPedidos, gastos, loja, filtrosSituac
   const meses = new Set()
   for (const p of todosPedidos) {
     if (loja && p.loja !== loja) continue
-    const d = new Date(p.data_pedido)
-    meses.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+    const dp = String(p.data_pedido).slice(0, 10) // YYYY-MM-DD
+    meses.add(dp.slice(0, 7)) // YYYY-MM
   }
   for (const g of gastos) {
     if (loja && g.loja !== loja) continue
-    const d = new Date(g.mes_referencia + 'T12:00:00')
-    meses.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+    const gp = String(g.mes_referencia).slice(0, 7) // YYYY-MM
+    meses.add(gp)
   }
 
   const sorted = [...meses].sort()
@@ -364,8 +365,7 @@ export function calcularEvolucaoMensal(todosPedidos, gastos, loja, filtrosSituac
     const leitNovos = leitoresNovosPeriodo(leitoresMap, loja, inicio, fim)
     const gastosMes = gastos.filter(g => {
       if (loja && g.loja !== loja) return false
-      const gd = new Date(g.mes_referencia + 'T12:00:00')
-      return gd.getFullYear() === ano && gd.getMonth() + 1 === m
+      return String(g.mes_referencia).slice(0, 7) === mes
     })
 
     const { cac, totalGastos } = calcularCACBlended(gastosMes, leitNovos)
