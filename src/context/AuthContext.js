@@ -19,6 +19,7 @@ export const MODULOS_PERMISSOES = {
   eventos: ['administrador', 'gerente', 'estagiario_marketplaces', 'analista_marketplaces'],
   rh: ['administrador'],
   pda: ['administrador'],
+  cac_ltv: ['administrador', 'gerente', 'supervisor_proprias'],
   treinamentos: ['administrador', 'gerente', 'supervisor_proprias'],
   usuarios: ['administrador'],
   guia_parcerias: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
