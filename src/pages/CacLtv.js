@@ -358,6 +358,7 @@ export default function CacLtv() {
         <TabImportacao
           importacoes={importacoes}
           resumo={resumoImportacao}
+          lojas={lojas}
           onRefresh={carregarDados}
           showToast={showToast}
         />
@@ -876,7 +877,7 @@ function TabGastos({ gastos, gastosFiltrados, lojas, lojaFiltro, periodo, onRefr
 // ══════════════════════════════════════════════════════════════
 // TAB: IMPORTAÇÃO
 // ══════════════════════════════════════════════════════════════
-function TabImportacao({ importacoes, resumo, onRefresh, showToast }) {
+function TabImportacao({ importacoes, resumo, lojas, onRefresh, showToast }) {
   const [showUpload, setShowUpload] = useState(false)
   const [confirmExcluir, setConfirmExcluir] = useState(null)
   const [excluindo, setExcluindo] = useState(false)
@@ -973,6 +974,7 @@ function TabImportacao({ importacoes, resumo, onRefresh, showToast }) {
       {/* Modal upload */}
       {showUpload && (
         <ModalUpload
+          lojas={lojas}
           onClose={() => setShowUpload(false)}
           onSuccess={async () => { setShowUpload(false); await onRefresh() }}
           showToast={showToast}
@@ -1006,10 +1008,11 @@ function TabImportacao({ importacoes, resumo, onRefresh, showToast }) {
 // ══════════════════════════════════════════════════════════════
 // MODAL DE UPLOAD / IMPORTAÇÃO
 // ══════════════════════════════════════════════════════════════
-function ModalUpload({ onClose, onSuccess, showToast }) {
+function ModalUpload({ lojas, onClose, onSuccess, showToast }) {
   const fileRef = useRef()
   const [step, setStep] = useState('select') // select → preview → importing → done
   const [fileName, setFileName] = useState('')
+  const [lojaSelecionada, setLojaSelecionada] = useState('')
   const [rows, setRows] = useState([])
   const [headers, setHeaders] = useState([])
   const [colMap, setColMap] = useState({})
@@ -1051,7 +1054,7 @@ function ModalUpload({ onClose, onSuccess, showToast }) {
         if (map.email == null) missing.push('E-mail')
         if (map.data_pedido == null) missing.push('Data do pedido')
         if (map.valor == null) missing.push('Valor')
-        if (map.loja == null) missing.push('Loja')
+        if (map.loja == null && !lojaSelecionada) missing.push('Loja (selecione no campo acima ou inclua na planilha)')
 
         if (missing.length) {
           showToast('Colunas não encontradas: ' + missing.join(', '), 'error')
@@ -1078,7 +1081,7 @@ function ModalUpload({ onClose, onSuccess, showToast }) {
       const existentes = await getNumeroPedidosExistentes(numeros)
 
       setProgresso('Processando linhas e gerando hashes...')
-      const result = await processarLinhas(rows, colMap, existentes)
+      const result = await processarLinhas(rows, colMap, existentes, lojaSelecionada)
 
       if (result.pedidos.length === 0) {
         setResultado({ ...result, importados: 0 })
@@ -1088,7 +1091,7 @@ function ModalUpload({ onClose, onSuccess, showToast }) {
 
       setProgresso(`Importando ${result.pedidos.length} pedidos...`)
       const { inseridos, totalNovos } = await importarPedidos(
-        result.pedidos, result.loteId, fileName, null
+        result.pedidos, result.loteId, fileName, lojaSelecionada || null
       )
 
       setResultado({ ...result, importados: inseridos, totalNovosReal: totalNovos })
@@ -1123,6 +1126,23 @@ function ModalUpload({ onClose, onSuccess, showToast }) {
               Selecione o arquivo .xlsx ou .csv exportado do ERP. A planilha será processada
               no navegador — nenhum dado pessoal é enviado ao servidor.
             </p>
+            <div className="form-group" style={{ marginBottom: 16 }}>
+              <label className="form-label">Loja (se todos os pedidos forem da mesma loja)</label>
+              <input
+                type="text"
+                className="form-input"
+                list="lojas-import-select"
+                placeholder="Deixe vazio para usar coluna da planilha"
+                value={lojaSelecionada}
+                onChange={e => setLojaSelecionada(e.target.value)}
+              />
+              <datalist id="lojas-import-select">
+                {(lojas || []).map(l => <option key={l} value={l} />)}
+              </datalist>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                Se a planilha já tiver coluna "Livraria" ou "Loja", pode deixar em branco.
+              </span>
+            </div>
             <div
               onClick={() => fileRef.current?.click()}
               style={{
@@ -1150,6 +1170,27 @@ function ModalUpload({ onClose, onSuccess, showToast }) {
               fontSize: 13, color: 'var(--text-soft)',
             }}>
               <strong>{fileName}</strong> — {rows.length} linhas encontradas
+              {lojaSelecionada && (
+                <span style={{ marginLeft: 8 }}>
+                  <span className="badge badge-accent" style={{ fontSize: 10 }}>Loja: {lojaSelecionada}</span>
+                </span>
+              )}
+            </div>
+
+            {/* Loja override no preview também */}
+            <div className="form-group" style={{ marginBottom: 16 }}>
+              <label className="form-label">Loja</label>
+              <input
+                type="text"
+                className="form-input"
+                list="lojas-import-preview"
+                placeholder="Deixe vazio para usar coluna da planilha"
+                value={lojaSelecionada}
+                onChange={e => setLojaSelecionada(e.target.value)}
+              />
+              <datalist id="lojas-import-preview">
+                {(lojas || []).map(l => <option key={l} value={l} />)}
+              </datalist>
             </div>
 
             {/* Mapeamento de colunas */}
