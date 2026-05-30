@@ -459,7 +459,7 @@ export function parseDataBR(val) {
 /**
  * Processa as linhas da planilha e retorna { pedidos, erros, duplicados }
  */
-export async function processarLinhas(rows, colMap, existentes) {
+export async function processarLinhas(rows, colMap, existentes, lojaOverride = '') {
   const pedidos = []
   const erros = []
   const duplicados = []
@@ -482,7 +482,7 @@ export async function processarLinhas(rows, colMap, existentes) {
       const dataPedido = parseDataBR(row[colMap.data_pedido])
       if (!dataPedido) { erros.push({ linha: i + 2, motivo: 'Data inválida' }); continue }
 
-      const loja = colMap.loja != null ? String(row[colMap.loja] || '').trim() : ''
+      const loja = lojaOverride || (colMap.loja != null ? String(row[colMap.loja] || '').trim() : '')
       if (!loja) { erros.push({ linha: i + 2, motivo: 'Sem loja' }); continue }
 
       const hash = await hashEmail(String(emailRaw))
