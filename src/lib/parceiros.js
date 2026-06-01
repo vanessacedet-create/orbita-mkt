@@ -208,13 +208,11 @@ export async function createParceiroCRM(payload, statusInicial = 'prospected') {
   return data
 }
 
-export async function getCRMParceiros({ grupo } = {}) {
-  let q = supabase
+export async function getCRMParceiros() {
+  const { data, error } = await supabase
     .from('parceiros')
-    .select('*, responsavel_interno:usuarios!responsavel_interno_id(id, nome)')
+    .select('*, responsavel_interno:usuarios!responsavel_interno_id(id, nome), criador:usuarios!criado_por_id(id, nome)')
     .order('nome')
-  if (grupo) q = q.eq('grupo', grupo)
-  const { data, error } = await q
   if (error) throw error
 
   const ids = (data||[]).map(p=>p.id)
@@ -233,7 +231,8 @@ export async function getCRMParceiros({ grupo } = {}) {
   return (data||[]).map(p => ({
     ...p,
     current_status: statusMap[p.id] || null,
-    responsavel_interno_nome: p.responsavel_interno?.nome || null
+    responsavel_interno_nome: p.responsavel_interno?.nome || null,
+    criado_por_nome: p.criador?.nome || null
   }))
 }
 
