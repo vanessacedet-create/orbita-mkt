@@ -8,7 +8,7 @@ import {
   LayoutDashboard, BookOpen, Users, LogOut,
   Orbit, ShieldAlert, Megaphone, CalendarDays, CheckSquare, UserRound, Eye,
   Network, Calculator, HeartHandshake, CalendarCheck, GraduationCap,
-  Store, FileText, SwitchCamera, X, Search, ChevronDown, Inbox, Target,
+  Store, FileText, SwitchCamera, X, Search, ChevronDown, Target,
   TrendingUp
 } from 'lucide-react'
 import './App.css'
@@ -33,12 +33,10 @@ const PDA            = lazy(() => import('./pages/PDA'))
 const VitrinePublica = lazy(() => import('./pages/VitrinePublica'))
 const VitrineAdmin   = lazy(() => import('./pages/VitrineAdmin'))
 const GuiaParcerias  = lazy(() => import('./pages/GuiaParcerias'))
-const InboxInfluenciadores = lazy(() => import('./pages/InboxInfluenciadores'))
 const CacLtv              = lazy(() => import('./pages/CacLtv'))
 
 const MENU = [
   { path: '/',                 label: 'Dashboard',         icon: LayoutDashboard, modulo: 'dashboard'       },
-  { path: '/inbox', label: 'Inbox Influenciadores', icon: Inbox, modulo: 'inbox_influencers' },
   { path: '/parceiros',        label: 'Parceiros',         icon: UserRound,       modulo: 'parceiros'       },
   { path: '/guia-parcerias',   label: 'Guia de Parcerias', icon: FileText,        modulo: 'guia_parcerias'  },
   { path: '/crm-influencers', label: 'CRM Influencers', icon: Network, modulo: 'crm_influencers' },
@@ -544,7 +542,6 @@ function Shell() {
           <Suspense fallback={<div className="loading"><div className="spinner"/></div>}>
             <Routes>
               <Route path="/"                element={<HomeRedirect />} />
-              <Route path="/inbox" element={<RequireAuth modulo="inbox_influencers"><InboxInfluenciadores /></RequireAuth>} />
               <Route path="/cortesias"       element={<RequireAuth modulo="cortesias"><Cortesias /></RequireAuth>} />
               <Route path="/parceiros"       element={<RequireAuth modulo="parceiros"><Parceiros /></RequireAuth>} />
               <Route path="/usuarios"        element={<RequireAuth modulo="usuarios"><Usuarios /></RequireAuth>} />
