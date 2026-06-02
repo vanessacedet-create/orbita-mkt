@@ -397,6 +397,23 @@ function TabDashboard({ cacBlended, cacAnterior, ltv, ltvCacRatio, leitoresNovos
 
   return (
     <div>
+      {leitoresNovos.length === 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+          padding: '14px 16px', marginBottom: 16,
+          background: 'var(--surface-2)', border: '1px solid var(--border)',
+          borderRadius: 10, color: 'var(--text-muted)', fontSize: 13,
+        }}>
+          <Info size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+          <div>
+            <strong style={{ color: 'var(--text)' }}>Nenhum leitor novo neste período.</strong>{' '}
+            Não há cliente com primeira compra na janela selecionada, então CAC e LTV ficam
+            sem base de cálculo e aparecem como “—”. Isso não é um erro — é um período sem
+            aquisição. Tente outra janela (ex.: “Ano anterior”) ou confira se os pedidos
+            importados cobrem essas datas.
+          </div>
+        </div>
+      )}
       {/* Cards KPI */}
       <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
         <div className="stat-card accent">
