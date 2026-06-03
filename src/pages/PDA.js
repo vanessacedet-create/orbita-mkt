@@ -99,9 +99,10 @@ function proximoStatus(s) {
 function calcularStats(iniciativas, semanasFiltro = null) {
   let total = 0, feitas = 0, em = 0, atr = 0, feitoAtr = 0
   for (const ini of iniciativas) {
-    if (ini.eh_grupo) continue
+    if (ini.eh_grupo && !(ini.pda_celulas || []).some(celulaAtiva)) continue
     for (const c of (ini.pda_celulas || [])) {
       if (semanasFiltro && !semanasFiltro.includes(c.semana)) continue
+      if (!celulaAtiva(c)) continue
       total++
       if (c.status === 'feito') feitas++
       else if (c.status === 'feito_atrasado') feitoAtr++
@@ -128,7 +129,11 @@ function statusDaLinha(ini, semanasFiltro = null) {
 function calcularStatsPorLinha(iniciativas, semanasFiltro = null) {
   let total = 0, feitas = 0, feitoAtr = 0, em = 0, atr = 0, planejadas = 0, naoIniciadas = 0
   for (const ini of iniciativas) {
-    if (ini.eh_grupo) continue
+    // Incluir grupos que têm células próprias ativas, além das iniciativas normais
+    if (ini.eh_grupo) {
+      const temCelulasProprias = (ini.pda_celulas || []).some(celulaAtiva)
+      if (!temCelulasProprias) continue
+    }
     if (semanasFiltro) {
       const temCelulaNaSemana = (ini.pda_celulas || []).some(c => semanasFiltro.includes(c.semana) && celulaAtiva(c))
       if (!temCelulaNaSemana) continue
@@ -150,7 +155,8 @@ function itensDeAtencao(iniciativas, semanaAtualIdx) {
   const atrasadas = []
   const estaSemana = []
   for (const ini of iniciativas) {
-    if (ini.eh_grupo) continue
+    // Incluir grupos que têm células próprias
+    if (ini.eh_grupo && !(ini.pda_celulas || []).some(celulaAtiva)) continue
     if (statusDaLinha(ini) === 'atrasada') atrasadas.push(ini)
     const cel = (ini.pda_celulas || []).find(c => c.semana === semanaAtualIdx && celulaAtiva(c))
     if (cel && cel.status !== 'feito' && cel.status !== 'feito_atrasado') {
@@ -201,15 +207,31 @@ function ultimoStatusAtivo(ini) {
 }
 
 function iniciativaConcluida(ini) {
-  if (ini.eh_grupo) return false
+  // Grupos sem células próprias: não são considerados "concluídos" isoladamente
+  if (ini.eh_grupo) {
+    const temCelulasProprias = (ini.pda_celulas || []).some(celulaAtiva)
+    if (!temCelulasProprias) return false
+  }
   const ultimoStatus = ultimoStatusAtivo(ini)
   return ultimoStatus === 'feito' || ultimoStatus === 'feito_atrasado'
 }
 
 function grupoConcluido(grupo, filhas) {
   if (!grupo?.eh_grupo) return false
-  if (!filhas || filhas.length === 0) return false
-  return filhas.every(iniciativaConcluida)
+  const grupoTemCelulas = (grupo.pda_celulas || []).some(celulaAtiva)
+  const filhasConcluidas = filhas && filhas.length > 0 && filhas.every(iniciativaConcluida)
+  
+  // Grupo com filhas: concluído se todas filhas concluídas E grupo próprio concluído (se tiver células)
+  if (filhas && filhas.length > 0) {
+    if (!filhasConcluidas) return false
+    if (grupoTemCelulas) return iniciativaConcluida(grupo)
+    return true
+  }
+  
+  // Grupo sem filhas: concluído se suas próprias células estão concluídas
+  if (grupoTemCelulas) return iniciativaConcluida(grupo)
+  
+  return false
 }
 
 function separarPdaPorSituacao(iniciativas) {
@@ -792,9 +814,8 @@ function VisaoMatriz({
   function renderCabecalhoGrupo(grupo, filhas) {
     const colapsado = gruposColapsados.has(grupo.id)
     const stats = calcularStatsPorLinha(filhas)
-    const concluidas = stats.feitas + stats.feitoAtr
     const corBarra = stats.atr > 0 ? 'var(--red)' : (stats.pct === 100 && stats.total > 0 ? 'var(--green)' : 'var(--accent)')
-    const temConteudo = filhas.length > 0
+    const temFilhas = filhas.length > 0
 
     return (
       <div key={grupo.id}
@@ -804,21 +825,23 @@ function VisaoMatriz({
         onDrop={e => handleDrop(e, grupo.id)}
         style={{
           display: 'grid',
-          gridTemplateColumns: `${NOME_COL_MATRIZ}px 1fr`,
+          gridTemplateColumns: `${NOME_COL_MATRIZ}px repeat(${semanasDoMes.length}, 1fr)`,
           background: draggingId === grupo.id ? 'rgba(249, 115, 22, 0.18)' : 'rgba(249, 115, 22, 0.05)',
           borderTop: dragOverId === grupo.id ? '2px solid var(--accent)' : '1px solid rgba(249, 115, 22, 0.3)',
           borderBottom: '1px solid var(--border)',
           opacity: draggingId === grupo.id ? 0.5 : 1,
           transition: 'background 0.15s',
         }}>
-        <div style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8, borderRight: '1px solid rgba(255,255,255,0.04)' }}>
           <div style={{ cursor: 'grab', color: 'var(--text-muted)', display: 'flex', opacity: 0.4 }}>
             <GripVertical size={14} />
           </div>
-          <button onClick={() => toggleGrupo(grupo.id)}
-            style={{ background: 'none', border: 'none', padding: 0, display: 'flex', cursor: 'pointer', color: 'var(--accent)' }}>
-            {colapsado ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-          </button>
+          {temFilhas && (
+            <button onClick={() => toggleGrupo(grupo.id)}
+              style={{ background: 'none', border: 'none', padding: 0, display: 'flex', cursor: 'pointer', color: 'var(--accent)' }}>
+              {colapsado ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+            </button>
+          )}
           {editandoTitulo?.id === grupo.id ? (
             <input
               autoFocus
@@ -829,52 +852,52 @@ function VisaoMatriz({
               style={{ flex: 1, fontSize: 13, fontWeight: 700, background: 'transparent', border: 'none', borderBottom: '1px solid var(--accent)', outline: 'none', color: 'var(--text)' }}
             />
           ) : (
-            <div
-              onClick={() => setEditandoTitulo({ id: grupo.id, titulo: grupo.titulo, responsavel: '' })}
-              style={{ flex: 1, fontSize: 13, fontWeight: 700, color: 'var(--text)', cursor: 'text', whiteSpace: 'normal', lineHeight: 1.25, textTransform: 'uppercase', letterSpacing: 0.3 }}>
-              {grupo.titulo}
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <div
+                onClick={() => setEditandoTitulo({ id: grupo.id, titulo: grupo.titulo, responsavel: '' })}
+                style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', cursor: 'text', lineHeight: 1.25, textTransform: 'uppercase', letterSpacing: 0.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                {grupo.titulo}
+              </div>
+              {/* Resumo compacto das filhas, se houver */}
+              {temFilhas && stats.total > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, fontSize: 10, color: 'var(--text-muted)' }}>
+                  <span>{filhas.length} sub</span>
+                  <span style={{ color: 'var(--green)' }}>✓{stats.feitas}</span>
+                  {stats.atr > 0 && <span style={{ color: 'var(--red)' }}>!{stats.atr}</span>}
+                  <div style={{ width: 36, height: 4, background: 'var(--border)', borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${stats.pct}%`, background: corBarra }} />
+                  </div>
+                  <span style={{ fontWeight: 700 }}>{stats.pct}%</span>
+                </div>
+              )}
             </div>
           )}
           <button onClick={() => onNovaIniciativa({ tipo: 'em_grupo', grupoId: grupo.id })}
             title={`Adicionar iniciativa a "${grupo.titulo}"`}
-            style={{ background: 'none', color: 'var(--accent)', border: 'none', padding: 2, cursor: 'pointer', display: 'flex', opacity: 0.6 }}>
+            style={{ background: 'none', color: 'var(--accent)', border: 'none', padding: 2, cursor: 'pointer', display: 'flex', opacity: 0.6, flexShrink: 0 }}>
             <Plus size={14} />
           </button>
           <button onClick={() => { if (window.confirm(`Excluir o grupo "${grupo.titulo}"?\n\nAs iniciativas dentro dele NÃO serão apagadas — apenas sairão do grupo e voltarão a ser avulsas.`)) onDeletarIniciativa(grupo.id) }}
             title="Excluir grupo"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex', opacity: 0.4 }}>
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2, display: 'flex', opacity: 0.4, flexShrink: 0 }}>
             <Trash2 size={12} />
           </button>
         </div>
 
-        {/* RESUMO DO GRUPO — melhorado: esconde "0 sub-ações" quando vazio */}
-        <div style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, fontSize: 11 }}>
-          {temConteudo ? (
-            <>
-              <span style={{ color: 'var(--text-muted)' }}>
-                {filhas.length} {filhas.length === 1 ? 'iniciativa' : 'iniciativas'}
-              </span>
-              {stats.total > 0 && (
-                <>
-                  <span style={{ color: 'var(--green)', fontWeight: 600 }}>✓ {stats.feitas}</span>
-                  {stats.feitoAtr > 0 && <span style={{ color: '#EF9F27', fontWeight: 600 }}>⚑ {stats.feitoAtr}</span>}
-                  {stats.em > 0 && <span style={{ color: '#FACC15', fontWeight: 600 }}>◐ {stats.em}</span>}
-                  {stats.atr > 0 && <span style={{ color: 'var(--red)', fontWeight: 600 }}>! {stats.atr}</span>}
-                  <div style={{ width: 60, height: 6, background: 'var(--border)', borderRadius: 99, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${stats.pct}%`, background: corBarra, transition: 'width 0.5s ease' }} />
-                  </div>
-                  <span style={{ color: 'var(--text)', fontWeight: 700, minWidth: 38, textAlign: 'right' }}>{stats.pct}%</span>
-                </>
-              )}
-            </>
-          ) : (
-            <span
-              onClick={() => onNovaIniciativa({ tipo: 'em_grupo', grupoId: grupo.id })}
-              style={{ color: 'var(--accent)', cursor: 'pointer', opacity: 0.6, fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <Plus size={11} /> Adicionar primeira iniciativa
-            </span>
-          )}
-        </div>
+        {/* CÉLULAS DE STATUS DO GRUPO — mesma mecânica das iniciativas */}
+        {semanasDoMes.map(semana => {
+          const celula = getCelula(grupo, semana)
+          return (
+            <StatusCelula
+              key={semana}
+              celula={celula}
+              ehSemAtual={semana === semanaAtualIdx}
+              onClick={async () => {
+                await onSalvarCelula(grupo.id, semana, null, proximoStatus(celula?.status))
+              }}
+            />
+          )
+        })}
       </div>
     )
   }
@@ -1126,9 +1149,17 @@ function VisaoGantt({ iniciativas, semanaAtualIdx, onVerDetalhes }) {
         ) : (
           estrutura.map(item => {
             if (item.tipo === 'grupo') {
+              const grupoTemCelulas = (item.grupo.pda_celulas || []).some(celulaAtiva)
+              const iv = grupoTemCelulas ? (() => {
+                const ws = (item.grupo.pda_celulas || []).filter(c => celulaAtiva(c)).map(c => c.semana)
+                return ws.length ? { ini: Math.min(...ws), fim: Math.max(...ws) } : null
+              })() : null
+              const stGrupo = statusDaLinha(item.grupo)
+              const corGrupo = corDe[stGrupo] || 'var(--text-muted)'
+
               return (
                 <div key={item.grupo.id}>
-                  <div style={{ display: 'flex', background: 'rgba(249, 115, 22, 0.05)', borderTop: '1px solid rgba(249, 115, 22, 0.3)', borderBottom: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', background: 'rgba(249, 115, 22, 0.05)', borderTop: '1px solid rgba(249, 115, 22, 0.3)', borderBottom: '1px solid var(--border)', minHeight: 42 }}>
                     <div style={{
                       width: NOME_COL_GANTT, flexShrink: 0,
                       padding: '10px 14px',
@@ -1139,6 +1170,7 @@ function VisaoGantt({ iniciativas, semanaAtualIdx, onVerDetalhes }) {
                         fontSize: 12, fontWeight: 700, color: 'var(--text)',
                         textTransform: 'uppercase', letterSpacing: 0.3,
                         lineHeight: 1.25, flex: 1,
+                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
                       }}>
                         {item.grupo.titulo}
                       </span>
@@ -1147,8 +1179,37 @@ function VisaoGantt({ iniciativas, semanaAtualIdx, onVerDetalhes }) {
                           {item.filhas.length}
                         </span>
                       )}
+                      <button onClick={() => onVerDetalhes(item.grupo)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', opacity: 0.5, display: 'flex', flexShrink: 0, padding: 0 }} title="Ver detalhes">
+                        <Info size={12} />
+                      </button>
                     </div>
-                    <div style={{ flex: 1, position: 'relative' }}><Faixas /></div>
+                    <div style={{ flex: 1, position: 'relative' }}>
+                      <Faixas />
+                      {iv ? (
+                        <div
+                          onClick={() => onVerDetalhes(item.grupo)}
+                          title={`${item.grupo.titulo} · semanas ${iv.ini} a ${iv.fim}`}
+                          style={{
+                            position: 'absolute', top: 8, height: 24,
+                            left: `${semanaParaPct(iv.ini, 0)}%`,
+                            width: `${semanaParaPct(iv.fim, 1) - semanaParaPct(iv.ini, 0)}%`,
+                            minWidth: 8, background: corGrupo, opacity: 0.8,
+                            borderRadius: 6, cursor: 'pointer',
+                            border: '1px solid rgba(249, 115, 22, 0.4)',
+                          }}
+                        />
+                      ) : !grupoTemCelulas && (
+                        <div style={{
+                          position: 'absolute', top: 12, left: '2%', right: '2%', height: 16,
+                          border: '1px dashed rgba(255,255,255,0.08)', borderRadius: 4,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <span style={{ fontSize: 9, color: 'var(--text-muted)', opacity: 0.4 }}>
+                            sem período definido
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   {item.filhas.map(filha => <Linha key={filha.id} ini={filha} ehFilha={true} />)}
                 </div>
