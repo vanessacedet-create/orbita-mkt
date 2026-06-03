@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import {
   getSemestres, criarSemestre,
   getIniciativas, criarIniciativa, atualizarIniciativa, deletarIniciativa,
@@ -212,8 +212,11 @@ function iniciativaConcluida(ini) {
     const temCelulasProprias = (ini.pda_celulas || []).some(celulaAtiva)
     if (!temCelulasProprias) return false
   }
-  const ultimoStatus = ultimoStatusAtivo(ini)
-  return ultimoStatus === 'feito' || ultimoStatus === 'feito_atrasado'
+  // Só é concluída se TODAS as células ativas forem "feito" ou "feito_atrasado".
+  // Uma única célula planejada, em andamento ou atrasada impede a conclusão.
+  const ativas = celulasAtivasDaIniciativa(ini)
+  if (ativas.length === 0) return false
+  return ativas.every(c => c.status === 'feito' || c.status === 'feito_atrasado')
 }
 
 function grupoConcluido(grupo, filhas) {
@@ -285,14 +288,41 @@ function HoverRow({ children, style, ...props }) {
 }
 
 // ── CÉLULA DE STATUS NA MATRIZ (MELHORADA) ─────────────────
-function StatusCelula({ celula, ehSemAtual, onClick }) {
+function StatusCelula({ celula, ehSemAtual, onStatusChange }) {
   const [hovered, setHovered] = useState(false)
+  const [aberto, setAberto] = useState(false)
+  const ref = useRef(null)
   const ativa = celulaAtiva(celula)
   const stInfo = STATUS_INFO[celula?.status || 'a_fazer']
   const Icon = stInfo.icon
 
+  // Fecha ao clicar fora
+  useEffect(() => {
+    if (!aberto) return
+    function handleClick(e) {
+      if (ref.current && !ref.current.contains(e.target)) setAberto(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [aberto])
+
+  function escolher(status) {
+    setAberto(false)
+    onStatusChange(status)
+  }
+
+  // Opções de status visíveis no picker
+  const opcoes = [
+    { key: 'planejada',      ...STATUS_INFO.planejada },
+    { key: 'em_andamento',   ...STATUS_INFO.em_andamento },
+    { key: 'feito',          ...STATUS_INFO.feito },
+    { key: 'feito_atrasado', ...STATUS_INFO.feito_atrasado },
+    { key: 'atrasado',       ...STATUS_INFO.atrasado },
+  ]
+
   return (
     <div
+      ref={ref}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -307,10 +337,11 @@ function StatusCelula({ celula, ehSemAtual, onClick }) {
         alignItems: 'center',
         justifyContent: 'center',
         transition: 'background 0.15s',
+        position: 'relative',
       }}
     >
       <div
-        onClick={onClick}
+        onClick={(e) => { e.stopPropagation(); setAberto(!aberto) }}
         title={ativa ? `${stInfo.label} — clique para mudar` : 'Clique para definir status'}
         style={{
           width: '100%', minHeight: 48,
@@ -335,6 +366,74 @@ function StatusCelula({ celula, ehSemAtual, onClick }) {
           <Plus size={14} color="var(--text-muted)" style={{ opacity: 0.3 }} />
         ) : null}
       </div>
+
+      {/* POPOVER DE SELEÇÃO RÁPIDA */}
+      {aberto && (
+        <div style={{
+          position: 'absolute',
+          top: '100%', left: '50%', transform: 'translateX(-50%)',
+          zIndex: 50,
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 10,
+          padding: 6,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+          display: 'flex', flexDirection: 'column', gap: 2,
+          minWidth: 150,
+          animation: 'fadeIn 0.1s ease',
+        }}
+          onClick={e => e.stopPropagation()}
+        >
+          {opcoes.map(op => {
+            const OpIcon = op.icon
+            const selecionado = celula?.status === op.key
+            return (
+              <button
+                key={op.key}
+                onClick={() => escolher(op.key)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '6px 10px', borderRadius: 6,
+                  border: 'none', cursor: 'pointer',
+                  background: selecionado ? op.bg : 'transparent',
+                  color: op.text,
+                  fontSize: 12, fontWeight: selecionado ? 700 : 500,
+                  textAlign: 'left', width: '100%',
+                  transition: 'background 0.1s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = op.bg}
+                onMouseLeave={e => e.currentTarget.style.background = selecionado ? op.bg : 'transparent'}
+              >
+                <OpIcon size={13} strokeWidth={2.5} />
+                <span>{op.label}</span>
+              </button>
+            )
+          })}
+          {/* Botão limpar */}
+          {ativa && (
+            <>
+              <div style={{ height: 1, background: 'var(--border)', margin: '2px 0' }} />
+              <button
+                onClick={() => escolher('a_fazer')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '6px 10px', borderRadius: 6,
+                  border: 'none', cursor: 'pointer',
+                  background: 'transparent',
+                  color: 'var(--text-muted)',
+                  fontSize: 12, fontWeight: 500,
+                  textAlign: 'left', width: '100%',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                <X size={13} />
+                <span>Limpar</span>
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -801,8 +900,8 @@ function VisaoMatriz({
               key={semana}
               celula={celula}
               ehSemAtual={semana === semanaAtualIdx}
-              onClick={async () => {
-                await onSalvarCelula(ini.id, semana, null, proximoStatus(celula?.status))
+              onStatusChange={async (novoStatus) => {
+                await onSalvarCelula(ini.id, semana, null, novoStatus)
               }}
             />
           )
@@ -892,8 +991,8 @@ function VisaoMatriz({
               key={semana}
               celula={celula}
               ehSemAtual={semana === semanaAtualIdx}
-              onClick={async () => {
-                await onSalvarCelula(grupo.id, semana, null, proximoStatus(celula?.status))
+              onStatusChange={async (novoStatus) => {
+                await onSalvarCelula(grupo.id, semana, null, novoStatus)
               }}
             />
           )
