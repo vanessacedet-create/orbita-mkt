@@ -1604,6 +1604,32 @@ export default function PDA() {
     const texto = novoTexto?.trim() || null
     const status = novoStatus || celulaExistente?.status || 'a_fazer'
 
+    // ── Simula como ficariam as células após esta mudança ──
+    const celulasAtuais = (ini.pda_celulas || []).filter(c => c.semana !== semana)
+    const celulaSimulada = { semana, status, texto }
+    const celulasSimuladas = [...celulasAtuais, celulaSimulada]
+
+    const eraConcluidaAntes = iniciativaConcluida(ini)
+
+    // Checa se FICARIA concluída com a mudança
+    const iniSimulada = { ...ini, pda_celulas: celulasSimuladas }
+    const ficaraConcluida = iniciativaConcluida(iniSimulada)
+
+    // ── Confirmação ao concluir ──
+    if (!eraConcluidaAntes && ficaraConcluida) {
+      const confirma = window.confirm(
+        `Todas as semanas de "${ini.titulo}" ficarão concluídas.\n\n` +
+        `Deseja mover esta iniciativa para os PDA concluídos?`
+      )
+      if (!confirma) return
+    }
+
+    // ── Aviso ao "desconcluir" (editando na aba concluídos) ──
+    if (eraConcluidaAntes && !ficaraConcluida && pdaSituacao === 'concluidos') {
+      showToast('Iniciativa movida de volta para PDA ativos.', 'success')
+    }
+
+    // ── Salva no banco ──
     const r = await upsertCelula({ iniciativa_id: iniciativaId, semana, texto, status })
 
     setIniciativas(prev => prev.map(i => {
