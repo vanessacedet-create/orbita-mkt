@@ -288,30 +288,62 @@ function HoverRow({ children, style, ...props }) {
 }
 
 // ── CÉLULA DE STATUS NA MATRIZ (MELHORADA) ─────────────────
-function StatusCelula({ celula, ehSemAtual, onStatusChange }) {
+function StatusCelula({ celula, ehSemAtual, onSave }) {
   const [hovered, setHovered] = useState(false)
   const [aberto, setAberto] = useState(false)
+  const [texto, setTexto] = useState('')
   const ref = useRef(null)
   const ativa = celulaAtiva(celula)
   const stInfo = STATUS_INFO[celula?.status || 'a_fazer']
   const Icon = stInfo.icon
+  const temTexto = !!(celula?.texto)
 
-  // Fecha ao clicar fora
+  // Sincroniza o texto local quando abre o popover
+  useEffect(() => {
+    if (aberto) setTexto(celula?.texto || '')
+  }, [aberto])
+
+  // Fecha ao clicar fora — salva nota se mudou
   useEffect(() => {
     if (!aberto) return
     function handleClick(e) {
-      if (ref.current && !ref.current.contains(e.target)) setAberto(false)
+      if (ref.current && !ref.current.contains(e.target)) {
+        fecharESalvarNota()
+      }
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
-  }, [aberto])
+  }, [aberto, texto, celula])
 
-  function escolher(status) {
+  function fecharESalvarNota() {
+    const textoAtual = celula?.texto || ''
+    const textoNovo = texto.trim()
+    // Se o texto mudou e a célula tem status, salva silenciosamente
+    if (textoNovo !== textoAtual && ativa) {
+      onSave(celula.status, textoNovo || null)
+    }
     setAberto(false)
-    onStatusChange(status)
   }
 
-  // Opções de status visíveis no picker
+  function escolherStatus(status) {
+    const textoNovo = texto.trim() || null
+    setAberto(false)
+    onSave(status, textoNovo)
+  }
+
+  function salvarNota() {
+    const textoNovo = texto.trim() || null
+    const statusAtual = celula?.status || 'a_fazer'
+    // Se não tem status ativo ainda mas escreveu nota, marca como planejada
+    const status = (!ativa && textoNovo) ? 'planejada' : statusAtual
+    onSave(status, textoNovo)
+  }
+
+  function limpar() {
+    setAberto(false)
+    onSave('a_fazer', null)
+  }
+
   const opcoes = [
     { key: 'planejada',      ...STATUS_INFO.planejada },
     { key: 'em_andamento',   ...STATUS_INFO.em_andamento },
@@ -342,12 +374,13 @@ function StatusCelula({ celula, ehSemAtual, onStatusChange }) {
     >
       <div
         onClick={(e) => { e.stopPropagation(); setAberto(!aberto) }}
-        title={ativa ? `${stInfo.label} — clique para mudar` : 'Clique para definir status'}
+        title={temTexto ? `${stInfo.label}\n📝 ${celula.texto}` : (ativa ? `${stInfo.label} — clique para mudar` : 'Clique para definir status')}
         style={{
           width: '100%', minHeight: 48,
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
           cursor: 'pointer', padding: '6px 4px',
           textAlign: 'center',
+          position: 'relative',
         }}
       >
         {ativa ? (
@@ -365,9 +398,17 @@ function StatusCelula({ celula, ehSemAtual, onStatusChange }) {
         ) : hovered ? (
           <Plus size={14} color="var(--text-muted)" style={{ opacity: 0.3 }} />
         ) : null}
+        {/* Indicador de nota */}
+        {temTexto && (
+          <div style={{
+            position: 'absolute', top: 3, right: 3,
+            width: 6, height: 6, borderRadius: '50%',
+            background: 'var(--accent)', opacity: 0.7,
+          }} />
+        )}
       </div>
 
-      {/* POPOVER DE SELEÇÃO RÁPIDA */}
+      {/* POPOVER */}
       {aberto && (
         <div style={{
           position: 'absolute',
@@ -379,18 +420,19 @@ function StatusCelula({ celula, ehSemAtual, onStatusChange }) {
           padding: 6,
           boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
           display: 'flex', flexDirection: 'column', gap: 2,
-          minWidth: 150,
+          minWidth: 200,
           animation: 'fadeIn 0.1s ease',
         }}
           onClick={e => e.stopPropagation()}
         >
+          {/* STATUS */}
           {opcoes.map(op => {
             const OpIcon = op.icon
             const selecionado = celula?.status === op.key
             return (
               <button
                 key={op.key}
-                onClick={() => escolher(op.key)}
+                onClick={() => escolherStatus(op.key)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: '6px 10px', borderRadius: 6,
@@ -409,12 +451,53 @@ function StatusCelula({ celula, ehSemAtual, onStatusChange }) {
               </button>
             )
           })}
-          {/* Botão limpar */}
+
+          {/* NOTA */}
+          <div style={{ height: 1, background: 'var(--border)', margin: '3px 0' }} />
+          <div style={{ padding: '2px 4px' }}>
+            <textarea
+              value={texto}
+              onChange={e => setTexto(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  salvarNota()
+                  setAberto(false)
+                }
+              }}
+              placeholder="Nota (opcional)..."
+              rows={2}
+              style={{
+                width: '100%', fontSize: 12, lineHeight: 1.4,
+                background: 'var(--surface-2)', border: '1px solid var(--border)',
+                borderRadius: 6, padding: '6px 8px', resize: 'vertical',
+                color: 'var(--text)', outline: 'none',
+                minHeight: 40, maxHeight: 120,
+                fontFamily: 'inherit',
+              }}
+            />
+            {texto.trim() !== (celula?.texto || '') && (
+              <button
+                onClick={() => { salvarNota(); setAberto(false) }}
+                style={{
+                  marginTop: 4, width: '100%',
+                  padding: '5px 8px', borderRadius: 5,
+                  border: 'none', cursor: 'pointer',
+                  background: 'var(--accent)', color: 'white',
+                  fontSize: 11, fontWeight: 600,
+                }}
+              >
+                Salvar nota
+              </button>
+            )}
+          </div>
+
+          {/* Limpar */}
           {ativa && (
             <>
               <div style={{ height: 1, background: 'var(--border)', margin: '2px 0' }} />
               <button
-                onClick={() => escolher('a_fazer')}
+                onClick={limpar}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: '6px 10px', borderRadius: 6,
@@ -428,7 +511,7 @@ function StatusCelula({ celula, ehSemAtual, onStatusChange }) {
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
                 <X size={13} />
-                <span>Limpar</span>
+                <span>Limpar tudo</span>
               </button>
             </>
           )}
@@ -900,8 +983,8 @@ function VisaoMatriz({
               key={semana}
               celula={celula}
               ehSemAtual={semana === semanaAtualIdx}
-              onStatusChange={async (novoStatus) => {
-                await onSalvarCelula(ini.id, semana, null, novoStatus)
+              onSave={async (novoStatus, novoTexto) => {
+                await onSalvarCelula(ini.id, semana, novoTexto, novoStatus)
               }}
             />
           )
@@ -991,8 +1074,8 @@ function VisaoMatriz({
               key={semana}
               celula={celula}
               ehSemAtual={semana === semanaAtualIdx}
-              onStatusChange={async (novoStatus) => {
-                await onSalvarCelula(grupo.id, semana, null, novoStatus)
+              onSave={async (novoStatus, novoTexto) => {
+                await onSalvarCelula(grupo.id, semana, novoTexto, novoStatus)
               }}
             />
           )
