@@ -35,6 +35,7 @@ const VitrineAdmin   = lazy(() => import('./pages/VitrineAdmin'))
 const GuiaParcerias  = lazy(() => import('./pages/GuiaParcerias'))
 const CacLtv              = lazy(() => import('./pages/CacLtv'))
 const PedidosCRM = lazy(() => import('./pages/PedidosCRM'))
+const CRMInteligencia = lazy(() => import('./pages/CRMInteligencia'))
 
 const MENU = [
   { path: '/',                 label: 'Dashboard',         icon: LayoutDashboard, modulo: 'dashboard'       },
@@ -56,6 +57,7 @@ const MENU = [
   { path: '/vitrine-admin',    label: 'Vitrine',           icon: Store,           modulo: 'parceiros'       },
   { path: '/usuarios',         label: 'Usuários',          icon: Users,           modulo: 'usuarios'        },
   { path: '/pedidos-crm',      label: 'Pedidos CRM',      icon: FileText,         modulo: 'pedidos_crm'     },
+  { path: '/crm-inteligencia', label: 'CRM Inteligência', icon: Activity,         modulo: 'crm_inteligencia'},
 ]
 
 const PERFIL_LABEL = {
@@ -561,6 +563,9 @@ function Shell() {
               <Route path="/cac-ltv"         element={<RequireAuth modulo="cac_ltv"><CacLtv /></RequireAuth>} />
               <Route path="/vitrine-admin"   element={<RequireAuth modulo="parceiros"><VitrineAdmin /></RequireAuth>} />
               <Route path="/guia-parcerias"  element={<RequireAuth modulo="guia_parcerias"><GuiaParcerias /></RequireAuth>} />
+              <Route path="/crm-inteligencia" element={<RequireAuth modulo="crm_inteligencia"><CRMInteligencia /></RequireAuth>
+  }
+/>
             </Routes>
           </Suspense>
         </div>
