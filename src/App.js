@@ -34,6 +34,7 @@ const VitrinePublica = lazy(() => import('./pages/VitrinePublica'))
 const VitrineAdmin   = lazy(() => import('./pages/VitrineAdmin'))
 const GuiaParcerias  = lazy(() => import('./pages/GuiaParcerias'))
 const CacLtv              = lazy(() => import('./pages/CacLtv'))
+const PedidosCRM = lazy(() => import('./pages/PedidosCRM'))
 
 const MENU = [
   { path: '/',                 label: 'Dashboard',         icon: LayoutDashboard, modulo: 'dashboard'       },
@@ -54,6 +55,7 @@ const MENU = [
   { path: '/eventos',          label: 'Eventos',           icon: CalendarCheck,   modulo: 'eventos'         },
   { path: '/vitrine-admin',    label: 'Vitrine',           icon: Store,           modulo: 'parceiros'       },
   { path: '/usuarios',         label: 'Usuários',          icon: Users,           modulo: 'usuarios'        },
+  { path: '/pedidos-crm',      label: 'Pedidos CRM',      icon: FileText,         modulo: 'pedidos_crm'     },
 ]
 
 const PERFIL_LABEL = {
@@ -588,6 +590,11 @@ export default function App() {
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/vitrine"        element={<VitrinePublica />} />
             <Route path="/*"              element={<RequireAuth><Shell /></RequireAuth>} />
+            <Route  path="/pedidos-crm"   element={<RequireAuth modulo="pedidos_crm">
+      <PedidosCRM />
+    </RequireAuth>
+  }
+/>
           </Routes>
         </Suspense>
       </BrowserRouter>
