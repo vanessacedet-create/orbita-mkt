@@ -23,6 +23,7 @@ export const MODULOS_PERMISSOES = {
   treinamentos: ['administrador', 'gerente', 'supervisor_proprias'],
   usuarios: ['administrador'],
   guia_parcerias: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
+  pedidos_crm: [  'administrador'],
 }
 
 // ==================== MAPEAMENTO DE GRUPO ====================
