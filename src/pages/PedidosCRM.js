@@ -122,6 +122,13 @@ function normalizarTexto(value) {
     .trim()
 }
 
+function normalizarNumeroPedido(value) {
+  return String(value ?? '')
+    .trim()
+    .replace(/\s+/g, '')
+    .replace(/\.0$/, '')
+}
+
 function limparBuscaSupabase(value) {
   return String(value || '')
     .replace(/[%(),]/g, ' ')
@@ -235,6 +242,37 @@ function parseValor(value) {
   return Number.isNaN(numero) ? null : numero
 }
 
+function deduplicarPorNumeroPedido(linhas, linhaInicial = 2) {
+  const mapa = new Map()
+  const duplicados = []
+
+  linhas.forEach((linha, index) => {
+    const numero = normalizarNumeroPedido(linha.numero_pedido)
+
+    if (!numero) return
+
+    const linhaNormalizada = {
+      ...linha,
+      numero_pedido: numero,
+    }
+
+    if (mapa.has(numero)) {
+      duplicados.push({
+        linha: linhaInicial + index,
+        numero_pedido: numero,
+        erro: 'Pedido repetido dentro da planilha. Foi mantida a última ocorrência.',
+      })
+    }
+
+    mapa.set(numero, linhaNormalizada)
+  })
+
+  return {
+    linhasDeduplicadas: Array.from(mapa.values()),
+    duplicados,
+  }
+}
+
 function csvEscape(value) {
   const str = String(value ?? '')
   if (str.includes(';') || str.includes('"') || str.includes('\n')) {
@@ -281,7 +319,10 @@ function Toast({ toast }) {
         padding: '12px 16px',
         borderRadius: 12,
         border: '1px solid var(--border)',
-        background: toast.type === 'error' ? 'rgba(127, 29, 29, 0.95)' : 'rgba(22, 101, 52, 0.95)',
+        background:
+          toast.type === 'error'
+            ? 'rgba(127, 29, 29, 0.95)'
+            : 'rgba(22, 101, 52, 0.95)',
         color: '#fff',
         boxShadow: '0 12px 30px rgba(0,0,0,.25)',
         fontSize: 14,
@@ -334,7 +375,7 @@ function PedidoModal({ pedido, onClose, onSaved }) {
     setSaving(true)
 
     const payload = {
-      numero_pedido: form.numero_pedido.trim(),
+      numero_pedido: normalizarNumeroPedido(form.numero_pedido),
       nome: form.nome.trim(),
       email: form.email.trim(),
       telefone: form.telefone.trim(),
@@ -532,7 +573,7 @@ function ImportarPlanilha({ onImportFinished, showToast }) {
     })
 
     return {
-      numero_pedido: String(obj.numero_pedido || '').trim(),
+      numero_pedido: normalizarNumeroPedido(obj.numero_pedido),
       nome: String(obj.nome || '').trim(),
       email: String(obj.email || '').trim(),
       telefone: String(obj.telefone || '').trim(),
@@ -618,15 +659,24 @@ function ImportarPlanilha({ onImportFinished, showToast }) {
         }
 
         const normalizadas = rawRows.map((row) => normalizarLinha(row, headers))
-        const erros = validarLinhas(normalizadas)
+
+        const { linhasDeduplicadas, duplicados } = deduplicarPorNumeroPedido(normalizadas)
+
+        const erros = validarLinhas(linhasDeduplicadas)
 
         setHeadersMap(mapa)
-        setRows(normalizadas)
-        setPreview(normalizadas.slice(0, 10))
+        setRows(linhasDeduplicadas)
+        setPreview(linhasDeduplicadas.slice(0, 10))
         setValidationErrors(erros)
-        setProgress((prev) => ({ ...prev, total: normalizadas.length }))
+        setImportErrors(duplicados)
+        setProgress((prev) => ({
+          ...prev,
+          total: linhasDeduplicadas.length,
+        }))
       } catch (err) {
-        setValidationErrors([err.message || 'Erro ao ler a planilha. Verifique se o arquivo é CSV ou XLSX válido.'])
+        setValidationErrors([
+          err.message || 'Erro ao ler a planilha. Verifique se o arquivo é CSV ou XLSX válido.',
+        ])
       }
     }
 
@@ -637,24 +687,32 @@ function ImportarPlanilha({ onImportFinished, showToast }) {
     if (!rows.length || validationErrors.length) return
 
     setImporting(true)
-    setImportErrors([])
+
+    const avisosAntesDaImportacao = [...importErrors]
     setResult(null)
 
     let importadas = 0
     let atualizadas = 0
     let erros = 0
     let processadas = 0
-    const errosDetalhados = []
+    const errosDetalhados = [...avisosAntesDaImportacao]
 
     try {
       const { data: sessionData } = await supabase.auth.getSession()
       const userId = sessionData?.session?.user?.id || null
 
       for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-        const batch = rows.slice(i, i + BATCH_SIZE)
+        const batchOriginal = rows.slice(i, i + BATCH_SIZE)
+
+        const { linhasDeduplicadas: batch, duplicados: duplicadosDoBatch } =
+          deduplicarPorNumeroPedido(batchOriginal, i + 2)
+
+        if (duplicadosDoBatch.length) {
+          errosDetalhados.push(...duplicadosDoBatch)
+        }
 
         const numeros = batch
-          .map((row) => row.numero_pedido)
+          .map((row) => normalizarNumeroPedido(row.numero_pedido))
           .filter(Boolean)
 
         let existentes = new Set()
@@ -667,11 +725,12 @@ function ImportarPlanilha({ onImportFinished, showToast }) {
 
           if (existingError) throw existingError
 
-          existentes = new Set((existentesData || []).map((item) => item.numero_pedido))
+          existentes = new Set((existentesData || []).map((item) => normalizarNumeroPedido(item.numero_pedido)))
         }
 
         const payload = batch.map((row) => ({
           ...row,
+          numero_pedido: normalizarNumeroPedido(row.numero_pedido),
           arquivo_origem: fileName || null,
           importado_por: userId,
           importado_em: new Date().toISOString(),
@@ -681,7 +740,6 @@ function ImportarPlanilha({ onImportFinished, showToast }) {
         const { error } = await supabase
           .from('pedidos_crm')
           .upsert(payload, { onConflict: 'numero_pedido' })
-          .select('id,numero_pedido')
 
         if (error) {
           erros += batch.length
@@ -695,7 +753,7 @@ function ImportarPlanilha({ onImportFinished, showToast }) {
           })
         } else {
           batch.forEach((row) => {
-            if (existentes.has(row.numero_pedido)) atualizadas += 1
+            if (existentes.has(normalizarNumeroPedido(row.numero_pedido))) atualizadas += 1
             else importadas += 1
           })
         }
@@ -712,11 +770,13 @@ function ImportarPlanilha({ onImportFinished, showToast }) {
       }
 
       setImportErrors(errosDetalhados)
+
       setResult({
         total: rows.length,
         importadas,
         atualizadas,
         erros,
+        avisos: errosDetalhados.length,
       })
 
       showToast('Importação concluída.')
@@ -796,6 +856,7 @@ function ImportarPlanilha({ onImportFinished, showToast }) {
               }}
             >
               <strong style={{ display: 'block', marginBottom: 8 }}>Colunas esperadas</strong>
+
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {CAMPOS.map((campo) => (
                   <span
@@ -812,6 +873,7 @@ function ImportarPlanilha({ onImportFinished, showToast }) {
                   </span>
                 ))}
               </div>
+
               <p style={{ margin: '10px 0 0', color: 'var(--text-muted)', fontSize: 13 }}>
                 Acentos, espaços e variações como “Nº Pedido”, “Método Pag.” e “Situação” são aceitos.
               </p>
@@ -828,11 +890,13 @@ function ImportarPlanilha({ onImportFinished, showToast }) {
                 />
 
                 <div
-                  onClick={() => inputRef.current?.click()}
+                  onClick={() => !importing && inputRef.current?.click()}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
                     e.preventDefault()
-                    handleFile({ target: { files: e.dataTransfer.files } })
+                    if (!importing) {
+                      handleFile({ target: { files: e.dataTransfer.files } })
+                    }
                   }}
                   style={{
                     marginTop: 16,
@@ -842,7 +906,7 @@ function ImportarPlanilha({ onImportFinished, showToast }) {
                     background: 'rgba(255,255,255,.03)',
                     textAlign: 'center',
                     cursor: importing ? 'not-allowed' : 'pointer',
-                    opacity: importing ? .65 : 1,
+                    opacity: importing ? 0.65 : 1,
                   }}
                 >
                   <FileSpreadsheet size={32} />
@@ -916,6 +980,7 @@ function ImportarPlanilha({ onImportFinished, showToast }) {
                         ))}
                       </tr>
                     </thead>
+
                     <tbody>
                       {preview.map((row, index) => (
                         <tr key={index}>
@@ -939,6 +1004,45 @@ function ImportarPlanilha({ onImportFinished, showToast }) {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+
+            {importErrors.length > 0 && !result && (
+              <div
+                style={{
+                  marginTop: 16,
+                  padding: 12,
+                  borderRadius: 10,
+                  background: 'rgba(245, 158, 11, .12)',
+                  border: '1px solid rgba(245, 158, 11, .28)',
+                  color: '#fde68a',
+                  fontSize: 14,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+                  <strong>Avisos antes da importação</strong>
+
+                  <button
+                    className="btn-secondary"
+                    type="button"
+                    onClick={() => baixarCSV('avisos-importacao-pedidos-crm.csv', importErrors)}
+                  >
+                    <Download size={15} />
+                    Baixar avisos
+                  </button>
+                </div>
+
+                <div style={{ marginTop: 10 }}>
+                  {importErrors.slice(0, 10).map((erro, index) => (
+                    <div key={index}>
+                      Linha {erro.linha || '—'} | Pedido {erro.numero_pedido || '—'} | {erro.erro}
+                    </div>
+                  ))}
+
+                  {importErrors.length > 10 && (
+                    <div>...e mais {importErrors.length - 10} aviso(s).</div>
+                  )}
                 </div>
               </div>
             )}
@@ -990,12 +1094,12 @@ function ImportarPlanilha({ onImportFinished, showToast }) {
                 </div>
 
                 <p style={{ margin: 0, color: 'var(--text-muted)' }}>
-                  Total: {result.total} | Importados: {result.importadas} | Atualizados: {result.atualizadas} | Erros: {result.erros}
+                  Total processado: {result.total} | Importados: {result.importadas} | Atualizados: {result.atualizadas} | Erros: {result.erros} | Avisos: {result.avisos}
                 </p>
               </div>
             )}
 
-            {importErrors.length > 0 && (
+            {importErrors.length > 0 && result && (
               <div
                 style={{
                   marginTop: 16,
@@ -1008,7 +1112,7 @@ function ImportarPlanilha({ onImportFinished, showToast }) {
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-                  <strong>Erros da importação</strong>
+                  <strong>Erros e avisos da importação</strong>
 
                   <button
                     className="btn-secondary"
@@ -1016,7 +1120,7 @@ function ImportarPlanilha({ onImportFinished, showToast }) {
                     onClick={() => baixarCSV('erros-importacao-pedidos-crm.csv', importErrors)}
                   >
                     <Download size={15} />
-                    Baixar erros
+                    Baixar relatório
                   </button>
                 </div>
 
@@ -1028,7 +1132,7 @@ function ImportarPlanilha({ onImportFinished, showToast }) {
                   ))}
 
                   {importErrors.length > 10 && (
-                    <div>...e mais {importErrors.length - 10} erro(s).</div>
+                    <div>...e mais {importErrors.length - 10} registro(s).</div>
                   )}
                 </div>
               </div>
@@ -1223,13 +1327,7 @@ export default function PedidosCRM() {
             value={situacao}
             onChange={(e) => setSituacao(e.target.value)}
             placeholder="Ex.: concluído"
-            style={{
-              padding: '10px 12px',
-              borderRadius: 10,
-              border: '1px solid var(--border)',
-              background: 'var(--surface-2, rgba(255,255,255,.04))',
-              color: 'var(--text)',
-            }}
+            style={inputStyle}
           />
         </label>
 
@@ -1239,13 +1337,7 @@ export default function PedidosCRM() {
             value={livraria}
             onChange={(e) => setLivraria(e.target.value)}
             placeholder="Ex.: Amazon"
-            style={{
-              padding: '10px 12px',
-              borderRadius: 10,
-              border: '1px solid var(--border)',
-              background: 'var(--surface-2, rgba(255,255,255,.04))',
-              color: 'var(--text)',
-            }}
+            style={inputStyle}
           />
         </label>
 
@@ -1255,13 +1347,7 @@ export default function PedidosCRM() {
             value={dataInicio}
             onChange={(e) => setDataInicio(e.target.value)}
             type="date"
-            style={{
-              padding: '10px 12px',
-              borderRadius: 10,
-              border: '1px solid var(--border)',
-              background: 'var(--surface-2, rgba(255,255,255,.04))',
-              color: 'var(--text)',
-            }}
+            style={inputStyle}
           />
         </label>
 
@@ -1271,13 +1357,7 @@ export default function PedidosCRM() {
             value={dataFim}
             onChange={(e) => setDataFim(e.target.value)}
             type="date"
-            style={{
-              padding: '10px 12px',
-              borderRadius: 10,
-              border: '1px solid var(--border)',
-              background: 'var(--surface-2, rgba(255,255,255,.04))',
-              color: 'var(--text)',
-            }}
+            style={inputStyle}
           />
         </label>
 
@@ -1408,6 +1488,14 @@ export default function PedidosCRM() {
       )}
     </div>
   )
+}
+
+const inputStyle = {
+  padding: '10px 12px',
+  borderRadius: 10,
+  border: '1px solid var(--border)',
+  background: 'var(--surface-2, rgba(255,255,255,.04))',
+  color: 'var(--text)',
 }
 
 const thStyle = {
