@@ -104,9 +104,7 @@ function csvEscape(value) {
 }
 
 function baixarCSV(nomeArquivo, linhas) {
-  const colunas = [
-    'email',
-  ]
+  const colunas = ['email']
 
   const header = colunas.join(';')
 
@@ -226,7 +224,13 @@ function Section({ title, description, children, action }) {
   )
 }
 
-function SimpleBarChart({ data, labelKey, valueKey, valueFormatter = formatCurrency, maxItems = 8 }) {
+function SimpleBarChart({
+  data,
+  labelKey,
+  valueKey,
+  valueFormatter = formatCurrency,
+  maxItems = 8,
+}) {
   const rows = useMemo(() => {
     return (data || []).slice(0, maxItems)
   }, [data, maxItems])
@@ -369,7 +373,6 @@ export default function CRMInteligencia() {
 
   const [kpis, setKpis] = useState(null)
   const [recompra, setRecompra] = useState(null)
-  const [livrarias, setLivrarias] = useState([])
   const [estados, setEstados] = useState([])
   const [rfm, setRfm] = useState([])
   const [topClientes, setTopClientes] = useState([])
@@ -377,25 +380,11 @@ export default function CRMInteligencia() {
   const [clientesRisco, setClientesRisco] = useState([])
   const [clientesPerdidos, setClientesPerdidos] = useState([])
 
-  // Filtro de livraria do dashboard
   const [dashboardLivraria, setDashboardLivraria] = useState('')
   const [livrariasOpcoes, setLivrariasOpcoes] = useState([])
 
   const [exportSegmentos, setExportSegmentos] = useState(['base_geral'])
   const [exportLivraria, setExportLivraria] = useState('')
-
-  // Alterna um segmento na seleção múltipla da exportação.
-  // 'base_geral' funciona como "todos": ao marcá-lo, limpa os demais;
-  // ao marcar qualquer outro, remove o 'base_geral'.
-  function toggleExportSegmento(value) {
-    setExportSegmentos((prev) => {
-      if (value === 'base_geral') return ['base_geral']
-      const semBase = prev.filter((v) => v !== 'base_geral')
-      const existe = semBase.includes(value)
-      const novo = existe ? semBase.filter((v) => v !== value) : [...semBase, value]
-      return novo.length ? novo : ['base_geral']
-    })
-  }
   const [exportTipoPeriodo, setExportTipoPeriodo] = useState('sem_periodo')
   const [exportDataInicio, setExportDataInicio] = useState('')
   const [exportDataFim, setExportDataFim] = useState('')
@@ -404,6 +393,18 @@ export default function CRMInteligencia() {
   function showToast(message) {
     setToast(message)
     setTimeout(() => setToast(''), 4000)
+  }
+
+  function toggleExportSegmento(value) {
+    setExportSegmentos((prev) => {
+      if (value === 'base_geral') return ['base_geral']
+
+      const semBase = prev.filter((v) => v !== 'base_geral')
+      const existe = semBase.includes(value)
+      const novo = existe ? semBase.filter((v) => v !== value) : [...semBase, value]
+
+      return novo.length ? novo : ['base_geral']
+    })
   }
 
   async function fetchData() {
@@ -421,7 +422,6 @@ export default function CRMInteligencia() {
 
       setKpis(d.kpis || null)
       setRecompra(d.recompra || null)
-      setLivrarias(d.livrarias || [])
       setEstados(d.estados || [])
       setRfm(d.rfm || [])
       setTopClientes(d.topClientes || [])
@@ -429,8 +429,6 @@ export default function CRMInteligencia() {
       setClientesRisco(d.clientesRisco || [])
       setClientesPerdidos(d.clientesPerdidos || [])
 
-      // Popula as opções de livraria pela própria RPC (admin-only, já autorizada).
-      // Só atualiza quando estamos na visão geral, para manter a lista completa.
       if (!dashboardLivraria) {
         setLivrariasOpcoes(d.livrarias || [])
       }
@@ -488,7 +486,9 @@ export default function CRMInteligencia() {
       }
 
       const segmentoLabel =
-        exportSegmentos.length === 1 ? exportSegmentos[0] : `${exportSegmentos.length}-segmentos`
+        exportSegmentos.length === 1
+          ? exportSegmentos[0]
+          : `${exportSegmentos.length}-segmentos`
 
       const nomeArquivo = nomeArquivoExportacao(
         segmentoLabel,
@@ -596,30 +596,7 @@ export default function CRMInteligencia() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'flex-end' }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 220 }}>
-            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-              Filtrar dashboard por livraria
-            </span>
-
-            <select
-              value={dashboardLivraria}
-              onChange={(e) => setDashboardLivraria(e.target.value)}
-              disabled={loading}
-              style={exportInputStyle}
-            >
-              <option value="">Todas as livrarias</option>
-              {livrariasOpcoes.map((opt) => {
-                const nome = opt.livraria || 'Não informado'
-                return (
-                  <option key={nome} value={nome}>
-                    {nome}
-                  </option>
-                )
-              })}
-            </select>
-          </label>
-
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <button className="btn-secondary" type="button" onClick={fetchData} disabled={loading}>
             <RefreshCw size={16} />
             Atualizar dados
@@ -630,6 +607,45 @@ export default function CRMInteligencia() {
             {recalculando ? 'Recalculando...' : 'Recalcular CRM'}
           </button>
         </div>
+      </div>
+
+      <div
+        style={{
+          marginBottom: 18,
+          display: 'grid',
+          gridTemplateColumns: 'minmax(260px, 420px) 1fr',
+          gap: 12,
+          alignItems: 'end',
+        }}
+      >
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+            Filtrar dashboard por livraria
+          </span>
+
+          <select
+            value={dashboardLivraria}
+            onChange={(e) => setDashboardLivraria(e.target.value)}
+            disabled={loading}
+            style={exportInputStyle}
+          >
+            <option value="">Todas as livrarias</option>
+
+            {livrariasOpcoes.map((opt) => {
+              const nome = opt.livraria || 'Não informado'
+
+              return (
+                <option key={nome} value={nome}>
+                  {nome}
+                </option>
+              )
+            })}
+          </select>
+        </label>
+
+        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 13 }}>
+          Quando uma livraria é selecionada, os KPIs, gráficos e tabelas consideram apenas os pedidos dessa livraria.
+        </p>
       </div>
 
       {erro && (
@@ -664,7 +680,7 @@ export default function CRMInteligencia() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
               gap: 14,
               marginBottom: 18,
             }}
@@ -672,7 +688,11 @@ export default function CRMInteligencia() {
             <Card
               title="Total de clientes"
               value={formatNumber(kpis?.total_clientes)}
-              subtitle="Clientes identificados por e-mail ou telefone"
+              subtitle={
+                dashboardLivraria
+                  ? `Clientes da livraria ${dashboardLivraria}`
+                  : 'Clientes identificados por e-mail ou telefone'
+              }
               icon={Users}
             />
 
@@ -707,22 +727,23 @@ export default function CRMInteligencia() {
             <Card
               title="Ticket médio"
               value={formatCurrency(kpis?.ticket_medio)}
-              subtitle="Média por cliente consolidado"
+              subtitle={
+                dashboardLivraria
+                  ? 'Média por cliente na livraria'
+                  : 'Média por cliente consolidado'
+              }
               icon={DollarSign}
             />
 
             <Card
               title="LTV médio"
               value={formatCurrency(kpis?.ltv_medio)}
-              subtitle="Valor médio acumulado por cliente"
+              subtitle={
+                dashboardLivraria
+                  ? 'Valor médio acumulado na livraria'
+                  : 'Valor médio acumulado por cliente'
+              }
               icon={Crown}
-            />
-
-            <Card
-              title="Receita total"
-              value={formatCurrency(kpis?.receita_total)}
-              subtitle="Receita consolidada na base CRM"
-              icon={DollarSign}
             />
           </div>
 
@@ -731,125 +752,137 @@ export default function CRMInteligencia() {
               title="Exportações para campanhas"
               description="Monte listas segmentadas de e-mails para campanhas personalizadas."
             >
-              <div style={{ marginBottom: 14 }}>
-                <span style={{ fontSize: 13, color: 'var(--text-muted)', display: 'block', marginBottom: 8 }}>
-                  Segmentos (selecione um ou mais)
-                </span>
-
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {SEGMENTOS_EXPORTACAO.map((segmento) => {
-                    const ativo = exportSegmentos.includes(segmento.value)
-                    return (
-                      <button
-                        key={segmento.value}
-                        type="button"
-                        onClick={() => toggleExportSegmento(segmento.value)}
-                        style={{
-                          padding: '6px 14px',
-                          borderRadius: 999,
-                          fontSize: 13,
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          border: '1.5px solid',
-                          borderColor: ativo ? 'var(--accent, #8b5cf6)' : 'var(--border)',
-                          background: ativo ? 'var(--accent, #8b5cf6)' : 'transparent',
-                          color: ativo ? '#fff' : 'var(--text-muted)',
-                          transition: 'all 0.15s',
-                        }}
-                      >
-                        {segmento.label}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
-                  gap: 10,
-                  alignItems: 'end',
-                }}
-              >
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                    Livraria
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <span
+                    style={{
+                      display: 'block',
+                      fontSize: 13,
+                      color: 'var(--text-muted)',
+                      marginBottom: 8,
+                    }}
+                  >
+                    Segmentos, selecione um ou mais
                   </span>
 
-                  <select
-                    value={exportLivraria}
-                    onChange={(e) => setExportLivraria(e.target.value)}
-                    style={exportInputStyle}
-                  >
-                    <option value="">Todas as livrarias</option>
-                    {livrariasOpcoes.map((opt) => {
-                      const nome = opt.livraria || 'Não informado'
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {SEGMENTOS_EXPORTACAO.map((segmento) => {
+                      const ativo = exportSegmentos.includes(segmento.value)
+
                       return (
-                        <option key={nome} value={nome}>
-                          {nome}
-                        </option>
+                        <button
+                          key={segmento.value}
+                          type="button"
+                          onClick={() => toggleExportSegmento(segmento.value)}
+                          style={{
+                            padding: '6px 14px',
+                            borderRadius: 999,
+                            fontSize: 13,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            border: '1.5px solid',
+                            borderColor: ativo ? 'var(--accent, #8b5cf6)' : 'var(--border)',
+                            background: ativo ? 'var(--accent, #8b5cf6)' : 'transparent',
+                            color: ativo ? '#fff' : 'var(--text-muted)',
+                            transition: 'all 0.15s',
+                          }}
+                        >
+                          {segmento.label}
+                        </button>
                       )
                     })}
-                  </select>
-                </label>
+                  </div>
+                </div>
 
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                    Tipo de período
-                  </span>
-
-                  <select
-                    value={exportTipoPeriodo}
-                    onChange={(e) => setExportTipoPeriodo(e.target.value)}
-                    style={exportInputStyle}
-                  >
-                    {TIPOS_PERIODO_EXPORTACAO.map((tipo) => (
-                      <option key={tipo.value} value={tipo.value}>
-                        {tipo.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                    Data inicial
-                  </span>
-
-                  <input
-                    type="date"
-                    value={exportDataInicio}
-                    onChange={(e) => setExportDataInicio(e.target.value)}
-                    disabled={exportTipoPeriodo === 'sem_periodo'}
-                    style={exportInputStyle}
-                  />
-                </label>
-
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                    Data final
-                  </span>
-
-                  <input
-                    type="date"
-                    value={exportDataFim}
-                    onChange={(e) => setExportDataFim(e.target.value)}
-                    disabled={exportTipoPeriodo === 'sem_periodo'}
-                    style={exportInputStyle}
-                  />
-                </label>
-
-                <button
-                  className="btn-primary"
-                  type="button"
-                  onClick={exportarClientesSegmentados}
-                  disabled={exportando}
-                  style={{ minHeight: 40 }}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+                    gap: 10,
+                    alignItems: 'end',
+                  }}
                 >
-                  <Download size={16} />
-                  {exportando ? 'Exportando...' : 'Exportar CSV'}
-                </button>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                      Livraria
+                    </span>
+
+                    <select
+                      value={exportLivraria}
+                      onChange={(e) => setExportLivraria(e.target.value)}
+                      style={exportInputStyle}
+                    >
+                      <option value="">Todas as livrarias</option>
+
+                      {livrariasOpcoes.map((opt) => {
+                        const nome = opt.livraria || 'Não informado'
+
+                        return (
+                          <option key={nome} value={nome}>
+                            {nome}
+                          </option>
+                        )
+                      })}
+                    </select>
+                  </label>
+
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                      Tipo de período
+                    </span>
+
+                    <select
+                      value={exportTipoPeriodo}
+                      onChange={(e) => setExportTipoPeriodo(e.target.value)}
+                      style={exportInputStyle}
+                    >
+                      {TIPOS_PERIODO_EXPORTACAO.map((tipo) => (
+                        <option key={tipo.value} value={tipo.value}>
+                          {tipo.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                      Data inicial
+                    </span>
+
+                    <input
+                      type="date"
+                      value={exportDataInicio}
+                      onChange={(e) => setExportDataInicio(e.target.value)}
+                      disabled={exportTipoPeriodo === 'sem_periodo'}
+                      style={exportInputStyle}
+                    />
+                  </label>
+
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                      Data final
+                    </span>
+
+                    <input
+                      type="date"
+                      value={exportDataFim}
+                      onChange={(e) => setExportDataFim(e.target.value)}
+                      disabled={exportTipoPeriodo === 'sem_periodo'}
+                      style={exportInputStyle}
+                    />
+                  </label>
+
+                  <button
+                    className="btn-primary"
+                    type="button"
+                    onClick={exportarClientesSegmentados}
+                    disabled={exportando}
+                    style={{ minHeight: 40 }}
+                  >
+                    <Download size={16} />
+                    {exportando ? 'Exportando...' : 'Exportar CSV'}
+                  </button>
+                </div>
               </div>
 
               <p style={{ margin: '12px 0 0', color: 'var(--text-muted)', fontSize: 13 }}>
@@ -861,12 +894,19 @@ export default function CRMInteligencia() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
               gap: 14,
               marginBottom: 18,
             }}
           >
-            <Section title="Recompra" description="Distribuição dos clientes por quantidade de compras.">
+            <Section
+              title="Recompra"
+              description={
+                dashboardLivraria
+                  ? `Recompra dentro da livraria ${dashboardLivraria}.`
+                  : 'Distribuição dos clientes por quantidade de compras.'
+              }
+            >
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
                 <Card
                   title="Clientes com 1 compra"
@@ -894,16 +934,14 @@ export default function CRMInteligencia() {
               </div>
             </Section>
 
-            <Section title="Receita por livraria" description="Canais com maior faturamento.">
-              <SimpleBarChart
-                data={livrarias}
-                labelKey="livraria"
-                valueKey="receita"
-                valueFormatter={formatCurrency}
-              />
-            </Section>
-
-            <Section title="Receita por estado" description="Distribuição geográfica da receita.">
+            <Section
+              title="Receita por estado"
+              description={
+                dashboardLivraria
+                  ? `Distribuição geográfica da livraria ${dashboardLivraria}.`
+                  : 'Distribuição geográfica da receita.'
+              }
+            >
               <SimpleBarChart
                 data={estados}
                 labelKey="estado"
@@ -921,7 +959,14 @@ export default function CRMInteligencia() {
               marginBottom: 18,
             }}
           >
-            <Section title="Distribuição RFM" description="Quantidade de clientes por segmento RFM.">
+            <Section
+              title="Distribuição RFM"
+              description={
+                dashboardLivraria
+                  ? `Segmentos RFM dentro da livraria ${dashboardLivraria}.`
+                  : 'Quantidade de clientes por segmento RFM.'
+              }
+            >
               <SimpleBarChart
                 data={rfm}
                 labelKey="segmento_rfm"
@@ -931,7 +976,14 @@ export default function CRMInteligencia() {
               />
             </Section>
 
-            <Section title="Clientes VIP" description="Top 10% por faturamento acumulado.">
+            <Section
+              title="Clientes VIP"
+              description={
+                dashboardLivraria
+                  ? `Top 10% por faturamento na livraria ${dashboardLivraria}.`
+                  : 'Top 10% por faturamento acumulado.'
+              }
+            >
               <Table
                 columns={clienteColumns}
                 data={clientesVip.slice(0, 8)}
@@ -940,15 +992,36 @@ export default function CRMInteligencia() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14 }}>
-            <Section title="Top clientes" description="Clientes com maior receita acumulada.">
+            <Section
+              title="Top clientes"
+              description={
+                dashboardLivraria
+                  ? `Clientes com maior receita na livraria ${dashboardLivraria}.`
+                  : 'Clientes com maior receita acumulada.'
+              }
+            >
               <Table columns={clienteColumns} data={topClientes} />
             </Section>
 
-            <Section title="Clientes em risco" description="Clientes com boa chance de recuperação.">
+            <Section
+              title="Clientes em risco"
+              description={
+                dashboardLivraria
+                  ? `Clientes em risco dentro da livraria ${dashboardLivraria}.`
+                  : 'Clientes com boa chance de recuperação.'
+              }
+            >
               <Table columns={clienteColumns} data={clientesRisco} />
             </Section>
 
-            <Section title="Clientes perdidos" description="Clientes sem compra há mais de 180 dias.">
+            <Section
+              title="Clientes perdidos"
+              description={
+                dashboardLivraria
+                  ? 'Clientes sem compra há mais de 180 dias nessa livraria.'
+                  : 'Clientes sem compra há mais de 180 dias.'
+              }
+            >
               <Table columns={clienteColumns} data={clientesPerdidos} />
             </Section>
           </div>
