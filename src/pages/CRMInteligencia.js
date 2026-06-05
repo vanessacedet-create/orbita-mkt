@@ -20,6 +20,42 @@ const currency = new Intl.NumberFormat('pt-BR', {
 
 const number = new Intl.NumberFormat('pt-BR')
 
+const SEGMENTOS_EXPORTACAO = [
+  { value: 'base_geral', label: 'Base geral' },
+  { value: 'campeao', label: 'Campeões' },
+  { value: 'cliente_fiel', label: 'Clientes fiéis' },
+  { value: 'potencial_fiel', label: 'Potenciais fiéis' },
+  { value: 'promissor', label: 'Promissores' },
+  { value: 'em_risco_rfm', label: 'Em risco RFM' },
+  { value: 'perdido_rfm', label: 'Perdidos RFM' },
+  { value: 'vip', label: 'Clientes VIP' },
+  { value: 'frequentes', label: 'Clientes frequentes' },
+  { value: 'novos', label: 'Clientes novos' },
+  { value: 'alto_potencial', label: 'Clientes alto potencial' },
+  { value: 'ativos', label: 'Clientes ativos' },
+  { value: 'em_atencao', label: 'Clientes em atenção' },
+  { value: 'em_risco_status', label: 'Clientes em risco status' },
+  { value: 'perdidos_status', label: 'Clientes perdidos status' },
+]
+
+const TIPOS_PERIODO_EXPORTACAO = [
+  { value: 'sem_periodo', label: 'Sem filtro de período' },
+  { value: 'primeira_compra', label: 'Primeira compra' },
+  { value: 'ultima_compra', label: 'Última compra' },
+  { value: 'comprou_periodo', label: 'Comprou no período' },
+]
+
+const exportInputStyle = {
+  width: '100%',
+  padding: '10px 12px',
+  borderRadius: 10,
+  border: '1px solid var(--border)',
+  background: 'var(--surface-2, rgba(255,255,255,.04))',
+  color: 'var(--text)',
+  outline: 'none',
+  boxSizing: 'border-box',
+}
+
 function formatCurrency(value) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
     return 'R$ 0,00'
@@ -55,6 +91,66 @@ function formatDate(value) {
   if (Number.isNaN(date.getTime())) return '—'
 
   return date.toLocaleDateString('pt-BR')
+}
+
+function csvEscape(value) {
+  const str = String(value ?? '')
+
+  if (str.includes(';') || str.includes('"') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`
+  }
+
+  return str
+}
+
+function baixarCSV(nomeArquivo, linhas) {
+  const colunas = [
+    'nome',
+    'email',
+    'telefone',
+    'cidade',
+    'estado',
+    'primeira_compra',
+    'ultima_compra',
+    'total_pedidos',
+    'valor_total',
+    'ticket_medio',
+    'dias_sem_comprar',
+    'status_cliente',
+    'rfm_score',
+    'segmento_rfm',
+    'segmento_marketing',
+  ]
+
+  const header = colunas.join(';')
+
+  const body = linhas.map((row) =>
+    colunas.map((coluna) => csvEscape(row[coluna])).join(';')
+  )
+
+  const csv = [header, ...body].join('\n')
+
+  const blob = new Blob([`\uFEFF${csv}`], {
+    type: 'text/csv;charset=utf-8;',
+  })
+
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+
+  a.href = url
+  a.download = nomeArquivo
+  a.click()
+
+  URL.revokeObjectURL(url)
+}
+
+function nomeArquivoExportacao(segmento, tipoPeriodo, dataInicio, dataFim) {
+  const segmentoLimpo = segmento || 'base_geral'
+  const periodoLimpo = tipoPeriodo || 'sem_periodo'
+  const inicio = dataInicio || 'inicio'
+  const fim = dataFim || 'fim'
+
+  return `crm-clientes-${segmentoLimpo}-${periodoLimpo}-${inicio}-${fim}.csv`
 }
 
 function Card({ title, value, subtitle, icon: Icon }) {
@@ -279,94 +375,6 @@ function Table({ columns, data, empty = 'Nenhum registro encontrado.' }) {
   )
 }
 
-const SEGMENTOS_EXPORTACAO = [
-  { value: 'base_geral', label: 'Base geral' },
-
-  { value: 'campeao', label: 'Campeões' },
-  { value: 'cliente_fiel', label: 'Clientes fiéis' },
-  { value: 'potencial_fiel', label: 'Potenciais fiéis' },
-  { value: 'promissor', label: 'Promissores' },
-  { value: 'em_risco_rfm', label: 'Em risco RFM' },
-  { value: 'perdido_rfm', label: 'Perdidos RFM' },
-
-  { value: 'vip', label: 'Clientes VIP' },
-  { value: 'frequentes', label: 'Clientes frequentes' },
-  { value: 'novos', label: 'Clientes novos' },
-  { value: 'alto_potencial', label: 'Clientes alto potencial' },
-
-  { value: 'ativos', label: 'Clientes ativos' },
-  { value: 'em_atencao', label: 'Clientes em atenção' },
-  { value: 'em_risco_status', label: 'Clientes em risco status' },
-  { value: 'perdidos_status', label: 'Clientes perdidos status' },
-]
-
-const TIPOS_PERIODO_EXPORTACAO = [
-  { value: 'sem_periodo', label: 'Sem filtro de período' },
-  { value: 'primeira_compra', label: 'Primeira compra' },
-  { value: 'ultima_compra', label: 'Última compra' },
-  { value: 'comprou_periodo', label: 'Comprou no período' },
-]
-
-function csvEscape(value) {
-  const str = String(value ?? '')
-
-  if (str.includes(';') || str.includes('"') || str.includes('\n')) {
-    return `"${str.replace(/"/g, '""')}"`
-  }
-
-  return str
-}
-
-function baixarCSV(nomeArquivo, linhas) {
-  const colunas = [
-    'nome',
-    'email',
-    'telefone',
-    'cidade',
-    'estado',
-    'primeira_compra',
-    'ultima_compra',
-    'total_pedidos',
-    'valor_total',
-    'ticket_medio',
-    'dias_sem_comprar',
-    'status_cliente',
-    'rfm_score',
-    'segmento_rfm',
-    'segmento_marketing',
-  ]
-
-  const header = colunas.join(';')
-
-  const body = linhas.map((row) =>
-    colunas.map((coluna) => csvEscape(row[coluna])).join(';')
-  )
-
-  const csv = [header, ...body].join('\n')
-
-  const blob = new Blob([`\uFEFF${csv}`], {
-    type: 'text/csv;charset=utf-8;',
-  })
-
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-
-  a.href = url
-  a.download = nomeArquivo
-  a.click()
-
-  URL.revokeObjectURL(url)
-}
-
-function nomeArquivoExportacao(segmento, tipoPeriodo, dataInicio, dataFim) {
-  const segmentoLimpo = segmento || 'base_geral'
-  const periodoLimpo = tipoPeriodo || 'sem_periodo'
-  const inicio = dataInicio || 'inicio'
-  const fim = dataFim || 'fim'
-
-  return `crm-clientes-${segmentoLimpo}-${periodoLimpo}-${inicio}-${fim}.csv`
-}
-
 export default function CRMInteligencia() {
   const [loading, setLoading] = useState(true)
   const [recalculando, setRecalculando] = useState(false)
@@ -471,6 +479,210 @@ export default function CRMInteligencia() {
     }
   }
 
+  function aplicarFiltroSegmento(query, segmento) {
+    switch (segmento) {
+      case 'campeao':
+        return query.eq('segmento_rfm', 'Campeão')
+
+      case 'cliente_fiel':
+        return query.eq('segmento_rfm', 'Cliente fiel')
+
+      case 'potencial_fiel':
+        return query.eq('segmento_rfm', 'Potencial fiel')
+
+      case 'promissor':
+        return query.eq('segmento_rfm', 'Promissor')
+
+      case 'em_risco_rfm':
+        return query.eq('segmento_rfm', 'Em risco')
+
+      case 'perdido_rfm':
+        return query.eq('segmento_rfm', 'Perdido')
+
+      case 'vip':
+        return query.eq('is_vip', true)
+
+      case 'frequentes':
+        return query.eq('is_frequente', true)
+
+      case 'novos':
+        return query.eq('is_novo', true)
+
+      case 'alto_potencial':
+        return query.eq('is_alto_potencial', true)
+
+      case 'ativos':
+        return query.eq('status_cliente', 'Ativo')
+
+      case 'em_atencao':
+        return query.eq('status_cliente', 'Em Atenção')
+
+      case 'em_risco_status':
+        return query.eq('status_cliente', 'Em Risco')
+
+      case 'perdidos_status':
+        return query.eq('status_cliente', 'Perdido')
+
+      case 'base_geral':
+      default:
+        return query
+    }
+  }
+
+  function aplicarFiltroPeriodoCliente(query) {
+    if (exportTipoPeriodo === 'primeira_compra') {
+      if (exportDataInicio) {
+        query = query.gte('primeira_compra', `${exportDataInicio}T00:00:00`)
+      }
+
+      if (exportDataFim) {
+        query = query.lte('primeira_compra', `${exportDataFim}T23:59:59`)
+      }
+    }
+
+    if (exportTipoPeriodo === 'ultima_compra') {
+      if (exportDataInicio) {
+        query = query.gte('ultima_compra', `${exportDataInicio}T00:00:00`)
+      }
+
+      if (exportDataFim) {
+        query = query.lte('ultima_compra', `${exportDataFim}T23:59:59`)
+      }
+    }
+
+    return query
+  }
+
+  async function buscarChavesClientesQueCompraramNoPeriodo() {
+    if (!exportDataInicio && !exportDataFim) {
+      throw new Error('Para usar “Comprou no período”, informe pelo menos uma data.')
+    }
+
+    const chaves = new Set()
+    const pageSize = 1000
+    let from = 0
+    let continuar = true
+
+    while (continuar) {
+      let query = supabase
+        .from('pedidos_crm')
+        .select('cliente_chave')
+        .not('cliente_chave', 'is', null)
+        .range(from, from + pageSize - 1)
+
+      if (exportDataInicio) {
+        query = query.gte('data_criacao', `${exportDataInicio}T00:00:00`)
+      }
+
+      if (exportDataFim) {
+        query = query.lte('data_criacao', `${exportDataFim}T23:59:59`)
+      }
+
+      const { data, error } = await query
+
+      if (error) throw error
+
+      ;(data || []).forEach((row) => {
+        if (row.cliente_chave) chaves.add(row.cliente_chave)
+      })
+
+      if (!data || data.length < pageSize) {
+        continuar = false
+      } else {
+        from += pageSize
+      }
+    }
+
+    return Array.from(chaves)
+  }
+
+  async function exportarClientesSegmentados() {
+    setErro('')
+    setExportando(true)
+
+    try {
+      const todasLinhas = []
+      const pageSize = 1000
+
+      if (exportTipoPeriodo === 'comprou_periodo') {
+        const chaves = await buscarChavesClientesQueCompraramNoPeriodo()
+
+        if (!chaves.length) {
+          setErro('Nenhum cliente comprou no período selecionado.')
+          setExportando(false)
+          return
+        }
+
+        for (let i = 0; i < chaves.length; i += 500) {
+          const loteChaves = chaves.slice(i, i + 500)
+
+          let query = supabase
+            .from('vw_crm_exportacao_clientes')
+            .select('*')
+            .in('cliente_chave', loteChaves)
+            .order('valor_total', { ascending: false })
+
+          query = aplicarFiltroSegmento(query, exportSegmento)
+
+          const { data, error } = await query
+
+          if (error) throw error
+
+          todasLinhas.push(...(data || []))
+        }
+      } else {
+        let from = 0
+        let continuar = true
+
+        while (continuar) {
+          let query = supabase
+            .from('vw_crm_exportacao_clientes')
+            .select('*')
+            .order('valor_total', { ascending: false })
+            .range(from, from + pageSize - 1)
+
+          query = aplicarFiltroSegmento(query, exportSegmento)
+          query = aplicarFiltroPeriodoCliente(query)
+
+          const { data, error } = await query
+
+          if (error) throw error
+
+          todasLinhas.push(...(data || []))
+
+          if (!data || data.length < pageSize) {
+            continuar = false
+          } else {
+            from += pageSize
+          }
+        }
+      }
+
+      const linhasUnicas = Array.from(
+        new Map(todasLinhas.map((row) => [row.email, row])).values()
+      )
+
+      if (!linhasUnicas.length) {
+        setErro('Nenhum cliente encontrado para esta exportação.')
+        return
+      }
+
+      const nomeArquivo = nomeArquivoExportacao(
+        exportSegmento,
+        exportTipoPeriodo,
+        exportDataInicio,
+        exportDataFim
+      )
+
+      baixarCSV(nomeArquivo, linhasUnicas)
+      showToast(`${linhasUnicas.length.toLocaleString('pt-BR')} clientes exportados.`)
+    } catch (err) {
+      setErro(err.message || 'Erro ao exportar clientes.')
+    } finally {
+      setExportando(false)
+    }
+  }
+
   useEffect(() => {
     fetchData()
   }, [])
@@ -523,212 +735,6 @@ export default function CRMInteligencia() {
     },
   ]
 
-function aplicarFiltroSegmento(query, segmento) {
-  switch (segmento) {
-    case 'campeao':
-      return query.eq('segmento_rfm', 'Campeão')
-
-    case 'cliente_fiel':
-      return query.eq('segmento_rfm', 'Cliente fiel')
-
-    case 'potencial_fiel':
-      return query.eq('segmento_rfm', 'Potencial fiel')
-
-    case 'promissor':
-      return query.eq('segmento_rfm', 'Promissor')
-
-    case 'em_risco_rfm':
-      return query.eq('segmento_rfm', 'Em risco')
-
-    case 'perdido_rfm':
-      return query.eq('segmento_rfm', 'Perdido')
-
-    case 'vip':
-      return query.eq('is_vip', true)
-
-    case 'frequentes':
-      return query.eq('is_frequente', true)
-
-    case 'novos':
-      return query.eq('is_novo', true)
-
-    case 'alto_potencial':
-      return query.eq('is_alto_potencial', true)
-
-    case 'ativos':
-      return query.eq('status_cliente', 'Ativo')
-
-    case 'em_atencao':
-      return query.eq('status_cliente', 'Em Atenção')
-
-    case 'em_risco_status':
-      return query.eq('status_cliente', 'Em Risco')
-
-    case 'perdidos_status':
-      return query.eq('status_cliente', 'Perdido')
-
-    case 'base_geral':
-    default:
-      return query
-  }
-}
-
-function aplicarFiltroPeriodoCliente(query) {
-  if (exportTipoPeriodo === 'primeira_compra') {
-    if (exportDataInicio) {
-      query = query.gte('primeira_compra', `${exportDataInicio}T00:00:00`)
-    }
-
-    if (exportDataFim) {
-      query = query.lte('primeira_compra', `${exportDataFim}T23:59:59`)
-    }
-  }
-
-  if (exportTipoPeriodo === 'ultima_compra') {
-    if (exportDataInicio) {
-      query = query.gte('ultima_compra', `${exportDataInicio}T00:00:00`)
-    }
-
-    if (exportDataFim) {
-      query = query.lte('ultima_compra', `${exportDataFim}T23:59:59`)
-    }
-  }
-
-  return query
-}
-
-async function buscarChavesClientesQueCompraramNoPeriodo() {
-  if (!exportDataInicio && !exportDataFim) {
-    throw new Error('Para usar “Comprou no período”, informe pelo menos uma data.')
-  }
-
-  const chaves = new Set()
-  const pageSize = 1000
-  let from = 0
-  let continuar = true
-
-  while (continuar) {
-    let query = supabase
-      .from('pedidos_crm')
-      .select('cliente_chave')
-      .not('cliente_chave', 'is', null)
-      .range(from, from + pageSize - 1)
-
-    if (exportDataInicio) {
-      query = query.gte('data_criacao', `${exportDataInicio}T00:00:00`)
-    }
-
-    if (exportDataFim) {
-      query = query.lte('data_criacao', `${exportDataFim}T23:59:59`)
-    }
-
-    const { data, error } = await query
-
-    if (error) throw error
-
-    ;(data || []).forEach((row) => {
-      if (row.cliente_chave) chaves.add(row.cliente_chave)
-    })
-
-    if (!data || data.length < pageSize) {
-      continuar = false
-    } else {
-      from += pageSize
-    }
-  }
-
-  return Array.from(chaves)
-}
-
-async function exportarClientesSegmentados() {
-  setErro('')
-  setExportando(true)
-
-  try {
-    const todasLinhas = []
-    const pageSize = 1000
-
-    if (exportTipoPeriodo === 'comprou_periodo') {
-      const chaves = await buscarChavesClientesQueCompraramNoPeriodo()
-
-      if (!chaves.length) {
-        setErro('Nenhum cliente comprou no período selecionado.')
-        setExportando(false)
-        return
-      }
-
-      for (let i = 0; i < chaves.length; i += 500) {
-        const loteChaves = chaves.slice(i, i + 500)
-
-        let query = supabase
-          .from('vw_crm_exportacao_clientes')
-          .select('*')
-          .in('cliente_chave', loteChaves)
-          .order('valor_total', { ascending: false })
-
-        query = aplicarFiltroSegmento(query, exportSegmento)
-
-        const { data, error } = await query
-
-        if (error) throw error
-
-        todasLinhas.push(...(data || []))
-      }
-    } else {
-      let from = 0
-      let continuar = true
-
-      while (continuar) {
-        let query = supabase
-          .from('vw_crm_exportacao_clientes')
-          .select('*')
-          .order('valor_total', { ascending: false })
-          .range(from, from + pageSize - 1)
-
-        query = aplicarFiltroSegmento(query, exportSegmento)
-        query = aplicarFiltroPeriodoCliente(query)
-
-        const { data, error } = await query
-
-        if (error) throw error
-
-        todasLinhas.push(...(data || []))
-
-        if (!data || data.length < pageSize) {
-          continuar = false
-        } else {
-          from += pageSize
-        }
-      }
-    }
-
-    const linhasUnicas = Array.from(
-      new Map(todasLinhas.map((row) => [row.email, row])).values()
-    )
-
-    if (!linhasUnicas.length) {
-      setErro('Nenhum cliente encontrado para esta exportação.')
-      return
-    }
-
-    const nomeArquivo = nomeArquivoExportacao(
-      exportSegmento,
-      exportTipoPeriodo,
-      exportDataInicio,
-      exportDataFim
-    )
-
-    baixarCSV(nomeArquivo, linhasUnicas)
-
-    showToast(`${linhasUnicas.length.toLocaleString('pt-BR')} clientes exportados.`)
-  } catch (err) {
-    setErro(err.message || 'Erro ao exportar clientes.')
-  } finally {
-    setExportando(false)
-  }
-}
-
-  
   return (
     <div className="page">
       {toast && (
@@ -874,6 +880,101 @@ async function exportarClientesSegmentados() {
             />
           </div>
 
+          <div style={{ marginBottom: 18 }}>
+            <Section
+              title="Exportações para campanhas"
+              description="Monte listas segmentadas de e-mails para campanhas personalizadas."
+            >
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+                  gap: 10,
+                  alignItems: 'end',
+                }}
+              >
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                    Segmento
+                  </span>
+
+                  <select
+                    value={exportSegmento}
+                    onChange={(e) => setExportSegmento(e.target.value)}
+                    style={exportInputStyle}
+                  >
+                    {SEGMENTOS_EXPORTACAO.map((segmento) => (
+                      <option key={segmento.value} value={segmento.value}>
+                        {segmento.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                    Tipo de período
+                  </span>
+
+                  <select
+                    value={exportTipoPeriodo}
+                    onChange={(e) => setExportTipoPeriodo(e.target.value)}
+                    style={exportInputStyle}
+                  >
+                    {TIPOS_PERIODO_EXPORTACAO.map((tipo) => (
+                      <option key={tipo.value} value={tipo.value}>
+                        {tipo.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                    Data inicial
+                  </span>
+
+                  <input
+                    type="date"
+                    value={exportDataInicio}
+                    onChange={(e) => setExportDataInicio(e.target.value)}
+                    disabled={exportTipoPeriodo === 'sem_periodo'}
+                    style={exportInputStyle}
+                  />
+                </label>
+
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                    Data final
+                  </span>
+
+                  <input
+                    type="date"
+                    value={exportDataFim}
+                    onChange={(e) => setExportDataFim(e.target.value)}
+                    disabled={exportTipoPeriodo === 'sem_periodo'}
+                    style={exportInputStyle}
+                  />
+                </label>
+
+                <button
+                  className="btn-primary"
+                  type="button"
+                  onClick={exportarClientesSegmentados}
+                  disabled={exportando}
+                  style={{ minHeight: 40 }}
+                >
+                  <Download size={16} />
+                  {exportando ? 'Exportando...' : 'Exportar CSV'}
+                </button>
+              </div>
+
+              <p style={{ margin: '12px 0 0', color: 'var(--text-muted)', fontSize: 13 }}>
+                O CSV exporta apenas clientes com e-mail preenchido. Para “Comprou no período”, o sistema considera qualquer pedido feito dentro do intervalo selecionado.
+              </p>
+            </Section>
+          </div>
+
           <div
             style={{
               display: 'grid',
@@ -972,108 +1073,4 @@ async function exportarClientesSegmentados() {
       )}
     </div>
   )
-
-<Section
-  title="Exportações para campanhas"
-  description="Monte listas segmentadas de e-mails para campanhas personalizadas."
->
-  <div
-    style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
-      gap: 10,
-      alignItems: 'end',
-    }}
-  >
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-        Segmento
-      </span>
-
-      <select
-        value={exportSegmento}
-        onChange={(e) => setExportSegmento(e.target.value)}
-        style={exportInputStyle}
-      >
-        {SEGMENTOS_EXPORTACAO.map((segmento) => (
-          <option key={segmento.value} value={segmento.value}>
-            {segmento.label}
-          </option>
-        ))}
-      </select>
-    </label>
-
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-        Tipo de período
-      </span>
-
-      <select
-        value={exportTipoPeriodo}
-        onChange={(e) => setExportTipoPeriodo(e.target.value)}
-        style={exportInputStyle}
-      >
-        {TIPOS_PERIODO_EXPORTACAO.map((tipo) => (
-          <option key={tipo.value} value={tipo.value}>
-            {tipo.label}
-          </option>
-        ))}
-      </select>
-    </label>
-
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-        Data inicial
-      </span>
-
-      <input
-        type="date"
-        value={exportDataInicio}
-        onChange={(e) => setExportDataInicio(e.target.value)}
-        disabled={exportTipoPeriodo === 'sem_periodo'}
-        style={exportInputStyle}
-      />
-    </label>
-
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-        Data final
-      </span>
-
-      <input
-        type="date"
-        value={exportDataFim}
-        onChange={(e) => setExportDataFim(e.target.value)}
-        disabled={exportTipoPeriodo === 'sem_periodo'}
-        style={exportInputStyle}
-      />
-    </label>
-
-    <button
-      className="btn-primary"
-      type="button"
-      onClick={exportarClientesSegmentados}
-      disabled={exportando}
-      style={{ minHeight: 40 }}
-    >
-      <Download size={16} />
-      {exportando ? 'Exportando...' : 'Exportar CSV'}
-    </button>
-  </div>
-
-  <p style={{ margin: '12px 0 0', color: 'var(--text-muted)', fontSize: 13 }}>
-    O CSV exporta apenas clientes com e-mail preenchido. Para “Comprou no período”, o sistema considera qualquer pedido feito dentro do intervalo selecionado.
-  </p>
-</Section>
-
-      const exportInputStyle = {
-  width: '100%',
-  padding: '10px 12px',
-  borderRadius: 10,
-  border: '1px solid var(--border)',
-  background: 'var(--surface-2, rgba(255,255,255,.04))',
-  color: 'var(--text)',
-  outline: 'none',
-  boxSizing: 'border-box',
-}
 }
