@@ -105,7 +105,6 @@ function csvEscape(value) {
 
 function baixarCSV(nomeArquivo, linhas) {
   const colunas = [
-    'nome',
     'email',
   ]
 
