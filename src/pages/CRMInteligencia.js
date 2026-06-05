@@ -110,6 +110,7 @@ function baixarCSV(nomeArquivo, linhas) {
     'telefone',
     'cidade',
     'estado',
+    'livrarias_cliente',
     'primeira_compra',
     'ultima_compra',
     'total_pedidos',
@@ -144,13 +145,21 @@ function baixarCSV(nomeArquivo, linhas) {
   URL.revokeObjectURL(url)
 }
 
-function nomeArquivoExportacao(segmento, tipoPeriodo, dataInicio, dataFim) {
+function nomeArquivoExportacao(segmento, tipoPeriodo, dataInicio, dataFim, livraria) {
   const segmentoLimpo = segmento || 'base_geral'
   const periodoLimpo = tipoPeriodo || 'sem_periodo'
   const inicio = dataInicio || 'inicio'
   const fim = dataFim || 'fim'
+  const livrariaLimpa = livraria
+    ? String(livraria)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+    : 'todas-livrarias'
 
-  return `crm-clientes-${segmentoLimpo}-${periodoLimpo}-${inicio}-${fim}.csv`
+  return `crm-clientes-${segmentoLimpo}-${periodoLimpo}-${livrariaLimpa}-${inicio}-${fim}.csv`
 }
 
 function Card({ title, value, subtitle, icon: Icon }) {
@@ -395,6 +404,7 @@ export default function CRMInteligencia() {
   const [exportTipoPeriodo, setExportTipoPeriodo] = useState('sem_periodo')
   const [exportDataInicio, setExportDataInicio] = useState('')
   const [exportDataFim, setExportDataFim] = useState('')
+  const [exportLivraria, setExportLivraria] = useState('')
   const [exportando, setExportando] = useState(false)
 
   function showToast(message) {
@@ -420,7 +430,7 @@ export default function CRMInteligencia() {
       ] = await Promise.all([
         supabase.from('vw_crm_kpis_executivos').select('*').single(),
         supabase.from('vw_crm_recompra').select('*').single(),
-        supabase.from('vw_crm_receita_por_livraria').select('*').limit(10),
+        supabase.from('vw_crm_livrarias').select('*'),
         supabase.from('vw_crm_receita_por_estado').select('*').limit(10),
         supabase.from('vw_crm_distribuicao_rfm').select('*').limit(12),
         supabase.from('vw_crm_top_100_clientes').select('*').limit(20),
@@ -553,6 +563,38 @@ export default function CRMInteligencia() {
     return query
   }
 
+  async function buscarChavesClientesPorLivraria() {
+    if (!exportLivraria) return null
+
+    const chaves = new Set()
+    const pageSize = 1000
+    let from = 0
+    let continuar = true
+
+    while (continuar) {
+      const { data, error } = await supabase
+        .from('pedidos_crm')
+        .select('cliente_chave')
+        .not('cliente_chave', 'is', null)
+        .eq('livraria', exportLivraria)
+        .range(from, from + pageSize - 1)
+
+      if (error) throw error
+
+      ;(data || []).forEach((row) => {
+        if (row.cliente_chave) chaves.add(row.cliente_chave)
+      })
+
+      if (!data || data.length < pageSize) {
+        continuar = false
+      } else {
+        from += pageSize
+      }
+    }
+
+    return Array.from(chaves)
+  }
+
   async function buscarChavesClientesQueCompraramNoPeriodo() {
     if (!exportDataInicio && !exportDataFim) {
       throw new Error('Para usar “Comprou no período”, informe pelo menos uma data.')
@@ -576,6 +618,10 @@ export default function CRMInteligencia() {
 
       if (exportDataFim) {
         query = query.lte('data_criacao', `${exportDataFim}T23:59:59`)
+      }
+
+      if (exportLivraria) {
+        query = query.eq('livraria', exportLivraria)
       }
 
       const { data, error } = await query
@@ -604,11 +650,17 @@ export default function CRMInteligencia() {
       const todasLinhas = []
       const pageSize = 1000
 
-      if (exportTipoPeriodo === 'comprou_periodo') {
-        const chaves = await buscarChavesClientesQueCompraramNoPeriodo()
+      if (exportTipoPeriodo === 'comprou_periodo' || exportLivraria) {
+        let chaves = []
 
-        if (!chaves.length) {
-          setErro('Nenhum cliente comprou no período selecionado.')
+        if (exportTipoPeriodo === 'comprou_periodo') {
+          chaves = await buscarChavesClientesQueCompraramNoPeriodo()
+        } else {
+          chaves = await buscarChavesClientesPorLivraria()
+        }
+
+        if (!chaves || !chaves.length) {
+          setErro('Nenhum cliente encontrado para os filtros selecionados.')
           setExportando(false)
           return
         }
@@ -623,6 +675,7 @@ export default function CRMInteligencia() {
             .order('valor_total', { ascending: false })
 
           query = aplicarFiltroSegmento(query, exportSegmento)
+          query = aplicarFiltroPeriodoCliente(query)
 
           const { data, error } = await query
 
@@ -671,7 +724,8 @@ export default function CRMInteligencia() {
         exportSegmento,
         exportTipoPeriodo,
         exportDataInicio,
-        exportDataFim
+        exportDataFim,
+        exportLivraria
       )
 
       baixarCSV(nomeArquivo, linhasUnicas)
@@ -888,7 +942,7 @@ export default function CRMInteligencia() {
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+                  gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
                   gap: 10,
                   alignItems: 'end',
                 }}
@@ -906,6 +960,25 @@ export default function CRMInteligencia() {
                     {SEGMENTOS_EXPORTACAO.map((segmento) => (
                       <option key={segmento.value} value={segmento.value}>
                         {segmento.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                    Livraria
+                  </span>
+
+                  <select
+                    value={exportLivraria}
+                    onChange={(e) => setExportLivraria(e.target.value)}
+                    style={exportInputStyle}
+                  >
+                    <option value="">Todas as livrarias</option>
+                    {livrarias.map((item) => (
+                      <option key={item.livraria} value={item.livraria}>
+                        {item.livraria}
                       </option>
                     ))}
                   </select>
@@ -970,7 +1043,7 @@ export default function CRMInteligencia() {
               </div>
 
               <p style={{ margin: '12px 0 0', color: 'var(--text-muted)', fontSize: 13 }}>
-                O CSV exporta apenas clientes com e-mail preenchido. Para “Comprou no período”, o sistema considera qualquer pedido feito dentro do intervalo selecionado.
+                O CSV exporta apenas clientes com e-mail preenchido. O filtro de livraria considera clientes que compraram ao menos uma vez na livraria selecionada. Para “Comprou no período”, o sistema considera qualquer pedido feito dentro do intervalo selecionado.
               </p>
             </Section>
           </div>
