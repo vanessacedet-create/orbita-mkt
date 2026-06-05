@@ -397,6 +397,7 @@ export default function CRMInteligencia() {
   const [livrariasOpcoes, setLivrariasOpcoes] = useState([])
 
   const [exportSegmento, setExportSegmento] = useState('base_geral')
+  const [exportLivraria, setExportLivraria] = useState('')
   const [exportTipoPeriodo, setExportTipoPeriodo] = useState('sem_periodo')
   const [exportDataInicio, setExportDataInicio] = useState('')
   const [exportDataFim, setExportDataFim] = useState('')
@@ -405,16 +406,6 @@ export default function CRMInteligencia() {
   function showToast(message) {
     setToast(message)
     setTimeout(() => setToast(''), 4000)
-  }
-
-  async function carregarLivrarias() {
-    try {
-      const { data, error } = await supabase.from('vw_crm_livrarias').select('*')
-      if (error) throw error
-      setLivrariasOpcoes(data || [])
-    } catch {
-      // silencioso: a ausência das opções não deve travar o dashboard
-    }
   }
 
   async function fetchData() {
@@ -439,6 +430,12 @@ export default function CRMInteligencia() {
       setClientesVip(d.clientesVip || [])
       setClientesRisco(d.clientesRisco || [])
       setClientesPerdidos(d.clientesPerdidos || [])
+
+      // Popula as opções de livraria pela própria RPC (admin-only, já autorizada).
+      // Só atualiza quando estamos na visão geral, para manter a lista completa.
+      if (!dashboardLivraria) {
+        setLivrariasOpcoes(d.livrarias || [])
+      }
     } catch (err) {
       setErro(err.message || 'Erro ao carregar dados do CRM.')
     } finally {
@@ -476,7 +473,7 @@ export default function CRMInteligencia() {
       }
 
       const { data, error } = await supabase.rpc('rpc_crm_exportacao_livraria', {
-        p_livraria: dashboardLivraria || null,
+        p_livraria: exportLivraria || null,
         p_segmento: exportSegmento || 'base_geral',
         p_tipo_periodo: exportTipoPeriodo || 'sem_periodo',
         p_data_inicio: exportDataInicio || null,
@@ -736,11 +733,33 @@ export default function CRMInteligencia() {
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+                  gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
                   gap: 10,
                   alignItems: 'end',
                 }}
               >
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                    Livraria
+                  </span>
+
+                  <select
+                    value={exportLivraria}
+                    onChange={(e) => setExportLivraria(e.target.value)}
+                    style={exportInputStyle}
+                  >
+                    <option value="">Todas as livrarias</option>
+                    {livrariasOpcoes.map((opt) => {
+                      const nome = opt.livraria || 'Não informado'
+                      return (
+                        <option key={nome} value={nome}>
+                          {nome}
+                        </option>
+                      )
+                    })}
+                  </select>
+                </label>
+
                 <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                     Segmento
