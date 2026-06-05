@@ -464,190 +464,30 @@ export default function CRMInteligencia() {
     }
   }
 
-  function aplicarFiltroSegmento(query, segmento) {
-    switch (segmento) {
-      case 'campeao':
-        return query.eq('segmento_rfm', 'Campeão')
-
-      case 'cliente_fiel':
-        return query.eq('segmento_rfm', 'Cliente fiel')
-
-      case 'potencial_fiel':
-        return query.eq('segmento_rfm', 'Potencial fiel')
-
-      case 'promissor':
-        return query.eq('segmento_rfm', 'Promissor')
-
-      case 'em_risco_rfm':
-        return query.eq('segmento_rfm', 'Em risco')
-
-      case 'perdido_rfm':
-        return query.eq('segmento_rfm', 'Perdido')
-
-      case 'vip':
-        return query.eq('is_vip', true)
-
-      case 'frequentes':
-        return query.eq('is_frequente', true)
-
-      case 'novos':
-        return query.eq('is_novo', true)
-
-      case 'alto_potencial':
-        return query.eq('is_alto_potencial', true)
-
-      case 'ativos':
-        return query.eq('status_cliente', 'Ativo')
-
-      case 'em_atencao':
-        return query.eq('status_cliente', 'Em Atenção')
-
-      case 'em_risco_status':
-        return query.eq('status_cliente', 'Em Risco')
-
-      case 'perdidos_status':
-        return query.eq('status_cliente', 'Perdido')
-
-      case 'base_geral':
-      default:
-        return query
-    }
-  }
-
-  function aplicarFiltroPeriodoCliente(query) {
-    if (exportTipoPeriodo === 'primeira_compra') {
-      if (exportDataInicio) {
-        query = query.gte('primeira_compra', `${exportDataInicio}T00:00:00`)
-      }
-
-      if (exportDataFim) {
-        query = query.lte('primeira_compra', `${exportDataFim}T23:59:59`)
-      }
-    }
-
-    if (exportTipoPeriodo === 'ultima_compra') {
-      if (exportDataInicio) {
-        query = query.gte('ultima_compra', `${exportDataInicio}T00:00:00`)
-      }
-
-      if (exportDataFim) {
-        query = query.lte('ultima_compra', `${exportDataFim}T23:59:59`)
-      }
-    }
-
-    return query
-  }
-
-  async function buscarChavesClientesQueCompraramNoPeriodo() {
-    if (!exportDataInicio && !exportDataFim) {
-      throw new Error('Para usar “Comprou no período”, informe pelo menos uma data.')
-    }
-
-    const chaves = new Set()
-    const pageSize = 1000
-    let from = 0
-    let continuar = true
-
-    while (continuar) {
-      let query = supabase
-        .from('pedidos_crm')
-        .select('cliente_chave')
-        .not('cliente_chave', 'is', null)
-        .range(from, from + pageSize - 1)
-
-      if (exportDataInicio) {
-        query = query.gte('data_criacao', `${exportDataInicio}T00:00:00`)
-      }
-
-      if (exportDataFim) {
-        query = query.lte('data_criacao', `${exportDataFim}T23:59:59`)
-      }
-
-      const { data, error } = await query
-
-      if (error) throw error
-
-      ;(data || []).forEach((row) => {
-        if (row.cliente_chave) chaves.add(row.cliente_chave)
-      })
-
-      if (!data || data.length < pageSize) {
-        continuar = false
-      } else {
-        from += pageSize
-      }
-    }
-
-    return Array.from(chaves)
-  }
-
   async function exportarClientesSegmentados() {
     setErro('')
     setExportando(true)
 
     try {
-      const todasLinhas = []
-      const pageSize = 1000
-
-      if (exportTipoPeriodo === 'comprou_periodo') {
-        const chaves = await buscarChavesClientesQueCompraramNoPeriodo()
-
-        if (!chaves.length) {
-          setErro('Nenhum cliente comprou no período selecionado.')
-          setExportando(false)
-          return
-        }
-
-        for (let i = 0; i < chaves.length; i += 500) {
-          const loteChaves = chaves.slice(i, i + 500)
-
-          let query = supabase
-            .from('vw_crm_exportacao_clientes')
-            .select('*')
-            .in('cliente_chave', loteChaves)
-            .order('valor_total', { ascending: false })
-
-          query = aplicarFiltroSegmento(query, exportSegmento)
-
-          const { data, error } = await query
-
-          if (error) throw error
-
-          todasLinhas.push(...(data || []))
-        }
-      } else {
-        let from = 0
-        let continuar = true
-
-        while (continuar) {
-          let query = supabase
-            .from('vw_crm_exportacao_clientes')
-            .select('*')
-            .order('valor_total', { ascending: false })
-            .range(from, from + pageSize - 1)
-
-          query = aplicarFiltroSegmento(query, exportSegmento)
-          query = aplicarFiltroPeriodoCliente(query)
-
-          const { data, error } = await query
-
-          if (error) throw error
-
-          todasLinhas.push(...(data || []))
-
-          if (!data || data.length < pageSize) {
-            continuar = false
-          } else {
-            from += pageSize
-          }
-        }
+      if (exportTipoPeriodo === 'comprou_periodo' && !exportDataInicio && !exportDataFim) {
+        setErro('Para usar “Comprou no período”, informe pelo menos uma data.')
+        setExportando(false)
+        return
       }
 
-      const linhasUnicas = Array.from(
-        new Map(todasLinhas.map((row) => [row.email, row])).values()
-      )
+      const { data, error } = await supabase.rpc('rpc_crm_exportacao_livraria', {
+        p_livraria: dashboardLivraria || null,
+        p_segmento: exportSegmento || 'base_geral',
+        p_tipo_periodo: exportTipoPeriodo || 'sem_periodo',
+        p_data_inicio: exportDataInicio || null,
+        p_data_fim: exportDataFim || null,
+      })
 
-      if (!linhasUnicas.length) {
+      if (error) throw error
+
+      const linhas = data || []
+
+      if (!linhas.length) {
         setErro('Nenhum cliente encontrado para esta exportação.')
         return
       }
@@ -659,8 +499,8 @@ export default function CRMInteligencia() {
         exportDataFim
       )
 
-      baixarCSV(nomeArquivo, linhasUnicas)
-      showToast(`${linhasUnicas.length.toLocaleString('pt-BR')} clientes exportados.`)
+      baixarCSV(nomeArquivo, linhas)
+      showToast(`${linhas.length.toLocaleString('pt-BR')} clientes exportados.`)
     } catch (err) {
       setErro(err.message || 'Erro ao exportar clientes.')
     } finally {
@@ -669,12 +509,8 @@ export default function CRMInteligencia() {
   }
 
   useEffect(() => {
-    carregarLivrarias()
-  }, [])
-
-  useEffect(() => {
     fetchData()
-  }, [dashboardLivraria]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dashboardLivraria]) // eslint-disable-line
 
   const clienteColumns = [
     {
