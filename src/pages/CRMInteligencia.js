@@ -107,20 +107,6 @@ function baixarCSV(nomeArquivo, linhas) {
   const colunas = [
     'nome',
     'email',
-    'telefone',
-    'cidade',
-    'estado',
-    'primeira_compra',
-    'ultima_compra',
-    'total_pedidos',
-    'valor_total',
-    'ticket_medio',
-    'dias_sem_comprar',
-    'status_cliente',
-    'rfm_score',
-    'segmento_rfm',
-    'segmento_marketing',
-    'livrarias_cliente',
   ]
 
   const header = colunas.join(';')
@@ -396,8 +382,21 @@ export default function CRMInteligencia() {
   const [dashboardLivraria, setDashboardLivraria] = useState('')
   const [livrariasOpcoes, setLivrariasOpcoes] = useState([])
 
-  const [exportSegmento, setExportSegmento] = useState('base_geral')
+  const [exportSegmentos, setExportSegmentos] = useState(['base_geral'])
   const [exportLivraria, setExportLivraria] = useState('')
+
+  // Alterna um segmento na seleção múltipla da exportação.
+  // 'base_geral' funciona como "todos": ao marcá-lo, limpa os demais;
+  // ao marcar qualquer outro, remove o 'base_geral'.
+  function toggleExportSegmento(value) {
+    setExportSegmentos((prev) => {
+      if (value === 'base_geral') return ['base_geral']
+      const semBase = prev.filter((v) => v !== 'base_geral')
+      const existe = semBase.includes(value)
+      const novo = existe ? semBase.filter((v) => v !== value) : [...semBase, value]
+      return novo.length ? novo : ['base_geral']
+    })
+  }
   const [exportTipoPeriodo, setExportTipoPeriodo] = useState('sem_periodo')
   const [exportDataInicio, setExportDataInicio] = useState('')
   const [exportDataFim, setExportDataFim] = useState('')
@@ -474,7 +473,7 @@ export default function CRMInteligencia() {
 
       const { data, error } = await supabase.rpc('rpc_crm_exportacao_livraria', {
         p_livraria: exportLivraria || null,
-        p_segmento: exportSegmento || 'base_geral',
+        p_segmentos: exportSegmentos.length ? exportSegmentos : ['base_geral'],
         p_tipo_periodo: exportTipoPeriodo || 'sem_periodo',
         p_data_inicio: exportDataInicio || null,
         p_data_fim: exportDataFim || null,
@@ -489,8 +488,11 @@ export default function CRMInteligencia() {
         return
       }
 
+      const segmentoLabel =
+        exportSegmentos.length === 1 ? exportSegmentos[0] : `${exportSegmentos.length}-segmentos`
+
       const nomeArquivo = nomeArquivoExportacao(
-        exportSegmento,
+        segmentoLabel,
         exportTipoPeriodo,
         exportDataInicio,
         exportDataFim
@@ -730,10 +732,43 @@ export default function CRMInteligencia() {
               title="Exportações para campanhas"
               description="Monte listas segmentadas de e-mails para campanhas personalizadas."
             >
+              <div style={{ marginBottom: 14 }}>
+                <span style={{ fontSize: 13, color: 'var(--text-muted)', display: 'block', marginBottom: 8 }}>
+                  Segmentos (selecione um ou mais)
+                </span>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {SEGMENTOS_EXPORTACAO.map((segmento) => {
+                    const ativo = exportSegmentos.includes(segmento.value)
+                    return (
+                      <button
+                        key={segmento.value}
+                        type="button"
+                        onClick={() => toggleExportSegmento(segmento.value)}
+                        style={{
+                          padding: '6px 14px',
+                          borderRadius: 999,
+                          fontSize: 13,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          border: '1.5px solid',
+                          borderColor: ativo ? 'var(--accent, #8b5cf6)' : 'var(--border)',
+                          background: ativo ? 'var(--accent, #8b5cf6)' : 'transparent',
+                          color: ativo ? '#fff' : 'var(--text-muted)',
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        {segmento.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
+                  gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
                   gap: 10,
                   alignItems: 'end',
                 }}
@@ -757,24 +792,6 @@ export default function CRMInteligencia() {
                         </option>
                       )
                     })}
-                  </select>
-                </label>
-
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                    Segmento
-                  </span>
-
-                  <select
-                    value={exportSegmento}
-                    onChange={(e) => setExportSegmento(e.target.value)}
-                    style={exportInputStyle}
-                  >
-                    {SEGMENTOS_EXPORTACAO.map((segmento) => (
-                      <option key={segmento.value} value={segmento.value}>
-                        {segmento.label}
-                      </option>
-                    ))}
                   </select>
                 </label>
 
