@@ -110,7 +110,6 @@ function baixarCSV(nomeArquivo, linhas) {
     'telefone',
     'cidade',
     'estado',
-    'livrarias_cliente',
     'primeira_compra',
     'ultima_compra',
     'total_pedidos',
@@ -121,6 +120,7 @@ function baixarCSV(nomeArquivo, linhas) {
     'rfm_score',
     'segmento_rfm',
     'segmento_marketing',
+    'livrarias_cliente',
   ]
 
   const header = colunas.join(';')
@@ -145,21 +145,13 @@ function baixarCSV(nomeArquivo, linhas) {
   URL.revokeObjectURL(url)
 }
 
-function nomeArquivoExportacao(segmento, tipoPeriodo, dataInicio, dataFim, livraria) {
+function nomeArquivoExportacao(segmento, tipoPeriodo, dataInicio, dataFim) {
   const segmentoLimpo = segmento || 'base_geral'
   const periodoLimpo = tipoPeriodo || 'sem_periodo'
   const inicio = dataInicio || 'inicio'
   const fim = dataFim || 'fim'
-  const livrariaLimpa = livraria
-    ? String(livraria)
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-    : 'todas-livrarias'
 
-  return `crm-clientes-${segmentoLimpo}-${periodoLimpo}-${livrariaLimpa}-${inicio}-${fim}.csv`
+  return `crm-clientes-${segmentoLimpo}-${periodoLimpo}-${inicio}-${fim}.csv`
 }
 
 function Card({ title, value, subtitle, icon: Icon }) {
@@ -400,11 +392,14 @@ export default function CRMInteligencia() {
   const [clientesRisco, setClientesRisco] = useState([])
   const [clientesPerdidos, setClientesPerdidos] = useState([])
 
+  // Filtro de livraria do dashboard
+  const [dashboardLivraria, setDashboardLivraria] = useState('')
+  const [livrariasOpcoes, setLivrariasOpcoes] = useState([])
+
   const [exportSegmento, setExportSegmento] = useState('base_geral')
   const [exportTipoPeriodo, setExportTipoPeriodo] = useState('sem_periodo')
   const [exportDataInicio, setExportDataInicio] = useState('')
   const [exportDataFim, setExportDataFim] = useState('')
-  const [exportLivraria, setExportLivraria] = useState('')
   const [exportando, setExportando] = useState(false)
 
   function showToast(message) {
@@ -412,58 +407,38 @@ export default function CRMInteligencia() {
     setTimeout(() => setToast(''), 4000)
   }
 
+  async function carregarLivrarias() {
+    try {
+      const { data, error } = await supabase.from('vw_crm_livrarias').select('*')
+      if (error) throw error
+      setLivrariasOpcoes(data || [])
+    } catch {
+      // silencioso: a ausência das opções não deve travar o dashboard
+    }
+  }
+
   async function fetchData() {
     setLoading(true)
     setErro('')
 
     try {
-      const [
-        kpisRes,
-        recompraRes,
-        livrariasRes,
-        estadosRes,
-        rfmRes,
-        topRes,
-        vipRes,
-        riscoRes,
-        perdidosRes,
-      ] = await Promise.all([
-        supabase.from('vw_crm_kpis_executivos').select('*').single(),
-        supabase.from('vw_crm_recompra').select('*').single(),
-        supabase.from('vw_crm_livrarias').select('*'),
-        supabase.from('vw_crm_receita_por_estado').select('*').limit(10),
-        supabase.from('vw_crm_distribuicao_rfm').select('*').limit(12),
-        supabase.from('vw_crm_top_100_clientes').select('*').limit(20),
-        supabase.from('vw_crm_clientes_vip').select('*').limit(20),
-        supabase.from('vw_crm_clientes_em_risco').select('*').limit(20),
-        supabase.from('vw_crm_clientes_perdidos').select('*').limit(20),
-      ])
+      const { data, error } = await supabase.rpc('rpc_crm_dashboard_livraria', {
+        p_livraria: dashboardLivraria || null,
+      })
 
-      const responses = [
-        kpisRes,
-        recompraRes,
-        livrariasRes,
-        estadosRes,
-        rfmRes,
-        topRes,
-        vipRes,
-        riscoRes,
-        perdidosRes,
-      ]
+      if (error) throw error
 
-      const firstError = responses.find((res) => res.error)?.error
+      const d = data || {}
 
-      if (firstError) throw firstError
-
-      setKpis(kpisRes.data)
-      setRecompra(recompraRes.data)
-      setLivrarias(livrariasRes.data || [])
-      setEstados(estadosRes.data || [])
-      setRfm(rfmRes.data || [])
-      setTopClientes(topRes.data || [])
-      setClientesVip(vipRes.data || [])
-      setClientesRisco(riscoRes.data || [])
-      setClientesPerdidos(perdidosRes.data || [])
+      setKpis(d.kpis || null)
+      setRecompra(d.recompra || null)
+      setLivrarias(d.livrarias || [])
+      setEstados(d.estados || [])
+      setRfm(d.rfm || [])
+      setTopClientes(d.topClientes || [])
+      setClientesVip(d.clientesVip || [])
+      setClientesRisco(d.clientesRisco || [])
+      setClientesPerdidos(d.clientesPerdidos || [])
     } catch (err) {
       setErro(err.message || 'Erro ao carregar dados do CRM.')
     } finally {
@@ -563,38 +538,6 @@ export default function CRMInteligencia() {
     return query
   }
 
-  async function buscarChavesClientesPorLivraria() {
-    if (!exportLivraria) return null
-
-    const chaves = new Set()
-    const pageSize = 1000
-    let from = 0
-    let continuar = true
-
-    while (continuar) {
-      const { data, error } = await supabase
-        .from('pedidos_crm')
-        .select('cliente_chave')
-        .not('cliente_chave', 'is', null)
-        .eq('livraria', exportLivraria)
-        .range(from, from + pageSize - 1)
-
-      if (error) throw error
-
-      ;(data || []).forEach((row) => {
-        if (row.cliente_chave) chaves.add(row.cliente_chave)
-      })
-
-      if (!data || data.length < pageSize) {
-        continuar = false
-      } else {
-        from += pageSize
-      }
-    }
-
-    return Array.from(chaves)
-  }
-
   async function buscarChavesClientesQueCompraramNoPeriodo() {
     if (!exportDataInicio && !exportDataFim) {
       throw new Error('Para usar “Comprou no período”, informe pelo menos uma data.')
@@ -618,10 +561,6 @@ export default function CRMInteligencia() {
 
       if (exportDataFim) {
         query = query.lte('data_criacao', `${exportDataFim}T23:59:59`)
-      }
-
-      if (exportLivraria) {
-        query = query.eq('livraria', exportLivraria)
       }
 
       const { data, error } = await query
@@ -650,17 +589,11 @@ export default function CRMInteligencia() {
       const todasLinhas = []
       const pageSize = 1000
 
-      if (exportTipoPeriodo === 'comprou_periodo' || exportLivraria) {
-        let chaves = []
+      if (exportTipoPeriodo === 'comprou_periodo') {
+        const chaves = await buscarChavesClientesQueCompraramNoPeriodo()
 
-        if (exportTipoPeriodo === 'comprou_periodo') {
-          chaves = await buscarChavesClientesQueCompraramNoPeriodo()
-        } else {
-          chaves = await buscarChavesClientesPorLivraria()
-        }
-
-        if (!chaves || !chaves.length) {
-          setErro('Nenhum cliente encontrado para os filtros selecionados.')
+        if (!chaves.length) {
+          setErro('Nenhum cliente comprou no período selecionado.')
           setExportando(false)
           return
         }
@@ -675,7 +608,6 @@ export default function CRMInteligencia() {
             .order('valor_total', { ascending: false })
 
           query = aplicarFiltroSegmento(query, exportSegmento)
-          query = aplicarFiltroPeriodoCliente(query)
 
           const { data, error } = await query
 
@@ -724,8 +656,7 @@ export default function CRMInteligencia() {
         exportSegmento,
         exportTipoPeriodo,
         exportDataInicio,
-        exportDataFim,
-        exportLivraria
+        exportDataFim
       )
 
       baixarCSV(nomeArquivo, linhasUnicas)
@@ -738,8 +669,12 @@ export default function CRMInteligencia() {
   }
 
   useEffect(() => {
-    fetchData()
+    carregarLivrarias()
   }, [])
+
+  useEffect(() => {
+    fetchData()
+  }, [dashboardLivraria]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const clienteColumns = [
     {
@@ -827,7 +762,30 @@ export default function CRMInteligencia() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end', alignItems: 'flex-end' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 220 }}>
+            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+              Filtrar dashboard por livraria
+            </span>
+
+            <select
+              value={dashboardLivraria}
+              onChange={(e) => setDashboardLivraria(e.target.value)}
+              disabled={loading}
+              style={exportInputStyle}
+            >
+              <option value="">Todas as livrarias</option>
+              {livrariasOpcoes.map((opt) => {
+                const nome = opt.livraria || 'Não informado'
+                return (
+                  <option key={nome} value={nome}>
+                    {nome}
+                  </option>
+                )
+              })}
+            </select>
+          </label>
+
           <button className="btn-secondary" type="button" onClick={fetchData} disabled={loading}>
             <RefreshCw size={16} />
             Atualizar dados
@@ -942,7 +900,7 @@ export default function CRMInteligencia() {
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
+                  gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
                   gap: 10,
                   alignItems: 'end',
                 }}
@@ -960,25 +918,6 @@ export default function CRMInteligencia() {
                     {SEGMENTOS_EXPORTACAO.map((segmento) => (
                       <option key={segmento.value} value={segmento.value}>
                         {segmento.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                    Livraria
-                  </span>
-
-                  <select
-                    value={exportLivraria}
-                    onChange={(e) => setExportLivraria(e.target.value)}
-                    style={exportInputStyle}
-                  >
-                    <option value="">Todas as livrarias</option>
-                    {livrarias.map((item) => (
-                      <option key={item.livraria} value={item.livraria}>
-                        {item.livraria}
                       </option>
                     ))}
                   </select>
@@ -1043,7 +982,7 @@ export default function CRMInteligencia() {
               </div>
 
               <p style={{ margin: '12px 0 0', color: 'var(--text-muted)', fontSize: 13 }}>
-                O CSV exporta apenas clientes com e-mail preenchido. O filtro de livraria considera clientes que compraram ao menos uma vez na livraria selecionada. Para “Comprou no período”, o sistema considera qualquer pedido feito dentro do intervalo selecionado.
+                O CSV exporta apenas clientes com e-mail preenchido. Para “Comprou no período”, o sistema considera qualquer pedido feito dentro do intervalo selecionado.
               </p>
             </Section>
           </div>
