@@ -104,7 +104,7 @@ function csvEscape(value) {
 }
 
 function baixarCSV(nomeArquivo, linhas) {
-  const colunas = ['email']
+  const colunas = ['email', 'nome', 'segmento_rfm', 'status_cliente', 'segmento_marketing']
 
   const header = colunas.join(';')
 
