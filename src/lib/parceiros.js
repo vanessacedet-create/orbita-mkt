@@ -368,10 +368,13 @@ export const SITUACOES = {
 
 // Retorna parceiros ativos (com tier) para a aba "Parceiros ativos"
 export async function getParceirosComTier() {
+  // Busca todos os parceiros ativos (com ou sem tier)
+  // Parceiros de Livraria (modelo 1) aparecem sem tier
+  // Parceiros Book Time/Institucional (modelos 2/3) aparecem com tier
   const { data, error } = await supabase
     .from('parceiros')
     .select('*, responsavel_interno:usuarios!responsavel_interno_id(id, nome)')
-    .not('tier', 'is', null)
+    .or('tier.not.is.null,situacao.eq.ativo,situacao.eq.pausado,situacao.eq.encerrado')
     .order('vendas_mes', { ascending: false, nullsFirst: false })
   if (error) throw error
 
