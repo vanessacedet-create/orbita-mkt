@@ -17,6 +17,7 @@ import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import TabelaAtivos from '../components/crm/TabelaAtivos'
 import BadgeTier, { BadgeSituacao, ProgressoTier } from '../components/crm/BadgeTier'
+import DesempenhoMensal from '../components/crm/DesempenhoMensal'
 
 // ── PIPELINE FALLBACK (usado se não houver config no banco) ──
 const PIPELINE_FALLBACK = [
@@ -1258,6 +1259,7 @@ export default function CRM({ grupo, titulo }) {
         {[
           {v:'prospeccao', l:'Prospecção'},
           {v:'ativos', l:'Parceiros ativos (Escada)'},
+          {v:'desempenho', l:'Desempenho'},
         ].map(({v,l})=>(
           <button key={v} onClick={()=>setVisao(v)}
             style={{padding:'10px 20px',background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:700,
@@ -1272,6 +1274,11 @@ export default function CRM({ grupo, titulo }) {
       {/* ── ABA: PARCEIROS ATIVOS (Escada de Crescimento) ── */}
       {visao==='ativos' && (
         <TabelaAtivos onOpenParceiro={p => setModalParceiro(p)} />
+      )}
+
+      {/* ── ABA: DESEMPENHO (Score de engajamento mensal) ── */}
+      {visao==='desempenho' && (
+        <DesempenhoMensal />
       )}
 
       {/* ── ABA: PROSPECÇÃO (Kanban original) ── */}
