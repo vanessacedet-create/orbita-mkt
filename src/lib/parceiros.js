@@ -311,6 +311,11 @@ export async function vincularDivulgadorComoParceiro(divulgador) {
 
 // ── CONSTANTES DA ESCADA ──────────────────────────────────
 
+// A Escada de Crescimento só se aplica a parceiros com modelo:
+//   2 (Book Time / cupom) e 3 (Institucional)
+// Parceiros modelo 1 (Livraria de influencer) NÃO participam da Escada.
+export const MODELOS_COM_ESCADA = [2, 3]
+
 export const TIERS = {
   bronze: {
     value: 'bronze',
@@ -507,28 +512,45 @@ export async function getTierHistory(parceiroId) {
 // ── ATIVAR PARCEIRO (Acordo fechado → Bronze) ─────────────
 
 // Chamada quando o parceiro fecha acordo no pipeline de prospecção
+// Só atribui tier para modelos 2 (Book Time) e 3 (Institucional)
 export async function ativarParceiroBronze(parceiroId, userId) {
-  // Definir tier e situacao
-  const { data, error } = await supabase
+  // Buscar modelo do parceiro
+  const { data: parceiro, error: fetchErr } = await supabase
     .from('parceiros')
-    .update({
+    .select('model')
+    .eq('id', parceiroId)
+    .single()
+  if (fetchErr) throw fetchErr
+
+  const temEscada = MODELOS_COM_ESCADA.includes(parceiro?.model)
+
+  // Definir tier (só se modelo elegível) e situacao
+  const updatePayload = {
+    situacao: 'ativo',
+    ...(temEscada ? {
       tier: 'bronze',
       tier_updated_at: new Date().toISOString(),
-      situacao: 'ativo',
-    })
+    } : {}),
+  }
+
+  const { data, error } = await supabase
+    .from('parceiros')
+    .update(updatePayload)
     .eq('id', parceiroId)
     .select('*')
     .single()
   if (error) throw error
 
-  // Registrar no histórico de tier
-  await supabase.from('tier_history').insert([{
-    parceiro_id: parceiroId,
-    tier_anterior: null,
-    tier_novo: 'bronze',
-    motivo: 'Acordo fechado — parceiro ativado como Bronze',
-    changed_by: userId || null,
-  }])
+  // Registrar no histórico de tier (só se entrou na Escada)
+  if (temEscada) {
+    await supabase.from('tier_history').insert([{
+      parceiro_id: parceiroId,
+      tier_anterior: null,
+      tier_novo: 'bronze',
+      motivo: 'Acordo fechado — parceiro ativado como Bronze',
+      changed_by: userId || null,
+    }])
+  }
 
   // Registrar no histórico de status do CRM também
   await addStatusHistory(parceiroId, 'active', 'Parceiro ativado via Escada de Crescimento')
