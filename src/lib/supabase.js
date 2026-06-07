@@ -19,6 +19,20 @@ export {
   getUsuarioPerfil, getUsuarios, updateUsuario, createUsuarioAdmin,
 } from './auth'
 
+// ============================================================
+// ADICIONAR AO src/lib/supabase.js
+// Na seção de imports de './parceiros', incluir as novas funções:
+// ============================================================
+
+// Localizar a linha que importa de './parceiros' e ADICIONAR:
+//
+//   TIERS, TIER_ORDER, SITUACOES,
+//   getParceirosComTier, verificarPromocao, progressoTier,
+//   updateTier, updateSituacao, updatePerformance,
+//   getTierHistory, ativarParceiroBronze,
+//
+// Exemplo de como ficaria o import completo:
+
 export {
   saveParceiroCPF, getParceiroCPF,
   getParceiros, getParceirosAtivos, getTodosParceiros, getParceirosComPontuacao,
@@ -26,7 +40,13 @@ export {
   createParceiroCRM, getCRMParceiros, updateParceiroCRM,
   getStatusHistory, addStatusHistory,
   vincularDivulgadorComoParceiro,
+  // ── NOVAS FUNÇÕES (Escada de Crescimento) ──
+  TIERS, TIER_ORDER, SITUACOES, MODELOS_COM_ESCADA,
+  getParceirosComTier, verificarPromocao, progressoTier,
+  updateTier, updateSituacao, updatePerformance,
+  getTierHistory, ativarParceiroBronze,
 } from './parceiros'
+
 
 export {
   getLivros, createLivro, updateLivro, deleteLivro,
