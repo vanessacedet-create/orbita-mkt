@@ -302,3 +302,236 @@ export async function vincularDivulgadorComoParceiro(divulgador) {
     .eq('id', divulgador.id)
   return parceiro
 }
+
+// ============================================================
+// FUNÇÕES DE TIER — Escada de Crescimento
+// Adicionar ao final do arquivo src/lib/parceiros.js
+// ============================================================
+
+
+// ── CONSTANTES DA ESCADA ──────────────────────────────────
+
+export const TIERS = {
+  bronze: {
+    value: 'bronze',
+    label: 'Bronze',
+    cor: '#78716c',
+    bg: 'rgba(120,113,108,0.12)',
+    border: 'rgba(120,113,108,0.3)',
+    criterio: 'Acordo fechado',
+    beneficios: 'Permuta 1 livro + cupom + comissão 10%',
+    proximoTier: 'prata',
+    metaVendas: 10,        // vendas acumuladas para subir
+    metaLabel: '10 vendas acumuladas',
+  },
+  prata: {
+    value: 'prata',
+    label: 'Prata',
+    cor: '#3b82f6',
+    bg: 'rgba(59,130,246,0.12)',
+    border: 'rgba(59,130,246,0.3)',
+    criterio: '10+ vendas acumuladas',
+    beneficios: 'Tudo do Bronze + lançamentos mensais grátis + prioridade editorial',
+    proximoTier: 'ouro',
+    metaVendas: 30,        // vendas/mês para subir
+    metaLabel: '30 vendas/mês por 2 meses',
+  },
+  ouro: {
+    value: 'ouro',
+    label: 'Ouro',
+    cor: '#d97706',
+    bg: 'rgba(217,119,6,0.12)',
+    border: 'rgba(217,119,6,0.3)',
+    criterio: '30+ vendas/mês (2 meses consecutivos)',
+    beneficios: 'Tudo do Prata + acesso antecipado + briefing exclusivo + Vitrine',
+    proximoTier: null,
+    metaVendas: null,
+    metaLabel: 'Tier máximo',
+  },
+}
+
+export const TIER_ORDER = ['bronze', 'prata', 'ouro']
+
+export const SITUACOES = {
+  ativo:     { label: 'Ativo',     cor: '#22c55e', bg: 'rgba(34,197,94,0.12)' },
+  pausado:   { label: 'Pausado',   cor: '#eab308', bg: 'rgba(234,179,8,0.12)' },
+  encerrado: { label: 'Encerrado', cor: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
+}
+
+
+// ── CONSULTAS DE PARCEIROS COM TIER ───────────────────────
+
+// Retorna parceiros ativos (com tier) para a aba "Parceiros ativos"
+export async function getParceirosComTier() {
+  const { data, error } = await supabase
+    .from('parceiros')
+    .select('*, responsavel_interno:usuarios!responsavel_interno_id(id, nome)')
+    .not('tier', 'is', null)
+    .order('vendas_mes', { ascending: false, nullsFirst: false })
+  if (error) throw error
+
+  return (data || []).map(p => ({
+    ...p,
+    responsavel_interno_nome: p.responsavel_interno?.nome || null,
+    pronto_para_subir: verificarPromocao(p),
+  }))
+}
+
+// Verifica se o parceiro atingiu os critérios do próximo tier
+export function verificarPromocao(parceiro) {
+  const { tier, vendas_total, vendas_mes } = parceiro
+  if (!tier) return null
+
+  const tierAtual = TIERS[tier]
+  if (!tierAtual || !tierAtual.proximoTier) return null
+
+  const proximoTier = tierAtual.proximoTier
+
+  if (tier === 'bronze' && vendas_total >= 10) {
+    return { proximo: proximoTier, motivo: `${vendas_total} vendas acumuladas (meta: 10)` }
+  }
+
+  if (tier === 'prata' && vendas_mes >= 30) {
+    return { proximo: proximoTier, motivo: `${vendas_mes} vendas/mês (meta: 30)` }
+  }
+
+  return null
+}
+
+// Progresso percentual até o próximo tier (para barra de progresso)
+export function progressoTier(parceiro) {
+  const { tier, vendas_total, vendas_mes } = parceiro
+  if (!tier || !TIERS[tier] || !TIERS[tier].proximoTier) return 100 // já é Ouro
+
+  if (tier === 'bronze') {
+    return Math.min(100, Math.round((vendas_total / 10) * 100))
+  }
+  if (tier === 'prata') {
+    return Math.min(100, Math.round((vendas_mes / 30) * 100))
+  }
+  return 0
+}
+
+
+// ── ATUALIZAÇÃO DE TIER ───────────────────────────────────
+
+export async function updateTier(parceiroId, novoTier, motivo, userId) {
+  // Buscar tier atual
+  const { data: parceiro, error: fetchErr } = await supabase
+    .from('parceiros')
+    .select('tier')
+    .eq('id', parceiroId)
+    .single()
+  if (fetchErr) throw fetchErr
+
+  // Registrar no histórico
+  const { error: histErr } = await supabase
+    .from('tier_history')
+    .insert([{
+      parceiro_id: parceiroId,
+      tier_anterior: parceiro?.tier || null,
+      tier_novo: novoTier,
+      motivo: motivo || null,
+      changed_by: userId || null,
+    }])
+  if (histErr) throw histErr
+
+  // Atualizar parceiro
+  const { data, error } = await supabase
+    .from('parceiros')
+    .update({
+      tier: novoTier,
+      tier_updated_at: new Date().toISOString(),
+    })
+    .eq('id', parceiroId)
+    .select('*')
+    .single()
+  if (error) throw error
+
+  return data
+}
+
+
+// ── ATUALIZAÇÃO DE SITUAÇÃO ───────────────────────────────
+
+export async function updateSituacao(parceiroId, novaSituacao) {
+  const { data, error } = await supabase
+    .from('parceiros')
+    .update({ situacao: novaSituacao })
+    .eq('id', parceiroId)
+    .select('*')
+    .single()
+  if (error) throw error
+  return data
+}
+
+
+// ── ATUALIZAÇÃO DE PERFORMANCE ────────────────────────────
+
+export async function updatePerformance(parceiroId, campos) {
+  // campos pode conter: vendas_total, vendas_mes, conteudos_postados, ultima_atividade
+  const allowed = ['vendas_total', 'vendas_mes', 'conteudos_postados', 'ultima_atividade']
+  const payload = {}
+  for (const key of allowed) {
+    if (campos[key] !== undefined) payload[key] = campos[key]
+  }
+  if (Object.keys(payload).length === 0) return null
+
+  const { data, error } = await supabase
+    .from('parceiros')
+    .update(payload)
+    .eq('id', parceiroId)
+    .select('*')
+    .single()
+  if (error) throw error
+  return data
+}
+
+
+// ── HISTÓRICO DE TIER ─────────────────────────────────────
+
+export async function getTierHistory(parceiroId) {
+  const { data, error } = await supabase
+    .from('tier_history')
+    .select('*, usuario:usuarios!changed_by(id, nome)')
+    .eq('parceiro_id', parceiroId)
+    .order('changed_at', { ascending: false })
+  if (error) throw error
+  return (data || []).map(h => ({
+    ...h,
+    changed_by_nome: h.usuario?.nome || null,
+  }))
+}
+
+
+// ── ATIVAR PARCEIRO (Acordo fechado → Bronze) ─────────────
+
+// Chamada quando o parceiro fecha acordo no pipeline de prospecção
+export async function ativarParceiroBronze(parceiroId, userId) {
+  // Definir tier e situacao
+  const { data, error } = await supabase
+    .from('parceiros')
+    .update({
+      tier: 'bronze',
+      tier_updated_at: new Date().toISOString(),
+      situacao: 'ativo',
+    })
+    .eq('id', parceiroId)
+    .select('*')
+    .single()
+  if (error) throw error
+
+  // Registrar no histórico de tier
+  await supabase.from('tier_history').insert([{
+    parceiro_id: parceiroId,
+    tier_anterior: null,
+    tier_novo: 'bronze',
+    motivo: 'Acordo fechado — parceiro ativado como Bronze',
+    changed_by: userId || null,
+  }])
+
+  // Registrar no histórico de status do CRM também
+  await addStatusHistory(parceiroId, 'active', 'Parceiro ativado via Escada de Crescimento')
+
+  return data
+}
