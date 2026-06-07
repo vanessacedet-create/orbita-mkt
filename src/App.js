@@ -59,7 +59,6 @@ const CRMInteligencia = lazy(() => import('./pages/CRMInteligencia'))
 
 const MENU = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard, modulo: 'dashboard' },
-  { path: '/parceiros', label: 'Parceiros', icon: UserRound, modulo: 'parceiros' },
   { path: '/guia-parcerias', label: 'Guia de Parcerias', icon: FileText, modulo: 'guia_parcerias' },
   { path: '/crm-influencers', label: 'CRM Influencers', icon: Network, modulo: 'crm_influencers' },
   { path: '/crm-parceiras', label: 'CRM Parceiras', icon: Network, modulo: 'crm_parceiras' },
