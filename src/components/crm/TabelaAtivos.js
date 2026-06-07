@@ -164,7 +164,8 @@ export default function TabelaAtivos({ onOpenParceiro }) {
       (p.nome || '').toLowerCase().includes(q) ||
       (p.username || '').toLowerCase().includes(q)
     )) return false
-    if (filtroTier && p.tier !== filtroTier) return false
+    if (filtroTier === 'livraria' && p.tier) return false
+    if (filtroTier && filtroTier !== 'livraria' && p.tier !== filtroTier) return false
     if (filtroSituacao && p.situacao !== filtroSituacao) return false
     if (filtroPlat && !(p.platforms || []).includes(filtroPlat)) return false
     if (filtroResp && p.responsavel_interno_id !== filtroResp) return false
@@ -181,6 +182,7 @@ export default function TabelaAtivos({ onOpenParceiro }) {
     ouro: ativos.filter(p => p.tier === 'ouro').length,
     prata: ativos.filter(p => p.tier === 'prata').length,
     bronze: ativos.filter(p => p.tier === 'bronze').length,
+    livraria: ativos.filter(p => !p.tier).length,
   }
 
   // ── Responsáveis únicos (para filtro) ──
@@ -204,6 +206,7 @@ export default function TabelaAtivos({ onOpenParceiro }) {
         <MetricCard label="Ouro" value={porTier.ouro} cor={TIERS.ouro.cor} />
         <MetricCard label="Prata" value={porTier.prata} cor={TIERS.prata.cor} />
         <MetricCard label="Bronze" value={porTier.bronze} cor={TIERS.bronze.cor} />
+        <MetricCard label="Livraria" value={porTier.livraria} cor="#8b5cf6" />
       </div>
 
       {/* Filtros */}
@@ -224,6 +227,7 @@ export default function TabelaAtivos({ onOpenParceiro }) {
           {TIER_ORDER.map(t => (
             <option key={t} value={t}>{TIERS[t].label}</option>
           ))}
+          <option value="livraria">Livraria</option>
         </select>
         <select className="form-select" style={{ width: 'auto', fontSize: 12, padding: '6px 10px' }}
           value={filtroSituacao} onChange={e => setFiltroSituacao(e.target.value)}>
@@ -263,7 +267,7 @@ export default function TabelaAtivos({ onOpenParceiro }) {
       ) : (
         <div className="table-card">
           <div className="table-toolbar">
-            <span className="table-title">Parceiros na Escada ({filtrados.length})</span>
+            <span className="table-title">Parceiros ativos ({filtrados.length})</span>
           </div>
           <table>
             <thead>
@@ -296,10 +300,18 @@ export default function TabelaAtivos({ onOpenParceiro }) {
                     )}
                   </td>
                   <td>
-                    <BadgeTier
-                      tier={p.tier}
-                      prontoParaSubir={!!p.pronto_para_subir}
-                    />
+                    {p.tier ? (
+                      <BadgeTier
+                        tier={p.tier}
+                        prontoParaSubir={!!p.pronto_para_subir}
+                      />
+                    ) : (
+                      <span style={{
+                        display:'inline-flex',alignItems:'center',
+                        background:'rgba(139,92,246,0.12)',border:'1px solid rgba(139,92,246,0.3)',
+                        borderRadius:20,padding:'3px 12px',fontSize:12,fontWeight:700,color:'#8b5cf6',
+                      }}>Livraria</span>
+                    )}
                   </td>
                   <td>
                     <ProgressoTier parceiro={p} />
