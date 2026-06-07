@@ -1224,7 +1224,7 @@ export default function CRM({ grupo, titulo }) {
   }
 
   // Status de ciclo de vida — geridos na aba Parceiros Ativos, não no kanban
-  const STATUS_LIFECYCLE = ['active', 'paused', 'closed', 'sem_retorno', 'sem_interesse']
+  const STATUS_LIFECYCLE = ['active', 'paused', 'closed']
   const pipelineProspeccao = pipeline.filter(s => !STATUS_LIFECYCLE.includes(s.value))
 
   const total = filtrados.length
