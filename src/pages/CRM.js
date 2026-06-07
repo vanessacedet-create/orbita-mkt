@@ -39,9 +39,9 @@ const ORIGENS = [
   { value: 'inbound',       label: 'Inbound'     },
 ]
 const MODELOS = [
-  { value: '1', label: '1 — Livraria Personalizada' },
-  { value: '2', label: '2 — Book Time (cupom)'      },
-  { value: '3', label: '3 — Institucional'           },
+  { value: '1', label: '1 — Livraria Personalizada', desc: 'Parceiro tem loja própria com URL personalizada' },
+  { value: '2', label: '2 — Book Time (cupom)',      desc: 'Parceiro divulga com cupom de desconto e ganha comissão de 10%' },
+  { value: '3', label: '3 — Institucional',           desc: 'Divulgação das editoras próprias do grupo' },
 ]
 
 function useToast() {
@@ -61,7 +61,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
     nome:         inicial.nome||'',
     username:     inicial.username||'',
     platforms:    inicial.platforms||[],
-    followers:    inicial.followers_count ? JSON.stringify(inicial.followers_count) : '',
+    followers:    inicial.followers_count || {},
     engagement_rate: inicial.engagement_rate||'',
     profile_url:  inicial.profile_url||'',
     contact_value: inicial.contact_value||'',
@@ -102,10 +102,10 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
   async function salvarPerfil() {
     setSaving(true)
     try {
-      let followers_count = null
-      if (form.followers.trim()) {
-        try { followers_count = JSON.parse(form.followers) } catch {}
-      }
+      // Constrói followers_count a partir dos campos por plataforma
+      const followers_count = Object.keys(form.followers).length > 0
+        ? Object.fromEntries(Object.entries(form.followers).filter(([,v]) => v && Number(v) > 0))
+        : null
       const payload = {
         nome:            form.nome.trim()||inicial.nome,
         username:        form.username||null,
@@ -176,7 +176,13 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
 
         {/* Abas */}
         <div style={{display:'flex',gap:4,padding:'12px 0 0',borderBottom:'1px solid var(--border)',marginBottom:16}}>
-          {[{v:'perfil',l:'Perfil CRM'},{v:'performance',l:'Performance'},{v:'pipeline',l:'Pipeline'},{v:'livros_propostos',l:`Livros propostos (${(parceiro.livros_propostos||[]).length})`},{v:'historico',l:`Histórico (${history.length})`}].map(({v,l})=>(
+          {[
+            {v:'perfil',l:'Perfil CRM'},
+            ...(parceiro.tier || statusAtual === 'active' ? [{v:'performance',l:'Performance'}] : []),
+            {v:'pipeline',l:'Pipeline'},
+            {v:'livros_propostos',l:`Livros propostos (${(parceiro.livros_propostos||[]).length})`},
+            {v:'historico',l:`Histórico (${history.length})`},
+          ].map(({v,l})=>(
             <button key={v} onClick={()=>setAba(v)}
               className={`btn btn-sm ${aba===v?'btn-primary':'btn-ghost'}`}
               style={{borderRadius:'6px 6px 0 0'}}>
@@ -184,6 +190,18 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
             </button>
           ))}
         </div>
+
+        {/* Dica de próximo passo */}
+        {statusAtual !== 'active' && !parceiro.tier && (
+          <div style={{padding:'10px 14px',marginBottom:16,borderRadius:8,background:'var(--surface-2)',border:'1px solid var(--border)',fontSize:12,color:'var(--text-muted)',display:'flex',alignItems:'center',gap:8}}>
+            <Clock size={14} style={{flexShrink:0}}/>
+            {statusAtual === 'found' && 'Próximo passo: avaliar o perfil e entrar em contato com o parceiro.'}
+            {statusAtual === 'prospected' && 'Próximo passo: propor livros e negociar o modelo de parceria.'}
+            {statusAtual === 'negotiating' && 'Próximo passo: definir modelo, cupom/livraria e fechar acordo.'}
+            {statusAtual === 'agreed' && 'Próximo passo: ativar o parceiro para ele entrar na Escada de Crescimento.'}
+            {!['found','prospected','negotiating','agreed'].includes(statusAtual) && 'Parceiro em prospecção — avance no pipeline para ativar.'}
+          </div>
+        )}
 
         {/* ── ABA PERFIL ── */}
         {aba==='perfil' && (
@@ -195,7 +213,16 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
               </div>
               <div className="form-group">
                 <label className="form-label">Link do perfil</label>
-                <input className="form-input" value={form.profile_url} onChange={e=>setForm(f=>({...f,profile_url:e.target.value}))} placeholder="https://instagram.com/..."/>
+                <div style={{display:'flex',gap:6}}>
+                  <input className="form-input" style={{flex:1}} value={form.profile_url} onChange={e=>setForm(f=>({...f,profile_url:e.target.value}))} placeholder="https://instagram.com/..."/>
+                  {form.profile_url && (
+                    <a href={form.profile_url} target="_blank" rel="noopener noreferrer"
+                      className="btn btn-ghost btn-icon" title="Abrir perfil"
+                      style={{flexShrink:0,display:'flex',alignItems:'center'}}>
+                      <ExternalLink size={15}/>
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -214,13 +241,23 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
               </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Seguidores por plataforma</label>
-              <input className="form-input" value={form.followers}
-                onChange={e=>setForm(f=>({...f,followers:e.target.value}))}
-                placeholder='{"Instagram": 10000, "TikTok": 5000}'/>
-              <div style={{fontSize:11,color:'var(--text-muted)',marginTop:3}}>Formato JSON: {`{"Instagram": 10000}`}</div>
-            </div>
+            {form.platforms.length > 0 && (
+              <div className="form-group">
+                <label className="form-label">Seguidores por plataforma</label>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                  {form.platforms.map(p=>(
+                    <div key={p} style={{display:'flex',alignItems:'center',gap:8}}>
+                      <span style={{fontSize:12,color:'var(--text-muted)',minWidth:70}}>{p}</span>
+                      <input className="form-input" type="number" min="0"
+                        style={{flex:1}}
+                        value={form.followers[p]||''}
+                        onChange={e=>setForm(f=>({...f,followers:{...f.followers,[p]:e.target.value?parseInt(e.target.value):undefined}}))}
+                        placeholder="0"/>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="form-row">
               <div className="form-group">
@@ -234,6 +271,11 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                   <option value="">Selecionar...</option>
                   {MODELOS.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}
                 </select>
+                {form.model && MODELOS.find(m=>m.value===form.model) && (
+                  <div style={{fontSize:11,color:'var(--text-muted)',marginTop:4}}>
+                    {MODELOS.find(m=>m.value===form.model).desc}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -321,7 +363,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                 </div>
               )}
             </div>
-            <div style={{display:'flex',justifyContent:'flex-end'}}>
+            <div style={{display:'flex',justifyContent:'flex-end',position:'sticky',bottom:0,paddingTop:12,paddingBottom:4,background:'var(--surface)',borderTop:'1px solid var(--border)',marginTop:8}}>
               <button className="btn btn-primary" onClick={salvarPerfil} disabled={saving}>
                 {saving?'Salvando...':'Salvar perfil'}
               </button>
@@ -487,10 +529,14 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
         {/* ── ABA PIPELINE ── */}
         {aba==='pipeline' && (
           <div>
+            {(() => {
+              const STATUS_LIFECYCLE_MODAL = ['active', 'paused', 'closed']
+              const pipelineFiltrado = pipeline.filter(s => !STATUS_LIFECYCLE_MODAL.includes(s.value))
+              return (<>
             <div style={{marginBottom:20}}>
               <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:8,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}}>Status atual</div>
               <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
-                {pipeline.map((s,i)=>(
+                {pipelineFiltrado.map((s,i)=>(
                   <div key={s.value} style={{display:'flex',alignItems:'center',gap:4}}>
                     <div style={{
                       padding:'6px 14px',borderRadius:20,fontSize:12,fontWeight:700,
@@ -498,7 +544,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                       color: statusAtual===s.value ? '#fff' : s.cor,
                       border:`2px solid ${s.cor}`,
                     }}>{s.label}</div>
-                    {i < pipeline.length-1 && <ChevronRight size={14} color="var(--border)"/>}
+                    {i < pipelineFiltrado.length-1 && <ChevronRight size={14} color="var(--border)"/>}
                   </div>
                 ))}
               </div>
@@ -511,7 +557,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                   <label className="form-label">Novo status</label>
                   <select className="form-select" value={novoStatus} onChange={e=>setNovoStatus(e.target.value)}>
                     <option value="">Selecionar...</option>
-                    {pipeline.filter(s=>s.value!==statusAtual).map(s=>(
+                    {pipelineFiltrado.filter(s=>s.value!==statusAtual).map(s=>(
                       <option key={s.value} value={s.value}>{s.label}</option>
                     ))}
                   </select>
@@ -531,6 +577,8 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                 {savingStatus?'Salvando...':'Confirmar mudança de status'}
               </button>
             </div>
+              </>)
+            })()}
           </div>
         )}
 
