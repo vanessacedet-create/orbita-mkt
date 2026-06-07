@@ -184,7 +184,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
 
   return (
     <div className="modal-backdrop">
-      <div className="modal" style={{maxWidth:580,maxHeight:'90vh',overflowY:'auto'}}>
+      <div className="modal" style={{maxWidth:780,maxHeight:'90vh',overflowY:'auto'}}>
         <div className="modal-header" style={{position:'sticky',top:0,background:'var(--surface)',zIndex:10,borderBottom:'1px solid var(--border)'}}>
           <div>
             <input
@@ -233,23 +233,17 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
         {/* ── ABA PERFIL ── */}
         {aba==='perfil' && (
           <div className="form-grid">
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">Username / @</label>
-                <input className="form-input" value={form.username} onChange={e=>setForm(f=>({...f,username:e.target.value}))} placeholder="@usuario"/>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Link do perfil</label>
-                <div style={{display:'flex',gap:6}}>
-                  <input className="form-input" style={{flex:1}} value={form.profile_url} onChange={e=>setForm(f=>({...f,profile_url:e.target.value}))} placeholder="https://instagram.com/..."/>
-                  {form.profile_url && (
-                    <a href={form.profile_url} target="_blank" rel="noopener noreferrer"
-                      className="btn btn-ghost btn-icon" title="Abrir perfil"
-                      style={{flexShrink:0,display:'flex',alignItems:'center'}}>
-                      <ExternalLink size={15}/>
-                    </a>
-                  )}
-                </div>
+            <div className="form-group">
+              <label className="form-label">Link do perfil</label>
+              <div style={{display:'flex',gap:6}}>
+                <input className="form-input" style={{flex:1}} value={form.profile_url} onChange={e=>setForm(f=>({...f,profile_url:e.target.value}))} placeholder="https://instagram.com/..."/>
+                {form.profile_url && (
+                  <a href={form.profile_url} target="_blank" rel="noopener noreferrer"
+                    className="btn btn-ghost btn-icon" title="Abrir perfil"
+                    style={{flexShrink:0,display:'flex',alignItems:'center'}}>
+                    <ExternalLink size={15}/>
+                  </a>
+                )}
               </div>
             </div>
 
@@ -289,8 +283,34 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Taxa de engajamento (%)</label>
-                <input className="form-input" type="number" step="0.01" value={form.engagement_rate}
-                  onChange={e=>setForm(f=>({...f,engagement_rate:e.target.value}))} placeholder="3.75"/>
+                <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                  <input className="form-input" type="number" step="0.01" style={{flex:1}} value={form.engagement_rate}
+                    onChange={e=>setForm(f=>({...f,engagement_rate:e.target.value}))} placeholder="3.75"/>
+                  <button type="button" className="btn btn-ghost btn-sm" title="Calcular engajamento no Social Cat"
+                    onClick={()=>{
+                      let user = ''
+                      try {
+                        const url = form.profile_url||''
+                        if (url.includes('instagram')) {
+                          user = new URL(url.startsWith('http')?url:'https://'+url).pathname.replace(/\//g,'')
+                        }
+                      } catch {}
+                      if (!user) user = (form.username || '').replace('@','')
+                      const dest = user
+                        ? `https://thesocialcat.com/tools/instagram-engagement-rate-calculator?username=${encodeURIComponent(user)}`
+                        : 'https://thesocialcat.com/tools/instagram-engagement-rate-calculator'
+                      window.open(dest, '_blank')
+                    }}
+                    style={{whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:4,padding:'6px 10px',flexShrink:0}}>
+                    <ExternalLink size={12}/>
+                    Calcular
+                  </button>
+                </div>
+                {!(form.profile_url || '').includes('instagram') && !form.engagement_rate && (
+                  <div style={{fontSize:10,color:'var(--text-muted)',marginTop:3}}>
+                    Preencha o link do Instagram acima para calcular automaticamente
+                  </div>
+                )}
               </div>
               <div className="form-group">
                 <label className="form-label">Modelo de parceria</label>
@@ -306,20 +326,22 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
               </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Responsável interno</label>
-              <select className="form-select" value={form.responsavel_interno_id} onChange={e=>setForm(f=>({...f,responsavel_interno_id:e.target.value}))}>
-                <option value="">Sem responsável</option>
-                {usuarios.map(u=><option key={u.id} value={u.id}>{u.nome}</option>)}
-              </select>
-            </div>
-
             <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Responsável interno</label>
+                <select className="form-select" value={form.responsavel_interno_id} onChange={e=>setForm(f=>({...f,responsavel_interno_id:e.target.value}))}>
+                  <option value="">Sem responsável</option>
+                  {usuarios.map(u=><option key={u.id} value={u.id}>{u.nome}</option>)}
+                </select>
+              </div>
               <div className="form-group">
                 <label className="form-label">Contato (WhatsApp/Email)</label>
                 <input className="form-input" value={form.contact_value}
                   onChange={e=>setForm(f=>({...f,contact_value:e.target.value}))} placeholder="+55 11 99999-9999"/>
               </div>
+            </div>
+
+            <div className="form-row">
               <div className="form-group">
                 <label className="form-label">Origem</label>
                 <select className="form-select" value={form.source} onChange={e=>setForm(f=>({...f,source:e.target.value}))}>
@@ -327,36 +349,39 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                   {ORIGENS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
+              {form.source==='referral' && (
+                <div className="form-group">
+                  <label className="form-label">Indicado por</label>
+                  <select className="form-select" value={form.referred_by} onChange={e=>setForm(f=>({...f,referred_by:e.target.value}))}>
+                    <option value="">Selecionar parceiro...</option>
+                    {todos.filter(p=>p.id!==parceiro.id).map(p=><option key={p.id} value={p.id}>{p.nome}</option>)}
+                  </select>
+                </div>
+              )}
             </div>
 
-            {form.source==='referral' && (
-              <div className="form-group">
-                <label className="form-label">Indicado por</label>
-                <select className="form-select" value={form.referred_by} onChange={e=>setForm(f=>({...f,referred_by:e.target.value}))}>
-                  <option value="">Selecionar parceiro...</option>
-                  {todos.filter(p=>p.id!==parceiro.id).map(p=><option key={p.id} value={p.id}>{p.nome}</option>)}
-                </select>
-              </div>
-            )}
 
-            {(form.model==='1'||!form.model) && (
-              <div className="form-group">
-                <label className="form-label">URL da Livraria Personalizada</label>
-                <input className="form-input" value={form.library_url}
-                  onChange={e=>setForm(f=>({...f,library_url:e.target.value}))} placeholder="https://..."/>
-              </div>
-            )}
 
-            {form.model==='2' && (
-              <div className="form-group">
-                <label className="form-label">Código do Cupom (Book Time)</label>
-                <input className="form-input" value={form.coupon_code}
-                  onChange={e=>setForm(f=>({...f,coupon_code:e.target.value}))} placeholder="BOOKTIME123"/>
-              </div>
-            )}
+            <div className="form-row">
+              {(form.model==='1'||!form.model) && (
+                <div className="form-group">
+                  <label className="form-label">URL da Livraria Personalizada</label>
+                  <input className="form-input" value={form.library_url}
+                    onChange={e=>setForm(f=>({...f,library_url:e.target.value}))} placeholder="https://..."/>
+                </div>
+              )}
+              {form.model==='2' && (
+                <div className="form-group">
+                  <label className="form-label">Código do Cupom (Book Time)</label>
+                  <input className="form-input" value={form.coupon_code}
+                    onChange={e=>setForm(f=>({...f,coupon_code:e.target.value}))} placeholder="BOOKTIME123"/>
+                </div>
+              )}
+            </div>
 
 
 
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,alignItems:'start'}}>
             <div className="form-group">
               <label className="form-label">Editoras a oferecer</label>
               {form.editoras_sugeridas.length > 0 && (
@@ -431,6 +456,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                   }
                 </div>
               )}
+            </div>
             </div>
 
             <div style={{display:'flex',justifyContent:'flex-end',position:'sticky',bottom:0,paddingTop:12,paddingBottom:4,background:'var(--surface)',borderTop:'1px solid var(--border)',marginTop:8}}>
