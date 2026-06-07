@@ -71,7 +71,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
     coupon_code:  inicial.coupon_code||'',
     model:        inicial.model||'',
     responsavel_interno_id: inicial.responsavel_interno_id||'',
-    notes:        inicial.notes||'',
+
     editoras_sugeridas: inicial.editoras_sugeridas ? String(inicial.editoras_sugeridas).split(',').map(e=>e.trim()).filter(Boolean) : [],
   })
   const [novoStatus, setNovoStatus] = useState('')
@@ -81,6 +81,11 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
   const [editoras, setEditoras]       = useState([])
   const [editoraSearch, setEditoraSearch] = useState('')
   const [usuarios, setUsuarios]       = useState([])
+  const [livros, setLivros]           = useState([])
+  const [livroSearch, setLivroSearch] = useState('')
+  const [livrosConvidados, setLivrosConvidados] = useState(
+    (inicial.livros_propostos||[]).map(lp=>({id:lp.livro_id, titulo:lp.livro, autor:''}))
+  )
   const [toast, showToast]          = useToast()
   const [tierHistory, setTierHistory] = useState([])
   const [perfForm, setPerfForm]     = useState({
@@ -97,6 +102,22 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
     getEditoras().then(setEditoras).catch(console.error)
     getUsuarios().then(setUsuarios).catch(console.error)
     getTierHistory(parceiro.id).then(setTierHistory).catch(console.error)
+    ;(async () => {
+      try {
+        const todos = []
+        let pagina = 0
+        const tamanho = 1000
+        while (true) {
+          const r = await getLivros({ page: pagina, pageSize: tamanho, grupos: null })
+          const lote = r.data || []
+          todos.push(...lote)
+          if (lote.length < tamanho) break
+          pagina++
+          if (pagina > 20) break
+        }
+        setLivros(todos)
+      } catch (e) { console.error('Erro ao carregar livros:', e) }
+    })()
   }, [parceiro.id])
 
   async function salvarPerfil() {
@@ -120,12 +141,18 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
         coupon_code:     form.coupon_code||null,
         model:           form.model ? Number(form.model) : null,
         responsavel_interno_id: form.responsavel_interno_id||null,
-        notes:           form.notes||null,
+
         editoras_sugeridas: form.editoras_sugeridas.length ? form.editoras_sugeridas.join(',') : null,
+        livros_propostos: livrosConvidados.length ? livrosConvidados.map(l => ({
+          livro: l.titulo,
+          livro_id: l.id,
+          status: 'proposto',
+          data: new Date().toLocaleDateString('pt-BR'),
+        })) : (parceiro.livros_propostos||null),
       }
       const upd = await updateParceiroCRM(parceiro.id, payload)
-      setParceiro({...upd, nome: payload.nome||upd.nome})
-      onSave({...upd, nome: payload.nome||upd.nome})
+      setParceiro({...upd, nome: payload.nome||upd.nome, livros_propostos: payload.livros_propostos||[]})
+      onSave({...upd, nome: payload.nome||upd.nome, livros_propostos: payload.livros_propostos||[]})
       showToast('Perfil atualizado!')
     } catch(e) { showToast('Erro ao salvar','error') } finally { setSaving(false) }
   }
@@ -328,11 +355,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
               </div>
             )}
 
-            <div className="form-group">
-              <label className="form-label">Observações CRM</label>
-              <textarea className="form-textarea" rows={3} value={form.notes}
-                onChange={e=>setForm(f=>({...f,notes:e.target.value}))} placeholder="Anotações sobre este parceiro..."/>
-            </div>
+
 
             <div className="form-group">
               <label className="form-label">Editoras a oferecer</label>
@@ -363,6 +386,53 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                 </div>
               )}
             </div>
+
+            {/* ── Livro a propor ── */}
+            <div className="form-group">
+              <label className="form-label">Livro a propor na parceria</label>
+              {livrosConvidados.length > 0 && (
+                <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:8}}>
+                  {livrosConvidados.map(l=>(
+                    <div key={l.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:'var(--accent-glow)',border:'1px solid var(--accent)',borderRadius:8,padding:'6px 12px'}}>
+                      <div style={{minWidth:0}}>
+                        <span style={{fontSize:13,fontWeight:600,color:'var(--accent)',display:'block',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{l.titulo}</span>
+                        {l.autor && <span style={{fontSize:11,color:'var(--text-muted)'}}>{l.autor}</span>}
+                      </div>
+                      <button onClick={()=>setLivrosConvidados(prev=>prev.filter(x=>x.id!==l.id))} style={{background:'none',border:'none',cursor:'pointer',color:'var(--accent)',padding:'0 0 0 8px',display:'flex',flexShrink:0}}><X size={13}/></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <input className="form-input" value={livroSearch} onChange={e=>setLivroSearch(e.target.value)} placeholder="Buscar livro pelo título, autor, ISBN ou SKU..."/>
+              {livroSearch.trim() && (
+                <div style={{border:'1px solid var(--border)',borderRadius:8,marginTop:4,maxHeight:160,overflowY:'auto',background:'var(--surface-2)'}}>
+                  {livros.filter(l=>
+                    (l.titulo||'').toLowerCase().includes(livroSearch.toLowerCase()) ||
+                    (l.autor||'').toLowerCase().includes(livroSearch.toLowerCase()) ||
+                    (l.isbn||'').toLowerCase().includes(livroSearch.toLowerCase()) ||
+                    (l.sku||'').toLowerCase().includes(livroSearch.toLowerCase())
+                  ).filter(l=>!livrosConvidados.find(x=>x.id===l.id)).slice(0,20).length === 0
+                    ? <div style={{padding:'10px 14px',fontSize:12,color:'var(--text-muted)'}}>Nenhum livro encontrado</div>
+                    : livros.filter(l=>
+                        (l.titulo||'').toLowerCase().includes(livroSearch.toLowerCase()) ||
+                        (l.autor||'').toLowerCase().includes(livroSearch.toLowerCase()) ||
+                        (l.isbn||'').toLowerCase().includes(livroSearch.toLowerCase()) ||
+                        (l.sku||'').toLowerCase().includes(livroSearch.toLowerCase())
+                      ).filter(l=>!livrosConvidados.find(x=>x.id===l.id)).slice(0,20).map(l=>(
+                        <div key={l.id}
+                          onClick={()=>{setLivrosConvidados(prev=>[...prev,l]);setLivroSearch('')}}
+                          style={{padding:'8px 14px',cursor:'pointer',borderBottom:'1px solid var(--border)'}}
+                          onMouseEnter={ev=>ev.currentTarget.style.background='var(--surface-3)'}
+                          onMouseLeave={ev=>ev.currentTarget.style.background='transparent'}>
+                          <div style={{fontSize:13,fontWeight:600,color:'var(--text)'}}>{l.titulo}</div>
+                          {l.autor && <div style={{fontSize:11,color:'var(--text-muted)'}}>{l.autor}{l.editora ? ` · ${l.editora}` : ''}</div>}
+                        </div>
+                      ))
+                  }
+                </div>
+              )}
+            </div>
+
             <div style={{display:'flex',justifyContent:'flex-end',position:'sticky',bottom:0,paddingTop:12,paddingBottom:4,background:'var(--surface)',borderTop:'1px solid var(--border)',marginTop:8}}>
               <button className="btn btn-primary" onClick={salvarPerfil} disabled={saving}>
                 {saving?'Salvando...':'Salvar perfil'}
