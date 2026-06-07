@@ -5,6 +5,7 @@ import {
   getCRMStatusConfig, saveCRMStatusConfig, corParaBg, getLivros,
   TIERS, TIER_ORDER, SITUACOES, MODELOS_COM_ESCADA,
   updateTier, updateSituacao, updatePerformance, getTierHistory, verificarPromocao,
+  ativarParceiroBronze,
 } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import {
@@ -336,7 +337,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                 <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:6,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}}>Tier atual</div>
                 {parceiro.tier ? (
                   <div style={{display:'flex',alignItems:'center',gap:10}}>
-                    <BadgeTier tier={parceiro.tier} size="lg" prontoParaSubir={!!verificarPromocao(parceiro)} />
+                    <BadgeTier tier={parceiro.tier} size="lg" prontoParaSubir={!!verificarPromocao({...parceiro,...perfForm})} />
                     <ProgressoTier parceiro={{...parceiro, ...perfForm}} />
                   </div>
                 ) : (
@@ -361,32 +362,25 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                 display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,
               }}>
                 <div>
-                  <div style={{fontSize:13,fontWeight:700,color:'#22c55e',marginBottom:2}}>
-                    Pronto para subir de tier
-                  </div>
-                  <div style={{fontSize:12,color:'var(--text-muted)'}}>
-                    {verificarPromocao({...parceiro, ...perfForm}).motivo}
-                  </div>
+                  <div style={{fontSize:13,fontWeight:700,color:'#22c55e',marginBottom:2}}>Pronto para subir de tier</div>
+                  <div style={{fontSize:12,color:'var(--text-muted)'}}>{verificarPromocao({...parceiro,...perfForm}).motivo}</div>
                 </div>
-                <button
-                  className="btn btn-primary btn-sm"
-                  disabled={savingTier}
+                <button className="btn btn-primary btn-sm" disabled={savingTier}
                   style={{background:'#22c55e',borderColor:'#22c55e',whiteSpace:'nowrap'}}
                   onClick={async () => {
-                    const promo = verificarPromocao({...parceiro, ...perfForm})
+                    const promo = verificarPromocao({...parceiro,...perfForm})
                     if (!promo) return
                     setSavingTier(true)
                     try {
-                      const upd = await updateTier(parceiro.id, promo.proximo, promo.motivo)
+                      await updateTier(parceiro.id, promo.proximo, promo.motivo)
                       setParceiro(prev => ({...prev, tier: promo.proximo, tier_updated_at: new Date().toISOString()}))
                       onSave({...parceiro, tier: promo.proximo})
                       setTierHistory(await getTierHistory(parceiro.id))
                       showToast(`Promovido para ${TIERS[promo.proximo].label}!`)
                     } catch { showToast('Erro ao promover','error') }
                     finally { setSavingTier(false) }
-                  }}
-                >
-                  <ChevronUp size={14}/> Promover para {TIERS[verificarPromocao({...parceiro, ...perfForm}).proximo].label}
+                  }}>
+                  <ChevronUp size={14}/> Promover para {TIERS[verificarPromocao({...parceiro,...perfForm}).proximo].label}
                 </button>
               </div>
             )}
@@ -394,43 +388,31 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
             {/* Campos de performance editáveis */}
             {MODELOS_COM_ESCADA.includes(parceiro.model) && (
               <div className="form-grid">
-                <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:4,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}}>
-                  Dados de performance
-                </div>
+                <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:4,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}}>Dados de performance</div>
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label">Vendas total (acumulado)</label>
-                    <input className="form-input" type="number" min="0"
-                      value={perfForm.vendas_total}
-                      onChange={e => setPerfForm(f => ({...f, vendas_total: parseInt(e.target.value)||0}))}
-                    />
+                    <input className="form-input" type="number" min="0" value={perfForm.vendas_total}
+                      onChange={e => setPerfForm(f => ({...f, vendas_total: parseInt(e.target.value)||0}))} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Vendas este mês</label>
-                    <input className="form-input" type="number" min="0"
-                      value={perfForm.vendas_mes}
-                      onChange={e => setPerfForm(f => ({...f, vendas_mes: parseInt(e.target.value)||0}))}
-                    />
+                    <input className="form-input" type="number" min="0" value={perfForm.vendas_mes}
+                      onChange={e => setPerfForm(f => ({...f, vendas_mes: parseInt(e.target.value)||0}))} />
                   </div>
                 </div>
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label">Conteúdos postados</label>
-                    <input className="form-input" type="number" min="0"
-                      value={perfForm.conteudos_postados}
-                      onChange={e => setPerfForm(f => ({...f, conteudos_postados: parseInt(e.target.value)||0}))}
-                    />
+                    <input className="form-input" type="number" min="0" value={perfForm.conteudos_postados}
+                      onChange={e => setPerfForm(f => ({...f, conteudos_postados: parseInt(e.target.value)||0}))} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Última atividade</label>
-                    <input className="form-input" type="date"
-                      value={perfForm.ultima_atividade || ''}
-                      onChange={e => setPerfForm(f => ({...f, ultima_atividade: e.target.value}))}
-                    />
+                    <input className="form-input" type="date" value={perfForm.ultima_atividade || ''}
+                      onChange={e => setPerfForm(f => ({...f, ultima_atividade: e.target.value}))} />
                   </div>
                 </div>
-
-                {/* Mudar situação */}
                 <div className="form-group">
                   <label className="form-label">Situação do parceiro</label>
                   <div style={{display:'flex',gap:8}}>
@@ -444,20 +426,16 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                             showToast(`Situação: ${info.label}`)
                           } catch { showToast('Erro','error') }
                         }}
-                        style={{
-                          padding:'5px 14px',borderRadius:20,fontSize:12,fontWeight:600,cursor:'pointer',
+                        style={{padding:'5px 14px',borderRadius:20,fontSize:12,fontWeight:600,cursor:'pointer',
                           border:`2px solid ${info.cor}`,
                           background: (parceiro.situacao||'ativo')===val ? info.cor : 'transparent',
                           color: (parceiro.situacao||'ativo')===val ? '#fff' : info.cor,
-                          transition:'all 0.15s',
-                        }}
-                      >
+                          transition:'all 0.15s'}}>
                         {info.label}
                       </button>
                     ))}
                   </div>
                 </div>
-
                 <div style={{display:'flex',justifyContent:'flex-end'}}>
                   <button className="btn btn-primary" disabled={savingPerf}
                     onClick={async () => {
@@ -469,8 +447,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                         showToast('Performance atualizada!')
                       } catch { showToast('Erro ao salvar','error') }
                       finally { setSavingPerf(false) }
-                    }}
-                  >
+                    }}>
                     {savingPerf ? 'Salvando...' : 'Salvar performance'}
                   </button>
                 </div>
@@ -480,9 +457,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
             {/* Histórico de tier */}
             {tierHistory.length > 0 && (
               <div style={{marginTop:20}}>
-                <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}}>
-                  Histórico de tier
-                </div>
+                <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}}>Histórico de tier</div>
                 {tierHistory.map((h, i) => {
                   const tierInfo = TIERS[h.tier_novo] || {cor:'#6b7280',label:h.tier_novo}
                   return (
@@ -493,16 +468,9 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                       </div>
                       <div style={{flex:1,paddingBottom:8}}>
                         <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:2}}>
-                          {h.tier_anterior && (
-                            <>
-                              <BadgeTier tier={h.tier_anterior} size="sm" />
-                              <ArrowRight size={12} color="var(--text-muted)" />
-                            </>
-                          )}
+                          {h.tier_anterior && (<><BadgeTier tier={h.tier_anterior} size="sm" /><ArrowRight size={12} color="var(--text-muted)" /></>)}
                           <BadgeTier tier={h.tier_novo} size="sm" />
-                          <span style={{fontSize:11,color:'var(--text-muted)'}}>
-                            {format(new Date(h.changed_at),'dd/MM/yyyy HH:mm',{locale:ptBR})}
-                          </span>
+                          <span style={{fontSize:11,color:'var(--text-muted)'}}>{format(new Date(h.changed_at),'dd/MM/yyyy HH:mm',{locale:ptBR})}</span>
                         </div>
                         {h.motivo && <div style={{fontSize:12,color:'var(--text-muted)',marginTop:2}}>{h.motivo}</div>}
                         {h.changed_by_nome && <div style={{fontSize:11,color:'var(--text-muted)',marginTop:1}}>por {h.changed_by_nome}</div>}
@@ -1218,8 +1186,14 @@ export default function CRM({ grupo, titulo }) {
     // Atualiza estado local imediatamente
     setParceiros(prev => prev.map(p => p.id === dragId ? { ...p, current_status: novoStatus } : p))
     try {
-      await addStatusHistory(dragId, novoStatus, 'Status alterado via kanban')
-      showToast(`${parceiro.nome} → ${pipelineInfo(novoStatus, pipeline).label}`)
+      // Se moveu para 'active', ativar como Bronze automaticamente (modelos 2 e 3)
+      if (novoStatus === 'active' && !parceiro.tier && MODELOS_COM_ESCADA.includes(parceiro.model)) {
+        await ativarParceiroBronze(dragId, usuario?.id)
+        showToast(`${parceiro.nome} → Ativo · Bronze na Escada`)
+      } else {
+        await addStatusHistory(dragId, novoStatus, 'Status alterado via kanban')
+        showToast(`${parceiro.nome} → ${pipelineInfo(novoStatus, pipeline).label}`)
+      }
     } catch(e) {
       // Reverte se falhar
       setParceiros(prev => prev.map(p => p.id === dragId ? { ...p, current_status: parceiro.current_status } : p))
