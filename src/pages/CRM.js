@@ -1223,8 +1223,9 @@ export default function CRM({ grupo, titulo }) {
     porStatus[st.value] = filtrados.filter(p => p.current_status === st.value)
   }
 
-  // Parceiros sem status no CRM (ainda não entraram no pipeline)
-  const semStatus = filtrados.filter(p => !p.current_status)
+  // Status de ciclo de vida — geridos na aba Parceiros Ativos, não no kanban
+  const STATUS_LIFECYCLE = ['active', 'paused', 'closed', 'sem_retorno', 'sem_interesse']
+  const pipelineProspeccao = pipeline.filter(s => !STATUS_LIFECYCLE.includes(s.value))
 
   const total = filtrados.length
   const ativos = filtrados.filter(p=>p.current_status==='active').length
@@ -1292,7 +1293,7 @@ export default function CRM({ grupo, titulo }) {
         </div>
         <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
           <option value="">Todos os status</option>
-          {pipeline.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
+          {pipelineProspeccao.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
         <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroPlat} onChange={e=>setFiltroPlat(e.target.value)}>
           <option value="">Todas as plataformas</option>
@@ -1320,27 +1321,8 @@ export default function CRM({ grupo, titulo }) {
         : (
           <div style={{overflowX:'auto',paddingBottom:16}}>
             <div style={{display:'flex',gap:14,minWidth:'max-content'}}>
-              {/* Coluna sem status */}
-              {semStatus.length > 0 && (
-                <div style={{width:220,flexShrink:0}}>
-                  <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:10,padding:'6px 10px',background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8}}>
-                    <div style={{width:10,height:10,borderRadius:'50%',background:'var(--border)'}}/>
-                    <span style={{fontSize:12,fontWeight:700,color:'var(--text-muted)',flex:1}}>Sem status</span>
-                    <span style={{fontSize:11,color:'var(--text-muted)',background:'var(--surface)',border:'1px solid var(--border)',borderRadius:20,padding:'1px 7px'}}>{semStatus.length}</span>
-                  </div>
-                  {semStatus.map(p=>(
-                    <KanbanCard key={p.id} parceiro={p}
-                      onClick={()=>setModalParceiro(p)}
-                      onDragStart={()=>setDragId(p.id)}
-                      onDragEnd={()=>{ setDragId(null); setDragOverCol(null) }}
-                      isDragging={dragId===p.id}
-                      onDelete={()=>handleDeleteParceiro(p.id, p.nome)}/>
-                  ))}
-                </div>
-              )}
-
-              {/* Colunas do pipeline */}
-              {pipeline.map(st=>{
+              {/* Colunas do pipeline (só prospecção) */}
+              {pipelineProspeccao.map(st=>{
                 const items = porStatus[st.value] || []
                 return (
                   <div key={st.value} style={{width:220,flexShrink:0}}>
