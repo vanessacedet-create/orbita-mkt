@@ -3,15 +3,19 @@ import {
   getParceiros, getParceirosAtivos, getEditoras, getUsuarios,
   getCRMParceiros, updateParceiroCRM, getStatusHistory, addStatusHistory, createParceiroCRM, deleteParceiro,
   getCRMStatusConfig, saveCRMStatusConfig, corParaBg, getLivros,
+  TIERS, TIER_ORDER, SITUACOES, MODELOS_COM_ESCADA,
+  updateTier, updateSituacao, updatePerformance, getTierHistory, verificarPromocao,
 } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import {
   Users, Plus, X, ChevronRight, Clock, ExternalLink,
-  Instagram, Youtube, Search, ArrowRight, Trash2, Settings2, GripVertical
+  Instagram, Youtube, Search, ArrowRight, Trash2, Settings2, GripVertical,
+  ArrowUp, ChevronUp
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import TabelaAtivos from '../components/crm/TabelaAtivos'
+import BadgeTier, { BadgeSituacao, ProgressoTier } from '../components/crm/BadgeTier'
 
 // ── PIPELINE FALLBACK (usado se não houver config no banco) ──
 const PIPELINE_FALLBACK = [
@@ -76,11 +80,21 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
   const [editoraSearch, setEditoraSearch] = useState('')
   const [usuarios, setUsuarios]       = useState([])
   const [toast, showToast]          = useToast()
+  const [tierHistory, setTierHistory] = useState([])
+  const [perfForm, setPerfForm]     = useState({
+    vendas_total: inicial.vendas_total || 0,
+    vendas_mes: inicial.vendas_mes || 0,
+    conteudos_postados: inicial.conteudos_postados || 0,
+    ultima_atividade: inicial.ultima_atividade || '',
+  })
+  const [savingPerf, setSavingPerf] = useState(false)
+  const [savingTier, setSavingTier] = useState(false)
 
   useEffect(() => {
     getStatusHistory(parceiro.id).then(setHistory).catch(console.error)
     getEditoras().then(setEditoras).catch(console.error)
     getUsuarios().then(setUsuarios).catch(console.error)
+    getTierHistory(parceiro.id).then(setTierHistory).catch(console.error)
   }, [parceiro.id])
 
   async function salvarPerfil() {
@@ -160,7 +174,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
 
         {/* Abas */}
         <div style={{display:'flex',gap:4,padding:'12px 0 0',borderBottom:'1px solid var(--border)',marginBottom:16}}>
-          {[{v:'perfil',l:'Perfil CRM'},{v:'pipeline',l:'Pipeline'},{v:'livros_propostos',l:`Livros propostos (${(parceiro.livros_propostos||[]).length})`},{v:'historico',l:`Histórico (${history.length})`}].map(({v,l})=>(
+          {[{v:'perfil',l:'Perfil CRM'},{v:'performance',l:'Performance'},{v:'pipeline',l:'Pipeline'},{v:'livros_propostos',l:`Livros propostos (${(parceiro.livros_propostos||[]).length})`},{v:'historico',l:`Histórico (${history.length})`}].map(({v,l})=>(
             <button key={v} onClick={()=>setAba(v)}
               className={`btn btn-sm ${aba===v?'btn-primary':'btn-ghost'}`}
               style={{borderRadius:'6px 6px 0 0'}}>
@@ -310,6 +324,194 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                 {saving?'Salvando...':'Salvar perfil'}
               </button>
             </div>
+          </div>
+        )}
+
+        {/* ── ABA PERFORMANCE (Escada de Crescimento) ── */}
+        {aba==='performance' && (
+          <div>
+            {/* Tier atual + situação */}
+            <div style={{display:'flex',alignItems:'center',gap:16,marginBottom:20,padding:'16px',background:'var(--surface-2)',borderRadius:8,border:'1px solid var(--border)'}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:6,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}}>Tier atual</div>
+                {parceiro.tier ? (
+                  <div style={{display:'flex',alignItems:'center',gap:10}}>
+                    <BadgeTier tier={parceiro.tier} size="lg" prontoParaSubir={!!verificarPromocao(parceiro)} />
+                    <ProgressoTier parceiro={{...parceiro, ...perfForm}} />
+                  </div>
+                ) : (
+                  <span style={{fontSize:13,color:'var(--text-muted)'}}>
+                    {MODELOS_COM_ESCADA.includes(parceiro.model)
+                      ? 'Parceiro ainda não entrou na Escada'
+                      : 'Modelo de parceria sem Escada (Livraria)'}
+                  </span>
+                )}
+              </div>
+              <div>
+                <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:6,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}}>Situação</div>
+                <BadgeSituacao situacao={parceiro.situacao || 'ativo'} />
+              </div>
+            </div>
+
+            {/* Promoção disponível */}
+            {parceiro.tier && verificarPromocao({...parceiro, ...perfForm}) && (
+              <div style={{
+                padding:'12px 16px',marginBottom:20,borderRadius:8,
+                background:'rgba(34,197,94,0.08)',border:'1px solid rgba(34,197,94,0.25)',
+                display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,
+              }}>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:'#22c55e',marginBottom:2}}>
+                    Pronto para subir de tier
+                  </div>
+                  <div style={{fontSize:12,color:'var(--text-muted)'}}>
+                    {verificarPromocao({...parceiro, ...perfForm}).motivo}
+                  </div>
+                </div>
+                <button
+                  className="btn btn-primary btn-sm"
+                  disabled={savingTier}
+                  style={{background:'#22c55e',borderColor:'#22c55e',whiteSpace:'nowrap'}}
+                  onClick={async () => {
+                    const promo = verificarPromocao({...parceiro, ...perfForm})
+                    if (!promo) return
+                    setSavingTier(true)
+                    try {
+                      const upd = await updateTier(parceiro.id, promo.proximo, promo.motivo)
+                      setParceiro(prev => ({...prev, tier: promo.proximo, tier_updated_at: new Date().toISOString()}))
+                      onSave({...parceiro, tier: promo.proximo})
+                      setTierHistory(await getTierHistory(parceiro.id))
+                      showToast(`Promovido para ${TIERS[promo.proximo].label}!`)
+                    } catch { showToast('Erro ao promover','error') }
+                    finally { setSavingTier(false) }
+                  }}
+                >
+                  <ChevronUp size={14}/> Promover para {TIERS[verificarPromocao({...parceiro, ...perfForm}).proximo].label}
+                </button>
+              </div>
+            )}
+
+            {/* Campos de performance editáveis */}
+            {MODELOS_COM_ESCADA.includes(parceiro.model) && (
+              <div className="form-grid">
+                <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:4,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                  Dados de performance
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Vendas total (acumulado)</label>
+                    <input className="form-input" type="number" min="0"
+                      value={perfForm.vendas_total}
+                      onChange={e => setPerfForm(f => ({...f, vendas_total: parseInt(e.target.value)||0}))}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Vendas este mês</label>
+                    <input className="form-input" type="number" min="0"
+                      value={perfForm.vendas_mes}
+                      onChange={e => setPerfForm(f => ({...f, vendas_mes: parseInt(e.target.value)||0}))}
+                    />
+                  </div>
+                </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Conteúdos postados</label>
+                    <input className="form-input" type="number" min="0"
+                      value={perfForm.conteudos_postados}
+                      onChange={e => setPerfForm(f => ({...f, conteudos_postados: parseInt(e.target.value)||0}))}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Última atividade</label>
+                    <input className="form-input" type="date"
+                      value={perfForm.ultima_atividade || ''}
+                      onChange={e => setPerfForm(f => ({...f, ultima_atividade: e.target.value}))}
+                    />
+                  </div>
+                </div>
+
+                {/* Mudar situação */}
+                <div className="form-group">
+                  <label className="form-label">Situação do parceiro</label>
+                  <div style={{display:'flex',gap:8}}>
+                    {Object.entries(SITUACOES).map(([val, info]) => (
+                      <button key={val} type="button"
+                        onClick={async () => {
+                          try {
+                            await updateSituacao(parceiro.id, val)
+                            setParceiro(prev => ({...prev, situacao: val}))
+                            onSave({...parceiro, situacao: val})
+                            showToast(`Situação: ${info.label}`)
+                          } catch { showToast('Erro','error') }
+                        }}
+                        style={{
+                          padding:'5px 14px',borderRadius:20,fontSize:12,fontWeight:600,cursor:'pointer',
+                          border:`2px solid ${info.cor}`,
+                          background: (parceiro.situacao||'ativo')===val ? info.cor : 'transparent',
+                          color: (parceiro.situacao||'ativo')===val ? '#fff' : info.cor,
+                          transition:'all 0.15s',
+                        }}
+                      >
+                        {info.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{display:'flex',justifyContent:'flex-end'}}>
+                  <button className="btn btn-primary" disabled={savingPerf}
+                    onClick={async () => {
+                      setSavingPerf(true)
+                      try {
+                        await updatePerformance(parceiro.id, perfForm)
+                        setParceiro(prev => ({...prev, ...perfForm}))
+                        onSave({...parceiro, ...perfForm})
+                        showToast('Performance atualizada!')
+                      } catch { showToast('Erro ao salvar','error') }
+                      finally { setSavingPerf(false) }
+                    }}
+                  >
+                    {savingPerf ? 'Salvando...' : 'Salvar performance'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Histórico de tier */}
+            {tierHistory.length > 0 && (
+              <div style={{marginTop:20}}>
+                <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                  Histórico de tier
+                </div>
+                {tierHistory.map((h, i) => {
+                  const tierInfo = TIERS[h.tier_novo] || {cor:'#6b7280',label:h.tier_novo}
+                  return (
+                    <div key={h.id} style={{display:'flex',gap:12,marginBottom:12}}>
+                      <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
+                        <div style={{width:10,height:10,borderRadius:'50%',background:tierInfo.cor,flexShrink:0,marginTop:3}}/>
+                        {i < tierHistory.length-1 && <div style={{width:2,flex:1,background:'var(--border)',marginTop:4}}/>}
+                      </div>
+                      <div style={{flex:1,paddingBottom:8}}>
+                        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:2}}>
+                          {h.tier_anterior && (
+                            <>
+                              <BadgeTier tier={h.tier_anterior} size="sm" />
+                              <ArrowRight size={12} color="var(--text-muted)" />
+                            </>
+                          )}
+                          <BadgeTier tier={h.tier_novo} size="sm" />
+                          <span style={{fontSize:11,color:'var(--text-muted)'}}>
+                            {format(new Date(h.changed_at),'dd/MM/yyyy HH:mm',{locale:ptBR})}
+                          </span>
+                        </div>
+                        {h.motivo && <div style={{fontSize:12,color:'var(--text-muted)',marginTop:2}}>{h.motivo}</div>}
+                        {h.changed_by_nome && <div style={{fontSize:11,color:'var(--text-muted)',marginTop:1}}>por {h.changed_by_nome}</div>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
 
