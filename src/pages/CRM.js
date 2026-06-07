@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import TabelaAtivos from '../components/crm/TabelaAtivos'
 
 // ── PIPELINE FALLBACK (usado se não houver config no banco) ──
 const PIPELINE_FALLBACK = [
@@ -954,6 +955,7 @@ export default function CRM({ grupo, titulo }) {
   const [filtroResp, setFiltroResp]       = useState('')
   const [filtroOrigem, setFiltroOrigem]   = useState('')
   const [toast, showToast]            = useToast()
+  const [visao, setVisao]             = useState('prospeccao') // 'prospeccao' | 'ativos'
 
   async function carregar() {
     setLoading(true)
@@ -1064,42 +1066,70 @@ export default function CRM({ grupo, titulo }) {
           </div>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap',alignItems:'center'}}>
-            <div style={{position:'relative'}}>
-              <Search size={14} style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-muted)'}}/>
-              <input className="search-input" style={{paddingLeft:32}} placeholder="Buscar parceiro..." value={search} onChange={e=>setSearch(e.target.value)}/>
-            </div>
-            <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
-              <option value="">Todos os status</option>
-              {pipeline.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-            <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroPlat} onChange={e=>setFiltroPlat(e.target.value)}>
-              <option value="">Todas as plataformas</option>
-              {PLATAFORMAS.map(p=><option key={p} value={p}>{p}</option>)}
-            </select>
-            <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroResp} onChange={e=>setFiltroResp(e.target.value)}>
-              <option value="">Todos os responsáveis</option>
-              {[...new Map(parceiros.filter(p=>p.responsavel_interno_id&&p.responsavel_interno_nome).map(p=>[p.responsavel_interno_id,p])).values()].map(p=>(
-                <option key={p.responsavel_interno_id} value={p.responsavel_interno_id}>{p.responsavel_interno_nome}</option>
-              ))}
-            </select>
-            <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroOrigem} onChange={e=>setFiltroOrigem(e.target.value)}>
-              <option value="">Todas as origens</option>
-              {ORIGENS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-            {temFiltro && (
-              <button className="btn btn-ghost btn-sm" onClick={()=>{setFiltroStatus('');setFiltroPlat('');setFiltroResp('');setFiltroOrigem('')}}>
-                <X size={12}/> Limpar
-              </button>
-            )}
-          </div>
           <button className="btn btn-primary" onClick={()=>setModalNovo(true)} style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
             <Plus size={15}/> Novo Parceiro
           </button>
-        <button className="btn btn-ghost btn-sm" onClick={()=>setModalConfig(true)} title="Configurar status do CRM" style={{marginLeft:6}}>
-          <Settings2 size={14}/> Configurar status
-        </button>
+          {visao==='prospeccao' && (
+            <button className="btn btn-ghost btn-sm" onClick={()=>setModalConfig(true)} title="Configurar status do CRM" style={{marginLeft:6}}>
+              <Settings2 size={14}/> Configurar status
+            </button>
+          )}
         </div>
+      </div>
+
+      {/* Abas: Prospecção vs Parceiros ativos */}
+      <div style={{display:'flex',gap:0,marginBottom:20,borderBottom:'1px solid var(--border)'}}>
+        {[
+          {v:'prospeccao', l:'Prospecção'},
+          {v:'ativos', l:'Parceiros ativos (Escada)'},
+        ].map(({v,l})=>(
+          <button key={v} onClick={()=>setVisao(v)}
+            style={{padding:'10px 20px',background:'none',border:'none',cursor:'pointer',fontSize:13,fontWeight:700,
+              color:visao===v?'var(--accent)':'var(--text-muted)',
+              borderBottom:`2px solid ${visao===v?'var(--accent)':'transparent'}`,
+              marginBottom:-1,transition:'all 0.15s'}}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {/* ── ABA: PARCEIROS ATIVOS (Escada de Crescimento) ── */}
+      {visao==='ativos' && (
+        <TabelaAtivos onOpenParceiro={p => setModalParceiro(p)} />
+      )}
+
+      {/* ── ABA: PROSPECÇÃO (Kanban original) ── */}
+      {visao==='prospeccao' && (<>
+
+      {/* Filtros da prospecção */}
+      <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap',alignItems:'center'}}>
+        <div style={{position:'relative'}}>
+          <Search size={14} style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-muted)'}}/>
+          <input className="search-input" style={{paddingLeft:32}} placeholder="Buscar parceiro..." value={search} onChange={e=>setSearch(e.target.value)}/>
+        </div>
+        <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
+          <option value="">Todos os status</option>
+          {pipeline.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
+        <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroPlat} onChange={e=>setFiltroPlat(e.target.value)}>
+          <option value="">Todas as plataformas</option>
+          {PLATAFORMAS.map(p=><option key={p} value={p}>{p}</option>)}
+        </select>
+        <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroResp} onChange={e=>setFiltroResp(e.target.value)}>
+          <option value="">Todos os responsáveis</option>
+          {[...new Map(parceiros.filter(p=>p.responsavel_interno_id&&p.responsavel_interno_nome).map(p=>[p.responsavel_interno_id,p])).values()].map(p=>(
+            <option key={p.responsavel_interno_id} value={p.responsavel_interno_id}>{p.responsavel_interno_nome}</option>
+          ))}
+        </select>
+        <select className="form-select" style={{width:'auto',fontSize:12,padding:'6px 10px'}} value={filtroOrigem} onChange={e=>setFiltroOrigem(e.target.value)}>
+          <option value="">Todas as origens</option>
+          {ORIGENS.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        {temFiltro && (
+          <button className="btn btn-ghost btn-sm" onClick={()=>{setFiltroStatus('');setFiltroPlat('');setFiltroResp('');setFiltroOrigem('')}}>
+            <X size={12}/> Limpar
+          </button>
+        )}
       </div>
 
       {loading
@@ -1165,6 +1195,8 @@ export default function CRM({ grupo, titulo }) {
           </div>
         )
       }
+
+      </>)}
 
       {modalConfig && (
         <ModalConfigStatus
