@@ -858,19 +858,20 @@ function VisaoMatriz({
 
   const estrutura = useMemo(() => agruparIniciativas(iniciativas), [iniciativas])
 
-  // Ao exibir os concluídos, inicia com todos os grupos colapsados
-  // (mostra as iniciativas fechadas sem as sub-tarefas). O usuário ainda
-  // pode expandir cada grupo manualmente.
+  // Assinatura estável dos grupos: só muda quando grupos são adicionados/removidos,
+  // não quando uma célula é editada. Evita recolapsar durante a edição.
+  const idsGruposKey = useMemo(
+    () => estrutura.filter(item => item.tipo === 'grupo').map(item => item.grupo.id).sort().join(','),
+    [estrutura]
+  )
+
+  // Inicia com cada iniciativa/grupo fechado (sub-tarefas escondidas).
+  // O usuário ainda pode expandir cada grupo manualmente.
   useEffect(() => {
-    if (colapsarGruposPorPadrao) {
-      const idsGrupos = estrutura
-        .filter(item => item.tipo === 'grupo')
-        .map(item => item.grupo.id)
-      setGruposColapsados(new Set(idsGrupos))
-    } else {
-      setGruposColapsados(new Set())
+    if (colapsarGruposPorPadrao && idsGruposKey) {
+      setGruposColapsados(new Set(idsGruposKey.split(',')))
     }
-  }, [colapsarGruposPorPadrao, estrutura])
+  }, [colapsarGruposPorPadrao, idsGruposKey])
 
   function getCelula(ini, semana) {
     return (ini.pda_celulas || []).find(c => c.semana === semana)
@@ -1509,7 +1510,7 @@ export default function PDA() {
   const [editandoCelula, setEditandoCelula] = useState(null)
   const [editandoTitulo, setEditandoTitulo] = useState(null)
   const [visao, setVisao] = useState('matriz')
-  const [pdaSituacao, setPdaSituacao] = useState('concluidos')
+  const [pdaSituacao, setPdaSituacao] = useState('ativos')
   const [toast, showToast] = useToast()
 
   const semanaAtualIdx = useMemo(() => semanaAtual(), [])
@@ -1769,7 +1770,7 @@ export default function PDA() {
       ) : visao === 'matriz' ? (
         <VisaoMatriz
           iniciativas={iniciativasVisiveis} mesIdx={mesIdx} setMesIdx={setMesIdx} semanaAtualIdx={semanaAtualIdx}
-          colapsarGruposPorPadrao={pdaSituacao === 'concluidos'}
+          colapsarGruposPorPadrao={true}
           editandoCelula={editandoCelula} setEditandoCelula={setEditandoCelula}
           editandoTitulo={editandoTitulo} setEditandoTitulo={setEditandoTitulo}
           onSalvarTitulo={handleSalvarTitulo} onSalvarCelula={handleSalvarCelula}
