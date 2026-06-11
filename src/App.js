@@ -59,10 +59,8 @@ const CRMInteligencia = lazy(() => import('./pages/CRMInteligencia'))
 
 const MENU = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard, modulo: 'dashboard' },
-  { path: '/guia-parcerias', label: 'Guia de Parcerias', icon: FileText, modulo: 'guia_parcerias' },
   { path: '/crm-influencers', label: 'CRM Influencers', icon: Network, modulo: 'crm_influencers' },
   { path: '/crm-parceiras', label: 'CRM Parceiras', icon: Network, modulo: 'crm_parceiras' },
-  { path: '/calculadora', label: 'Calculadora', icon: Calculator, modulo: 'calculadora' },
   { path: '/cortesias', label: 'Cortesias', icon: BookOpen, modulo: 'cortesias' },
   { path: '/campanhas', label: 'Campanhas', icon: Megaphone, modulo: 'campanhas' },
   { path: '/monitoramento', label: 'Monitoramento', icon: Eye, modulo: 'monitoramento' },
@@ -70,13 +68,10 @@ const MENU = [
   { path: '/tarefas', label: 'Tarefas', icon: CheckSquare, modulo: 'tarefas' },
   { path: '/rh', label: 'RH', icon: HeartHandshake, modulo: 'rh' },
   { path: '/pda', label: 'PDA', icon: Target, modulo: 'pda' },
-  { path: '/cac-ltv', label: 'CAC / LTV', icon: TrendingUp, modulo: 'cac_ltv' },
   { path: '/treinamentos', label: 'Treinamentos', icon: GraduationCap, modulo: 'treinamentos' },
   { path: '/eventos', label: 'Eventos', icon: CalendarCheck, modulo: 'eventos' },
   { path: '/vitrine-admin', label: 'Vitrine', icon: Store, modulo: 'parceiros' },
   { path: '/usuarios', label: 'Usuários', icon: Users, modulo: 'usuarios' },
-  { path: '/pedidos-crm', label: 'Pedidos CRM', icon: FileText, modulo: 'pedidos_crm' },
-  { path: '/crm-inteligencia', label: 'CRM Inteligência', icon: Activity, modulo: 'crm_inteligencia' },
 ]
 
 const PERFIL_LABEL = {
