@@ -26,6 +26,8 @@ export default function VitrineAdmin() {
   const [showFormParceiro, setShowFormParceiro] = useState(false);
   const [editandoParceiro, setEditandoParceiro] = useState(null);
   const [buscaParceiro, setBuscaParceiro] = useState('');
+  const [subTabPedidos, setSubTabPedidos] = useState('andamento'); // 'andamento' | 'concluidos'
+  const [buscaPedido, setBuscaPedido] = useState('');
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -334,6 +336,13 @@ export default function VitrineAdmin() {
   const totalAtivos = livros.filter(l => l.ativo).length;
   const totalInativos = livros.filter(l => !l.ativo).length;
   const pedidosNovos = pedidos.filter(p => p.status === 'novo').length;
+  const pedidosConcluidos = pedidos.filter(p => p.status === 'concluido');
+  const pedidosAndamento = pedidos.filter(p => p.status !== 'concluido');
+  const basePedidosSubTab = subTabPedidos === 'concluidos' ? pedidosConcluidos : pedidosAndamento;
+  const pedidosFiltrados = basePedidosSubTab.filter(p =>
+    !buscaPedido.trim() ||
+    (p.nome_parceiro || '').toLowerCase().includes(buscaPedido.trim().toLowerCase())
+  );
   const parceirosAtivos = parceiros.filter(p => p.ativo).length;
 
   return (
@@ -673,8 +682,61 @@ export default function VitrineAdmin() {
               <p style={{ fontSize: 14 }}>Quando parceiros selecionarem livros na vitrine, os pedidos aparecerão aqui.</p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              {pedidos.map(pedido => {
+            <>
+              {/* Sub-abas: Em andamento / Concluídos */}
+              <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => setSubTabPedidos('andamento')}
+                  style={{
+                    padding: '8px 16px', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                    border: '1px solid', borderColor: subTabPedidos === 'andamento' ? '#F2B705' : 'rgba(255,255,255,0.12)',
+                    background: subTabPedidos === 'andamento' ? 'rgba(242,183,5,0.12)' : 'transparent',
+                    color: subTabPedidos === 'andamento' ? '#F2B705' : '#999',
+                  }}
+                >
+                  Em andamento ({pedidosAndamento.length})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSubTabPedidos('concluidos')}
+                  style={{
+                    padding: '8px 16px', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                    border: '1px solid', borderColor: subTabPedidos === 'concluidos' ? '#16a34a' : 'rgba(255,255,255,0.12)',
+                    background: subTabPedidos === 'concluidos' ? 'rgba(22,163,74,0.12)' : 'transparent',
+                    color: subTabPedidos === 'concluidos' ? '#16a34a' : '#999',
+                  }}
+                >
+                  Concluídos ({pedidosConcluidos.length})
+                </button>
+
+                <div style={{ position: 'relative', marginLeft: 'auto', minWidth: 240 }}>
+                  <Search size={15} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#888' }} />
+                  <input
+                    type="text"
+                    value={buscaPedido}
+                    onChange={(e) => setBuscaPedido(e.target.value)}
+                    placeholder="Buscar parceiro..."
+                    style={{
+                      width: '100%', padding: '8px 10px 8px 32px', borderRadius: 8, fontSize: 14,
+                      background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', outline: 'none',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {pedidosFiltrados.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 40, color: '#999' }}>
+                  <p style={{ fontSize: 14 }}>
+                    {buscaPedido.trim()
+                      ? 'Nenhum pedido encontrado para esse parceiro nesta aba.'
+                      : (subTabPedidos === 'concluidos' ? 'Nenhum pedido concluído ainda.' : 'Nenhum pedido em andamento.')}
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  {pedidosFiltrados.map(pedido => {
                 const statusConfig = {
                   novo:       { color: '#F2B705', bg: 'rgba(242,183,5,0.12)', label: '🟡 Novo' },
                   visto:      { color: '#3b82f6', bg: 'rgba(59,130,246,0.12)', label: '🔵 Visto' },
@@ -908,7 +970,9 @@ export default function VitrineAdmin() {
                   </div>
                 );
               })}
-            </div>
+                </div>
+              )}
+            </>
           )}
         </>
       )}
