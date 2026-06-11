@@ -818,6 +818,7 @@ function VisaoMatriz({
   editandoCelula, setEditandoCelula,
   editandoTitulo, setEditandoTitulo,
   onSalvarTitulo, onSalvarCelula, onDeletarIniciativa, onNovaIniciativa, onReordenarGrupos, onVerDetalhes, area,
+  colapsarGruposPorPadrao,
 }) {
   const mes = MESES[mesIdx]
   const semanasDoMes = mes.semanas
@@ -856,6 +857,20 @@ function VisaoMatriz({
   }
 
   const estrutura = useMemo(() => agruparIniciativas(iniciativas), [iniciativas])
+
+  // Ao exibir os concluídos, inicia com todos os grupos colapsados
+  // (mostra as iniciativas fechadas sem as sub-tarefas). O usuário ainda
+  // pode expandir cada grupo manualmente.
+  useEffect(() => {
+    if (colapsarGruposPorPadrao) {
+      const idsGrupos = estrutura
+        .filter(item => item.tipo === 'grupo')
+        .map(item => item.grupo.id)
+      setGruposColapsados(new Set(idsGrupos))
+    } else {
+      setGruposColapsados(new Set())
+    }
+  }, [colapsarGruposPorPadrao, estrutura])
 
   function getCelula(ini, semana) {
     return (ini.pda_celulas || []).find(c => c.semana === semana)
@@ -1494,7 +1509,7 @@ export default function PDA() {
   const [editandoCelula, setEditandoCelula] = useState(null)
   const [editandoTitulo, setEditandoTitulo] = useState(null)
   const [visao, setVisao] = useState('matriz')
-  const [pdaSituacao, setPdaSituacao] = useState('ativos')
+  const [pdaSituacao, setPdaSituacao] = useState('concluidos')
   const [toast, showToast] = useToast()
 
   const semanaAtualIdx = useMemo(() => semanaAtual(), [])
@@ -1754,6 +1769,7 @@ export default function PDA() {
       ) : visao === 'matriz' ? (
         <VisaoMatriz
           iniciativas={iniciativasVisiveis} mesIdx={mesIdx} setMesIdx={setMesIdx} semanaAtualIdx={semanaAtualIdx}
+          colapsarGruposPorPadrao={pdaSituacao === 'concluidos'}
           editandoCelula={editandoCelula} setEditandoCelula={setEditandoCelula}
           editandoTitulo={editandoTitulo} setEditandoTitulo={setEditandoTitulo}
           onSalvarTitulo={handleSalvarTitulo} onSalvarCelula={handleSalvarCelula}
