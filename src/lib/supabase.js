@@ -83,7 +83,7 @@ export {
 export {
   getRegistrosMonitoramento, createRegistroMonitoramento,
   updateRegistroMonitoramento, deleteRegistroMonitoramento,
-  getLancamentosMonitoramento,
+  getLancamentosMonitoramento, marcarDivulgacaoPublicada,
 } from './monitoramento'
 
 export {
