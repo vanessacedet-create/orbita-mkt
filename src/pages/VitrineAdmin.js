@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import {
   Plus, Trash2, Edit2, Upload, Download, Search, Eye, EyeOff,
   Star, StarOff, Save, X, ChevronDown, Loader2, BookOpen,
-  FileSpreadsheet, Check, AlertCircle, Package, ClipboardList, Users, Link2
+  FileSpreadsheet, Check, AlertCircle, Package, ClipboardList, Users, Link2, Megaphone
 } from 'lucide-react';
 
 /* ============================================
@@ -43,7 +43,84 @@ export default function VitrineAdmin() {
   const [buscaParceiro, setBuscaParceiro] = useState('');
   const [subTabPedidos, setSubTabPedidos] = useState('andamento'); // 'andamento' | 'concluidos'
   const [buscaPedido, setBuscaPedido] = useState('');
+  const [divulgacoesPedido, setDivulgacoesPedido] = useState({}); // pedido.id -> resultado
+  const [verificandoPedido, setVerificandoPedido] = useState(null);
   const fileRef = useRef(null);
+
+  // ── Verifica nas campanhas se o parceiro do pedido já divulgou os livros ──
+  async function verificarDivulgacoesPedido(pedido) {
+    setVerificandoPedido(pedido.id);
+    try {
+      // 1. Parceiro no CRM (mesma lógica do envio de cortesia)
+      const nomeParceiro = (pedido.nome_parceiro || '').trim();
+      let parceiroCRM = null;
+      const { data: porNome } = await supabase
+        .from('parceiros').select('id, nome')
+        .ilike('nome', `%${nomeParceiro}%`).limit(1).maybeSingle();
+      parceiroCRM = porNome;
+      if (!parceiroCRM) {
+        const { data: porLivraria } = await supabase
+          .from('parceiros').select('id, nome')
+          .ilike('livraria', `%${nomeParceiro}%`).limit(1).maybeSingle();
+        parceiroCRM = porLivraria;
+      }
+      if (!parceiroCRM) {
+        setDivulgacoesPedido(prev => ({ ...prev, [pedido.id]: { erro: `Parceiro "${nomeParceiro}" não encontrado no CRM.` } }));
+        return;
+      }
+
+      // 2. Resolver o livro do catálogo de cada item (via vitrine_livros)
+      const itens = pedido.vitrine_pedido_itens || [];
+      const vitrineIds = itens.map(i => i.livro_id).filter(Boolean);
+      const mapaVitrine = {}; // vitrine_livros.id -> uuid do catálogo
+      if (vitrineIds.length > 0) {
+        const { data: vls } = await supabase
+          .from('vitrine_livros').select('id, livro_id').in('id', vitrineIds);
+        for (const v of (vls || [])) if (v.livro_id) mapaVitrine[v.id] = v.livro_id;
+      }
+      // Fallback por EAN para itens sem vínculo
+      const eansFaltantes = itens.filter(i => !mapaVitrine[i.livro_id] && i.ean_livro).map(i => String(i.ean_livro));
+      const mapaEan = eansFaltantes.length > 0 ? await mapearEansParaLivroIds(eansFaltantes) : {};
+
+      const itemLivroUuid = {}; // item.id -> uuid catálogo
+      for (const i of itens) {
+        itemLivroUuid[i.id] = mapaVitrine[i.livro_id] || (i.ean_livro ? mapaEan[String(i.ean_livro)] : null) || null;
+      }
+      const livroUuids = [...new Set(Object.values(itemLivroUuid).filter(Boolean))];
+
+      // 3. Divulgações de campanha do parceiro com esses livros
+      const porLivro = {}; // uuid -> [divulgações]
+      if (livroUuids.length > 0) {
+        const { data: cps } = await supabase
+          .from('campanha_parceiros')
+          .select('id, campanhas(nome)')
+          .eq('parceiro_id', parceiroCRM.id);
+        const cpIds = (cps || []).map(c => c.id);
+        const cpNome = Object.fromEntries((cps || []).map(c => [c.id, c.campanhas?.nome]));
+        if (cpIds.length > 0) {
+          const { data: divs } = await supabase
+            .from('campanha_divulgacoes')
+            .select('livro_id, tipo, data_divulgacao, data_publicada, link, campanha_parceiro_id')
+            .in('campanha_parceiro_id', cpIds)
+            .in('livro_id', livroUuids);
+          for (const d of (divs || [])) {
+            if (!porLivro[d.livro_id]) porLivro[d.livro_id] = [];
+            porLivro[d.livro_id].push({ ...d, campanha: cpNome[d.campanha_parceiro_id] });
+          }
+        }
+      }
+
+      setDivulgacoesPedido(prev => ({
+        ...prev,
+        [pedido.id]: { parceiro: parceiroCRM.nome, itemLivroUuid, porLivro },
+      }));
+    } catch (err) {
+      console.error('[Vitrine] Erro ao verificar divulgações:', err);
+      setDivulgacoesPedido(prev => ({ ...prev, [pedido.id]: { erro: 'Erro ao consultar as campanhas.' } }));
+    } finally {
+      setVerificandoPedido(null);
+    }
+  }
 
   useEffect(() => {
     carregarDados();
@@ -1001,7 +1078,11 @@ export default function VitrineAdmin() {
 
                       {/* Lista de livros em formato de lista legível */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {itens.map(item => (
+                        {itens.map(item => {
+                          const resultado = divulgacoesPedido[pedido.id];
+                          const uuid = resultado?.itemLivroUuid?.[item.id];
+                          const divs = uuid ? (resultado?.porLivro?.[uuid] || []) : [];
+                          return (
                           <div
                             key={item.id}
                             style={{
@@ -1038,6 +1119,25 @@ export default function VitrineAdmin() {
                                     ISBN: {item.ean_livro}
                                   </div>
                                 )}
+                                {/* Resultado da verificação de divulgações */}
+                                {resultado && !resultado.erro && (
+                                  divs.length > 0 ? (
+                                    <div style={{ marginTop: 4 }}>
+                                      {divs.map((d, di) => (
+                                        <div key={di} style={{ fontSize: 11, color: '#16a34a', display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                                          <Megaphone size={11} />
+                                          Divulgado{d.tipo ? ` (${d.tipo})` : ''} em {new Date((d.data_publicada || d.data_divulgacao) + 'T12:00:00').toLocaleDateString('pt-BR')}
+                                          {d.campanha ? ` · ${d.campanha}` : ''}
+                                          {d.link && <a href={d.link} target="_blank" rel="noreferrer" style={{ color: '#F2B705' }}>ver</a>}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div style={{ fontSize: 11, color: uuid ? '#f97316' : 'rgba(255,255,255,0.35)', marginTop: 4 }}>
+                                      {uuid ? '⚠ Sem divulgação registrada nas campanhas' : '— Livro sem vínculo com o catálogo (não dá para cruzar)'}
+                                    </div>
+                                  )
+                                )}
                               </div>
                             </div>
                             {item.quantidade > 1 && (
@@ -1055,7 +1155,45 @@ export default function VitrineAdmin() {
                               </span>
                             )}
                           </div>
-                        ))}
+                          );
+                        })}
+                      </div>
+
+                      {/* Botão / resultado da verificação nas campanhas */}
+                      <div style={{ marginTop: 12 }}>
+                        {divulgacoesPedido[pedido.id]?.erro && (
+                          <div style={{ fontSize: 12, color: '#f87171', marginBottom: 8 }}>
+                            {divulgacoesPedido[pedido.id].erro}
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => verificarDivulgacoesPedido(pedido)}
+                          disabled={verificandoPedido === pedido.id}
+                          style={{
+                            background: 'rgba(242,183,5,0.1)',
+                            border: '1px solid rgba(242,183,5,0.4)',
+                            color: '#F2B705',
+                            borderRadius: 8,
+                            padding: '7px 14px',
+                            fontSize: 12,
+                            fontWeight: 700,
+                            cursor: verificandoPedido === pedido.id ? 'wait' : 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                          }}
+                        >
+                          {verificandoPedido === pedido.id
+                            ? <Loader2 size={13} className="spin" />
+                            : <Megaphone size={13} />}
+                          {divulgacoesPedido[pedido.id] ? 'Verificar novamente' : 'Verificar divulgações nas campanhas'}
+                        </button>
+                        {divulgacoesPedido[pedido.id]?.parceiro && (
+                          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginLeft: 10 }}>
+                            cruzado com: {divulgacoesPedido[pedido.id].parceiro} (CRM)
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
