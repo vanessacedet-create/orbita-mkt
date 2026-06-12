@@ -309,6 +309,9 @@ export async function gerarProximaOcorrencia(tarefa) {
   )
   if (!proximoPrazo) return null
 
+  // Respeita a data-limite ("repetir até"): não cria além dela
+  if (tarefa.recorrencia_fim && proximoPrazo > tarefa.recorrencia_fim) return null
+
   const payload = {
     titulo:              tarefa.titulo,
     descricao:           tarefa.descricao,
@@ -321,6 +324,7 @@ export async function gerarProximaOcorrencia(tarefa) {
     recorrencia_ativa:   true,
     recorrencia_tipo:    tarefa.recorrencia_tipo,
     recorrencia_config:  tarefa.recorrencia_config,
+    recorrencia_fim:     tarefa.recorrencia_fim || null,
     recorrencia_origem_id: tarefa.recorrencia_origem_id || tarefa.id,
   }
 
