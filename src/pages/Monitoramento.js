@@ -88,7 +88,7 @@ function useToast(){
 // 1. Confirmar: lançamentos 'agendado' com data nos próximos 0–3 dias
 // 2. Atrasados: pendentes (manuais ou lançamentos) com data vencida
 // 3. Sem retorno: registros 'sem_retorno' (cobrar de novo)
-function AcoesHoje({todos, hj, onClickDia}){
+function AcoesHoje({todos, hj, onClickItem}){
   const confirmar = todos.filter(r=>{
     if(r._origem!=='lancamento'||!r.data)return false
     const ehAgendado = r._statusOriginal==='agendado'
@@ -129,7 +129,7 @@ function AcoesHoje({todos, hj, onClickDia}){
         </div>
         <div style={expandido?{maxHeight:300,overflowY:'auto',paddingRight:4}:undefined}>
         {visiveis.map((r,i)=>(
-          <div key={r.id||r._lancamentoId||i} onClick={()=>r.data&&onClickDia(r.data)}
+          <div key={r.id||r._lancamentoId||i} onClick={()=>onClickItem(r)}
             style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,
               background:'var(--surface-2)',border:'1px solid var(--border)',borderLeft:`3px solid ${cor}`,
               borderRadius:8,padding:'7px 10px',marginBottom:6,cursor:r.data?'pointer':'default',transition:'background 0.15s'}}
@@ -462,6 +462,7 @@ export default function Monitoramento(){
   const[parceiros,setParceiros] = useState([])
   const[loading,setLoading] = useState(true)
   const[modalDia,setModalDia] = useState(null) // dataKey
+  const[modalFoco,setModalFoco] = useState(null) // registro único vindo do painel de ações
   const[modalForm,setModalForm] = useState(null) // {registro?, dataInicial?}
   const[toast,showToast] = useToast()
 
@@ -634,7 +635,7 @@ export default function Monitoramento(){
 
       {/* Painel Ações de hoje — fila de trabalho derivada dos dados do período */}
       {!loading&&(
-        <AcoesHoje todos={todos} hj={hj} onClickDia={key=>setModalDia(key)}/>
+        <AcoesHoje todos={todos} hj={hj} onClickItem={r=>setModalFoco(r)}/>
       )}
 
       {/* Navegação */}
@@ -660,6 +661,23 @@ export default function Monitoramento(){
           </div>
         ))}
       </div>
+
+      {/* Modal de item focado (vindo do painel Ações de hoje) */}
+      {modalFoco&&(
+        <ModalDia
+          dataKey={modalFoco.data}
+          registros={(porDia[modalFoco.data]||[]).filter(r=>
+            (modalFoco.id&&r.id===modalFoco.id)||(modalFoco._lancamentoId&&r._lancamentoId===modalFoco._lancamentoId)
+          )}
+          parceiros={parceiros}
+          hj={hj}
+          onAdd={key=>{setModalFoco(null);setModalForm({dataInicial:key})}}
+          onEdit={r=>{setModalFoco(null);setModalForm({registro:r})}}
+          onDelete={async id=>{await handleDelete(id);setModalFoco(null)}}
+          onMarcarPostou={async r=>{await handleMarcarPostou(r);setModalFoco(null)}}
+          onClose={()=>setModalFoco(null)}
+        />
+      )}
 
       {/* Modal dia */}
       {modalDia&&(
