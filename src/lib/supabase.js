@@ -77,6 +77,7 @@ export {
   importarTarefasLote, desfazerImportacao, getLotesRecentes,
   addComentario,
   gerarProximaOcorrencia, calcularProximoPrazo,
+  setResponsaveisTarefa, toggleParteResponsavel, concluirTodasAsPartes,
 } from './tarefas'
 
 export {
@@ -106,4 +107,3 @@ export {
   enviarMensagemMeta,
   subscribeConversa, subscribeConversas,
 } from './inbox'
-
