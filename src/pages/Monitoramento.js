@@ -114,7 +114,10 @@ function AcoesHoje({todos, hj, onClickDia}){
   )
 
   function Grupo({titulo,icone,cor,itens,acao}){
+    const[expandido,setExpandido]=useState(false)
     if(itens.length===0)return null
+    const LIMITE=5
+    const visiveis = expandido?itens:itens.slice(0,LIMITE)
     return(
       <div style={{flex:'1 1 240px',minWidth:220}}>
         <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
@@ -122,7 +125,8 @@ function AcoesHoje({todos, hj, onClickDia}){
           <span style={{fontSize:12,fontWeight:700,color:cor,textTransform:'uppercase',letterSpacing:'0.04em'}}>{titulo}</span>
           <span style={{fontSize:11,fontWeight:800,color:'#fff',background:cor,borderRadius:10,padding:'0 7px',lineHeight:'16px'}}>{itens.length}</span>
         </div>
-        {itens.slice(0,5).map((r,i)=>(
+        <div style={expandido?{maxHeight:300,overflowY:'auto',paddingRight:4}:undefined}>
+        {visiveis.map((r,i)=>(
           <div key={r.id||r._lancamentoId||i} onClick={()=>r.data&&onClickDia(r.data)}
             style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,
               background:'var(--surface-2)',border:'1px solid var(--border)',borderLeft:`3px solid ${cor}`,
@@ -131,10 +135,10 @@ function AcoesHoje({todos, hj, onClickDia}){
             onMouseLeave={e=>e.currentTarget.style.background='var(--surface-2)'}>
             <div style={{minWidth:0}}>
               <div style={{fontSize:12,fontWeight:700,color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-                {r.parceiros?.nome||'—'}
+                {r.parceiros?.nome||r._campanha||r._livro||'Sem parceiro vinculado'}
               </div>
               <div style={{fontSize:10,color:'var(--text-muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-                {acao}{r._campanha?` · ${r._campanha}`:''}{r._livro?` · ${r._livro}`:''}
+                {acao}{r.parceiros?.nome&&r._campanha?` · ${r._campanha}`:''}{r._livro&&r.parceiros?.nome?` · ${r._livro}`:''}
               </div>
             </div>
             {r.data&&(
@@ -144,7 +148,14 @@ function AcoesHoje({todos, hj, onClickDia}){
             )}
           </div>
         ))}
-        {itens.length>5&&<div style={{fontSize:10,color:'var(--text-muted)'}}>+{itens.length-5} no calendário</div>}
+        </div>
+        {itens.length>LIMITE&&(
+          <button type="button" onClick={()=>setExpandido(e=>!e)}
+            style={{background:'none',border:`1px solid ${cor}55`,color:cor,borderRadius:6,
+              padding:'4px 10px',fontSize:11,fontWeight:700,cursor:'pointer',marginTop:2}}>
+            {expandido?'Ver menos':`Ver todos (${itens.length})`}
+          </button>
+        )}
       </div>
     )
   }
