@@ -4,13 +4,28 @@ import * as XLSX from 'xlsx';
 import {
   Plus, Trash2, Edit2, Upload, Download, Search, Eye, EyeOff,
   Star, StarOff, Save, X, ChevronDown, Loader2, BookOpen,
-  FileSpreadsheet, Check, AlertCircle, Package, ClipboardList, Users
+  FileSpreadsheet, Check, AlertCircle, Package, ClipboardList, Users, Link2
 } from 'lucide-react';
 
 /* ============================================
    VITRINE ADMIN — Gerenciamento de Livros
    Rota: /admin/vitrine (autenticado)
    ============================================ */
+
+// ── Vincula EANs ao catálogo oficial (tabela livros) em lotes ──
+async function mapearEansParaLivroIds(eans) {
+  const unicos = [...new Set(eans.filter(Boolean).map(String))];
+  const mapa = {};
+  for (let i = 0; i < unicos.length; i += 200) {
+    const lote = unicos.slice(i, i + 200);
+    const { data } = await supabase
+      .from('livros')
+      .select('id, isbn')
+      .in('isbn', lote);
+    for (const l of (data || [])) mapa[l.isbn] = l.id;
+  }
+  return mapa;
+}
 
 export default function VitrineAdmin() {
   const [tab, setTab] = useState('livros'); // 'livros' | 'pedidos' | 'parceiros'
@@ -144,6 +159,14 @@ export default function VitrineAdmin() {
         return;
       }
 
+      // ── Vínculo automático com o catálogo oficial (livros) pelo EAN/ISBN ──
+      const mapaEan = await mapearEansParaLivroIds(livrosParaInserir.map(l => l.ean));
+      let vinculados = 0;
+      for (const l of livrosParaInserir) {
+        l.livro_id = l.ean ? (mapaEan[l.ean] || null) : null;
+        if (l.livro_id) vinculados++;
+      }
+
       // Inserir em lotes de 100
       let inseridos = 0;
       for (let i = 0; i < livrosParaInserir.length; i += 100) {
@@ -163,7 +186,7 @@ export default function VitrineAdmin() {
 
       setMsgImport({
         tipo: 'sucesso',
-        texto: `${inseridos} livros importados com sucesso!`,
+        texto: `${inseridos} livros importados! ${vinculados} vinculados automaticamente ao catálogo Órbita${inseridos - vinculados > 0 ? ` — ${inseridos - vinculados} sem correspondência de ISBN (vincule manualmente ao editar)` : ''}.`,
       });
       carregarDados();
     } catch (err) {
@@ -191,7 +214,7 @@ export default function VitrineAdmin() {
           const resultado = await criarEnvioCortesia(pedido);
           if (resultado.ok) {
             const aviso = resultado.livrosFaltando > 0
-              ? `Envio criado nas cortesias (Envio #${resultado.envioId}). ⚠️ ${resultado.livrosFaltando} livro(s) não encontrado(s) no catálogo pelo ISBN — verifique manualmente.`
+              ? `Envio criado nas cortesias (Envio #${resultado.envioId}). ⚠️ ${resultado.livrosFaltando} livro(s) não encontrado(s) no catálogo — verifique manualmente.`
               : `Envio criado nas cortesias (Envio #${resultado.envioId}).`;
             alert(aviso);
           } else {
@@ -264,18 +287,56 @@ export default function VitrineAdmin() {
         };
       }
 
-      // 2. Buscar IDs dos livros na tabela livros pelo EAN/ISBN
+      // 2. Resolver o livro do catálogo oficial de cada item:
+      //    item.livro_id aponta para vitrine_livros (bigint, legado);
+      //    o catálogo vem de vitrine_livros.livro_id (UUID),
+      //    com fallback pelo EAN/ISBN para pedidos antigos.
       const itens = pedido.vitrine_pedido_itens || [];
-      const eans = itens.map(i => i.ean_livro).filter(Boolean);
-      let livroIds = [];
+      const livroIdsSet = new Set();
+      const eansResolvidos = new Set();
 
-      if (eans.length > 0) {
-        const { data: livrosEncontrados } = await supabase
-          .from('livros')
-          .select('id, isbn')
-          .in('isbn', eans);
-        livroIds = (livrosEncontrados || []).map(l => l.id);
+      // 2a. Caminho principal: vitrine_pedido_itens.livro_id → vitrine_livros.livro_id
+      const vitrineIds = itens.map(i => i.livro_id).filter(Boolean);
+      if (vitrineIds.length > 0) {
+        const { data: vls } = await supabase
+          .from('vitrine_livros')
+          .select('id, livro_id, ean')
+          .in('id', vitrineIds);
+        for (const v of (vls || [])) {
+          if (v.livro_id) {
+            livroIdsSet.add(v.livro_id);
+            if (v.ean) eansResolvidos.add(String(v.ean));
+          }
+        }
       }
+
+      // 2b. Fallback: itens não resolvidos, pelo EAN na vitrine e depois no catálogo
+      const eansSemVinculo = itens
+        .filter(i => i.ean_livro && !eansResolvidos.has(String(i.ean_livro)))
+        .map(i => String(i.ean_livro));
+
+      if (eansSemVinculo.length > 0) {
+        const { data: vlivros } = await supabase
+          .from('vitrine_livros')
+          .select('ean, livro_id')
+          .in('ean', eansSemVinculo)
+          .not('livro_id', 'is', null);
+        const resolvidos = new Set();
+        for (const v of (vlivros || [])) {
+          livroIdsSet.add(v.livro_id);
+          resolvidos.add(String(v.ean));
+        }
+        const restantes = eansSemVinculo.filter(e => !resolvidos.has(e));
+        if (restantes.length > 0) {
+          const { data: livrosEncontrados } = await supabase
+            .from('livros')
+            .select('id, isbn')
+            .in('isbn', restantes);
+          for (const l of (livrosEncontrados || [])) livroIdsSet.add(l.id);
+        }
+      }
+
+      const livroIds = [...livroIdsSet];
 
       // 3. Criar envio
       const { data: envio, error: errEnvio } = await supabase
@@ -298,7 +359,7 @@ export default function VitrineAdmin() {
         );
       }
 
-      return { ok: true, envioId: envio.id, livrosFaltando: eans.length - livroIds.length };
+      return { ok: true, envioId: envio.id, livrosFaltando: itens.length - livroIds.length < 0 ? 0 : itens.length - livroIds.length };
     } catch (err) {
       console.error('[Vitrine→Cortesia] Erro:', err);
       return { ok: false, msg: 'Erro ao criar envio nas cortesias.' };
@@ -335,6 +396,7 @@ export default function VitrineAdmin() {
   // ── Contadores ──
   const totalAtivos = livros.filter(l => l.ativo).length;
   const totalInativos = livros.filter(l => !l.ativo).length;
+  const totalSemVinculo = livros.filter(l => !l.livro_id).length;
   const pedidosNovos = pedidos.filter(p => p.status === 'novo').length;
   const pedidosConcluidos = pedidos.filter(p => p.status === 'concluido');
   const pedidosAndamento = pedidos.filter(p => p.status !== 'concluido');
@@ -386,6 +448,16 @@ export default function VitrineAdmin() {
           }}>
             <div style={{ fontSize: 20, fontWeight: 700, color: '#dc2626' }}>{totalInativos}</div>
             <div style={{ fontSize: 11, color: '#666' }}>Inativos</div>
+          </div>
+          <div style={{
+            background: '#f5f3ff',
+            border: '1px solid #ddd6fe',
+            borderRadius: 10,
+            padding: '8px 16px',
+            textAlign: 'center',
+          }} title="Livros da vitrine sem vínculo com o catálogo Órbita">
+            <div style={{ fontSize: 20, fontWeight: 700, color: '#7c3aed' }}>{totalSemVinculo}</div>
+            <div style={{ fontSize: 11, color: '#666' }}>Sem vínculo</div>
           </div>
           <div style={{
             background: '#fffbeb',
@@ -562,6 +634,7 @@ export default function VitrineAdmin() {
                     <th style={th}>Editora</th>
                     <th style={th}>ISBN</th>
                     <th style={th}>Preço</th>
+                    <th style={th}>Catálogo</th>
                     <th style={th}>Status</th>
                     <th style={th}>Ações</th>
                   </tr>
@@ -615,6 +688,24 @@ export default function VitrineAdmin() {
                       <td style={{ ...td, fontFamily: 'monospace', fontSize: 11 }}>{livro.ean || '—'}</td>
                       <td style={td}>
                         {livro.preco ? `R$ ${Number(livro.preco).toFixed(2).replace('.', ',')}` : '—'}
+                      </td>
+                      <td style={td}>
+                        {livro.livro_id ? (
+                          <span title="Vinculado ao catálogo Órbita" style={{
+                            padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                            background: '#f0fdf4', color: '#16a34a',
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                          }}>
+                            <Link2 size={11} /> Vinculado
+                          </span>
+                        ) : (
+                          <span title="Sem vínculo com o catálogo — edite para vincular" style={{
+                            padding: '3px 8px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                            background: '#f5f3ff', color: '#7c3aed',
+                          }}>
+                            Sem vínculo
+                          </span>
+                        )}
                       </td>
                       <td style={td}>
                         <span style={{
@@ -1295,11 +1386,68 @@ function FormLivro({ livro, onSalvar, onCancelar }) {
     destaque: livro?.destaque ?? false,
   });
 
+  // ── Vínculo com o catálogo oficial (tabela livros) ──
+  const [livroId, setLivroId] = useState(livro?.livro_id || null);
+  const [vinculadoNome, setVinculadoNome] = useState('');
+  const [buscaCat, setBuscaCat] = useState('');
+  const [resultadosCat, setResultadosCat] = useState([]);
+  const [buscandoCat, setBuscandoCat] = useState(false);
+
+  // Carrega o nome do livro vinculado ao abrir em edição
+  useEffect(() => {
+    let ativo = true;
+    if (livro?.livro_id) {
+      supabase.from('livros').select('id, titulo, autor').eq('id', livro.livro_id).maybeSingle()
+        .then(({ data }) => { if (ativo && data) setVinculadoNome(`${data.titulo}${data.autor ? ' — ' + data.autor : ''}`); });
+    }
+    return () => { ativo = false; };
+  }, [livro]);
+
+  // Busca no catálogo com debounce
+  useEffect(() => {
+    if (!buscaCat || buscaCat.length < 3) { setResultadosCat([]); return; }
+    const t = setTimeout(async () => {
+      setBuscandoCat(true);
+      try {
+        // Busca por título OU ISBN
+        const { data } = await supabase
+          .from('livros')
+          .select('id, titulo, autor, editora, isbn')
+          .or(`titulo.ilike.%${buscaCat}%,isbn.ilike.%${buscaCat}%`)
+          .limit(8);
+        setResultadosCat(data || []);
+      } catch (e) { console.error(e); }
+      finally { setBuscandoCat(false); }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [buscaCat]);
+
+  function selecionarDoCatalogo(l) {
+    setLivroId(l.id);
+    setVinculadoNome(`${l.titulo}${l.autor ? ' — ' + l.autor : ''}`);
+    setBuscaCat('');
+    setResultadosCat([]);
+    // Preenche campos vazios com os dados do catálogo
+    setForm(f => ({
+      ...f,
+      titulo: f.titulo || l.titulo || '',
+      autor: f.autor || l.autor || '',
+      editora: f.editora || l.editora || '',
+      ean: f.ean || l.isbn || '',
+    }));
+  }
+
+  function removerVinculo() {
+    setLivroId(null);
+    setVinculadoNome('');
+  }
+
   function handleSubmit() {
     if (!form.titulo.trim()) return;
     onSalvar({
       ...form,
       preco: form.preco ? Number(form.preco) : null,
+      livro_id: livroId,
     });
   }
 
@@ -1343,6 +1491,80 @@ function FormLivro({ livro, onSalvar, onCancelar }) {
         </div>
 
         <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+          {/* ── Vínculo com o catálogo Órbita ── */}
+          <div style={{
+            background: livroId ? '#f0fdf4' : '#faf5ff',
+            border: `1.5px solid ${livroId ? '#bbf7d0' : '#e9d5ff'}`,
+            borderRadius: 10,
+            padding: '12px 14px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <Link2 size={14} color={livroId ? '#16a34a' : '#7c3aed'} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: livroId ? '#16a34a' : '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Catálogo Órbita
+              </span>
+            </div>
+
+            {livroId ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <div style={{ fontSize: 13, color: '#15803d', fontWeight: 600 }}>
+                  ✓ {vinculadoNome || 'Livro vinculado'}
+                </div>
+                <button
+                  type="button"
+                  onClick={removerVinculo}
+                  style={{ background: 'none', border: '1px solid #fecaca', color: '#dc2626', borderRadius: 6, padding: '4px 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                >
+                  Remover vínculo
+                </button>
+              </div>
+            ) : (
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="text"
+                  value={buscaCat}
+                  onChange={e => setBuscaCat(e.target.value)}
+                  placeholder="Buscar por título ou ISBN no cadastro de livros..."
+                  style={{
+                    width: '100%', padding: '9px 12px',
+                    border: '1.5px solid #ddd', borderRadius: 8,
+                    fontSize: 13, boxSizing: 'border-box',
+                  }}
+                />
+                {buscandoCat && (
+                  <Loader2 size={14} className="spin" style={{ position: 'absolute', right: 12, top: 11, color: '#999' }} />
+                )}
+                {resultadosCat.length > 0 && (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+                    background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8,
+                    maxHeight: 220, overflowY: 'auto',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                  }}>
+                    {resultadosCat.map(l => (
+                      <div
+                        key={l.id}
+                        onClick={() => selecionarDoCatalogo(l)}
+                        style={{ padding: '9px 12px', cursor: 'pointer', borderBottom: '1px solid #f3f4f6' }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                        onMouseLeave={e => e.currentTarget.style.background = '#fff'}
+                      >
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>{l.titulo}</div>
+                        <div style={{ fontSize: 11, color: '#888' }}>
+                          {l.autor || '—'} · {l.editora || '—'}{l.isbn ? ` · ISBN ${l.isbn}` : ''}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p style={{ fontSize: 11, color: '#888', margin: '6px 0 0' }}>
+                  Vincular ao cadastro oficial permite cruzar pedidos e divulgações deste livro.
+                </p>
+              </div>
+            )}
+          </div>
+
           <Field label="Título *" value={form.titulo} onChange={v => setForm({ ...form, titulo: v })} />
           <Field label="Autor(es)" value={form.autor} onChange={v => setForm({ ...form, autor: v })} />
           <div style={{ display: 'flex', gap: 12 }}>
