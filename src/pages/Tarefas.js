@@ -8,7 +8,7 @@ import {
   setResponsaveisTarefa, toggleParteResponsavel, concluirTodasAsPartes,
   gerarProximaOcorrencia
 } from '../lib/supabase'
-import { useAuth } from '../context/AuthContext'
+import { useAuth, PERFIL_GRUPO } from '../context/AuthContext'
 import {
   Plus, X, Pencil, Trash2, CheckSquare, Square, MessageSquare,
   Calendar, Flag, User, ChevronDown, List, Columns, Clock,
@@ -265,13 +265,20 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
         recorrencia_ativa: !!recorrencia_tipo,
         recorrencia_tipo:  recorrencia_tipo || null,
         recorrencia_config: recorrenciaConfig,
-      }, tarefa?.id, responsaveis)
+      }, tarefa?.id, responsaveis, tarefa ? [] : checklist.filter(c => c._local))
       onClose()
     } catch(e) { console.error(e) } finally { setSaving(false) }
   }
 
   async function addItem() {
-    if (!novoItem.trim() || !tarefa) return
+    if (!novoItem.trim()) return
+    if (!tarefa) {
+      // Modo cadastro: item local; será gravado junto ao salvar a tarefa
+      setChecklist(prev => [...prev, { id: `local-${Date.now()}`, texto: novoItem.trim(), concluido: false, ordem: prev.length, _local: true }])
+      setNovoItem('')
+      checkInputRef.current?.focus()
+      return
+    }
     const item = await addChecklistItem(tarefa.id, novoItem.trim())
     setChecklist(prev => [...prev, item])
     setNovoItem('')
@@ -279,11 +286,19 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
   }
 
   async function toggleItem(item) {
+    if (item._local) {
+      setChecklist(prev => prev.map(x => x.id === item.id ? { ...x, concluido: !x.concluido } : x))
+      return
+    }
     const upd = await updateChecklistItem(item.id, { concluido: !item.concluido })
     setChecklist(prev => prev.map(x => x.id === upd.id ? upd : x))
   }
 
   async function removeItem(id) {
+    if (String(id).startsWith('local-')) {
+      setChecklist(prev => prev.filter(x => x.id !== id))
+      return
+    }
     await deleteChecklistItem(id)
     setChecklist(prev => prev.filter(x => x.id !== id))
   }
@@ -310,12 +325,12 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
           </div>
         </div>
 
-        {tarefa && (
+        {(
           <div style={{ display:'flex', gap:0, borderBottom:'1px solid var(--border)', marginBottom:16 }}>
             {[
               { id:'detalhes',   label:'Detalhes' },
               { id:'checklist',  label:`Checklist ${checkTotal > 0 ? `(${checkDone}/${checkTotal})` : ''}` },
-              { id:'comentarios', label:`Comentários (${comentarios.length})` },
+              ...(tarefa ? [{ id:'comentarios', label:`Comentários (${comentarios.length})` }] : []),
             ].map(t => (
               <button key={t.id} onClick={()=>setTab(t.id)} style={{
                 padding:'8px 16px', fontSize:12, fontWeight:700, border:'none', cursor:'pointer',
@@ -1009,6 +1024,10 @@ export default function Tarefas() {
   const [filtroResponsavel, setFiltroResponsavel] = useState('todos')
   const [filtroGrupo, setFiltroGrupo] = useState('todos')
   const ehAdmin = usuario?.perfil === 'administrador' || usuario?.perfil === 'gerente'
+  const meuGrupo = PERFIL_GRUPO[usuario?.perfil] || null
+  const usuariosDaEquipe = ehAdmin
+    ? usuarios
+    : usuarios.filter(u => (PERFIL_GRUPO[u.perfil] || null) === meuGrupo)
   const [toast, showToast]          = useToast()
   const [dragId, setDragId]           = useState(null)
   const [dragOverCol, setDragOverCol] = useState(null)
@@ -1044,7 +1063,7 @@ export default function Tarefas() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [showMenuNova])
 
-  async function handleSave(form, id, responsaveis = []) {
+  async function handleSave(form, id, responsaveis = [], checklistLocal = []) {
     if (id) {
       let upd = await updateTarefa(id, form)
       await setResponsaveisTarefa(id, responsaveis)
@@ -1062,6 +1081,11 @@ export default function Tarefas() {
       let nova = await createTarefa(form)
       if (responsaveis.length > 0) {
         await setResponsaveisTarefa(nova.id, responsaveis)
+      }
+      for (const item of checklistLocal) {
+        await addChecklistItem(nova.id, item.texto)
+      }
+      if (responsaveis.length > 0 || checklistLocal.length > 0) {
         nova = await updateTarefa(nova.id, {})
       }
       setTarefas(prev => [nova, ...prev])
@@ -1286,7 +1310,7 @@ export default function Tarefas() {
           value={filtroResponsavel} onChange={e=>setFiltroResponsavel(e.target.value)}>
           <option value="todos">Todos os responsáveis</option>
           <option value="minha">Minhas tarefas</option>
-          {usuarios.map(u=><option key={u.id} value={u.id}>{u.nome}</option>)}
+          {usuariosDaEquipe.map(u=><option key={u.id} value={u.id}>{u.nome}</option>)}
         </select>
         {ehAdmin && (
           <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 10px' }}
