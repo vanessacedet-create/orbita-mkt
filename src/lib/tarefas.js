@@ -3,7 +3,8 @@ import { supabase } from './client'
 const TAREFA_SELECT = `*, responsavel:responsavel_id(id, nome), criador:created_by(id, nome),
   tarefa_checklist(id, texto, concluido, ordem),
   tarefa_comentarios(id, texto, created_at, usuario:usuario_id(id, nome)),
-  tarefa_livros(id, livros(id, titulo, autor, isbn))`
+  tarefa_livros(id, livros(id, titulo, autor, isbn)),
+  tarefa_responsaveis(id, usuario_id, concluido, concluido_em, usuario:usuario_id(id, nome))`
 
 export async function getTarefas() {
   const { data, error } = await supabase
@@ -326,11 +327,84 @@ export async function gerarProximaOcorrencia(tarefa) {
   const { data, error } = await supabase
     .from('tarefas')
     .insert([payload])
-    .select(`*, responsavel:responsavel_id(id, nome), criador:created_by(id, nome),
-      tarefa_checklist(id, texto, concluido, ordem),
-      tarefa_comentarios(id, texto, created_at, usuario:usuario_id(id, nome)),
-      tarefa_livros(id, livros(id, titulo, autor, isbn))`)
+    .select('id')
+    .single()
+  if (error) throw error
+
+  // Copia os responsáveis (com conclusão zerada)
+  const responsaveis = (tarefa.tarefa_responsaveis || [])
+  if (responsaveis.length > 0) {
+    await supabase.from('tarefa_responsaveis').insert(
+      responsaveis.map(r => ({ tarefa_id: data.id, usuario_id: r.usuario_id, concluido: false }))
+    )
+  } else if (tarefa.responsavel_id) {
+    await supabase.from('tarefa_responsaveis').insert(
+      [{ tarefa_id: data.id, usuario_id: tarefa.responsavel_id, concluido: false }]
+    )
+  }
+
+  // Copia o checklist (desmarcado)
+  const checklist = (tarefa.tarefa_checklist || [])
+  if (checklist.length > 0) {
+    await supabase.from('tarefa_checklist').insert(
+      checklist.map(c => ({ tarefa_id: data.id, texto: c.texto, concluido: false, ordem: c.ordem }))
+    )
+  }
+
+  // Retorna a tarefa completa
+  const { data: completa, error: e2 } = await supabase
+    .from('tarefas')
+    .select(TAREFA_SELECT)
+    .eq('id', data.id)
+    .single()
+  if (e2) throw e2
+  return completa
+}
+
+// ── MÚLTIPLOS RESPONSÁVEIS ──────────────────────────────────────────────────
+
+/** Sincroniza a lista de responsáveis de uma tarefa (adiciona novos, remove os que saíram). */
+export async function setResponsaveisTarefa(tarefaId, usuarioIds) {
+  const ids = [...new Set(usuarioIds || [])]
+  const { data: atuais, error: e1 } = await supabase
+    .from('tarefa_responsaveis')
+    .select('id, usuario_id')
+    .eq('tarefa_id', tarefaId)
+  if (e1) throw e1
+
+  const atuaisIds = (atuais || []).map(r => r.usuario_id)
+  const adicionar = ids.filter(id => !atuaisIds.includes(id))
+  const remover   = (atuais || []).filter(r => !ids.includes(r.usuario_id)).map(r => r.id)
+
+  if (remover.length > 0) {
+    const { error } = await supabase.from('tarefa_responsaveis').delete().in('id', remover)
+    if (error) throw error
+  }
+  if (adicionar.length > 0) {
+    const { error } = await supabase.from('tarefa_responsaveis')
+      .insert(adicionar.map(usuario_id => ({ tarefa_id: tarefaId, usuario_id, concluido: false })))
+    if (error) throw error
+  }
+}
+
+/** Marca/desmarca a parte de um responsável. Retorna a linha atualizada. */
+export async function toggleParteResponsavel(linhaId, concluido) {
+  const { data, error } = await supabase
+    .from('tarefa_responsaveis')
+    .update({ concluido, concluido_em: concluido ? new Date().toISOString() : null })
+    .eq('id', linhaId)
+    .select('id, usuario_id, concluido, concluido_em')
     .single()
   if (error) throw error
   return data
+}
+
+/** Marca todas as partes como concluídas (usado ao concluir a tarefa direto no kanban). */
+export async function concluirTodasAsPartes(tarefaId) {
+  const { error } = await supabase
+    .from('tarefa_responsaveis')
+    .update({ concluido: true, concluido_em: new Date().toISOString() })
+    .eq('tarefa_id', tarefaId)
+    .eq('concluido', false)
+  if (error) throw error
 }
