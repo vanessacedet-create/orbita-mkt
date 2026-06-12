@@ -41,13 +41,26 @@ export async function deleteRegistroMonitoramento(id) {
   if (error) throw error
 }
 
+// Marca uma divulgação de campanha como publicada (chamada pelo Monitoramento)
+export async function marcarDivulgacaoPublicada(id, { data_publicada, link } = {}) {
+  const updates = { data_publicada: data_publicada || null }
+  if (link !== undefined && link !== null && link !== '') updates.link = link
+  const { data, error } = await supabase
+    .from('campanha_divulgacoes')
+    .update(updates)
+    .eq('id', id)
+    .select('*')
+    .single()
+  if (error) throw error
+  return data
+}
+
 export async function getLancamentosMonitoramento({ ano, mes, grupo } = {}) {
   const ini = `${ano}-${String(mes).padStart(2,'0')}-01`
   const ultimoDia = new Date(ano, mes, 0).getDate()
   const fim = `${ano}-${String(mes).padStart(2,'0')}-${String(ultimoDia).padStart(2,'0')}`
 
-  // Lançamentos: filtra via join com campanhas pelo grupo, quando aplicável.
-  // O !inner garante que registros sem campanha (ou de outro grupo) sejam excluídos.
+  // ── 1. Lançamentos (lancamento_parceiros — já tem status próprio) ──
   let qLanc = supabase
     .from('lancamento_parceiros')
     .select(`
@@ -62,43 +75,54 @@ export async function getLancamentosMonitoramento({ ano, mes, grupo } = {}) {
   const { data: lancData, error: lancError } = await qLanc
   if (lancError) throw lancError
 
-  let qCampPromo = supabase.from('campanhas').select('id, nome').eq('tipo', 'Promoção')
-  if (grupo) qCampPromo = qCampPromo.eq('grupo', grupo)
-  const { data: campPromo } = await qCampPromo
+  // ── 2. Divulgações de campanha (campanha_divulgacoes — TODOS os tipos) ──
+  // Fluxo CEDET: data_divulgacao = data COMBINADA (planejada na campanha).
+  // data_publicada = preenchida quando o parceiro posta.
+  // Monitoramento: sem data_publicada e data vencida → fila de cobrança.
+  let qCamp = supabase.from('campanhas').select('id, nome, tipo')
+  if (grupo) qCamp = qCamp.eq('grupo', grupo)
+  const { data: campAll } = await qCamp
 
-  const campPromoIds = (campPromo || []).map(c => c.id)
-  const campPromoMap = Object.fromEntries((campPromo || []).map(c => [c.id, c.nome]))
+  const campIds = (campAll || []).map(c => c.id)
+  const campMap = Object.fromEntries((campAll || []).map(c => [c.id, c]))
 
-  let promNorm = []
-  if (campPromoIds.length > 0) {
+  let divNorm = []
+  if (campIds.length > 0) {
     const { data: cpData } = await supabase
       .from('campanha_parceiros')
       .select('id, campanha_id, parceiros(id, nome)')
-      .in('campanha_id', campPromoIds)
+      .in('campanha_id', campIds)
 
     const cpIds = (cpData || []).map(cp => cp.id)
     const cpMap = Object.fromEntries((cpData || []).map(cp => [cp.id, cp]))
 
     if (cpIds.length > 0) {
-      const { data: divData } = await supabase
+      const { data: divData, error: divError } = await supabase
         .from('campanha_divulgacoes')
-        .select('id, tipo, origem, data_divulgacao, link, campanha_parceiro_id')
+        .select('id, tipo, origem, data_divulgacao, data_publicada, link, campanha_parceiro_id, livros(id, titulo)')
         .in('campanha_parceiro_id', cpIds)
         .gte('data_divulgacao', ini)
         .lte('data_divulgacao', fim)
+      if (divError) throw divError
 
-      promNorm = (divData || []).map(d => {
+      divNorm = (divData || []).map(d => {
         const cp = cpMap[d.campanha_parceiro_id]
+        const camp = campMap[cp?.campanha_id]
+        // Orgânica = aconteceu espontaneamente (já nasce publicada).
+        const publicada = !!d.data_publicada || d.origem === 'organica'
         return {
           id: d.id,
-          status: 'pendente',
+          _divulgacaoCampanhaId: d.id, // habilita "marcar como postou" na página
+          status: publicada ? 'publicado' : 'pendente',
           data_combinada: d.data_divulgacao,
+          data_publicada: d.data_publicada || null,
           tipo_divulgacao: d.tipo || null,
           link: d.link || null,
           parceiros: cp?.parceiros,
-          _campanha: campPromoMap[cp?.campanha_id],
-          _tipo_campanha: 'Promoção',
-          _origem_campanha: 'promocao',
+          _campanha: camp?.nome,
+          _livro: d.livros?.titulo,
+          _tipo_campanha: camp?.tipo || 'Campanha',
+          _origem_campanha: 'campanha',
           _origem: d.origem || 'combinada',
         }
       })
@@ -113,5 +137,5 @@ export async function getLancamentosMonitoramento({ ano, mes, grupo } = {}) {
     _origem_campanha: 'lancamento',
   }))
 
-  return [...lancNorm, ...promNorm]
+  return [...lancNorm, ...divNorm]
 }
