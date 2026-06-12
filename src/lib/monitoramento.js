@@ -61,16 +61,15 @@ export async function getLancamentosMonitoramento({ ano, mes, grupo } = {}) {
   const fim = `${ano}-${String(mes).padStart(2,'0')}-${String(ultimoDia).padStart(2,'0')}`
 
   // ── 1. Lançamentos (lancamento_parceiros — já tem status próprio) ──
+  // Data efetiva = data_combinada; na falta dela, data_divulgacao (mesma data).
   let qLanc = supabase
     .from('lancamento_parceiros')
     .select(`
-      id, status, data_combinada, tipo_divulgacao, link,
+      id, status, data_combinada, data_divulgacao, tipo_divulgacao, link,
       parceiros(id, nome),
       lancamento_livros!inner(id, livros(id, titulo), campanhas!inner(id, nome, tipo, grupo))
     `)
-    .not('data_combinada', 'is', null)
-    .gte('data_combinada', ini)
-    .lte('data_combinada', fim)
+    .or(`and(data_combinada.gte.${ini},data_combinada.lte.${fim}),and(data_combinada.is.null,data_divulgacao.gte.${ini},data_divulgacao.lte.${fim})`)
   if (grupo) qLanc = qLanc.eq('lancamento_livros.campanhas.grupo', grupo)
   const { data: lancData, error: lancError } = await qLanc
   if (lancError) throw lancError
@@ -131,6 +130,8 @@ export async function getLancamentosMonitoramento({ ano, mes, grupo } = {}) {
 
   const lancNorm = (lancData || []).map(lp => ({
     ...lp,
+    // Sem data combinada: considera a data divulgada como a mesma data
+    data_combinada: lp.data_combinada || lp.data_divulgacao,
     _campanha: lp.lancamento_livros?.campanhas?.nome,
     _livro: lp.lancamento_livros?.livros?.titulo,
     _tipo_campanha: lp.lancamento_livros?.campanhas?.tipo || 'Lançamento',
