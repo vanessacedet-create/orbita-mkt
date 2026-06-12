@@ -222,8 +222,32 @@ function SeletorLivros({ tarefaId, livrosVinculados, onChange }) {
 }
 
 // ── MODAL TAREFA ───────────────────────────────────────────
+function isoData(d) { return d.toISOString().slice(0, 10) }
+
+// Primeira ocorrência de uma recorrência, a partir de hoje (inclusive)
+function primeiraOcorrencia(tipo, cfg = {}) {
+  const d = new Date(); d.setHours(12, 0, 0, 0)
+  if (tipo === 'diaria') return isoData(d)
+  if (tipo === 'semanal' || tipo === 'quinzenal') {
+    const alvo = Number(cfg.dia_semana ?? 1)
+    while (d.getDay() !== alvo) d.setDate(d.getDate() + 1)
+    return isoData(d)
+  }
+  if (tipo === 'mensal') {
+    const dia = Number(cfg.dia_mes ?? 1)
+    const nesteMes = new Date(d.getFullYear(), d.getMonth(), dia, 12)
+    if (nesteMes >= d) return isoData(nesteMes)
+    return isoData(new Date(d.getFullYear(), d.getMonth() + 1, dia, 12))
+  }
+  return isoData(d)
+}
+
 function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
   const { usuario } = useAuth()
+  const ehAdminModal = usuario?.perfil === 'administrador' || usuario?.perfil === 'gerente'
+  const usuariosSelecionaveis = ehAdminModal
+    ? usuarios
+    : usuarios.filter(u => (PERFIL_GRUPO[u.perfil] || null) === (PERFIL_GRUPO[usuario?.perfil] || null))
   const EMPTY = { titulo:'', descricao:'', status:'a_fazer', prioridade:'media', responsaveis: [], data_prazo: tarefa?._dataPrazo || '', recorrencia_tipo:'', recorrencia_dia_semana:'1', recorrencia_dia_mes:'1' }
   const [form, setForm] = useState(tarefa && !tarefa._dataPrazo ? {
     titulo:          tarefa.titulo,
@@ -231,7 +255,7 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
     status:          tarefa.status,
     prioridade:      tarefa.prioridade,
     responsaveis:    (tarefa.tarefa_responsaveis || []).map(r => r.usuario_id),
-    data_prazo:      tarefa.data_prazo || '',
+    data_prazo:      tarefa.recorrencia_tipo ? (tarefa.recorrencia_fim || '') : (tarefa.data_prazo || ''),
     recorrencia_tipo:       tarefa.recorrencia_tipo || '',
     recorrencia_dia_semana: String(tarefa.recorrencia_config?.dia_semana ?? '1'),
     recorrencia_dia_mes:    String(tarefa.recorrencia_config?.dia_mes ?? '1'),
@@ -240,6 +264,7 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
   const [comentarios, setComentarios] = useState(tarefa?.tarefa_comentarios || [])
   const [livrosVinculados, setLivrosVinculados] = useState(tarefa?.tarefa_livros || [])
   const [novoItem, setNovoItem]     = useState('')
+  const [erroForm, setErroForm]     = useState('')
   const [novoComent, setNovoComent] = useState('')
   const [saving, setSaving]         = useState(false)
   const [tab, setTab]               = useState('detalhes')
@@ -257,14 +282,29 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
               ? { dia_semana: Number(recorrencia_dia_semana) }
               : {})
         : null
+
+      let dataPrazoFinal = form.data_prazo || null
+      let recorrenciaFim = null
+      if (recorrencia_tipo) {
+        if (!form.data_prazo) { setErroForm('Informe até quando a tarefa deve se repetir.'); setSaving(false); return }
+        recorrenciaFim = form.data_prazo
+        dataPrazoFinal = primeiraOcorrencia(recorrencia_tipo, recorrenciaConfig)
+        if (dataPrazoFinal > recorrenciaFim) {
+          setErroForm('A data "repetir até" é anterior à primeira ocorrência da recorrência.')
+          setSaving(false); return
+        }
+      }
+      setErroForm('')
+
       await onSave({
         ...resto,
         responsavel_id:    responsaveis[0] || null,
-        data_prazo:        form.data_prazo || null,
+        data_prazo:        dataPrazoFinal,
         created_by:        tarefa ? undefined : usuario?.id,
         recorrencia_ativa: !!recorrencia_tipo,
         recorrencia_tipo:  recorrencia_tipo || null,
         recorrencia_config: recorrenciaConfig,
+        recorrencia_fim:   recorrenciaFim,
       }, tarefa?.id, responsaveis, tarefa ? [] : checklist.filter(c => c._local))
       onClose()
     } catch(e) { console.error(e) } finally { setSaving(false) }
@@ -341,6 +381,12 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
           </div>
         )}
 
+        {erroForm && (
+          <div style={{background:'rgba(239,68,68,0.08)',border:'1px solid rgba(239,68,68,0.25)',color:'#ef4444',padding:'8px 12px',borderRadius:8,fontSize:12,marginBottom:12}}>
+            {erroForm}
+          </div>
+        )}
+
         {tab === 'detalhes' && (
           <div className="form-grid">
             <div className="form-group">
@@ -367,10 +413,6 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
             </div>
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Prazo</label>
-                <input className="form-input" type="date" value={form.data_prazo} onChange={e=>setForm(f=>({...f,data_prazo:e.target.value}))}/>
-              </div>
-              <div className="form-group">
                 <label className="form-label">Recorrência</label>
                 <select className="form-select" value={form.recorrencia_tipo} onChange={e=>setForm(f=>({...f,recorrencia_tipo:e.target.value}))}>
                   <option value="">Não se repete</option>
@@ -379,6 +421,15 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
                   <option value="quinzenal">Quinzenal</option>
                   <option value="mensal">Mensal</option>
                 </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">{form.recorrencia_tipo ? 'Repetir até *' : 'Prazo'}</label>
+                <input className="form-input" type="date" value={form.data_prazo} onChange={e=>setForm(f=>({...f,data_prazo:e.target.value}))}/>
+                {form.recorrencia_tipo && (
+                  <div style={{fontSize:11,color:'var(--text-muted)',marginTop:3}}>
+                    O prazo de cada ocorrência é o próprio dia da recorrência.
+                  </div>
+                )}
               </div>
             </div>
             {(form.recorrencia_tipo === 'semanal' || form.recorrencia_tipo === 'quinzenal') && (
@@ -404,7 +455,7 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
             <div className="form-group">
               <label className="form-label">Responsáveis</label>
               <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
-                {usuarios.map(u=>{
+                {usuariosSelecionaveis.map(u=>{
                   const ativo = form.responsaveis.includes(u.id)
                   return (
                     <button key={u.id} type="button"
