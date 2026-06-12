@@ -4,7 +4,9 @@ import {
   addChecklistItem, updateChecklistItem, deleteChecklistItem,
   addComentario, getUsuarios,
   addLivroTarefa, removeLivroTarefa, getLivros,
-  importarTarefasLote, buscarLivroPorISBN
+  importarTarefasLote, buscarLivroPorISBN,
+  setResponsaveisTarefa, toggleParteResponsavel, concluirTodasAsPartes,
+  gerarProximaOcorrencia
 } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import {
@@ -12,7 +14,7 @@ import {
   Calendar, Flag, User, ChevronDown, List, Columns, Clock,
   AlertCircle, ArrowUp, Minus, CheckCircle2, Circle, LayoutList,
   CalendarDays, ChevronLeft, ChevronRight, Book, Search,
-  Upload, Download, FileSpreadsheet, ChevronUp, Users
+  Upload, Download, FileSpreadsheet, ChevronUp, Users, Check
 } from 'lucide-react'
 import { format, isPast, isToday, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -222,14 +224,17 @@ function SeletorLivros({ tarefaId, livrosVinculados, onChange }) {
 // ── MODAL TAREFA ───────────────────────────────────────────
 function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
   const { usuario } = useAuth()
-  const EMPTY = { titulo:'', descricao:'', status:'a_fazer', prioridade:'media', responsavel_id:'', data_prazo: tarefa?._dataPrazo || '' }
+  const EMPTY = { titulo:'', descricao:'', status:'a_fazer', prioridade:'media', responsaveis: [], data_prazo: tarefa?._dataPrazo || '', recorrencia_tipo:'', recorrencia_dia_semana:'1', recorrencia_dia_mes:'1' }
   const [form, setForm] = useState(tarefa && !tarefa._dataPrazo ? {
     titulo:          tarefa.titulo,
     descricao:       tarefa.descricao || '',
     status:          tarefa.status,
     prioridade:      tarefa.prioridade,
-    responsavel_id:  tarefa.responsavel_id || '',
+    responsaveis:    (tarefa.tarefa_responsaveis || []).map(r => r.usuario_id),
     data_prazo:      tarefa.data_prazo || '',
+    recorrencia_tipo:       tarefa.recorrencia_tipo || '',
+    recorrencia_dia_semana: String(tarefa.recorrencia_config?.dia_semana ?? '1'),
+    recorrencia_dia_mes:    String(tarefa.recorrencia_config?.dia_mes ?? '1'),
   } : EMPTY)
   const [checklist, setChecklist]   = useState(tarefa?.tarefa_checklist || [])
   const [comentarios, setComentarios] = useState(tarefa?.tarefa_comentarios || [])
@@ -244,12 +249,23 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
     if (!form.titulo.trim()) return
     setSaving(true)
     try {
+      const { responsaveis, recorrencia_tipo, recorrencia_dia_semana, recorrencia_dia_mes, ...resto } = form
+      const recorrenciaConfig = recorrencia_tipo
+        ? (recorrencia_tipo === 'mensal'
+            ? { dia_mes: Number(recorrencia_dia_mes) || 1 }
+            : (recorrencia_tipo === 'semanal' || recorrencia_tipo === 'quinzenal')
+              ? { dia_semana: Number(recorrencia_dia_semana) }
+              : {})
+        : null
       await onSave({
-        ...form,
-        responsavel_id: form.responsavel_id || null,
-        data_prazo:     form.data_prazo || null,
-        created_by:     tarefa ? undefined : usuario?.id,
-      }, tarefa?.id)
+        ...resto,
+        responsavel_id:    responsaveis[0] || null,
+        data_prazo:        form.data_prazo || null,
+        created_by:        tarefa ? undefined : usuario?.id,
+        recorrencia_ativa: !!recorrencia_tipo,
+        recorrencia_tipo:  recorrencia_tipo || null,
+        recorrencia_config: recorrenciaConfig,
+      }, tarefa?.id, responsaveis)
       onClose()
     } catch(e) { console.error(e) } finally { setSaving(false) }
   }
@@ -336,17 +352,103 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
             </div>
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Responsável</label>
-                <select className="form-select" value={form.responsavel_id} onChange={e=>setForm(f=>({...f,responsavel_id:e.target.value}))}>
-                  <option value="">Sem responsável</option>
-                  {usuarios.map(u=><option key={u.id} value={u.id}>{u.nome}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
                 <label className="form-label">Prazo</label>
                 <input className="form-input" type="date" value={form.data_prazo} onChange={e=>setForm(f=>({...f,data_prazo:e.target.value}))}/>
               </div>
+              <div className="form-group">
+                <label className="form-label">Recorrência</label>
+                <select className="form-select" value={form.recorrencia_tipo} onChange={e=>setForm(f=>({...f,recorrencia_tipo:e.target.value}))}>
+                  <option value="">Não se repete</option>
+                  <option value="diaria">Diária</option>
+                  <option value="semanal">Semanal</option>
+                  <option value="quinzenal">Quinzenal</option>
+                  <option value="mensal">Mensal</option>
+                </select>
+              </div>
             </div>
+            {(form.recorrencia_tipo === 'semanal' || form.recorrencia_tipo === 'quinzenal') && (
+              <div className="form-group">
+                <label className="form-label">Dia da semana</label>
+                <select className="form-select" value={form.recorrencia_dia_semana} onChange={e=>setForm(f=>({...f,recorrencia_dia_semana:e.target.value}))}>
+                  {['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'].map((d,i)=>(
+                    <option key={i} value={String(i)}>{d}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {form.recorrencia_tipo === 'mensal' && (
+              <div className="form-group">
+                <label className="form-label">Dia do mês</label>
+                <select className="form-select" value={form.recorrencia_dia_mes} onChange={e=>setForm(f=>({...f,recorrencia_dia_mes:e.target.value}))}>
+                  {Array.from({length:31},(_,i)=>i+1).map(d=>(
+                    <option key={d} value={String(d)}>{d}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="form-group">
+              <label className="form-label">Responsáveis</label>
+              <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                {usuarios.map(u=>{
+                  const ativo = form.responsaveis.includes(u.id)
+                  return (
+                    <button key={u.id} type="button"
+                      onClick={()=>setForm(f=>({...f,responsaveis: ativo ? f.responsaveis.filter(id=>id!==u.id) : [...f.responsaveis, u.id]}))}
+                      style={{padding:'4px 12px',borderRadius:20,fontSize:12,fontWeight:600,cursor:'pointer',border:'2px solid',
+                        borderColor: ativo ? 'var(--accent)' : 'var(--border)',
+                        background: ativo ? 'var(--accent-glow)' : 'transparent',
+                        color: ativo ? 'var(--accent)' : 'var(--text-muted)',transition:'all 0.15s'}}>
+                      {u.nome}
+                    </button>
+                  )
+                })}
+              </div>
+              {form.responsaveis.length > 1 && (
+                <div style={{fontSize:11,color:'var(--text-muted)',marginTop:4}}>
+                  Cada responsável conclui a sua parte; a tarefa fecha quando todos concluírem.
+                </div>
+              )}
+            </div>
+            {tarefa && (tarefa.tarefa_responsaveis || []).length > 0 && (
+              <div className="form-group">
+                <label className="form-label">Conclusão por responsável</label>
+                <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                  {(tarefa.tarefa_responsaveis || []).map(r => {
+                    const ehMinha = r.usuario_id === usuario?.id
+                    const podeMarcar = ehMinha || usuario?.perfil === 'administrador' || usuario?.perfil === 'gerente'
+                    return (
+                      <label key={r.id} style={{display:'flex',alignItems:'center',gap:8,fontSize:13,
+                        color: r.concluido ? '#22c55e' : 'var(--text)', cursor: podeMarcar ? 'pointer' : 'default', opacity: podeMarcar ? 1 : 0.7}}>
+                        <input type="checkbox" checked={!!r.concluido} disabled={!podeMarcar}
+                          onChange={async (e) => {
+                            const novoValor = e.target.checked
+                            try {
+                              await toggleParteResponsavel(r.id, novoValor)
+                              const atualizados = (tarefa.tarefa_responsaveis || []).map(x => x.id === r.id ? { ...x, concluido: novoValor } : x)
+                              const todosConcluiram = atualizados.length > 0 && atualizados.every(x => x.concluido)
+                              if (todosConcluiram && tarefa.status !== 'concluido') {
+                                await onSave({ status: 'concluido' }, tarefa.id, atualizados.map(x => x.usuario_id))
+                                onClose()
+                              } else if (!todosConcluiram && tarefa.status === 'concluido') {
+                                await onSave({ status: 'em_andamento' }, tarefa.id, atualizados.map(x => x.usuario_id))
+                                onClose()
+                              } else {
+                                tarefa.tarefa_responsaveis = atualizados
+                                setForm(f => ({ ...f }))
+                              }
+                            } catch(err) { console.error(err) }
+                          }}/>
+                        <span>{r.usuario?.nome}{ehMinha ? ' (você)' : ''}</span>
+                        {r.concluido && <Check size={13} color="#22c55e"/>}
+                      </label>
+                    )
+                  })}
+                </div>
+                <div style={{fontSize:11,color:'var(--text-muted)',marginTop:4}}>
+                  A tarefa é concluída automaticamente quando todos marcarem a sua parte.
+                </div>
+              </div>
+            )}
             <div className="form-group">
               <label className="form-label">Livros relacionados (opcional)</label>
               <SeletorLivros
@@ -851,16 +953,34 @@ function CardKanban({ tarefa, onClick, onDragStart, onDragEnd, isDragging }) {
           <PrazoBadge data_prazo={tarefa.data_prazo} status={tarefa.status}/>
         </div>
       </div>
-      {tarefa.responsavel?.nome && (
-        <div style={{ marginTop:8, paddingTop:8, borderTop:'1px solid var(--border)', display:'flex', alignItems:'center', gap:6 }}>
-          <div style={{ width:18, height:18, borderRadius:'50%', background:'var(--accent-glow)', border:'1px solid var(--accent)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, fontWeight:700, color:'var(--accent)', flexShrink:0 }}>
-            {tarefa.responsavel.nome[0].toUpperCase()}
+      {(() => {
+        const resps = (tarefa.tarefa_responsaveis && tarefa.tarefa_responsaveis.length > 0)
+          ? tarefa.tarefa_responsaveis
+          : (tarefa.responsavel?.nome ? [{ id:'_legado', usuario:{ nome: tarefa.responsavel.nome }, concluido: tarefa.status === 'concluido' }] : [])
+        if (resps.length === 0 && !tarefa.recorrencia_ativa) return null
+        return (
+          <div style={{ marginTop:8, paddingTop:8, borderTop:'1px solid var(--border)', display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
+            {resps.map(r => (
+              <div key={r.id} title={r.concluido ? `${r.usuario?.nome} — parte concluída` : r.usuario?.nome}
+                style={{ display:'flex', alignItems:'center', gap:4 }}>
+                <div style={{ width:18, height:18, borderRadius:'50%',
+                  background: r.concluido ? 'rgba(34,197,94,0.18)' : 'var(--accent-glow)',
+                  border: `1px solid ${r.concluido ? '#22c55e' : 'var(--accent)'}`,
+                  display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, fontWeight:700,
+                  color: r.concluido ? '#22c55e' : 'var(--accent)', flexShrink:0 }}>
+                  {(r.usuario?.nome || '?')[0].toUpperCase()}
+                </div>
+                <span style={{ fontSize:11, color: r.concluido ? '#22c55e' : 'var(--text-muted)', maxWidth:90, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                  {r.usuario?.nome}
+                </span>
+              </div>
+            ))}
+            {tarefa.recorrencia_ativa && (
+              <span title="Tarefa recorrente" style={{ marginLeft:'auto', fontSize:11 }}>🔁</span>
+            )}
           </div>
-          <span style={{ fontSize:11, color:'var(--text-muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-            {tarefa.responsavel.nome}
-          </span>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }
@@ -924,9 +1044,11 @@ export default function Tarefas() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [showMenuNova])
 
-  async function handleSave(form, id) {
+  async function handleSave(form, id, responsaveis = []) {
     if (id) {
-      const upd = await updateTarefa(id, form)
+      let upd = await updateTarefa(id, form)
+      await setResponsaveisTarefa(id, responsaveis)
+      upd = await updateTarefa(id, {}) // recarrega com responsáveis atualizados
       setTarefas(prev => prev.map(t => t.id === upd.id ? upd : t))
       // Se concluída, muda para aba de concluídas automaticamente
       if (upd.status === 'concluido' && abaView === 'ativas') {
@@ -937,7 +1059,11 @@ export default function Tarefas() {
         showToast('Tarefa atualizada!')
       }
     } else {
-      const nova = await createTarefa(form)
+      let nova = await createTarefa(form)
+      if (responsaveis.length > 0) {
+        await setResponsaveisTarefa(nova.id, responsaveis)
+        nova = await updateTarefa(nova.id, {})
+      }
       setTarefas(prev => [nova, ...prev])
       showToast('Tarefa criada!')
     }
@@ -950,8 +1076,18 @@ export default function Tarefas() {
   }
 
   async function handleStatusChange(tarefa, novoStatus) {
+    if (novoStatus === 'concluido') await concluirTodasAsPartes(tarefa.id)
     const upd = await updateTarefa(tarefa.id, { status: novoStatus })
     setTarefas(prev => prev.map(t => t.id === upd.id ? upd : t))
+    if (novoStatus === 'concluido' && upd.recorrencia_ativa) {
+      try {
+        const proxima = await gerarProximaOcorrencia(upd)
+        if (proxima) {
+          setTarefas(prev => [proxima, ...prev])
+          showToast('Tarefa concluída! Próxima ocorrência criada 🔁')
+        }
+      } catch(e) { console.error(e); showToast('Concluída, mas falhou ao criar a próxima ocorrência', 'error') }
+    }
   }
 
   async function handleDragDrop(novoStatus) {
@@ -961,7 +1097,15 @@ export default function Tarefas() {
     setDragId(null); setDragOverCol(null)
     setTarefas(prev => prev.map(t => t.id === dragId ? { ...t, status: novoStatus } : t))
     try {
-      await updateTarefa(dragId, { status: novoStatus })
+      if (novoStatus === 'concluido') await concluirTodasAsPartes(dragId)
+      const upd = await updateTarefa(dragId, { status: novoStatus })
+      if (novoStatus === 'concluido' && upd.recorrencia_ativa) {
+        const proxima = await gerarProximaOcorrencia(upd)
+        if (proxima) {
+          setTarefas(prev => [proxima, ...prev])
+          showToast('Próxima ocorrência criada 🔁')
+        }
+      }
     } catch(e) {
       setTarefas(prev => prev.map(t => t.id === dragId ? { ...t, status: tarefa.status } : t))
       showToast('Erro ao mover tarefa', 'error')
@@ -980,13 +1124,16 @@ export default function Tarefas() {
   const tarefasFiltradas = listaBase.filter(t => {
     if (filtroStatus !== 'todos' && t.status !== filtroStatus) return false
     if (filtroPrioridade !== 'todas' && t.prioridade !== filtroPrioridade) return false
+    const idsResp = (t.tarefa_responsaveis || []).map(r => r.usuario_id)
+    if (t.responsavel_id && !idsResp.includes(t.responsavel_id)) idsResp.push(t.responsavel_id)
     if (filtroResponsavel !== 'todos') {
-      if (filtroResponsavel === 'minha' && t.responsavel_id !== usuario?.id) return false
-      if (filtroResponsavel !== 'minha' && t.responsavel_id !== filtroResponsavel) return false
+      if (filtroResponsavel === 'minha' && !idsResp.includes(usuario?.id)) return false
+      if (filtroResponsavel !== 'minha' && !idsResp.includes(filtroResponsavel)) return false
     }
     if (filtroGrupo !== 'todos') {
-      const g = grupoPorUsuario[t.responsavel_id] || grupoPorUsuario[t.created_by] || null
-      if (g !== filtroGrupo) return false
+      const gruposTarefa = idsResp.map(id => grupoPorUsuario[id]).filter(Boolean)
+      if (gruposTarefa.length === 0 && grupoPorUsuario[t.created_by]) gruposTarefa.push(grupoPorUsuario[t.created_by])
+      if (!gruposTarefa.includes(filtroGrupo)) return false
     }
     return true
   })
