@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useViewAs } from '../context/ViewAsContext'
 import { useAuth } from '../context/AuthContext'
 import { PERFIL_GRUPO } from '../context/AuthContext'
-import { getRegistrosMonitoramento, createRegistroMonitoramento, updateRegistroMonitoramento, deleteRegistroMonitoramento, getParceiros, getParceirosAtivos, getLancamentosMonitoramento } from '../lib/supabase'
+import { getRegistrosMonitoramento, createRegistroMonitoramento, updateRegistroMonitoramento, deleteRegistroMonitoramento, getParceiros, getParceirosAtivos, getLancamentosMonitoramento, marcarDivulgacaoPublicada } from '../lib/supabase'
 import { ChevronLeft, ChevronRight, Eye, Plus, Pencil, Trash2, X, BellRing, AlertTriangle, MessageCircle, CalendarClock } from 'lucide-react'
 
 // ── UTILITÁRIOS DE DATA ────────────────────────────────────
@@ -91,7 +91,9 @@ function useToast(){
 function AcoesHoje({todos, hj, onClickDia}){
   const confirmar = todos.filter(r=>{
     if(r._origem!=='lancamento'||!r.data)return false
-    if(r._statusOriginal!=='agendado')return false
+    const ehAgendado = r._statusOriginal==='agendado'
+    const ehCampPendente = !!r._divulgacaoCampanhaId&&statusEfetivo(r,hj)==='pendente'
+    if(!ehAgendado&&!ehCampPendente)return false
     const d=diffDias(r.data,hj)
     return d>=0&&d<=3
   }).sort((a,b)=>a.data.localeCompare(b.data))
@@ -307,7 +309,7 @@ function ModalRegistro({registro, dataInicial, parceiros, onSave, onClose}){
 }
 
 // ── MODAL DIA ──────────────────────────────────────────────
-function ModalDia({dataKey, registros, parceiros, hj, onAdd, onEdit, onDelete, onClose}){
+function ModalDia({dataKey, registros, parceiros, hj, onAdd, onEdit, onDelete, onMarcarPostou, onClose}){
   const[ay,am,ad]=dataKey.split('-').map(Number)
   return(
     <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -349,6 +351,13 @@ function ModalDia({dataKey, registros, parceiros, hj, onAdd, onEdit, onDelete, o
                 {tipo&&<div style={{fontSize:11,marginBottom:2}}><span className="badge badge-indigo" style={{fontSize:10}}>{tipo.label}</span></div>}
                 {r.link&&<a href={r.link} target="_blank" rel="noreferrer" style={{fontSize:11,color:'var(--accent)',display:'block',marginTop:4}}>🔗 Ver publicação</a>}
                 {r.observacao&&<div style={{fontSize:11,color:'var(--text-muted)',marginTop:4}}>{r.observacao}</div>}
+                {r._divulgacaoCampanhaId&&statusEfetivo(r,hj)!=='postou'&&(
+                  <button type="button" onClick={()=>onMarcarPostou(r)}
+                    style={{marginTop:8,background:'#22c55e22',border:'1px solid #22c55e66',color:'#22c55e',
+                      borderRadius:6,padding:'4px 12px',fontSize:11,fontWeight:700,cursor:'pointer'}}>
+                    ✅ Marcar como postou
+                  </button>
+                )}
               </div>
             )
           })
@@ -504,6 +513,7 @@ export default function Monitoramento(){
         _campanha: lp._campanha||lp.lancamento_livros?.campanhas?.nome,
         _livro: lp._livro||lp.lancamento_livros?.livros?.titulo,
         _statusOriginal: lp.status,
+        _divulgacaoCampanhaId: lp._divulgacaoCampanhaId||null,
       })
     }
   }
@@ -539,6 +549,18 @@ export default function Monitoramento(){
       setRegistros(p=>[...p,novo])
       showToast('Registrado!')
     }
+  }
+
+  async function handleMarcarPostou(r){
+    const link = window.prompt('Link da publicação (opcional):', r.link||'')
+    if(link===null) return // cancelou
+    try{
+      await marcarDivulgacaoPublicada(r._divulgacaoCampanhaId, { data_publicada: hj, link: link.trim()||undefined })
+      setLancamentos(p=>p.map(l=>l.id===r._divulgacaoCampanhaId
+        ? {...l, status:'publicado', data_publicada:hj, link: link.trim()||l.link}
+        : l))
+      showToast('Divulgação confirmada! ✅')
+    }catch(e){ console.error(e); showToast('Erro ao marcar como postou','error') }
   }
 
   async function handleDelete(id){
@@ -649,6 +671,7 @@ export default function Monitoramento(){
           onAdd={key=>{setModalDia(null);setModalForm({dataInicial:key})}}
           onEdit={r=>{setModalDia(null);setModalForm({registro:r})}}
           onDelete={async id=>{await handleDelete(id)}}
+          onMarcarPostou={handleMarcarPostou}
           onClose={()=>setModalDia(null)}
         />
       )}
