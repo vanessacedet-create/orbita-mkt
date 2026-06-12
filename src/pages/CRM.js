@@ -44,6 +44,19 @@ const MODELOS = [
   { value: '3', label: '3 — Institucional',           desc: 'Divulgação das editoras próprias do grupo' },
 ]
 
+// ── Extrai o username do Instagram a partir da URL do perfil ──
+function extrairUsername(profileUrl, usernameFallback) {
+  let user = ''
+  try {
+    const url = profileUrl || ''
+    if (url.includes('instagram')) {
+      user = new URL(url.startsWith('http') ? url : 'https://' + url).pathname.replace(/\//g, '')
+    }
+  } catch {}
+  if (!user) user = (usernameFallback || '').replace('@', '')
+  return user
+}
+
 function useToast() {
   const [t, setT] = useState(null)
   function show(msg, type='success') { setT({msg,type}); setTimeout(()=>setT(null),4000) }
@@ -288,14 +301,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                     onChange={e=>setForm(f=>({...f,engagement_rate:e.target.value}))} placeholder="3.75"/>
                   <button type="button" className="btn btn-ghost btn-sm" title="Calcular engajamento no Social Cat"
                     onClick={()=>{
-                      let user = ''
-                      try {
-                        const url = form.profile_url||''
-                        if (url.includes('instagram')) {
-                          user = new URL(url.startsWith('http')?url:'https://'+url).pathname.replace(/\//g,'')
-                        }
-                      } catch {}
-                      if (!user) user = (form.username || '').replace('@','')
+                      const user = extrairUsername(form.profile_url, form.username)
                       const dest = user
                         ? `https://thesocialcat.com/tools/instagram-engagement-rate-calculator?username=${encodeURIComponent(user)}`
                         : 'https://thesocialcat.com/tools/instagram-engagement-rate-calculator'
@@ -833,7 +839,8 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
     nome: '', tipo_parceria: '', cpf: '', livraria: '',
     canal_comunicacao: '', temas: '', editoras_divulga: '',
     username: '', platforms: [], profile_url: '', contact_value: '',
-    source: '', model: '', notes: '',
+    source: '', model: '',
+    engagement_rate: '', library_url: '', coupon_code: '',
     responsavel_interno_id: '',
     editoras_sugeridas: [],
   })
@@ -878,6 +885,9 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
     if (!form.nome.trim()) return
     setSaving(true)
     try {
+      // Username derivado do link do perfil (campo removido da UI,
+      // valor preservado no banco como fallback p/ calculadora)
+      const usernameDerivado = extrairUsername(form.profile_url, form.username)
       const payload = {
         nome: form.nome.trim(),
         tipo_parceria: form.tipo_parceria||null,
@@ -886,14 +896,16 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
         canal_comunicacao: form.canal_comunicacao||null,
         temas: form.temas||null,
         editoras_divulga: form.editoras_divulga||null,
-        username: form.username||null,
+        username: usernameDerivado||null,
         platforms: form.platforms,
+        engagement_rate: form.engagement_rate ? Number(form.engagement_rate) : null,
         profile_url: form.profile_url||null,
         contact_value: form.contact_value||null,
         source: form.source||null,
+        library_url: form.library_url||null,
+        coupon_code: form.coupon_code||null,
         model: form.model ? Number(form.model) : null,
         responsavel_interno_id: form.responsavel_interno_id||null,
-        notes: form.notes||null,
         editoras_sugeridas: form.editoras_sugeridas.length ? form.editoras_sugeridas.join(',') : null,
         livros_propostos: livrosConvidados.length ? livrosConvidados.map(l => ({
           livro: l.titulo,
@@ -910,23 +922,33 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
 
   return (
     <div className="modal-backdrop">
-      <div className="modal" style={{maxWidth:520,maxHeight:'90vh',overflowY:'auto'}}>
+      <div className="modal" style={{maxWidth:780,maxHeight:'90vh',overflowY:'auto'}}>
         <div className="modal-header" style={{position:'sticky',top:0,background:'var(--surface)',zIndex:10,borderBottom:'1px solid var(--border)'}}>
           <h2 className="modal-title">Novo parceiro</h2>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
         </div>
         <div className="form-grid">
           {/* Dados básicos */}
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Nome *</label>
-              <input className="form-input" value={form.nome} onChange={e=>setForm(f=>({...f,nome:e.target.value}))} placeholder="Nome completo"/>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Username / @</label>
-              <input className="form-input" value={form.username} onChange={e=>setForm(f=>({...f,username:e.target.value}))} placeholder="@usuario"/>
+          <div className="form-group">
+            <label className="form-label">Nome *</label>
+            <input className="form-input" value={form.nome} onChange={e=>setForm(f=>({...f,nome:e.target.value}))} placeholder="Nome completo"/>
+          </div>
+
+          {/* Link do perfil (clicável) */}
+          <div className="form-group">
+            <label className="form-label">Link do perfil</label>
+            <div style={{display:'flex',gap:6}}>
+              <input className="form-input" style={{flex:1}} value={form.profile_url} onChange={e=>setForm(f=>({...f,profile_url:e.target.value}))} placeholder="https://instagram.com/..."/>
+              {form.profile_url && (
+                <a href={form.profile_url} target="_blank" rel="noopener noreferrer"
+                  className="btn btn-ghost btn-icon" title="Abrir perfil"
+                  style={{flexShrink:0,display:'flex',alignItems:'center'}}>
+                  <ExternalLink size={15}/>
+                </a>
+              )}
             </div>
           </div>
+
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Tipo de parceria</label>
@@ -941,6 +963,11 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
                 <option value="">Selecionar...</option>
                 {MODELOS.map(m=><option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
+              {form.model && MODELOS.find(m=>m.value===form.model) && (
+                <div style={{fontSize:11,color:'var(--text-muted)',marginTop:4}}>
+                  {MODELOS.find(m=>m.value===form.model).desc}
+                </div>
+              )}
             </div>
           </div>
 
@@ -960,6 +987,41 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
             </div>
           </div>
 
+          {/* Engajamento + Responsável */}
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Taxa de engajamento (%)</label>
+              <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                <input className="form-input" type="number" step="0.01" style={{flex:1}} value={form.engagement_rate}
+                  onChange={e=>setForm(f=>({...f,engagement_rate:e.target.value}))} placeholder="3.75"/>
+                <button type="button" className="btn btn-ghost btn-sm" title="Calcular engajamento no Social Cat"
+                  onClick={()=>{
+                    const user = extrairUsername(form.profile_url, form.username)
+                    const dest = user
+                      ? `https://thesocialcat.com/tools/instagram-engagement-rate-calculator?username=${encodeURIComponent(user)}`
+                      : 'https://thesocialcat.com/tools/instagram-engagement-rate-calculator'
+                    window.open(dest, '_blank')
+                  }}
+                  style={{whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:4,padding:'6px 10px',flexShrink:0}}>
+                  <ExternalLink size={12}/>
+                  Calcular
+                </button>
+              </div>
+              {!(form.profile_url || '').includes('instagram') && !form.engagement_rate && (
+                <div style={{fontSize:10,color:'var(--text-muted)',marginTop:3}}>
+                  Preencha o link do Instagram acima para calcular automaticamente
+                </div>
+              )}
+            </div>
+            <div className="form-group">
+              <label className="form-label">Responsável interno</label>
+              <select className="form-select" value={form.responsavel_interno_id} onChange={e=>setForm(f=>({...f,responsavel_interno_id:e.target.value}))}>
+                <option value="">Sem responsável</option>
+                {usuarios.map(u=><option key={u.id} value={u.id}>{u.nome}</option>)}
+              </select>
+            </div>
+          </div>
+
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Contato (WhatsApp/Email)</label>
@@ -974,25 +1036,26 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
             </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Link do perfil</label>
-            <input className="form-input" value={form.profile_url} onChange={e=>setForm(f=>({...f,profile_url:e.target.value}))} placeholder="https://instagram.com/..."/>
+          {/* URL da livraria / Cupom conforme o modelo */}
+          <div className="form-row">
+            {(form.model==='1'||!form.model) && (
+              <div className="form-group">
+                <label className="form-label">URL da Livraria Personalizada</label>
+                <input className="form-input" value={form.library_url}
+                  onChange={e=>setForm(f=>({...f,library_url:e.target.value}))} placeholder="https://..."/>
+              </div>
+            )}
+            {form.model==='2' && (
+              <div className="form-group">
+                <label className="form-label">Código do Cupom (Book Time)</label>
+                <input className="form-input" value={form.coupon_code}
+                  onChange={e=>setForm(f=>({...f,coupon_code:e.target.value}))} placeholder="BOOKTIME123"/>
+              </div>
+            )}
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Responsável interno</label>
-            <select className="form-select" value={form.responsavel_interno_id} onChange={e=>setForm(f=>({...f,responsavel_interno_id:e.target.value}))}>
-              <option value="">Sem responsável</option>
-              {usuarios.map(u=><option key={u.id} value={u.id}>{u.nome}</option>)}
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Observações</label>
-            <textarea className="form-textarea" rows={2} value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} placeholder="Anotações iniciais..."/>
-          </div>
-
-          {/* Editoras sugeridas */}
+          {/* Editoras sugeridas + Livro convidado (lado a lado) */}
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,alignItems:'start'}}>
           <div className="form-group">
             <label className="form-label">Editoras a oferecer</label>
             {form.editoras_sugeridas.length > 0 && (
@@ -1067,6 +1130,7 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
                 }
               </div>
             )}
+          </div>
           </div>
 
           {/* Status inicial */}
