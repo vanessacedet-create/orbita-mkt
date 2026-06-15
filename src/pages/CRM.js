@@ -67,6 +67,7 @@ function pipelineInfo(v, pipeline = PIPELINE_FALLBACK) { return pipeline.find(p=
 
 // ── MODAL DETALHE PARCEIRO CRM ─────────────────────────────
 function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline }) {
+  const { usuario } = useAuth()
   const [parceiro, setParceiro] = useState(inicial)
   const [history, setHistory]   = useState([])
   const [aba, setAba]           = useState('perfil') // perfil | pipeline | historico
@@ -109,6 +110,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
   })
   const [savingPerf, setSavingPerf] = useState(false)
   const [savingTier, setSavingTier] = useState(false)
+  const [ativando, setAtivando] = useState(false)
 
   useEffect(() => {
     getStatusHistory(parceiro.id).then(setHistory).catch(console.error)
@@ -183,6 +185,25 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
       setNovoStatus(''); setMotivo('')
       showToast('Status atualizado!')
     } catch(e) { showToast('Erro','error') } finally { setSavingStatus(false) }
+  }
+
+  async function ativarParceiro() {
+    if (statusAtual === 'active') return
+    setAtivando(true)
+    try {
+      // Mesma regra do kanban: modelos com escada entram como Bronze
+      if (!parceiro.tier && MODELOS_COM_ESCADA.includes(parceiro.model)) {
+        await ativarParceiroBronze(parceiro.id, usuario?.id)
+      } else {
+        await addStatusHistory(parceiro.id, 'active', 'Parceiro ativado')
+      }
+      const hist = await getStatusHistory(parceiro.id)
+      setHistory(hist)
+      const parceiroAtualizado = { ...parceiro, current_status: 'active' }
+      setParceiro(parceiroAtualizado)
+      onSave(parceiroAtualizado)
+      showToast('Parceiro ativado! Agora aparece em Parceiros Ativos.')
+    } catch(e) { showToast('Erro ao ativar parceiro', 'error') } finally { setAtivando(false) }
   }
 
   const statusAtual = parceiro.current_status || 'prospected'
@@ -679,6 +700,31 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                 {savingStatus?'Salvando...':'Confirmar mudança de status'}
               </button>
             </div>
+
+            {/* Ação de ciclo de vida: ativar parceiro */}
+            {statusAtual !== 'active' && (
+              <div style={{borderTop:'1px solid var(--border)',marginTop:16,paddingTop:16}}>
+                <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}}>Parceiros Ativos</div>
+                <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+                  <button
+                    onClick={ativarParceiro}
+                    disabled={ativando}
+                    style={{
+                      display:'inline-flex',alignItems:'center',gap:8,
+                      background:'#22c55e',color:'#fff',border:'none',borderRadius:8,
+                      padding:'10px 18px',fontSize:14,fontWeight:700,cursor: ativando ? 'default' : 'pointer',
+                      opacity: ativando ? 0.7 : 1,
+                    }}>
+                    <ArrowRight size={16}/>
+                    {ativando ? 'Ativando...' : 'Tornar parceiro ativo'}
+                  </button>
+                  <span style={{fontSize:12,color:'var(--text-muted)'}}>
+                    Move o parceiro para a aba <strong>Parceiros Ativos</strong> e o torna visível em todo o Orbita.
+                    {MODELOS_COM_ESCADA.includes(parceiro.model) && !parceiro.tier && ' Ele entra na Escada de Crescimento como Bronze.'}
+                  </span>
+                </div>
+              </div>
+            )}
               </>)
             })()}
           </div>
