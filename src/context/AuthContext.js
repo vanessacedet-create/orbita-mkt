@@ -23,6 +23,7 @@ export const MODULOS_PERMISSOES = {
   cac_ltv: ['administrador', 'gerente', 'supervisor_proprias'],
   treinamentos: ['administrador', 'gerente', 'supervisor_proprias'],
   usuarios: ['administrador'],
+  acessos_equipe: ['administrador', 'gerente', 'supervisor_parceiras'],
   guia_parcerias: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
   pedidos_crm: [  'administrador'],
   crm_inteligencia: ['administrador',],
