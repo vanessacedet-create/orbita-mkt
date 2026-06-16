@@ -1061,7 +1061,9 @@ function menuItemStyle() {
 }
 
 // ── PÁGINA PRINCIPAL ───────────────────────────────────────
-export default function Tarefas() {
+const GRUPOS_MIGRADOS = ['parceiras'] // grupos com aba própria → escondidos na aba geral
+
+export default function Tarefas({ grupo: grupoFixo = null, titulo = 'Tarefas' }) {
   const { usuario } = useAuth()
   const [tarefas, setTarefas]       = useState([])
   const [usuarios, setUsuarios]     = useState([])
@@ -1076,9 +1078,12 @@ export default function Tarefas() {
   const [filtroGrupo, setFiltroGrupo] = useState('todos')
   const ehAdmin = usuario?.perfil === 'administrador' || usuario?.perfil === 'gerente'
   const meuGrupo = PERFIL_GRUPO[usuario?.perfil] || null
-  const usuariosDaEquipe = ehAdmin
-    ? usuarios
-    : usuarios.filter(u => (PERFIL_GRUPO[u.perfil] || null) === meuGrupo)
+  const grupoDoUsuario = (u) => u?.grupo || PERFIL_GRUPO[u?.perfil] || null
+  const usuariosDaEquipe = grupoFixo
+    ? usuarios.filter(u => grupoDoUsuario(u) === grupoFixo)
+    : ehAdmin
+      ? usuarios
+      : usuarios.filter(u => grupoDoUsuario(u) === meuGrupo)
   const [toast, showToast]          = useToast()
   const [dragId, setDragId]           = useState(null)
   const [dragOverCol, setDragOverCol] = useState(null)
@@ -1194,7 +1199,7 @@ export default function Tarefas() {
 
   // Mapa userId -> grupo (o grupo da tarefa vem do responsável)
   const grupoPorUsuario = {}
-  for (const u of usuarios) grupoPorUsuario[u.id] = u.grupo || null
+  for (const u of usuarios) grupoPorUsuario[u.id] = u.grupo || PERFIL_GRUPO[u.perfil] || null
 
   const tarefasFiltradas = listaBase.filter(t => {
     if (filtroStatus !== 'todos' && t.status !== filtroStatus) return false
@@ -1205,9 +1210,16 @@ export default function Tarefas() {
       if (filtroResponsavel === 'minha' && !idsResp.includes(usuario?.id)) return false
       if (filtroResponsavel !== 'minha' && !idsResp.includes(filtroResponsavel)) return false
     }
+    // Grupo da tarefa: derivado dos responsáveis (fallback no criador)
+    const gruposTarefa = idsResp.map(id => grupoPorUsuario[id]).filter(Boolean)
+    if (gruposTarefa.length === 0 && grupoPorUsuario[t.created_by]) gruposTarefa.push(grupoPorUsuario[t.created_by])
+    // Escopo da tela: aba de grupo mostra só o seu grupo; aba geral esconde os grupos já migrados
+    if (grupoFixo) {
+      if (!gruposTarefa.includes(grupoFixo)) return false
+    } else if (gruposTarefa.some(g => GRUPOS_MIGRADOS.includes(g))) {
+      return false
+    }
     if (filtroGrupo !== 'todos') {
-      const gruposTarefa = idsResp.map(id => grupoPorUsuario[id]).filter(Boolean)
-      if (gruposTarefa.length === 0 && grupoPorUsuario[t.created_by]) gruposTarefa.push(grupoPorUsuario[t.created_by])
       if (!gruposTarefa.includes(filtroGrupo)) return false
     }
     return true
@@ -1254,7 +1266,7 @@ export default function Tarefas() {
         <div style={{ display:'flex', alignItems:'center', gap:14 }}>
           <LayoutList size={22} color="var(--accent)"/>
           <div>
-            <h1 className="page-title" style={{ margin:0 }}>Tarefas</h1>
+            <h1 className="page-title" style={{ margin:0 }}>{titulo}</h1>
             <p style={{ fontSize:12, color:'var(--text-muted)', margin:0 }}>
               {tarefasAtivas.length} pendentes
               {totalAtrasadas > 0 && <span style={{ color:'var(--red)', marginLeft:8 }}>· {totalAtrasadas} atrasada{totalAtrasadas!==1?'s':''}</span>}
@@ -1363,7 +1375,7 @@ export default function Tarefas() {
           <option value="minha">Minhas tarefas</option>
           {usuariosDaEquipe.map(u=><option key={u.id} value={u.id}>{u.nome}</option>)}
         </select>
-        {ehAdmin && (
+        {ehAdmin && !grupoFixo && (
           <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 10px' }}
             value={filtroGrupo} onChange={e=>setFiltroGrupo(e.target.value)}>
             <option value="todos">Todos os grupos</option>
@@ -1545,7 +1557,7 @@ export default function Tarefas() {
       {view === 'equipe' && (
         <ViewEquipe
           tarefas={tarefas}
-          usuarios={usuarios}
+          usuarios={usuariosDaEquipe}
           usuario={usuario}
           onOpen={t => setModal(t)}
         />
@@ -1555,7 +1567,7 @@ export default function Tarefas() {
       {modal && (
         <ModalTarefa
           tarefa={modal === 'new' ? null : modal}
-          usuarios={usuarios}
+          usuarios={usuariosDaEquipe}
           onSave={handleSave}
           onDelete={handleDelete}
           onClose={()=>{ setModal(null); carregar() }}
@@ -1565,7 +1577,7 @@ export default function Tarefas() {
       {/* Modal de importação */}
       {showImportar && (
         <ModalImportar
-          usuarios={usuarios}
+          usuarios={usuariosDaEquipe}
           onClose={()=>setShowImportar(false)}
           onImported={()=>{ carregar(); showToast('Tarefas importadas!') }}
         />
