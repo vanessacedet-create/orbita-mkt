@@ -37,6 +37,7 @@ import Login from './pages/Login'
 import ResetPassword from './pages/ResetPassword'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
+const BemVindo = lazy(() => import('./pages/BemVindo'))
 const Cortesias = lazy(() => import('./pages/Cortesias'))
 const Usuarios = lazy(() => import('./pages/Usuarios'))
 const Campanhas = lazy(() => import('./pages/Campanhas'))
@@ -58,7 +59,7 @@ const PedidosCRM = lazy(() => import('./pages/PedidosCRM'))
 const CRMInteligencia = lazy(() => import('./pages/CRMInteligencia'))
 
 const MENU = [
-  { path: '/', label: 'Dashboard', icon: LayoutDashboard, modulo: 'dashboard' },
+  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, modulo: 'dashboard' },
   { path: '/crm-influencers', label: 'CRM Influencers', icon: Network, modulo: 'crm_influencers' },
   { path: '/crm-parceiras', label: 'CRM Parceiras', icon: Network, modulo: 'crm_parceiras' },
   { path: '/cortesias', label: 'Cortesias', icon: BookOpen, modulo: 'cortesias' },
@@ -647,7 +648,8 @@ function Shell() {
           <div style={{ flex: 1, overflow: 'auto' }}>
             <Suspense fallback={<div className="loading"><div className="spinner" /></div>}>
               <Routes>
-                <Route path="/" element={<HomeRedirect />} />
+                <Route path="/" element={<RequireAuth><BemVindo menu={menuVisivel} /></RequireAuth>} />
+                <Route path="/dashboard" element={<RequireAuth modulo="dashboard"><Dashboard /></RequireAuth>} />
                 <Route path="/cortesias" element={<RequireAuth modulo="cortesias"><Cortesias /></RequireAuth>} />
                 <Route path="/parceiros" element={<RequireAuth modulo="parceiros"><Parceiros /></RequireAuth>} />
                 <Route path="/usuarios" element={<RequireAuth modulo="usuarios"><Usuarios /></RequireAuth>} />
