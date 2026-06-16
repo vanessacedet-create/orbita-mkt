@@ -143,7 +143,7 @@ export default function AcessosEquipe() {
       </div>
 
       <p style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 620, marginBottom: 24 }}>
-        Aqui você decide quais abas cada pessoa da sua equipe pode acessar, além do que o perfil dela já libera.
+        Aqui você decide quais abas cada pessoa da sua equipe pode acessar.
       </p>
 
       {/* Lista */}
