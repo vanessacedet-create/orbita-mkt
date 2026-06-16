@@ -66,6 +66,7 @@ const MENU = [
   { path: '/monitoramento', label: 'Monitoramento', icon: Eye, modulo: 'monitoramento' },
   { path: '/lancamentos', label: 'Lançamentos', icon: CalendarDays, modulo: 'lancamentos' },
   { path: '/tarefas', label: 'Tarefas', icon: CheckSquare, modulo: 'tarefas' },
+  { path: '/tarefas-parceiras', label: 'Tarefas Parceiras', icon: CheckSquare, modulo: 'tarefas_parceiras' },
   { path: '/rh', label: 'RH', icon: HeartHandshake, modulo: 'rh' },
   { path: '/pda', label: 'PDA', icon: Target, modulo: 'pda' },
   { path: '/treinamentos', label: 'Treinamentos', icon: GraduationCap, modulo: 'treinamentos' },
@@ -659,6 +660,7 @@ function Shell() {
                 <Route path="/eventos" element={<RequireAuth modulo="eventos"><Eventos /></RequireAuth>} />
                 <Route path="/lancamentos" element={<RequireAuth modulo="lancamentos"><Lancamentos /></RequireAuth>} />
                 <Route path="/tarefas" element={<RequireAuth modulo="tarefas"><Tarefas /></RequireAuth>} />
+                <Route path="/tarefas-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><Tarefas grupo="parceiras" titulo="Tarefas — Editoras Parceiras" /></RequireAuth>} />
                 <Route path="/treinamentos" element={<RequireAuth modulo="treinamentos"><Treinamentos /></RequireAuth>} />
                 <Route path="/pda" element={<RequireAuth modulo="pda"><PDA /></RequireAuth>} />
                 <Route path="/cac-ltv" element={<RequireAuth modulo="cac_ltv"><CacLtv /></RequireAuth>} />
