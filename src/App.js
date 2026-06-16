@@ -38,6 +38,7 @@ import ResetPassword from './pages/ResetPassword'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const BemVindo = lazy(() => import('./pages/BemVindo'))
+const AcessosEquipe = lazy(() => import('./pages/AcessosEquipe'))
 const Cortesias = lazy(() => import('./pages/Cortesias'))
 const Usuarios = lazy(() => import('./pages/Usuarios'))
 const Campanhas = lazy(() => import('./pages/Campanhas'))
@@ -73,6 +74,7 @@ const MENU = [
   { path: '/treinamentos', label: 'Treinamentos', icon: GraduationCap, modulo: 'treinamentos' },
   { path: '/eventos', label: 'Eventos', icon: CalendarCheck, modulo: 'eventos' },
   { path: '/vitrine-admin', label: 'Vitrine', icon: Store, modulo: 'parceiros' },
+  { path: '/acessos-equipe', label: 'Acessos da Equipe', icon: Users, modulo: 'acessos_equipe' },
   { path: '/usuarios', label: 'Usuários', icon: Users, modulo: 'usuarios' },
 ]
 
@@ -653,6 +655,7 @@ function Shell() {
                 <Route path="/cortesias" element={<RequireAuth modulo="cortesias"><Cortesias /></RequireAuth>} />
                 <Route path="/parceiros" element={<RequireAuth modulo="parceiros"><Parceiros /></RequireAuth>} />
                 <Route path="/usuarios" element={<RequireAuth modulo="usuarios"><Usuarios /></RequireAuth>} />
+                <Route path="/acessos-equipe" element={<RequireAuth modulo="acessos_equipe"><AcessosEquipe /></RequireAuth>} />
                 <Route path="/campanhas" element={<RequireAuth modulo="campanhas"><Campanhas /></RequireAuth>} />
                 <Route path="/monitoramento" element={<RequireAuth modulo="monitoramento"><Monitoramento /></RequireAuth>} />
                 <Route path="/crm-influencers" element={<RequireAuth modulo="crm_influencers"><CRM grupo="influencers" titulo="CRM Influencers" /></RequireAuth>} />
