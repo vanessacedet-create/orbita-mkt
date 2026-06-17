@@ -772,7 +772,7 @@ export default function Tarefas({ grupo: grupoFixo = null, titulo = 'Tarefas' })
   const [modal, setModal]           = useState(null)
   const [showImportar, setShowImportar] = useState(false)
   const [showMenuNova, setShowMenuNova] = useState(false)
-  const [view, setView]             = useState('kanban')
+  const [view, setView]             = useState(() => localStorage.getItem('tarefas_view') || 'kanban')
   const [filtroStatus, setFiltroStatus]       = useState('todos')
   const [filtroPrioridade, setFiltroPrioridade] = useState('todas')
   const [filtroResponsavel, setFiltroResponsavel] = useState('todos')
@@ -919,7 +919,7 @@ export default function Tarefas({ grupo: grupoFixo = null, titulo = 'Tarefas' })
               { key:'equipe',      label:'Equipe',        Icon: Users },
               { key:'banco',       label:'Banco',         Icon: Database },
             ].map(({ key, label, Icon }) => (
-              <button key={key} onClick={() => setView(key)} style={{ padding:'7px 12px', border:'none', cursor:'pointer', background: view===key ? 'var(--accent)' : 'transparent', color: view===key ? '#fff' : 'var(--text-muted)', transition:'all 0.15s', display:'flex', alignItems:'center', gap:5, fontSize:12 }}>
+              <button key={key} onClick={() => setView(key); localStorage.setItem('tarefas_view', key); localStorage.setItem('tarefas_view', key); localStorage.setItem('tarefas_view', key); localStorage.setItem('tarefas_view', key); localStorage.setItem('tarefas_view', key); localStorage.setItem('tarefas_view', key); localStorage.setItem('tarefas_view', key); localStorage.setItem('tarefas_view', key); localStorage.setItem('tarefas_view', key); localStorage.setItem('tarefas_view', key)} style={{ padding:'7px 12px', border:'none', cursor:'pointer', background: view===key ? 'var(--accent)' : 'transparent', color: view===key ? '#fff' : 'var(--text-muted)', transition:'all 0.15s', display:'flex', alignItems:'center', gap:5, fontSize:12 }}>
                 <Icon size={13}/> {label}
               </button>
             ))}
