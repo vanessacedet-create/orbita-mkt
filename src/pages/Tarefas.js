@@ -1119,3 +1119,4 @@ function ViewEquipe({ tarefas, usuarios, usuario, onOpen }) {
     </div>
   )
 }
+
