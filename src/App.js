@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { lazy, Suspense, useState, useEffect } from 'react'
-import { AuthProvider, useAuth, import { AuthProvider, useAuth } from './context/AuthContext' } from './context/AuthContext'
+import { AuthProvider, useAuth } from './context/AuthContext'
 import { ViewAsContext } from './context/ViewAsContext'
 import { usePermissions } from './hooks/usePermissions'
 import { signOut, supabase, getUsuarios } from './lib/supabase'
