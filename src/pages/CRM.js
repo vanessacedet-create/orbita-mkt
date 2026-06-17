@@ -111,6 +111,8 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
   const [savingPerf, setSavingPerf] = useState(false)
   const [savingTier, setSavingTier] = useState(false)
   const [ativando, setAtivando] = useState(false)
+  const [tierManual, setTierManual] = useState('')
+  const ehAdminModal = usuario?.perfil === 'administrador' || usuario?.perfil === 'gerente'
 
   useEffect(() => {
     getStatusHistory(parceiro.id).then(setHistory).catch(console.error)
@@ -519,6 +521,51 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                 <BadgeSituacao situacao={parceiro.situacao || 'ativo'} />
               </div>
             </div>
+
+            {/* Ajuste manual de tier (admin/gerente) */}
+            {ehAdminModal && (
+              <div style={{padding:'12px 16px',marginBottom:20,borderRadius:8,background:'var(--surface-2)',border:'1px solid var(--border)'}}>
+                <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:8,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}}>Ajustar tier manualmente</div>
+                <div style={{display:'flex',alignItems:'flex-end',gap:10,flexWrap:'wrap'}}>
+                  <div className="form-group" style={{margin:0,minWidth:200}}>
+                    <label className="form-label">Definir como</label>
+                    <select className="form-select" value={tierManual} onChange={e=>setTierManual(e.target.value)}>
+                      <option value="">Selecionar...</option>
+                      <option value="livraria">Livraria (sem Escada)</option>
+                      <option value="bronze">Bronze</option>
+                      <option value="prata">Prata</option>
+                      <option value="ouro">Ouro</option>
+                    </select>
+                  </div>
+                  <button className="btn btn-primary" disabled={savingTier || !tierManual}
+                    onClick={async () => {
+                      if (!tierManual) return
+                      setSavingTier(true)
+                      try {
+                        if (tierManual === 'livraria') {
+                          await updateParceiroCRM(parceiro.id, { tier: null, model: 1 })
+                          setParceiro(prev => ({...prev, tier: null, model: 1}))
+                          onSave({...parceiro, tier: null, model: 1})
+                          showToast('Parceiro definido como Livraria (sem Escada).')
+                        } else {
+                          await updateTier(parceiro.id, tierManual, 'Ajuste manual de tier', usuario?.id)
+                          setParceiro(prev => ({...prev, tier: tierManual, tier_updated_at: new Date().toISOString()}))
+                          onSave({...parceiro, tier: tierManual})
+                          setTierHistory(await getTierHistory(parceiro.id))
+                          showToast(`Tier ajustado para ${TIERS[tierManual].label}.`)
+                        }
+                        setTierManual('')
+                      } catch { showToast('Erro ao ajustar tier','error') }
+                      finally { setSavingTier(false) }
+                    }}>
+                    {savingTier ? 'Salvando...' : 'Aplicar'}
+                  </button>
+                </div>
+                <div style={{fontSize:11,color:'var(--text-muted)',marginTop:8}}>
+                  "Livraria" remove o parceiro da Escada de Crescimento (fica sem tier bronze/prata/ouro). Use para corrigir parceiros do modelo Livraria Personalizada.
+                </div>
+              </div>
+            )}
 
             {/* Promoção disponível */}
             {parceiro.tier && verificarPromocao({...parceiro, ...perfForm}) && (
