@@ -12,7 +12,7 @@ import {
   getBancoTarefas, createBancoTarefa, updateBancoTarefa, desativarBancoTarefa,
   getAtribuicoes, getMinhasAtribuicoes, atribuirTarefa, updateAtribuicao, deleteAtribuicao,
 } from '../lib/banco-tarefas'
-import { useAuth, PERFIL_GRUPO } from '../context/AuthContext'
+import { useAuth, PERFIL_GRUPO, MODULOS_PERMISSOES } from '../context/AuthContext'
 import {
   Plus, X, Pencil, Trash2, CheckSquare, Square, MessageSquare,
   Calendar, Flag, User, ChevronDown, List, Columns, Clock,
