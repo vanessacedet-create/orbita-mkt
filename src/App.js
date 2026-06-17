@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { lazy, Suspense, useState, useEffect } from 'react'
-import { AuthProvider, useAuth } from './context/AuthContext'
+import { AuthProvider, useAuth, MODULOS_PERMISSOES } from './context/AuthContext'
 import { ViewAsContext } from './context/ViewAsContext'
 import { usePermissions } from './hooks/usePermissions'
 import { signOut, supabase, getUsuarios } from './lib/supabase'
@@ -112,7 +112,7 @@ const PODE_VER_COMO = ['administrador', 'gerente']
 
 function canPerfil(perfil, modulo) {
   if (!perfil || !modulo) return false
-  return (import { AuthProvider, useAuth } from './context/AuthContext'[modulo] || []).includes(perfil)
+  return (MODULOS_PERMISSOES[modulo] || []).includes(perfil)
 }
 
 function RequireAuth({ children, modulo }) {
