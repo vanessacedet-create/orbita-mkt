@@ -919,7 +919,7 @@ export default function Tarefas({ grupo: grupoFixo = null, titulo = 'Tarefas' })
               { key:'equipe',      label:'Equipe',        Icon: Users },
               { key:'banco',       label:'Banco',         Icon: Database },
             ].map(({ key, label, Icon }) => (
-              <button key={key} onClick={() => setView(key); localStorage.setItem('tarefas_view', key); localStorage.setItem('tarefas_view', key); localStorage.setItem('tarefas_view', key); localStorage.setItem('tarefas_view', key); localStorage.setItem('tarefas_view', key); localStorage.setItem('tarefas_view', key); localStorage.setItem('tarefas_view', key); localStorage.setItem('tarefas_view', key); localStorage.setItem('tarefas_view', key); localStorage.setItem('tarefas_view', key)} style={{ padding:'7px 12px', border:'none', cursor:'pointer', background: view===key ? 'var(--accent)' : 'transparent', color: view===key ? '#fff' : 'var(--text-muted)', transition:'all 0.15s', display:'flex', alignItems:'center', gap:5, fontSize:12 }}>
+              <button key={key} onClick={() => { setView(key); localStorage.setItem('tarefas_view', key); }} style={{ background: view===key ? 'var(--accent)' : 'transparent', color: view===key ? '#fff' : 'var(--text-muted)', transition:'all 0.15s', display:'flex', alignItems:'center', gap:5, fontSize:12, padding:'7px 12px', border:'none', cursor:'pointer' }}>
                 <Icon size={13}/> {label}
               </button>
             ))}
