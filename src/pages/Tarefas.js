@@ -512,7 +512,7 @@ function menuItemStyle() {
 
 // ── VIEW BANCO DE TAREFAS ──────────────────────────────────
 function ViewBancoTarefas({ usuarios, usuario }) {
-  const isAdmin = usuario?.perfil === 'administrador' || usuario?.perfil === 'gerente'
+  const isAdmin = usuario?.perfil === 'administrador' || usuario?.perfil === 'gerente' || usuario?.perfil === 'supervisor_parceiras'
   const [banco, setBanco] = useState([])
   const [atribuicoes, setAtribuicoes] = useState([])
   const [loading, setLoading] = useState(true)
