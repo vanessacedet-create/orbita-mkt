@@ -64,6 +64,7 @@ const CRMInteligencia= lazy(() => import('./pages/CRMInteligencia'))
 const Agenda         = lazy(() => import('./pages/Agenda'))
 const Configuracoes  = lazy(() => import('./pages/Configuracoes'))
 const BlocoNotas     = lazy(() => import('./pages/BlocoNotas'))
+const MonitoramentoParceiras = lazy(() => import('./pages/MonitoramentoParceiras'))
 
 const MENU = [
   { path: '/dashboard',        label: 'Dashboard',        icon: LayoutDashboard, modulo: 'dashboard' },
@@ -76,6 +77,7 @@ const MENU = [
   { path: '/tarefas',          label: 'Tarefas',          icon: CheckSquare,     modulo: 'tarefas' },
   { path: '/tarefas-parceiras',label: 'Tarefas Parceiras',icon: CheckSquare,     modulo: 'tarefas_parceiras' },
   { path: '/agenda',           label: 'Agenda',           icon: CalendarRange,   modulo: 'tarefas_parceiras' },
+  { path: '/monitoramento-parceiras', label: 'Monitoramento', icon: Eye, modulo: 'tarefas_parceiras' },
   { path: '/notas',             label: 'Bloco de Notas',   icon: BookMarked,     modulo: 'dashboard', sempreVisivel: true },
   { path: '/configuracoes',     label: 'Configurações',    icon: Settings,        modulo: 'dashboard', sempreVisivel: true },
   { path: '/rh',               label: 'RH',               icon: HeartHandshake,  modulo: 'rh' },
