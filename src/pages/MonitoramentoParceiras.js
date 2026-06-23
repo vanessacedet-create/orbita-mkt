@@ -7,27 +7,73 @@ import {
   getObservacoesEditora, createObservacao, deleteObservacao,
 } from '../lib/monitoramento-editoras'
 import {
+  getCheckagemCriativoMes, upsertCheckagemCriativoDia,
+} from '../lib/monitoramento-criativo'
+import {
   Eye, Plus, X, Upload, ChevronLeft, ChevronRight,
-  Pencil, Trash2, Check, Clock, AlertCircle, FileSpreadsheet,
-  Instagram, MessageSquare, LayoutGrid, List,
+  Pencil, Trash2, MessageSquare, LayoutGrid, List,
+  Instagram, FileSpreadsheet, Users, BookOpen,
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
 // ── CONSTANTES ─────────────────────────────────────────────
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 
-const FORMATOS = [
-  { value: 'stories', label: 'Stories',  diasSemana: [2, 5], cor: '#8b5cf6' }, // ter, sex
-  { value: 'feed',    label: 'Feed',     diasSemana: [3],    cor: '#8b5cf6' }, // qua
-  { value: 'reels',   label: 'Reels',    diasSemana: [1],    cor: '#8b5cf6', quinzenal: true }, // seg
-  { value: 'email',   label: 'E-mail',   diasSemana: [1],    cor: '#8b5cf6' }, // seg
+// Feriados nacionais fixos: "MM-DD"
+const FERIADOS_FIXOS = ['01-01','04-21','05-01','09-07','10-12','11-02','11-15','12-25']
+
+// Feriados móveis por ano: "YYYY-MM-DD"
+const FERIADOS_MOVEIS = {
+  2026: ['2026-02-16','2026-02-17','2026-04-03','2026-06-04'],
+  2025: ['2025-03-03','2025-03-04','2025-04-18','2025-06-19'],
+  2027: ['2027-02-08','2027-02-09','2027-03-26','2027-05-27'],
+}
+
+function isFeriado(ano, mes, dia) {
+  const mmdd = `${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`
+  if (FERIADOS_FIXOS.includes(mmdd)) return true
+  const key = `${ano}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`
+  return (FERIADOS_MOVEIS[ano] || []).includes(key)
+}
+
+function isDiaNaoUtil(ano, mes, dia) {
+  const d = new Date(ano, mes - 1, dia)
+  const ds = d.getDay()
+  if (ds === 0 || ds === 6) return true // fim de semana
+  if (isFeriado(ano, mes, dia)) return true
+  return false
+}
+
+// Formatos Editoras Parceiras (sem E-mail)
+const FORMATOS_PARCEIRAS = [
+  { value: 'story', label: 'Story',  cor: '#8b5cf6' },
+  { value: 'feed',  label: 'Feed',   cor: '#8b5cf6' },
+  { value: 'reels', label: 'Reels',  cor: '#8b5cf6' },
 ]
 
-const STATUS = [
-  { value: 'pendente',    label: 'Pendente',    cor: '#6b7280', bg: '#6b728018', icon: '🕐' },
-  { value: 'postou',      label: 'Postou',      cor: '#22c55e', bg: '#22c55e18', icon: '✅' },
-  { value: 'nao_postou',  label: 'Não postou',  cor: '#ef4444', bg: '#ef444418', icon: '❌' },
+// Formatos Equipe Cedet
+const FORMATOS_CRIATIVO = [
+  { value: 'story',          label: 'Story',                    cor: '#8b5cf6' },
+  { value: 'feed',           label: 'Feed',                     cor: '#8b5cf6' },
+  { value: 'reels_roteiro',  label: 'Reels (Roteiro/Gravação)', cor: '#8b5cf6' },
+  { value: 'reels_edicao',   label: 'Reels (Edição)',           cor: '#8b5cf6' },
+  { value: 'email_mkt',      label: 'E-mail Marketing',         cor: '#8b5cf6' },
+  { value: 'email_revenda',  label: 'E-mail Revendas',          cor: '#8b5cf6' },
 ]
+
+const STATUS_PARCEIRAS = [
+  { value: 'pendente',   label: 'Pendente',   cor: '#6b7280' },
+  { value: 'postou',     label: 'Postou',     cor: '#22c55e' },
+  { value: 'nao_postou', label: 'Não postou', cor: '#ef4444' },
+]
+
+const STATUS_CRIATIVO = [
+  { value: 'pendente',  label: 'Pendente',  cor: '#6b7280' },
+  { value: 'iniciado',  label: 'Iniciado',  cor: '#f59e0b' },
+  { value: 'finalizado',label: 'Finalizado',cor: '#22c55e' },
+]
+
+const EQUIPE = ['Viviane', 'Sarah', 'Vanessa', 'Gabriela']
 
 const CATEGORIAS_OBS = ['Comportamento', 'Resposta às mensagens', 'Vendas na livraria', 'Qualidade das postagens', 'Relacionamento', 'Outro']
 
@@ -39,24 +85,13 @@ function diasDoMes(ano, mes) {
   const total = new Date(ano, mes, 0).getDate()
   return Array.from({ length: total }, (_, i) => {
     const d = new Date(ano, mes - 1, i + 1)
-    return { dia: i + 1, key: toKey(ano, mes, i + 1), diaSemana: d.getDay() }
+    return {
+      dia: i + 1,
+      key: toKey(ano, mes, i + 1),
+      diaSemana: d.getDay(),
+      naoUtil: isDiaNaoUtil(ano, mes, i + 1),
+    }
   })
-}
-
-function isDiaEntrega(diaSemana, formato, semanaDoMes) {
-  const f = FORMATOS.find(x => x.value === formato)
-  if (!f) return false
-  if (!f.diasSemana.includes(diaSemana)) return false
-  if (f.quinzenal && semanaDoMes % 2 === 0) return false // quinzenal = semanas ímpares (1ª e 3ª)
-  return true
-}
-
-function semanaDoMes(dia) {
-  return Math.ceil(dia / 7)
-}
-
-function statusInfo(s) {
-  return STATUS.find(x => x.value === s) || STATUS[0]
 }
 
 function useToast() {
@@ -158,12 +193,9 @@ function ModalImportar({ onClose, onImported }) {
           <h2 className="modal-title">Importar editoras via planilha</h2>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
         </div>
-
         {etapa === 'upload' && (
           <div>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-              Baixe o template, preencha com as editoras e faça o upload.
-            </p>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>Baixe o template, preencha com as editoras e faça o upload.</p>
             <button onClick={baixarTemplate} className="btn btn-ghost" style={{ width: '100%', marginBottom: 12, justifyContent: 'center' }}>
               <FileSpreadsheet size={14} /> Baixar template .xlsx
             </button>
@@ -180,7 +212,6 @@ function ModalImportar({ onClose, onImported }) {
             </div>
           </div>
         )}
-
         {etapa === 'revisao' && (
           <div>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
@@ -216,18 +247,16 @@ function PainelEditora({ editora, checkagemMes, ano, mes, usuario, onClose }) {
 
   useEffect(() => {
     setLoadingObs(true)
-    getObservacoesEditora(editora.id)
-      .then(setObs)
-      .finally(() => setLoadingObs(false))
+    getObservacoesEditora(editora.id).then(setObs).finally(() => setLoadingObs(false))
   }, [editora.id])
 
-  // Resumo de postagens da editora no mês
   const registros = checkagemMes.filter(r => r.editora_id === editora.id)
   const postou = registros.filter(r => r.status === 'postou').length
   const naoPostou = registros.filter(r => r.status === 'nao_postou').length
   const pendente = registros.filter(r => r.status === 'pendente').length
   const total = registros.length
   const pct = total > 0 ? Math.round((postou / total) * 100) : 0
+  const corSaude = pct >= 70 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444'
 
   async function salvarObs() {
     if (!novaObs.texto.trim()) return
@@ -246,11 +275,8 @@ function PainelEditora({ editora, checkagemMes, ano, mes, usuario, onClose }) {
     setObs(prev => prev.filter(o => o.id !== id))
   }
 
-  const corSaude = pct >= 70 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444'
-
   return (
     <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 380, background: 'var(--surface)', borderLeft: '1px solid var(--border)', zIndex: 100, display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 24px rgba(0,0,0,0.2)' }}>
-      {/* Header */}
       <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{editora.nome}</div>
@@ -266,7 +292,6 @@ function PainelEditora({ editora, checkagemMes, ano, mes, usuario, onClose }) {
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
-        {/* Saúde do mês */}
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
             {MESES[mes - 1]} {ano}
@@ -286,7 +311,8 @@ function PainelEditora({ editora, checkagemMes, ano, mes, usuario, onClose }) {
           {total > 0 && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
-                <span>Taxa de postagem</span><span style={{ color: corSaude, fontWeight: 700 }}>{pct}%</span>
+                <span>Taxa de postagem</span>
+                <span style={{ color: corSaude, fontWeight: 700 }}>{pct}%</span>
               </div>
               <div style={{ height: 6, borderRadius: 99, background: 'var(--surface-3)' }}>
                 <div style={{ height: '100%', width: `${pct}%`, background: corSaude, borderRadius: 99, transition: 'width 0.3s' }} />
@@ -295,14 +321,13 @@ function PainelEditora({ editora, checkagemMes, ano, mes, usuario, onClose }) {
           )}
         </div>
 
-        {/* Histórico por formato */}
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Postagens por formato</div>
-          {FORMATOS.map(fmt => {
-            const regsFormato = registros.filter(r => r.formato === fmt.value)
-            const p = regsFormato.filter(r => r.status === 'postou').length
-            const np = regsFormato.filter(r => r.status === 'nao_postou').length
-            if (regsFormato.length === 0) return null
+          {FORMATOS_PARCEIRAS.map(fmt => {
+            const rf = registros.filter(r => r.formato === fmt.value)
+            const p = rf.filter(r => r.status === 'postou').length
+            const np = rf.filter(r => r.status === 'nao_postou').length
+            if (rf.length === 0) return null
             return (
               <div key={fmt.value} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                 <span style={{ width: 8, height: 8, borderRadius: 2, background: fmt.cor, flexShrink: 0 }} />
@@ -314,11 +339,8 @@ function PainelEditora({ editora, checkagemMes, ano, mes, usuario, onClose }) {
           })}
         </div>
 
-        {/* Observações */}
         <div>
           <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Observações</div>
-
-          {/* Nova observação */}
           <div style={{ background: 'var(--surface-2)', borderRadius: 8, padding: 12, marginBottom: 12 }}>
             <select className="form-select" value={novaObs.categoria} onChange={e => setNovaObs(f => ({ ...f, categoria: e.target.value }))} style={{ marginBottom: 8, fontSize: 12 }}>
               {CATEGORIAS_OBS.map(c => <option key={c} value={c}>{c}</option>)}
@@ -328,8 +350,6 @@ function PainelEditora({ editora, checkagemMes, ano, mes, usuario, onClose }) {
               <MessageSquare size={12} /> Registrar
             </button>
           </div>
-
-          {/* Lista de observações */}
           {loadingObs ? (
             <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Carregando...</div>
           ) : obs.length === 0 ? (
@@ -352,15 +372,61 @@ function PainelEditora({ editora, checkagemMes, ano, mes, usuario, onClose }) {
   )
 }
 
-// ── CHECKLIST DE CHECAGEM (aba principal) ──────────────────
-function ViewChecklist({ editoras, checkagemMes, formato, dataKey, onMarcar, onGerarDia }) {
+// ── SELETOR DE DIAS (reutilizável) ─────────────────────────
+function SeletorDias({ dias, mes, dataSel, onSelect, indicadores }) {
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {dias.map(d => {
+          const selecionado = dataSel === d.key
+          const ehHoje = d.key === hojeKey()
+          const ind = indicadores?.[d.key] || {}
+
+          return (
+            <button
+              key={d.key}
+              onClick={() => !d.naoUtil && onSelect(d.key)}
+              disabled={d.naoUtil}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 10,
+                fontSize: 12,
+                fontWeight: selecionado ? 700 : 500,
+                cursor: d.naoUtil ? 'not-allowed' : 'pointer',
+                border: `2px solid ${selecionado ? 'var(--accent)' : ehHoje && !d.naoUtil ? 'var(--accent)' : 'var(--border)'}`,
+                background: d.naoUtil ? 'var(--surface-2)' : selecionado ? 'var(--accent-glow)' : 'var(--surface)',
+                color: d.naoUtil ? 'var(--text-muted)' : selecionado ? 'var(--accent)' : 'var(--text)',
+                opacity: d.naoUtil ? 0.45 : 1,
+                transition: 'all 0.15s',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 3,
+                minWidth: 52,
+              }}
+            >
+              <span>{d.dia}/{mes}</span>
+              {ind.total > 0 && (
+                <div style={{ display: 'flex', gap: 3 }}>
+                  {ind.ok > 0 && <span style={{ fontSize: 9, color: '#22c55e', fontWeight: 700 }}>●{ind.ok}</span>}
+                  {ind.nok > 0 && <span style={{ fontSize: 9, color: '#ef4444', fontWeight: 700 }}>●{ind.nok}</span>}
+                  {ind.ini > 0 && <span style={{ fontSize: 9, color: '#f59e0b', fontWeight: 700 }}>●{ind.ini}</span>}
+                </div>
+              )}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── CHECKLIST EDITORAS PARCEIRAS ───────────────────────────
+function ViewChecklistParceiras({ editoras, checkagemMes, formato, dataKey, onMarcar, onGerarDia }) {
   const registrosDoDia = checkagemMes.filter(r => r.formato === formato && r.data_esperada === dataKey)
   const mapa = {}
   for (const r of registrosDoDia) mapa[r.editora_id] = r
-
-  // Editoras que ainda não têm registro nesse dia/formato
   const semRegistro = editoras.filter(e => !mapa[e.id])
-
   const [gerando, setGerando] = useState(false)
 
   async function gerar() {
@@ -383,31 +449,26 @@ function ViewChecklist({ editoras, checkagemMes, formato, dataKey, onMarcar, onG
           </button>
         </div>
       )}
-
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {editoras.map(editora => {
           const reg = mapa[editora.id]
           const status = reg?.status || null
-
           return (
-            <div key={editora.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, transition: 'border-color 0.15s' }}>
-              {/* Nome */}
+            <div key={editora.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{editora.nome}</div>
                 {editora.contato && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>👤 {editora.contato}</div>}
-              {editora.instagram && (
+                {editora.instagram && (
                   <a href={`https://instagram.com/${editora.instagram.replace('@', '')}`} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
                     <Instagram size={10} /> {editora.instagram}
                   </a>
                 )}
               </div>
-
-              {/* Botões de status */}
               <div style={{ display: 'flex', gap: 6 }}>
-                {STATUS.map(s => (
+                {STATUS_PARCEIRAS.map(s => (
                   <button key={s.value} onClick={() => onMarcar({ editora, formato, dataKey, status: s.value })}
                     style={{ padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `2px solid ${s.cor}`, background: status === s.value ? s.cor : 'transparent', color: status === s.value ? '#fff' : s.cor, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
-                    {s.icon} {s.label}
+                    {s.label}
                   </button>
                 ))}
               </div>
@@ -419,10 +480,71 @@ function ViewChecklist({ editoras, checkagemMes, formato, dataKey, onMarcar, onG
   )
 }
 
+// ── CHECKLIST EQUIPE CEDET ─────────────────────────────────
+function ViewChecklistCriativo({ editoras, checkagemCriativo, formato, dataKey, onMarcar }) {
+  const registrosDoDia = checkagemCriativo.filter(r => r.formato === formato && r.data_esperada === dataKey)
+  const mapa = {}
+  for (const r of registrosDoDia) mapa[r.editora_id] = r
+
+  if (editoras.length === 0) {
+    return <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '48px 0', fontSize: 13 }}>Nenhuma editora cadastrada ainda.</div>
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {editoras.map(editora => {
+        const reg = mapa[editora.id]
+        const status = reg?.status || 'pendente'
+        const responsavel = reg?.responsavel || ''
+
+        return (
+          <div key={editora.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10 }}>
+            {/* Nome editora */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{editora.nome}</div>
+              {editora.contato && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>👤 {editora.contato}</div>}
+            </div>
+
+            {/* Responsável */}
+            <div style={{ minWidth: 140 }}>
+              <select
+                value={responsavel}
+                onChange={e => onMarcar({ editora, formato, dataKey, status, responsavel: e.target.value })}
+                style={{
+                  padding: '5px 10px',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  border: '1px solid var(--border)',
+                  background: responsavel ? 'var(--accent-glow)' : 'var(--surface-2)',
+                  color: responsavel ? 'var(--accent)' : 'var(--text-muted)',
+                  fontWeight: responsavel ? 700 : 400,
+                  cursor: 'pointer',
+                  width: '100%',
+                }}
+              >
+                <option value="">Responsável...</option>
+                {EQUIPE.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+
+            {/* Botões de status */}
+            <div style={{ display: 'flex', gap: 6 }}>
+              {STATUS_CRIATIVO.map(s => (
+                <button key={s.value} onClick={() => onMarcar({ editora, formato, dataKey, status: s.value, responsavel })}
+                  style={{ padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `2px solid ${s.cor}`, background: status === s.value ? s.cor : 'transparent', color: status === s.value ? '#fff' : s.cor, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ── DASHBOARD GERAL ────────────────────────────────────────
 function ViewDashboard({ editoras, checkagemMes, mes, ano, onAbrirEditora }) {
-  const hj = hojeKey()
-
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
       {editoras.map(editora => {
@@ -440,16 +562,13 @@ function ViewDashboard({ editoras, checkagemMes, mes, ano, onAbrirEditora }) {
             style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px', cursor: 'pointer', transition: 'all 0.15s', borderTop: `3px solid ${corSaude}` }}
             onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
             onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.borderTopColor = corSaude }}>
-
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>{editora.nome}</div>
                 {editora.contato && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>👤 {editora.contato}</div>}
-                {editora.instagram && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{editora.instagram}</div>}
               </div>
               <span style={{ fontSize: 11, fontWeight: 700, color: corSaude, background: corSaude + '18', padding: '2px 8px', borderRadius: 20 }}>{labelSaude}</span>
             </div>
-
             {total > 0 ? (
               <>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
@@ -465,14 +584,11 @@ function ViewDashboard({ editoras, checkagemMes, mes, ano, onAbrirEditora }) {
             ) : (
               <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Sem checagens neste mês.</div>
             )}
-
-            {/* Por formato */}
             <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-              {FORMATOS.map(fmt => {
+              {FORMATOS_PARCEIRAS.map(fmt => {
                 const rf = regs.filter(r => r.formato === fmt.value)
                 if (rf.length === 0) return null
                 const p = rf.filter(r => r.status === 'postou').length
-                const np = rf.filter(r => r.status === 'nao_postou').length
                 return (
                   <span key={fmt.value} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, background: fmt.cor + '18', color: fmt.cor, fontWeight: 600 }}>
                     {fmt.label} {p}/{rf.length}
@@ -495,19 +611,37 @@ export default function MonitoramentoParceiras() {
   const agora = new Date()
   const [ano, setAno] = useState(agora.getFullYear())
   const [mes, setMes] = useState(agora.getMonth() + 1)
+
+  // Aba principal: 'parceiras' | 'criativo'
+  const [abaMonitor, setAbaMonitor] = useState('parceiras')
+
+  // Sub-aba de visualização (checklist / dashboard) — apenas parceiras tem dashboard
+  const [abaView, setAbaView] = useState('checklist')
+
+  // Editoras
   const [editoras, setEditoras] = useState([])
+
+  // Dados parceiras
   const [checkagemMes, setCheckagemMes] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [aba, setAba] = useState('checklist') // 'checklist' | 'dashboard'
-  const [formatoSel, setFormatoSel] = useState('stories')
+  const [formatoSel, setFormatoSel] = useState('story')
   const [dataSel, setDataSel] = useState(hojeKey())
+
+  // Dados criativo
+  const [checkagemCriativo, setCheckagemCriativo] = useState([])
+  const [formatoCriativoSel, setFormatoCriativoSel] = useState('story')
+  const [dataCriativoSel, setDataCriativoSel] = useState(hojeKey())
+
+  const [loading, setLoading] = useState(true)
   const [painelEditora, setPainelEditora] = useState(null)
-  const [modalEditora, setModalEditora] = useState(null) // null | 'new' | editora
+  const [modalEditora, setModalEditora] = useState(null)
   const [showImportar, setShowImportar] = useState(false)
   const [toast, showToast] = useToast()
 
+  const dias = diasDoMes(ano, mes)
+
   useEffect(() => { carregarEditoras() }, [])
   useEffect(() => { carregarCheckagemMes() }, [ano, mes])
+  useEffect(() => { carregarCheckagemCriativo() }, [ano, mes])
 
   async function carregarEditoras() {
     try { setEditoras(await getEditorasParceiras()) }
@@ -521,6 +655,11 @@ export default function MonitoramentoParceiras() {
     finally { setLoading(false) }
   }
 
+  async function carregarCheckagemCriativo() {
+    try { setCheckagemCriativo(await getCheckagemCriativoMes({ ano, mes })) }
+    catch (e) { console.error(e) }
+  }
+
   function navMes(d) {
     let nm = mes + d, na = ano
     if (nm > 12) { nm = 1; na++ }
@@ -528,11 +667,41 @@ export default function MonitoramentoParceiras() {
     setMes(nm); setAno(na)
   }
 
-  // Dias do mês com indicação de entrega por formato
-  const dias = diasDoMes(ano, mes)
-  const diasEntrega = dias // todos os dias disponíveis
+  // Indicadores para bolinha nos dias — parceiras
+  function indicadoresParceiras(formato) {
+    const ind = {}
+    for (const d of dias) {
+      const regs = checkagemMes.filter(r => r.formato === formato && r.data_esperada === d.key)
+      if (regs.length > 0) {
+        ind[d.key] = {
+          total: regs.length,
+          ok: regs.filter(r => r.status === 'postou').length,
+          nok: regs.filter(r => r.status === 'nao_postou').length,
+          ini: 0,
+        }
+      }
+    }
+    return ind
+  }
 
-  async function handleMarcar({ editora, formato, dataKey, status }) {
+  // Indicadores para bolinha nos dias — criativo
+  function indicadoresCriativo(formato) {
+    const ind = {}
+    for (const d of dias) {
+      const regs = checkagemCriativo.filter(r => r.formato === formato && r.data_esperada === d.key)
+      if (regs.length > 0) {
+        ind[d.key] = {
+          total: regs.length,
+          ok: regs.filter(r => r.status === 'finalizado').length,
+          nok: 0,
+          ini: regs.filter(r => r.status === 'iniciado').length,
+        }
+      }
+    }
+    return ind
+  }
+
+  async function handleMarcarParceira({ editora, formato, dataKey, status }) {
     try {
       const reg = await upsertCheckagemDia({ editora_id: editora.id, formato, data_esperada: dataKey, status })
       setCheckagemMes(prev => {
@@ -556,6 +725,17 @@ export default function MonitoramentoParceiras() {
     } catch (e) { console.error(e); showToast('Erro ao gerar', 'error') }
   }
 
+  async function handleMarcarCriativo({ editora, formato, dataKey, status, responsavel }) {
+    try {
+      const reg = await upsertCheckagemCriativoDia({ editora_id: editora.id, formato, data_esperada: dataKey, status, responsavel })
+      setCheckagemCriativo(prev => {
+        const idx = prev.findIndex(r => r.editora_id === editora.id && r.formato === formato && r.data_esperada === dataKey)
+        if (idx >= 0) { const n = [...prev]; n[idx] = reg; return n }
+        return [...prev, reg]
+      })
+    } catch (e) { console.error(e); showToast('Erro ao salvar', 'error') }
+  }
+
   async function handleSalvarEditora(form) {
     if (modalEditora && modalEditora !== 'new') {
       const upd = await updateEditoraParceira(modalEditora.id, form)
@@ -575,19 +755,41 @@ export default function MonitoramentoParceiras() {
     showToast('Editora removida!')
   }
 
-  // Resumo do mês
+  // Resumos
   const totalPostou = checkagemMes.filter(r => r.status === 'postou').length
-  const totalNao = checkagemMes.filter(r => r.status === 'nao_postou').length
-  const totalPend = checkagemMes.filter(r => r.status === 'pendente').length
+  const totalNao    = checkagemMes.filter(r => r.status === 'nao_postou').length
+  const totalPend   = checkagemMes.filter(r => r.status === 'pendente').length
+
+  const totalFinalizado = checkagemCriativo.filter(r => r.status === 'finalizado').length
+  const totalIniciado   = checkagemCriativo.filter(r => r.status === 'iniciado').length
+  const totalPendCriat  = checkagemCriativo.filter(r => r.status === 'pendente').length
+
+  // Estilo das abas superiores
+  function tabStyle(ativa) {
+    return {
+      padding: '10px 24px',
+      fontSize: 13,
+      fontWeight: 700,
+      cursor: 'pointer',
+      border: 'none',
+      borderBottom: ativa ? '2px solid var(--accent)' : '2px solid transparent',
+      background: 'transparent',
+      color: ativa ? 'var(--accent)' : 'var(--text-muted)',
+      transition: 'all 0.15s',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6,
+    }
+  }
 
   return (
     <div>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <Eye size={22} color="var(--accent)" />
           <div>
-            <h1 className="page-title" style={{ margin: 0 }}>Monitoramento Parceiras</h1>
+            <h1 className="page-title" style={{ margin: 0 }}>Monitoramento</h1>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
               {editoras.length} editoras · {MESES[mes - 1]} {ano}
             </p>
@@ -595,34 +797,57 @@ export default function MonitoramentoParceiras() {
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          {/* Resumo */}
-          <div style={{ display: 'flex', gap: 14 }}>
-            {[{ n: totalPostou, l: 'Postaram', c: '#22c55e' }, { n: totalNao, l: 'Não postaram', c: '#ef4444' }, { n: totalPend, l: 'Pendentes', c: '#6b7280' }].map(({ n, l, c }) => (
-              <div key={l} style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 18, fontWeight: 800, color: c, lineHeight: 1 }}>{n}</div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: 2 }}>{l}</div>
-              </div>
-            ))}
-          </div>
+          {/* Resumo dinâmico por aba */}
+          {abaMonitor === 'parceiras' ? (
+            <div style={{ display: 'flex', gap: 14 }}>
+              {[{ n: totalPostou, l: 'Postaram', c: '#22c55e' }, { n: totalNao, l: 'Não postaram', c: '#ef4444' }, { n: totalPend, l: 'Pendentes', c: '#6b7280' }].map(({ n, l, c }) => (
+                <div key={l} style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: c, lineHeight: 1 }}>{n}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: 2 }}>{l}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 14 }}>
+              {[{ n: totalFinalizado, l: 'Finalizados', c: '#22c55e' }, { n: totalIniciado, l: 'Iniciados', c: '#f59e0b' }, { n: totalPendCriat, l: 'Pendentes', c: '#6b7280' }].map(({ n, l, c }) => (
+                <div key={l} style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: c, lineHeight: 1 }}>{n}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: 2 }}>{l}</div>
+                </div>
+              ))}
+            </div>
+          )}
 
-          {/* Ações admin */}
-          {isAdmin && (
+          {/* Ações admin (só em parceiras) */}
+          {abaMonitor === 'parceiras' && isAdmin && (
             <>
               <button className="btn btn-ghost btn-sm" onClick={() => setShowImportar(true)}><Upload size={13} /> Importar editoras</button>
               <button className="btn btn-ghost btn-sm" onClick={() => setModalEditora('new')}><Plus size={13} /> Nova editora</button>
             </>
           )}
 
-          {/* Toggle aba */}
-          <div style={{ display: 'flex', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-            <button onClick={() => setAba('checklist')} style={{ padding: '7px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: aba === 'checklist' ? 'var(--accent)' : 'transparent', color: aba === 'checklist' ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
-              <List size={13} /> Checklist
-            </button>
-            <button onClick={() => setAba('dashboard')} style={{ padding: '7px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: aba === 'dashboard' ? 'var(--accent)' : 'transparent', color: aba === 'dashboard' ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
-              <LayoutGrid size={13} /> Dashboard
-            </button>
-          </div>
+          {/* Toggle checklist / dashboard (só em parceiras) */}
+          {abaMonitor === 'parceiras' && (
+            <div style={{ display: 'flex', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+              <button onClick={() => setAbaView('checklist')} style={{ padding: '7px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: abaView === 'checklist' ? 'var(--accent)' : 'transparent', color: abaView === 'checklist' ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <List size={13} /> Checklist
+              </button>
+              <button onClick={() => setAbaView('dashboard')} style={{ padding: '7px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: abaView === 'dashboard' ? 'var(--accent)' : 'transparent', color: abaView === 'dashboard' ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <LayoutGrid size={13} /> Dashboard
+              </button>
+            </div>
+          )}
         </div>
+      </div>
+
+      {/* Abas superiores: Editoras Parceiras / Equipe Cedet */}
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 20, gap: 0 }}>
+        <button style={tabStyle(abaMonitor === 'parceiras')} onClick={() => setAbaMonitor('parceiras')}>
+          <BookOpen size={14} /> Editoras Parceiras
+        </button>
+        <button style={tabStyle(abaMonitor === 'criativo')} onClick={() => setAbaMonitor('criativo')}>
+          <Users size={14} /> Equipe Cedet
+        </button>
       </div>
 
       {/* Navegação de mês */}
@@ -632,126 +857,120 @@ export default function MonitoramentoParceiras() {
         <button className="btn btn-ghost btn-icon" onClick={() => navMes(1)}><ChevronRight size={18} /></button>
       </div>
 
-      {/* ── ABA CHECKLIST ── */}
-      {aba === 'checklist' && (
+      {/* ═══════════════════════════════════════════════════════
+          ABA: EDITORAS PARCEIRAS
+      ═══════════════════════════════════════════════════════ */}
+      {abaMonitor === 'parceiras' && (
+        <>
+          {abaView === 'checklist' && (
+            <div>
+              {/* Seletor de formato */}
+              <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+                {FORMATOS_PARCEIRAS.map(fmt => (
+                  <button key={fmt.value} onClick={() => setFormatoSel(fmt.value)}
+                    style={{ padding: '7px 18px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: `2px solid ${fmt.cor}`, background: formatoSel === fmt.value ? fmt.cor : 'transparent', color: formatoSel === fmt.value ? '#fff' : fmt.cor, transition: 'all 0.15s' }}>
+                    {fmt.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Seletor de dias */}
+              <SeletorDias
+                dias={dias}
+                mes={mes}
+                dataSel={dataSel}
+                onSelect={setDataSel}
+                indicadores={indicadoresParceiras(formatoSel)}
+              />
+
+              {loading ? (
+                <div className="loading"><div className="spinner" /></div>
+              ) : (
+                <ViewChecklistParceiras
+                  editoras={editoras}
+                  checkagemMes={checkagemMes}
+                  formato={formatoSel}
+                  dataKey={dataSel}
+                  onMarcar={handleMarcarParceira}
+                  onGerarDia={handleGerarDia}
+                />
+              )}
+            </div>
+          )}
+
+          {abaView === 'dashboard' && (
+            loading ? (
+              <div className="loading"><div className="spinner" /></div>
+            ) : (
+              <>
+                {isAdmin && editoras.length > 0 && (
+                  <div style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {editoras.map(e => (
+                      <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 20, fontSize: 12 }}>
+                        <span style={{ color: 'var(--text)' }}>{e.nome}</span>
+                        <button onClick={() => setModalEditora(e)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text-muted)', display: 'flex' }}><Pencil size={11} /></button>
+                        <button onClick={() => handleDesativar(e)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text-muted)', display: 'flex', opacity: 0.5 }}><Trash2 size={11} /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <ViewDashboard editoras={editoras} checkagemMes={checkagemMes} mes={mes} ano={ano} onAbrirEditora={setPainelEditora} />
+              </>
+            )
+          )}
+        </>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════
+          ABA: EQUIPE CEDET
+      ═══════════════════════════════════════════════════════ */}
+      {abaMonitor === 'criativo' && (
         <div>
           {/* Seletor de formato */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-            {FORMATOS.map(fmt => (
-              <button key={fmt.value} onClick={() => setFormatoSel(fmt.value)}
-                style={{ padding: '7px 18px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: `2px solid ${fmt.cor}`, background: formatoSel === fmt.value ? fmt.cor : 'transparent', color: formatoSel === fmt.value ? '#fff' : fmt.cor, transition: 'all 0.15s' }}>
+            {FORMATOS_CRIATIVO.map(fmt => (
+              <button key={fmt.value} onClick={() => setFormatoCriativoSel(fmt.value)}
+                style={{ padding: '7px 18px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: `2px solid ${fmt.cor}`, background: formatoCriativoSel === fmt.value ? fmt.cor : 'transparent', color: formatoCriativoSel === fmt.value ? '#fff' : fmt.cor, transition: 'all 0.15s' }}>
                 {fmt.label}
-                {fmt.quinzenal && <span style={{ fontSize: 10, marginLeft: 4, opacity: 0.8 }}>quinzenal</span>}
               </button>
             ))}
           </div>
 
-          {/* Seletor de dia — mostra só dias de entrega do formato */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
-              Dias de entrega de {FORMATOS.find(f => f.value === formatoSel)?.label}:
-            </div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {diasEntrega.map(d => {
-                const regsNoDia = checkagemMes.filter(r => r.formato === formatoSel && r.data_esperada === d.key)
-                const postou = regsNoDia.filter(r => r.status === 'postou').length
-                const nao = regsNoDia.filter(r => r.status === 'nao_postou').length
-                const ehHoje = d.key === hojeKey()
-                const selecionado = dataSel === d.key
-                const corBorda = selecionado ? 'var(--accent)' : ehHoje ? 'var(--accent)' : 'var(--border)'
+          {/* Seletor de dias */}
+          <SeletorDias
+            dias={dias}
+            mes={mes}
+            dataSel={dataCriativoSel}
+            onSelect={setDataCriativoSel}
+            indicadores={indicadoresCriativo(formatoCriativoSel)}
+          />
 
-                return (
-                  <button key={d.key} onClick={() => setDataSel(d.key)}
-                    style={{ padding: '8px 14px', borderRadius: 10, fontSize: 12, fontWeight: selecionado ? 700 : 500, cursor: 'pointer', border: `2px solid ${corBorda}`, background: selecionado ? 'var(--accent-glow)' : 'var(--surface)', color: selecionado ? 'var(--accent)' : 'var(--text)', transition: 'all 0.15s', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, minWidth: 58 }}>
-                    <span>{d.dia}/{mes}</span>
-                    {regsNoDia.length > 0 && (
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        {postou > 0 && <span style={{ fontSize: 10, color: '#22c55e', fontWeight: 700 }}>✅{postou}</span>}
-                        {nao > 0 && <span style={{ fontSize: 10, color: '#ef4444', fontWeight: 700 }}>❌{nao}</span>}
-                      </div>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Lista de checagem */}
-          {loading ? (
-            <div className="loading"><div className="spinner" /></div>
-          ) : (
-            <ViewChecklist
-              editoras={editoras}
-              checkagemMes={checkagemMes}
-              formato={formatoSel}
-              dataKey={dataSel}
-              onMarcar={handleMarcar}
-              onGerarDia={handleGerarDia}
-            />
-          )}
+          <ViewChecklistCriativo
+            editoras={editoras}
+            checkagemCriativo={checkagemCriativo}
+            formato={formatoCriativoSel}
+            dataKey={dataCriativoSel}
+            onMarcar={handleMarcarCriativo}
+          />
         </div>
-      )}
-
-      {/* ── ABA DASHBOARD ── */}
-      {aba === 'dashboard' && (
-        loading ? (
-          <div className="loading"><div className="spinner" /></div>
-        ) : (
-          <>
-            {/* Gerenciar editoras (admin) */}
-            {isAdmin && editoras.length > 0 && (
-              <div style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {editoras.map(e => (
-                  <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 20, fontSize: 12 }}>
-                    <span style={{ color: 'var(--text)' }}>{e.nome}</span>
-                    <button onClick={() => setModalEditora(e)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text-muted)', display: 'flex' }}><Pencil size={11} /></button>
-                    <button onClick={() => handleDesativar(e)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text-muted)', display: 'flex', opacity: 0.5 }}><Trash2 size={11} /></button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <ViewDashboard
-              editoras={editoras}
-              checkagemMes={checkagemMes}
-              mes={mes}
-              ano={ano}
-              onAbrirEditora={setPainelEditora}
-            />
-          </>
-        )
       )}
 
       {/* Painel lateral de editora */}
       {painelEditora && (
         <>
           <div onClick={() => setPainelEditora(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 99 }} />
-          <PainelEditora
-            editora={painelEditora}
-            checkagemMes={checkagemMes}
-            ano={ano}
-            mes={mes}
-            usuario={usuario}
-            onClose={() => setPainelEditora(null)}
-          />
+          <PainelEditora editora={painelEditora} checkagemMes={checkagemMes} ano={ano} mes={mes} usuario={usuario} onClose={() => setPainelEditora(null)} />
         </>
       )}
 
       {/* Modal editora */}
       {modalEditora && (
-        <ModalEditora
-          editora={modalEditora === 'new' ? null : modalEditora}
-          onSave={handleSalvarEditora}
-          onClose={() => setModalEditora(null)}
-        />
+        <ModalEditora editora={modalEditora === 'new' ? null : modalEditora} onSave={handleSalvarEditora} onClose={() => setModalEditora(null)} />
       )}
 
       {/* Modal importar */}
       {showImportar && (
-        <ModalImportar
-          onClose={() => setShowImportar(false)}
-          onImported={() => { carregarEditoras(); showToast('Editoras importadas!') }}
-        />
+        <ModalImportar onClose={() => setShowImportar(false)} onImported={() => { carregarEditoras(); showToast('Editoras importadas!') }} />
       )}
 
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
