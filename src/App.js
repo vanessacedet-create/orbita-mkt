@@ -33,6 +33,7 @@ import {
   CalendarRange,
   Settings,
   BookMarked,
+  LibraryBig,
 } from 'lucide-react'
 import './App.css'
 
@@ -66,29 +67,31 @@ const Agenda                = lazy(() => import('./pages/Agenda'))
 const Configuracoes         = lazy(() => import('./pages/Configuracoes'))
 const BlocoNotas            = lazy(() => import('./pages/BlocoNotas'))
 const MonitoramentoParceiras = lazy(() => import('./pages/MonitoramentoParceiras'))
+const EditorasLivrarias     = lazy(() => import('./pages/EditorasLivrarias'))
 
 const MENU = [
-  { path: '/dashboard',             label: 'Dashboard',         icon: LayoutDashboard, modulo: 'dashboard', ocultarPerfis: ['supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'] },
-  { path: '/dashboard-parceiras',   label: 'Dashboard',         icon: LayoutDashboard, modulo: 'tarefas_parceiras' },
-  { path: '/crm-influencers',       label: 'CRM Influencers',   icon: Network,         modulo: 'crm_influencers' },
-  { path: '/crm-parceiras',         label: 'CRM Parceiras',     icon: Network,         modulo: 'crm_parceiras' },
-  { path: '/cortesias',             label: 'Cortesias',         icon: BookOpen,        modulo: 'cortesias' },
-  { path: '/campanhas',             label: 'Campanhas',         icon: Megaphone,       modulo: 'campanhas' },
-  { path: '/monitoramento',         label: 'Monitoramento',     icon: Eye,             modulo: 'monitoramento', ocultarPerfis: ['supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'] },
-  { path: '/lancamentos',           label: 'Lançamentos',       icon: CalendarDays,    modulo: 'lancamentos' },
-  { path: '/tarefas',               label: 'Tarefas',           icon: CheckSquare,     modulo: 'tarefas' },
-  { path: '/tarefas-parceiras',     label: 'Tarefas Parceiras', icon: CheckSquare,     modulo: 'tarefas_parceiras' },
-  { path: '/agenda',                label: 'Agenda',            icon: CalendarRange,   modulo: 'tarefas_parceiras' },
-  { path: '/monitoramento-parceiras', label: 'Monitoramento',   icon: Eye,             modulo: 'tarefas_parceiras' },
-  { path: '/notas',                 label: 'Bloco de Notas',    icon: BookMarked,      modulo: 'dashboard', sempreVisivel: true },
-  { path: '/configuracoes',         label: 'Configurações',     icon: Settings,        modulo: 'dashboard', sempreVisivel: true },
-  { path: '/rh',                    label: 'RH',                icon: HeartHandshake,  modulo: 'rh' },
-  { path: '/pda',                   label: 'PDA',               icon: Target,          modulo: 'pda' },
-  { path: '/treinamentos',          label: 'Treinamentos',      icon: GraduationCap,   modulo: 'treinamentos' },
-  { path: '/eventos',               label: 'Eventos',           icon: CalendarCheck,   modulo: 'eventos' },
-  { path: '/vitrine-admin',         label: 'Vitrine',           icon: Store,           modulo: 'parceiros' },
-  { path: '/acessos-equipe',        label: 'Acessos da Equipe', icon: Users,           modulo: 'acessos_equipe' },
-  { path: '/usuarios',              label: 'Usuários',          icon: Users,           modulo: 'usuarios' },
+  { path: '/dashboard',             label: 'Dashboard',           icon: LayoutDashboard, modulo: 'dashboard', ocultarPerfis: ['supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'] },
+  { path: '/dashboard-parceiras',   label: 'Dashboard',           icon: LayoutDashboard, modulo: 'tarefas_parceiras' },
+  { path: '/crm-influencers',       label: 'CRM Influencers',     icon: Network,         modulo: 'crm_influencers' },
+  { path: '/crm-parceiras',         label: 'CRM Parceiras',       icon: Network,         modulo: 'crm_parceiras' },
+  { path: '/cortesias',             label: 'Cortesias',           icon: BookOpen,        modulo: 'cortesias' },
+  { path: '/campanhas',             label: 'Campanhas',           icon: Megaphone,       modulo: 'campanhas' },
+  { path: '/monitoramento',         label: 'Monitoramento',       icon: Eye,             modulo: 'monitoramento', ocultarPerfis: ['supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'] },
+  { path: '/lancamentos',           label: 'Lançamentos',         icon: CalendarDays,    modulo: 'lancamentos' },
+  { path: '/tarefas',               label: 'Tarefas',             icon: CheckSquare,     modulo: 'tarefas' },
+  { path: '/tarefas-parceiras',     label: 'Tarefas Parceiras',   icon: CheckSquare,     modulo: 'tarefas_parceiras' },
+  { path: '/agenda',                label: 'Agenda',              icon: CalendarRange,   modulo: 'tarefas_parceiras' },
+  { path: '/editoras-livrarias',    label: 'Editoras & Livrarias',icon: LibraryBig,      modulo: 'tarefas_parceiras' },
+  { path: '/monitoramento-parceiras', label: 'Monitoramento',     icon: Eye,             modulo: 'tarefas_parceiras' },
+  { path: '/notas',                 label: 'Bloco de Notas',      icon: BookMarked,      modulo: 'dashboard', sempreVisivel: true },
+  { path: '/configuracoes',         label: 'Configurações',       icon: Settings,        modulo: 'dashboard', sempreVisivel: true },
+  { path: '/rh',                    label: 'RH',                  icon: HeartHandshake,  modulo: 'rh' },
+  { path: '/pda',                   label: 'PDA',                 icon: Target,          modulo: 'pda' },
+  { path: '/treinamentos',          label: 'Treinamentos',        icon: GraduationCap,   modulo: 'treinamentos' },
+  { path: '/eventos',               label: 'Eventos',             icon: CalendarCheck,   modulo: 'eventos' },
+  { path: '/vitrine-admin',         label: 'Vitrine',             icon: Store,           modulo: 'parceiros' },
+  { path: '/acessos-equipe',        label: 'Acessos da Equipe',   icon: Users,           modulo: 'acessos_equipe' },
+  { path: '/usuarios',              label: 'Usuários',            icon: Users,           modulo: 'usuarios' },
 ]
 
 const PERFIL_LABEL = {
@@ -400,6 +403,7 @@ function Shell() {
                 <Route path="/tarefas" element={<RequireAuth modulo="tarefas"><Tarefas /></RequireAuth>} />
                 <Route path="/tarefas-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><Tarefas grupo="parceiras" titulo="Tarefas — Editoras Parceiras" /></RequireAuth>} />
                 <Route path="/agenda" element={<RequireAuth modulo="tarefas_parceiras"><Agenda /></RequireAuth>} />
+                <Route path="/editoras-livrarias" element={<RequireAuth modulo="tarefas_parceiras"><EditorasLivrarias /></RequireAuth>} />
                 <Route path="/monitoramento-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><MonitoramentoParceiras /></RequireAuth>} />
                 <Route path="/treinamentos" element={<RequireAuth modulo="treinamentos"><Treinamentos /></RequireAuth>} />
                 <Route path="/pda" element={<RequireAuth modulo="pda"><PDA /></RequireAuth>} />
