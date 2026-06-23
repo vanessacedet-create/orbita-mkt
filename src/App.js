@@ -68,7 +68,7 @@ const BlocoNotas            = lazy(() => import('./pages/BlocoNotas'))
 const MonitoramentoParceiras = lazy(() => import('./pages/MonitoramentoParceiras'))
 
 const MENU = [
-  { path: '/dashboard',             label: 'Dashboard',         icon: LayoutDashboard, modulo: 'dashboard' },
+  { path: '/dashboard',             label: 'Dashboard',         icon: LayoutDashboard, modulo: 'dashboard', ocultarPerfis: ['supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'] },
   { path: '/dashboard-parceiras',   label: 'Dashboard',         icon: LayoutDashboard, modulo: 'tarefas_parceiras' },
   { path: '/crm-influencers',       label: 'CRM Influencers',   icon: Network,         modulo: 'crm_influencers' },
   { path: '/crm-parceiras',         label: 'CRM Parceiras',     icon: Network,         modulo: 'crm_parceiras' },
