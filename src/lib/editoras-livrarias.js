@@ -137,10 +137,19 @@ export async function updateLivraria(id, payload) {
     .from('livrarias')
     .update(payload)
     .eq('id', id)
-    .select('*, editoras_parceiras(id, nome)')
+    .select('*')
     .single()
   if (error) throw error
-  return data
+  // Buscar editora vinculada separadamente
+  if (data.editora_id) {
+    const { data: ed } = await supabase
+      .from('editoras_parceiras')
+      .select('id, nome')
+      .eq('id', data.editora_id)
+      .single()
+    return { ...data, editoras_parceiras: ed || null }
+  }
+  return { ...data, editoras_parceiras: null }
 }
 
 export async function desativarLivraria(id) {
