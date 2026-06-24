@@ -214,6 +214,7 @@ function ModalImportar({ tipo, editoras, onClose, onImported }) {
   const [linhas, setLinhas] = useState([])
   const [etapa, setEtapa] = useState('upload')
   const [importando, setImportando] = useState(false)
+  const [erro, setErro] = useState(null)
 
   function baixarTemplate() {
     const wb = XLSX.utils.book_new()
@@ -250,12 +251,16 @@ function ModalImportar({ tipo, editoras, onClose, onImported }) {
 
   async function confirmar() {
     setImportando(true)
+    setErro(null)
     try {
       if (tipo === 'editora') await importarEditorasPlanilha(linhas)
       else await importarLivrariasPlanilha(linhas, editoras)
       onImported()
       onClose()
-    } catch(e){console.error(e)} finally{setImportando(false)}
+    } catch(e) {
+      console.error(e)
+      setErro(e?.message || 'Erro ao importar. Verifique o console.')
+    } finally { setImportando(false) }
   }
 
   return (
@@ -296,6 +301,7 @@ function ModalImportar({ tipo, editoras, onClose, onImported }) {
               <button className="btn btn-ghost" onClick={()=>setEtapa('upload')}>Voltar</button>
               <button className="btn btn-primary" onClick={confirmar} disabled={importando}>{importando?'Importando...':`Importar ${linhas.length}`}</button>
             </div>
+            {erro && <div style={{marginTop:10,padding:'8px 12px',background:'#ef444418',border:'1px solid #ef4444',borderRadius:8,fontSize:12,color:'#ef4444'}}>{erro}</div>}
           </div>
         )}
       </div>
