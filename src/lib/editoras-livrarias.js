@@ -86,38 +86,50 @@ export async function desativarEditorasLote(ids) {
 export async function importarEditorasPlanilha(rows) {
   const GRUPO_MAPA = { 'I':1,'II':2,'III':3,'IV':4,'V':5,'VI':6,'VII':7,'VIII':8 }
 
-  const editoras = rows.map(r => ({
-    nome:            r[0]?.toString().trim() || null,
-    macro:           r[2]?.toString().trim() || null,
-    nicho:           r[3]?.toString().trim() || null,
-    sub_nicho:       r[4]?.toString().trim() || null,
-    posicionamento:  r[5]?.toString().trim() || null,
-    grupo_id:        GRUPO_MAPA[r[6]?.toString().trim()] || null,
-    status_parceria: r[7]?.toString().trim().toLowerCase() || 'ativa',
-    _livraria:       r[1]?.toString().trim() !== '-' && r[1]?.toString().trim() !== '' ? r[1]?.toString().trim() : null,
-  })).filter(r => r.nome)
+  const dadosOriginais = rows
+    .filter(r => r[0]?.toString().trim())
+    .map(r => ({
+      nome:            r[0]?.toString().trim(),
+      macro:           r[2]?.toString().trim() || null,
+      nicho:           r[3]?.toString().trim() || null,
+      sub_nicho:       r[4]?.toString().trim() || null,
+      posicionamento:  r[5]?.toString().trim() || null,
+      grupo_id:        GRUPO_MAPA[r[6]?.toString().trim()] || null,
+      status_parceria: r[7]?.toString().trim().toLowerCase() || 'ativa',
+      _livraria:       r[1]?.toString().trim() !== '-' && r[1]?.toString().trim() !== '' ? r[1]?.toString().trim() : null,
+    }))
 
-  // Inserir editoras em lotes de 50
+  // Inserir editoras em lotes de 50 (sem _livraria)
   const LOTE = 50
-  const inseridas = []
-  for (let i = 0; i < editoras.length; i += LOTE) {
-    const lote = editoras.slice(i, i + LOTE).map(({ _livraria, ...rest }) => rest)
-    const { data, error } = await supabase
+  for (let i = 0; i < dadosOriginais.length; i += LOTE) {
+    const lote = dadosOriginais.slice(i, i + LOTE).map(({ _livraria, ...rest }) => rest)
+    const { error } = await supabase
       .from('editoras_parceiras')
       .upsert(lote, { onConflict: 'nome', ignoreDuplicates: false })
-      .select('*')
     if (error) throw error
-    // Reattach _livraria info
-    for (const ed of data || []) {
-      const orig = editoras.find(e => e.nome === ed.nome)
-      inseridas.push({ ...ed, _livraria: orig?._livraria || null })
-    }
   }
 
-  // Criar livrarias vinculadas para as que têm nome de livraria
-  const livrariasParaInserir = inseridas
+  // Buscar IDs das editoras que têm livraria
+  const nomesComLivraria = dadosOriginais
     .filter(e => e._livraria)
-    .map(e => ({ nome: e._livraria, editora_id: e.id }))
+    .map(e => e.nome)
+
+  if (nomesComLivraria.length === 0) return dadosOriginais
+
+  const { data: editorasInseridas, error: errBusca } = await supabase
+    .from('editoras_parceiras')
+    .select('id, nome')
+    .in('nome', nomesComLivraria)
+  if (errBusca) throw errBusca
+
+  // Criar mapa nome → id
+  const mapaId = {}
+  for (const e of editorasInseridas || []) mapaId[e.nome] = e.id
+
+  // Inserir livrarias vinculadas
+  const livrariasParaInserir = dadosOriginais
+    .filter(e => e._livraria && mapaId[e.nome])
+    .map(e => ({ nome: e._livraria, editora_id: mapaId[e.nome] }))
 
   if (livrariasParaInserir.length) {
     const { error } = await supabase
@@ -126,7 +138,7 @@ export async function importarEditorasPlanilha(rows) {
     if (error) throw error
   }
 
-  return inseridas
+  return dadosOriginais
 }
 
 // ── LIVRARIAS ──────────────────────────────────────────────
