@@ -16,6 +16,7 @@ function useToast() {
 
 const STATUS_COR = {
   ativa:        { cor: '#22c55e', bg: '#22c55e18', label: 'Ativa' },
+  em_analise:   { cor: '#6366f1', bg: '#6366f118', label: 'Em análise' },
   encerramento: { cor: '#ef4444', bg: '#ef444418', label: 'Encerramento' },
   finalizada:   { cor: '#6b7280', bg: '#6b728018', label: 'Finalizada' },
   pendente:     { cor: '#f59e0b', bg: '#f59e0b18', label: 'Pendente' },
