@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import {
   getEditorasCompletas, createEditora, updateEditora, desativarEditora, desativarEditorasLote, importarEditorasPlanilha,
   getLivrarias, createLivraria, updateLivraria, desativarLivraria, desativarLivrariaLote, importarLivrariasPlanilha,
-  GRUPOS, STATUS_PARCERIA,
+  GRUPOS, STATUS_PARCERIA, STATUS_LIVRARIA,
 } from '../lib/editoras-livrarias'
 import { BookOpen, Plus, X, Upload, Pencil, Trash2, FileSpreadsheet, Building2, Library, LayoutGrid, Settings2, ChevronDown } from 'lucide-react'
 import * as XLSX from 'xlsx'
@@ -27,10 +27,9 @@ function getStatusSafe(status) {
   return STATUS_COR[status?.toLowerCase()] || STATUS_COR['ativa']
 }
 
-// Todas as colunas possíveis para editoras
 const TODAS_COLUNAS_EDITORAS = [
-  { key: 'classificacao',  label: 'Class.',      fixo: true },
-  { key: 'nome',           label: 'Nome',         fixo: true },
+  { key: 'classificacao',  label: 'Class.',         fixo: true },
+  { key: 'nome',           label: 'Nome',            fixo: true },
   { key: 'livraria',       label: 'Livraria' },
   { key: 'macro',          label: 'Macro' },
   { key: 'nicho',          label: 'Nicho' },
@@ -46,54 +45,44 @@ const TODAS_COLUNAS_EDITORAS = [
   { key: 'selos',          label: 'Selos' },
 ]
 
-const COLUNAS_LIVRARIAS = [
+const TODAS_COLUNAS_LIVRARIAS = [
   { key: 'nome',        label: 'Livraria',          fixo: true },
   { key: 'editora',     label: 'Editora vinculada',  fixo: true },
   { key: 'contato',     label: 'Contato' },
-  { key: 'instagram',   label: 'Instagram' },
   { key: 'site',        label: 'Site' },
+  { key: 'instagram',   label: 'Instagram' },
+  { key: 'youtube',     label: 'YouTube' },
   { key: 'inauguracao', label: 'Inauguração' },
+  { key: 'observacao',  label: 'Observação' },
+  { key: 'status',      label: 'Status' },
 ]
 
-// Ordem e visibilidade padrão
 const ORDEM_DEFAULT_EDITORAS = TODAS_COLUNAS_EDITORAS.map(c => c.key)
 const VISIVEIS_DEFAULT_EDITORAS = ['classificacao','nome','livraria','macro','nicho','sub_nicho','posicionamento','grupo_id','status_parceria']
-const ORDEM_DEFAULT_LIVRARIAS = COLUNAS_LIVRARIAS.map(c => c.key)
-const VISIVEIS_DEFAULT_LIVRARIAS = ['nome','editora','contato','site','inauguracao']
+const ORDEM_DEFAULT_LIVRARIAS = TODAS_COLUNAS_LIVRARIAS.map(c => c.key)
+const VISIVEIS_DEFAULT_LIVRARIAS = ['nome','editora','contato','site','instagram','inauguracao','status']
 
-function formatarTituloGrupo(romano, label) {
-  const partes = label.split(/[;,\/]/).map(p => p.trim()).filter(Boolean)
-  return `${romano} - ${partes.map(p => p.split(' ').join(' | ')).join(' · ')}`
-}
-
-// ── SELETOR DE COLUNAS COM DRAG ────────────────────────────
+// ── SELETOR DE COLUNAS ─────────────────────────────────────
 function SeletorColunas({ colunas, ordem, onOrdemChange, visiveis, onVisiveisChange, onClose }) {
   const ref = useRef(null)
   const dragIdx = useRef(null)
-  const dragOverIdx = useRef(null)
   const [dragState, setDragState] = useState(null)
 
   useEffect(() => {
-    function handleClick(e) { if (ref.current && !ref.current.contains(e.target)) onClose() }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
+    function h(e) { if (ref.current && !ref.current.contains(e.target)) onClose() }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
   }, [onClose])
 
-  // Todas as colunas não fixas na ordem atual
   const naoFixas = ordem
     .map(k => colunas.find(c => c.key === k))
     .filter(c => c && !c.fixo)
 
-  function onDragStart(e, idx) {
-    dragIdx.current = idx
-    setDragState(idx)
-    e.dataTransfer.effectAllowed = 'move'
-  }
+  function onDragStart(e, idx) { dragIdx.current = idx; setDragState(idx); e.dataTransfer.effectAllowed = 'move' }
 
   function onDragOver(e, idx) {
     e.preventDefault()
     if (dragIdx.current === null || dragIdx.current === idx) return
-    dragOverIdx.current = idx
     const nova = [...naoFixas]
     const [item] = nova.splice(dragIdx.current, 1)
     nova.splice(idx, 0, item)
@@ -102,27 +91,21 @@ function SeletorColunas({ colunas, ordem, onOrdemChange, visiveis, onVisiveisCha
     onOrdemChange([...fixas, ...nova.map(c => c.key)])
   }
 
-  function onDragEnd() { dragIdx.current = null; dragOverIdx.current = null; setDragState(null) }
+  function onDragEnd() { dragIdx.current = null; setDragState(null) }
 
   return (
     <div ref={ref} style={{ position:'absolute', top:36, right:0, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10, padding:12, zIndex:100, minWidth:240, boxShadow:'0 8px 24px rgba(0,0,0,0.25)' }}>
-      <div style={{ fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', marginBottom:8, letterSpacing:'0.05em' }}>
-        Colunas visíveis · arraste para reordenar
-      </div>
+      <div style={{ fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', marginBottom:8 }}>Colunas visíveis · arraste para reordenar</div>
       {naoFixas.map((col, idx) => (
-        <div key={col.key}
-          draggable
+        <div key={col.key} draggable
           onDragStart={e => onDragStart(e, idx)}
           onDragOver={e => onDragOver(e, idx)}
           onDragEnd={onDragEnd}
           style={{ display:'flex', alignItems:'center', gap:8, padding:'5px 4px', borderRadius:6, background: dragState === idx ? 'var(--surface-2)' : 'transparent', cursor:'grab', userSelect:'none' }}>
           <span style={{ color:'var(--text-muted)', fontSize:13 }}>⠿</span>
           <label style={{ display:'flex', alignItems:'center', gap:7, cursor:'pointer', flex:1, fontSize:13 }}>
-            <input type="checkbox"
-              checked={visiveis.includes(col.key)}
-              onChange={e => e.target.checked
-                ? onVisiveisChange([...visiveis, col.key])
-                : onVisiveisChange(visiveis.filter(k => k !== col.key))}
+            <input type="checkbox" checked={visiveis.includes(col.key)}
+              onChange={e => e.target.checked ? onVisiveisChange([...visiveis, col.key]) : onVisiveisChange(visiveis.filter(k => k !== col.key))}
               style={{ accentColor:'var(--accent)', cursor:'pointer', width:14, height:14 }} />
             <span style={{ color:'var(--text)' }}>{col.label}</span>
           </label>
@@ -136,27 +119,41 @@ function SeletorColunas({ colunas, ordem, onOrdemChange, visiveis, onVisiveisCha
 function FiltroExcel({ valores, selecionados, onConfirm, onClose }) {
   const ref = useRef(null)
   const [busca, setBusca] = useState('')
-  const [sel, setSel] = useState(new Set(selecionados.length ? selecionados : valores))
+  const [sel, setSel] = useState(() => new Set(selecionados?.length ? selecionados : valores))
 
   useEffect(() => {
     function h(e) { if (ref.current && !ref.current.contains(e.target)) onClose() }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
+    // Pequeno delay para não fechar imediatamente ao abrir
+    const t = setTimeout(() => document.addEventListener('mousedown', h), 100)
+    return () => { clearTimeout(t); document.removeEventListener('mousedown', h) }
   }, [onClose])
 
-  const filtrados = valores.filter(v => v.toLowerCase().includes(busca.toLowerCase()))
-  const todosSel = filtrados.every(v => sel.has(v))
+  const filtrados = valores.filter(v => String(v).toLowerCase().includes(busca.toLowerCase()))
+  const todosSel = filtrados.length > 0 && filtrados.every(v => sel.has(v))
 
   function toggleAll() {
-    if (todosSel) setSel(prev => { const n = new Set(prev); filtrados.forEach(v => n.delete(v)); return n })
-    else setSel(prev => { const n = new Set(prev); filtrados.forEach(v => n.add(v)); return n })
+    setSel(prev => {
+      const n = new Set(prev)
+      if (todosSel) filtrados.forEach(v => n.delete(v))
+      else filtrados.forEach(v => n.add(v))
+      return n
+    })
   }
 
-  function toggle(v) { setSel(prev => { const n = new Set(prev); n.has(v) ? n.delete(v) : n.add(v); return n }) }
+  function toggle(v) {
+    setSel(prev => { const n = new Set(prev); n.has(v) ? n.delete(v) : n.add(v); return n })
+  }
+
+  function confirmar(e) {
+    e.stopPropagation()
+    onConfirm([...sel])
+  }
 
   return (
-    <div ref={ref} style={{ position:'absolute', top:'100%', left:0, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, zIndex:200, minWidth:200, boxShadow:'0 8px 24px rgba(0,0,0,0.2)', padding:8 }}>
+    <div ref={ref} onClick={e => e.stopPropagation()}
+      style={{ position:'absolute', top:'100%', left:0, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, zIndex:300, minWidth:200, maxWidth:280, boxShadow:'0 8px 24px rgba(0,0,0,0.25)', padding:8 }}>
       <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Pesquisar..."
+        autoFocus
         style={{ width:'100%', padding:'5px 8px', borderRadius:6, border:'1px solid var(--border)', background:'var(--surface-2)', color:'var(--text)', fontSize:12, marginBottom:6, boxSizing:'border-box' }} />
       <div style={{ maxHeight:200, overflowY:'auto', marginBottom:6 }}>
         <label style={{ display:'flex', alignItems:'center', gap:6, padding:'3px 4px', fontSize:12, cursor:'pointer', fontWeight:600 }}>
@@ -171,32 +168,32 @@ function FiltroExcel({ valores, selecionados, onConfirm, onClose }) {
         ))}
       </div>
       <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
-        <button className="btn btn-ghost btn-sm" onClick={onClose} style={{ fontSize:11 }}>Cancelar</button>
-        <button className="btn btn-primary btn-sm" onClick={() => onConfirm([...sel])} style={{ fontSize:11 }}>OK</button>
+        <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); onClose() }} style={{ fontSize:11 }}>Cancelar</button>
+        <button className="btn btn-primary btn-sm" onClick={confirmar} style={{ fontSize:11 }}>OK</button>
       </div>
     </div>
   )
 }
 
-// ── CABEÇALHO COM FILTRO EXCEL ─────────────────────────────
 function ThFiltro({ label, colKey, dados, filtroAtivo, onFiltro }) {
   const [open, setOpen] = useState(false)
+
   const valores = [...new Set(dados.map(r => {
+    if (colKey === 'grupo_id') return GRUPOS.find(g => g.id === r.grupo_id)?.romano || ''
+    if (colKey === 'status_parceria' || colKey === 'status') return getStatusSafe(r[colKey]).label
     const v = r[colKey]
-    if (colKey === 'grupo_id') return GRUPOS.find(g => g.id === v)?.romano || ''
-    if (colKey === 'status_parceria') return getStatusSafe(v).label
-    return v ? String(v) : ''
-  }).filter(v => v !== undefined))].sort()
+    return v != null ? String(v) : ''
+  }))].sort()
 
   const ativo = filtroAtivo && filtroAtivo.length < valores.length
 
   return (
-    <th style={{ padding:'8px 10px', textAlign:'left', fontWeight:700, color: ativo ? 'var(--accent)' : 'var(--text-muted)', fontSize:11, textTransform:'uppercase', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', whiteSpace:'nowrap', position:'relative', cursor:'pointer', userSelect:'none' }}
-      onClick={() => setOpen(v => !v)}>
+    <th onClick={() => setOpen(v => !v)}
+      style={{ padding:'8px 10px', textAlign:'left', fontWeight:700, color: ativo ? 'var(--accent)' : 'var(--text-muted)', fontSize:11, textTransform:'uppercase', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', whiteSpace:'nowrap', position:'relative', cursor:'pointer', userSelect:'none' }}>
       <span style={{ display:'flex', alignItems:'center', gap:4 }}>
         {label}
         <ChevronDown size={10} style={{ opacity: ativo ? 1 : 0.5, color: ativo ? 'var(--accent)' : 'inherit' }} />
-        {ativo && <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--accent)', display:'inline-block' }} />}
+        {ativo && <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--accent)', flexShrink:0 }} />}
       </span>
       {open && (
         <FiltroExcel
@@ -210,6 +207,31 @@ function ThFiltro({ label, colKey, dados, filtroAtivo, onFiltro }) {
   )
 }
 
+function Celula({ children, width = 140 }) {
+  const texto = typeof children === 'string' ? children : undefined
+  return (
+    <td style={{ padding:'7px 10px', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)', fontSize:12, color:'var(--text)', maxWidth:width, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={texto}>
+      {children != null && children !== '' ? children : <span style={{ color:'var(--border)' }}>—</span>}
+    </td>
+  )
+}
+
+function BarraSeleção({ selecionados, total, onSelecionarTodos, onDeselecionarTodos, onExcluir, excluindo }) {
+  if (selecionados === 0) return null
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:12, padding:'8px 14px', background:'var(--accent-glow)', border:'1px solid var(--accent)', borderRadius:8, marginBottom:12 }}>
+      <span style={{ fontSize:13, color:'var(--accent)', fontWeight:600 }}>{selecionados} selecionado{selecionados !== 1 ? 's' : ''}</span>
+      <button className="btn btn-ghost btn-sm" onClick={onSelecionarTodos} style={{ fontSize:12 }}>Selecionar todos ({total})</button>
+      <button className="btn btn-ghost btn-sm" onClick={onDeselecionarTodos} style={{ fontSize:12 }}>Limpar seleção</button>
+      <button onClick={onExcluir} disabled={excluindo}
+        style={{ marginLeft:'auto', background:'#ef4444', color:'#fff', border:'none', borderRadius:6, padding:'5px 14px', cursor:'pointer', fontSize:12, fontWeight:600, display:'flex', alignItems:'center', gap:5 }}>
+        <Trash2 size={12} /> {excluindo ? 'Removendo...' : `Remover ${selecionados}`}
+      </button>
+    </div>
+  )
+}
+
+// ── MODAL EDITORA ──────────────────────────────────────────
 function ModalEditora({ editora, onSave, onClose }) {
   const empty = { nome:'', instagram:'', youtube:'', contato:'', email:'', tem_grupo:false, macro:'', nicho:'', sub_nicho:'', posicionamento:'', grupo_id:'', status_parceria:'ativa', selos:[] }
   const [form, setForm] = useState(editora ? { ...editora, selos: editora.selos_editoriais?.map(s => s.nome) || [], grupo_id: editora.grupo_id ?? '' } : empty)
@@ -294,20 +316,23 @@ function ModalEditora({ editora, onSave, onClose }) {
   )
 }
 
+// ── MODAL LIVRARIA ─────────────────────────────────────────
 function ModalLivraria({ livraria, editoras, onSave, onClose }) {
-  const empty = { nome:'', editora_id:'', contato:'', email:'', instagram:'', site:'', inauguracao:'' }
+  const empty = { nome:'', editora_id:'', contato:'', site:'', instagram:'', youtube:'', inauguracao:'', observacao:'', status:'ativa' }
   const [form, setForm] = useState(livraria ? { ...livraria, editora_id: livraria.editora_id ?? '', inauguracao: livraria.inauguracao ?? '' } : empty)
   const [saving, setSaving] = useState(false)
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
+
   async function salvar() {
     if (!form.nome.trim()) return
     setSaving(true)
     try { await onSave({ ...form, editora_id: form.editora_id || null, inauguracao: form.inauguracao || null }); onClose() }
     catch (e) { console.error(e) } finally { setSaving(false) }
   }
+
   return (
     <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth:460 }}>
+      <div className="modal" style={{ maxWidth:500, maxHeight:'90vh', overflowY:'auto' }}>
         <div className="modal-header">
           <h2 className="modal-title">{livraria ? 'Editar livraria' : 'Nova livraria'}</h2>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
@@ -325,9 +350,20 @@ function ModalLivraria({ livraria, editoras, onSave, onClose }) {
             </select>
           </div>
           <div className="form-group"><label className="form-label">Contato</label><input className="form-input" value={form.contato ?? ''} onChange={e => set('contato', e.target.value)} placeholder="Nome" /></div>
-          <div className="form-group"><label className="form-label">Instagram</label><input className="form-input" value={form.instagram ?? ''} onChange={e => set('instagram', e.target.value)} placeholder="@livraria" /></div>
           <div className="form-group"><label className="form-label">Site</label><input className="form-input" value={form.site ?? ''} onChange={e => set('site', e.target.value)} placeholder="https://" /></div>
+          <div className="form-group"><label className="form-label">Instagram</label><input className="form-input" value={form.instagram ?? ''} onChange={e => set('instagram', e.target.value)} placeholder="@livraria" /></div>
+          <div className="form-group"><label className="form-label">YouTube</label><input className="form-input" value={form.youtube ?? ''} onChange={e => set('youtube', e.target.value)} placeholder="@canal" /></div>
           <div className="form-group"><label className="form-label">Inauguração</label><input className="form-input" type="date" value={form.inauguracao ?? ''} onChange={e => set('inauguracao', e.target.value)} /></div>
+          <div className="form-group">
+            <label className="form-label">Status</label>
+            <select className="form-select" value={form.status || 'ativa'} onChange={e => set('status', e.target.value)}>
+              {STATUS_LIVRARIA.map(s => <option key={s} value={s}>{STATUS_COR[s]?.label || s}</option>)}
+            </select>
+          </div>
+          <div className="form-group" style={{ gridColumn:'1/-1' }}>
+            <label className="form-label">Observação</label>
+            <textarea className="form-textarea" rows={2} value={form.observacao ?? ''} onChange={e => set('observacao', e.target.value)} placeholder="Observações sobre a livraria" />
+          </div>
         </div>
         <div className="form-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
@@ -338,6 +374,7 @@ function ModalLivraria({ livraria, editoras, onSave, onClose }) {
   )
 }
 
+// ── MODAL IMPORTAR ─────────────────────────────────────────
 function ModalImportar({ tipo, editoras, onClose, onImported }) {
   const fileRef = useRef()
   const [linhas, setLinhas] = useState([])
@@ -357,10 +394,10 @@ function ModalImportar({ tipo, editoras, onClose, onImported }) {
       XLSX.writeFile(wb, 'template_editoras.xlsx')
     } else {
       const ws = XLSX.utils.aoa_to_sheet([
-        ['Editora (nome exato)','Contato Editora','Email Editora','Nome Livraria','Site Livraria','Contato Livraria','Email Livraria','Telefone','Data Contrato','Data Inauguração','Observação'],
-        ['Editora Exemplo','João Silva','joao@ex.com','Livraria Exemplo','https://livraria.com','Maria Lima','maria@ex.com','(11) 99999-0000','01/01/2024','15/03/2024',''],
+        ['Nome Livraria','Editora (nome exato)','Contato','Site','Instagram','YouTube','Data Inauguração (dd/mm/aaaa)','Observação','Status (ativa/encerramento/pendente)'],
+        ['Livraria Exemplo','Editora Exemplo','Maria Lima','https://livraria.com','@livraria','@canal','15/03/2024','Observação aqui','ativa'],
       ])
-      ws['!cols'] = [28,20,24,24,24,20,24,16,14,14,20].map(w => ({ wch:w }))
+      ws['!cols'] = [24,24,16,24,14,14,22,24,16].map(w => ({ wch:w }))
       XLSX.utils.book_append_sheet(wb, ws, 'Livrarias')
       XLSX.writeFile(wb, 'template_livrarias.xlsx')
     }
@@ -369,7 +406,7 @@ function ModalImportar({ tipo, editoras, onClose, onImported }) {
   function processar(file) {
     const reader = new FileReader()
     reader.onload = e => {
-      const wb = XLSX.read(e.target.result, { type:'array', cellDates:true })
+      const wb = XLSX.read(e.target.result, { type:'array', cellDates:false })
       const ws = wb.Sheets[wb.SheetNames[0]]
       const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' })
       setLinhas(rows.slice(1).filter(r => r[0]?.toString().trim()))
@@ -420,7 +457,9 @@ function ModalImportar({ tipo, editoras, onClose, onImported }) {
               {linhas.map((l, i) => (
                 <div key={i} style={{ padding:'8px 14px', borderBottom:'1px solid var(--border)', fontSize:13, display:'flex', gap:12 }}>
                   <span style={{ fontWeight:600, color:'var(--text)', flex:1 }}>{l[0]}</span>
-                  <span style={{ fontSize:11, color: l[7] && l[7].toString().toLowerCase() !== 'ativa' ? '#ef4444' : 'var(--text-muted)' }}>{l[7]}</span>
+                  <span style={{ fontSize:11, color: l[tipo === 'editora' ? 7 : 8] && String(l[tipo === 'editora' ? 7 : 8]).toLowerCase() !== 'ativa' ? '#ef4444' : 'var(--text-muted)' }}>
+                    {l[tipo === 'editora' ? 7 : 8]}
+                  </span>
                 </div>
               ))}
             </div>
@@ -436,68 +475,39 @@ function ModalImportar({ tipo, editoras, onClose, onImported }) {
   )
 }
 
-function Celula({ children, width = 140 }) {
-  const texto = typeof children === 'string' ? children : undefined
-  return (
-    <td style={{ padding:'7px 10px', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)', fontSize:12, color:'var(--text)', maxWidth:width, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={texto}>
-      {children != null && children !== '' ? children : <span style={{ color:'var(--border)' }}>—</span>}
-    </td>
-  )
-}
-
-function BarraSeleção({ selecionados, total, onSelecionarTodos, onDeselecionarTodos, onExcluir, excluindo }) {
-  if (selecionados === 0) return null
-  return (
-    <div style={{ display:'flex', alignItems:'center', gap:12, padding:'8px 14px', background:'var(--accent-glow)', border:'1px solid var(--accent)', borderRadius:8, marginBottom:12 }}>
-      <span style={{ fontSize:13, color:'var(--accent)', fontWeight:600 }}>{selecionados} selecionado{selecionados !== 1 ? 's' : ''}</span>
-      <button className="btn btn-ghost btn-sm" onClick={onSelecionarTodos} style={{ fontSize:12 }}>Selecionar todos ({total})</button>
-      <button className="btn btn-ghost btn-sm" onClick={onDeselecionarTodos} style={{ fontSize:12 }}>Limpar seleção</button>
-      <button onClick={onExcluir} disabled={excluindo}
-        style={{ marginLeft:'auto', background:'#ef4444', color:'#fff', border:'none', borderRadius:6, padding:'5px 14px', cursor:'pointer', fontSize:12, fontWeight:600, display:'flex', alignItems:'center', gap:5 }}>
-        <Trash2 size={12} /> {excluindo ? 'Removendo...' : `Remover ${selecionados}`}
-      </button>
-    </div>
-  )
-}
-
 // ── ABA EDITORAS ───────────────────────────────────────────
 function AbaEditoras({ editoras, livrarias, setEditoras, isAdmin, showToast }) {
   const [ordem, setOrdem] = useState(ORDEM_DEFAULT_EDITORAS)
   const [visiveis, setVisiveis] = useState(VISIVEIS_DEFAULT_EDITORAS)
   const [showColSel, setShowColSel] = useState(false)
-  const [filtros, setFiltros] = useState({}) // { colKey: ['val1','val2'] }
+  const [filtros, setFiltros] = useState({})
   const [buscaNome, setBuscaNome] = useState('')
   const [modal, setModal] = useState(null)
   const [importar, setImportar] = useState(false)
   const [selecionados, setSelecionados] = useState(new Set())
   const [excluindo, setExcluindo] = useState(false)
 
-  // Mapa editora_id → livraria
   const livrariaPorEditora = {}
   for (const l of livrarias) { if (l.editora_id) livrariaPorEditora[l.editora_id] = l }
 
-  // Adicionar livraria como campo virtual em cada editora para filtros
   const editorasComLivraria = editoras.map(e => ({
     ...e,
     livraria: livrariaPorEditora[e.id]?.nome || '',
   }))
 
   const colsAtivas = ordem
-    .filter(k => {
-      const c = TODAS_COLUNAS_EDITORAS.find(x => x.key === k)
-      return c && (c.fixo || visiveis.includes(k))
-    })
+    .filter(k => { const c = TODAS_COLUNAS_EDITORAS.find(x => x.key === k); return c && (c.fixo || visiveis.includes(k)) })
     .map(k => TODAS_COLUNAS_EDITORAS.find(c => c.key === k))
     .filter(Boolean)
 
   const lista = editorasComLivraria.filter(e => {
     if (buscaNome && !e.nome?.toLowerCase().includes(buscaNome.toLowerCase())) return false
     for (const [col, vals] of Object.entries(filtros)) {
-      if (!vals || !vals.length) continue
+      if (!vals?.length) continue
       let v = ''
       if (col === 'grupo_id') v = GRUPOS.find(g => g.id === e.grupo_id)?.romano || ''
       else if (col === 'status_parceria') v = getStatusSafe(e.status_parceria).label
-      else v = e[col] ? String(e[col]) : ''
+      else v = e[col] != null ? String(e[col]) : ''
       if (!vals.includes(v) && !(vals.includes('(vazio)') && !v)) return false
     }
     return true
@@ -512,58 +522,50 @@ function AbaEditoras({ editoras, livrarias, setEditoras, isAdmin, showToast }) {
       await desativarEditorasLote([...selecionados])
       setEditoras(prev => prev.filter(e => !selecionados.has(e.id)))
       setSelecionados(new Set())
-      showToast(`${selecionados.size} removida${selecionados.size !== 1 ? 's' : ''}!`)
-    } catch (e) { console.error(e) } finally { setExcluindo(false) }
+      showToast(`${selecionados.size} editora${selecionados.size !== 1 ? 's removidas' : ' removida'}!`)
+    } catch (e) { console.error(e); showToast('Erro ao remover editoras.', 'error') }
+    finally { setExcluindo(false) }
   }
 
   async function handleSalvar(form) {
-    if (modal === 'new') { const nova = await createEditora(form); setEditoras(prev => [...prev, nova]); showToast('Editora cadastrada!') }
-    else { const upd = await updateEditora(modal.id, form); setEditoras(prev => prev.map(e => e.id === upd.id ? upd : e)); showToast('Editora atualizada!') }
+    try {
+      if (modal === 'new') { const nova = await createEditora(form); setEditoras(prev => [...prev, nova]); showToast('Editora cadastrada!') }
+      else { const upd = await updateEditora(modal.id, form); setEditoras(prev => prev.map(e => e.id === upd.id ? upd : e)); showToast('Editora atualizada!') }
+    } catch (e) { showToast('Erro ao salvar editora.', 'error') }
   }
 
   async function handleExcluir(e) {
     if (!window.confirm(`Remover ${e.nome}?`)) return
-    await desativarEditora(e.id); setEditoras(prev => prev.filter(x => x.id !== e.id)); showToast('Editora removida!')
+    try {
+      await desativarEditora(e.id); setEditoras(prev => prev.filter(x => x.id !== e.id)); showToast('Editora removida!')
+    } catch { showToast('Erro ao remover editora.', 'error') }
   }
 
   function renderCelula(e, key) {
     if (key === 'classificacao') return e.classificacao ? <span style={{ fontWeight:800, color:CLASS_COR[e.classificacao]||'var(--accent)' }}>{e.classificacao}</span> : null
     if (key === 'nome') return e.nome
     if (key === 'livraria') return e.livraria || null
-    if (key === 'status_parceria') {
-      const s = getStatusSafe(e.status_parceria)
-      return <span style={{ fontSize:11, fontWeight:700, color:s.cor, background:s.bg, padding:'2px 8px', borderRadius:20, whiteSpace:'nowrap' }}>{s.label}</span>
-    }
+    if (key === 'status_parceria') { const s = getStatusSafe(e.status_parceria); return <span style={{ fontSize:11, fontWeight:700, color:s.cor, background:s.bg, padding:'2px 8px', borderRadius:20, whiteSpace:'nowrap' }}>{s.label}</span> }
     if (key === 'grupo_id') { const g = GRUPOS.find(x => x.id === e.grupo_id); return g ? g.romano : null }
     if (key === 'tem_grupo') return e.tem_grupo ? '✓' : null
     if (key === 'selos') return e.selos_editoriais?.map(s => s.nome).join(', ') || null
-    if (key === 'instagram' && e.instagram)
-      return <a href={`https://instagram.com/${e.instagram.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color:'var(--accent)' }}>{e.instagram}</a>
+    if (key === 'instagram' && e.instagram) return <a href={`https://instagram.com/${e.instagram.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color:'var(--accent)' }}>{e.instagram}</a>
     return e[key] || null
   }
-
-  const filtrosAtivos = Object.values(filtros).some(v => v && v.length)
 
   return (
     <div>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12, flexWrap:'wrap', gap:10 }}>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           <span style={{ fontSize:13, color:'var(--text-muted)' }}>{lista.length} editora{lista.length !== 1 ? 's' : ''}</span>
-          {filtrosAtivos && <button className="btn btn-ghost btn-sm" onClick={() => setFiltros({})} style={{ fontSize:11 }}><X size={11} /> Limpar filtros</button>}
+          {Object.values(filtros).some(v => v?.length) && <button className="btn btn-ghost btn-sm" onClick={() => setFiltros({})} style={{ fontSize:11 }}><X size={11} /> Limpar filtros</button>}
         </div>
         <div style={{ display:'flex', gap:8, alignItems:'center' }}>
           <input value={buscaNome} onChange={e => setBuscaNome(e.target.value)} placeholder="Buscar nome..."
             style={{ padding:'6px 10px', borderRadius:8, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text)', fontSize:12, minWidth:160 }} />
           <div style={{ position:'relative' }}>
             <button className="btn btn-ghost btn-sm" onClick={() => setShowColSel(v => !v)}><Settings2 size={13} /> Colunas</button>
-            {showColSel && (
-              <SeletorColunas
-                colunas={TODAS_COLUNAS_EDITORAS}
-                ordem={ordem} onOrdemChange={setOrdem}
-                visiveis={visiveis} onVisiveisChange={setVisiveis}
-                onClose={() => setShowColSel(false)}
-              />
-            )}
+            {showColSel && <SeletorColunas colunas={TODAS_COLUNAS_EDITORAS} ordem={ordem} onOrdemChange={setOrdem} visiveis={visiveis} onVisiveisChange={setVisiveis} onClose={() => setShowColSel(false)} />}
           </div>
           {isAdmin && <>
             <button className="btn btn-ghost btn-sm" onClick={() => setImportar(true)}><Upload size={13} /> Importar</button>
@@ -582,18 +584,14 @@ function AbaEditoras({ editoras, livrarias, setEditoras, isAdmin, showToast }) {
           <thead>
             <tr style={{ background:'var(--surface-2)' }}>
               <th style={{ padding:'8px 10px', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', width:36 }}>
-                <input type="checkbox"
-                  checked={lista.length > 0 && lista.every(e => selecionados.has(e.id))}
+                <input type="checkbox" checked={lista.length > 0 && lista.every(e => selecionados.has(e.id))}
                   onChange={e => e.target.checked ? setSelecionados(new Set(lista.map(x => x.id))) : setSelecionados(new Set())}
                   style={{ accentColor:'var(--accent)', cursor:'pointer' }} />
               </th>
-              {colsAtivas.map(c => (
-                c.fixo
-                  ? <th key={c.key} style={{ padding:'8px 10px', textAlign:'left', fontWeight:700, color:'var(--text-muted)', fontSize:11, textTransform:'uppercase', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', whiteSpace:'nowrap' }}>{c.label}</th>
-                  : <ThFiltro key={c.key} label={c.label} colKey={c.key} dados={editorasComLivraria}
-                      filtroAtivo={filtros[c.key]}
-                      onFiltro={(col, vals) => setFiltros(f => ({ ...f, [col]: vals }))} />
-              ))}
+              {colsAtivas.map(c => c.fixo
+                ? <th key={c.key} style={{ padding:'8px 10px', textAlign:'left', fontWeight:700, color:'var(--text-muted)', fontSize:11, textTransform:'uppercase', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', whiteSpace:'nowrap' }}>{c.label}</th>
+                : <ThFiltro key={c.key} label={c.label} colKey={c.key} dados={editorasComLivraria} filtroAtivo={filtros[c.key]} onFiltro={(col, vals) => setFiltros(f => ({ ...f, [col]: vals }))} />
+              )}
               {isAdmin && <th style={{ padding:'8px 10px', borderBottom:'2px solid var(--border)', width:60 }}></th>}
             </tr>
           </thead>
@@ -603,8 +601,7 @@ function AbaEditoras({ editoras, livrarias, setEditoras, isAdmin, showToast }) {
             ) : lista.map((e, i) => {
               const sel = selecionados.has(e.id)
               return (
-                <tr key={e.id}
-                  style={{ background: sel ? 'var(--accent-glow)' : i % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)', transition:'background 0.1s' }}
+                <tr key={e.id} style={{ background: sel ? 'var(--accent-glow)' : i % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)', transition:'background 0.1s' }}
                   onMouseEnter={el => { if (!sel) el.currentTarget.style.background = 'var(--accent-glow)' }}
                   onMouseLeave={el => { if (!sel) el.currentTarget.style.background = i % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)' }}>
                   <td style={{ padding:'7px 10px', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)' }}>
@@ -631,8 +628,7 @@ function AbaEditoras({ editoras, livrarias, setEditoras, isAdmin, showToast }) {
       </div>
 
       {modal && <ModalEditora editora={modal === 'new' ? null : modal} onSave={handleSalvar} onClose={() => setModal(null)} />}
-      {importar && <ModalImportar tipo="editora" editoras={editoras} onClose={() => setImportar(false)}
-        onImported={async () => { setEditoras(await getEditorasCompletas()); showToast('Editoras importadas!') }} />}
+      {importar && <ModalImportar tipo="editora" editoras={editoras} onClose={() => setImportar(false)} onImported={async () => { setEditoras(await getEditorasCompletas()); showToast('Editoras importadas com sucesso!') }} />}
     </div>
   )
 }
@@ -655,18 +651,15 @@ function AbaLivrarias({ livrarias, setLivrarias, editoras, isAdmin, showToast })
   }))
 
   const colsAtivas = ordem
-    .filter(k => {
-      const c = COLUNAS_LIVRARIAS.find(x => x.key === k)
-      return c && (c.fixo || visiveis.includes(k))
-    })
-    .map(k => COLUNAS_LIVRARIAS.find(c => c.key === k))
+    .filter(k => { const c = TODAS_COLUNAS_LIVRARIAS.find(x => x.key === k); return c && (c.fixo || visiveis.includes(k)) })
+    .map(k => TODAS_COLUNAS_LIVRARIAS.find(c => c.key === k))
     .filter(Boolean)
 
   const lista = livrariaComEditora.filter(l => {
     if (buscaNome && !l.nome?.toLowerCase().includes(buscaNome.toLowerCase())) return false
     for (const [col, vals] of Object.entries(filtros)) {
-      if (!vals || !vals.length) continue
-      const v = l[col] ? String(l[col]) : ''
+      if (!vals?.length) continue
+      let v = col === 'status' ? getStatusSafe(l.status).label : (l[col] != null ? String(l[col]) : '')
       if (!vals.includes(v) && !(vals.includes('(vazio)') && !v)) return false
     }
     return true
@@ -681,25 +674,30 @@ function AbaLivrarias({ livrarias, setLivrarias, editoras, isAdmin, showToast })
       await desativarLivrariaLote([...selecionados])
       setLivrarias(prev => prev.filter(l => !selecionados.has(l.id)))
       setSelecionados(new Set())
-      showToast(`${selecionados.size} removida${selecionados.size !== 1 ? 's' : ''}!`)
-    } catch (e) { console.error(e) } finally { setExcluindo(false) }
+      showToast(`${selecionados.size} livraria${selecionados.size !== 1 ? 's removidas' : ' removida'}!`)
+    } catch { showToast('Erro ao remover livrarias.', 'error') }
+    finally { setExcluindo(false) }
   }
 
   async function handleSalvar(form) {
-    if (modal === 'new') { const nova = await createLivraria(form); setLivrarias(prev => [...prev, nova].sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR'))); showToast('Livraria cadastrada!') }
-    else { const upd = await updateLivraria(modal.id, form); setLivrarias(prev => prev.map(l => l.id === upd.id ? upd : l)); showToast('Livraria atualizada!') }
+    try {
+      if (modal === 'new') { const nova = await createLivraria(form); setLivrarias(prev => [...prev, nova].sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR'))); showToast('Livraria cadastrada!') }
+      else { const upd = await updateLivraria(modal.id, form); setLivrarias(prev => prev.map(l => l.id === upd.id ? upd : l)); showToast('Livraria atualizada!') }
+    } catch { showToast('Erro ao salvar livraria.', 'error') }
   }
 
   async function handleExcluir(l) {
     if (!window.confirm(`Remover ${l.nome}?`)) return
-    await desativarLivraria(l.id); setLivrarias(prev => prev.filter(x => x.id !== l.id)); showToast('Livraria removida!')
+    try { await desativarLivraria(l.id); setLivrarias(prev => prev.filter(x => x.id !== l.id)); showToast('Livraria removida!') }
+    catch { showToast('Erro ao remover livraria.', 'error') }
   }
 
   function renderCelula(l, key) {
     if (key === 'editora') return l.editora || null
-    if (key === 'site' && l.site) return <a href={l.site} target="_blank" rel="noreferrer" style={{ color:'var(--accent)' }}>🔗 site</a>
+    if (key === 'site' && l.site) return <a href={l.site} target="_blank" rel="noreferrer" style={{ color:'var(--accent)', textDecoration:'underline' }}>{l.site}</a>
     if (key === 'instagram' && l.instagram) return <a href={`https://instagram.com/${l.instagram.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color:'var(--accent)' }}>{l.instagram}</a>
-    if (key === 'inauguracao' && l.inauguracao) return new Date(l.inauguracao).toLocaleDateString('pt-BR')
+    if (key === 'inauguracao' && l.inauguracao) return new Date(l.inauguracao + 'T12:00:00').toLocaleDateString('pt-BR')
+    if (key === 'status') { const s = getStatusSafe(l.status); return <span style={{ fontSize:11, fontWeight:700, color:s.cor, background:s.bg, padding:'2px 8px', borderRadius:20, whiteSpace:'nowrap' }}>{s.label}</span> }
     return l[key] || null
   }
 
@@ -715,7 +713,7 @@ function AbaLivrarias({ livrarias, setLivrarias, editoras, isAdmin, showToast })
             style={{ padding:'6px 10px', borderRadius:8, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text)', fontSize:12, minWidth:160 }} />
           <div style={{ position:'relative' }}>
             <button className="btn btn-ghost btn-sm" onClick={() => setShowColSel(v => !v)}><Settings2 size={13} /> Colunas</button>
-            {showColSel && <SeletorColunas colunas={COLUNAS_LIVRARIAS} ordem={ordem} onOrdemChange={setOrdem} visiveis={visiveis} onVisiveisChange={setVisiveis} onClose={() => setShowColSel(false)} />}
+            {showColSel && <SeletorColunas colunas={TODAS_COLUNAS_LIVRARIAS} ordem={ordem} onOrdemChange={setOrdem} visiveis={visiveis} onVisiveisChange={setVisiveis} onClose={() => setShowColSel(false)} />}
           </div>
           {isAdmin && <>
             <button className="btn btn-ghost btn-sm" onClick={() => setImportar(true)}><Upload size={13} /> Importar</button>
@@ -738,13 +736,10 @@ function AbaLivrarias({ livrarias, setLivrarias, editoras, isAdmin, showToast })
                   onChange={e => e.target.checked ? setSelecionados(new Set(lista.map(x => x.id))) : setSelecionados(new Set())}
                   style={{ accentColor:'var(--accent)', cursor:'pointer' }} />
               </th>
-              {colsAtivas.map(c => (
-                c.fixo
-                  ? <th key={c.key} style={{ padding:'8px 10px', textAlign:'left', fontWeight:700, color:'var(--text-muted)', fontSize:11, textTransform:'uppercase', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', whiteSpace:'nowrap' }}>{c.label}</th>
-                  : <ThFiltro key={c.key} label={c.label} colKey={c.key} dados={livrariaComEditora}
-                      filtroAtivo={filtros[c.key]}
-                      onFiltro={(col, vals) => setFiltros(f => ({ ...f, [col]: vals }))} />
-              ))}
+              {colsAtivas.map(c => c.fixo
+                ? <th key={c.key} style={{ padding:'8px 10px', textAlign:'left', fontWeight:700, color:'var(--text-muted)', fontSize:11, textTransform:'uppercase', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', whiteSpace:'nowrap' }}>{c.label}</th>
+                : <ThFiltro key={c.key} label={c.label} colKey={c.key} dados={livrariaComEditora} filtroAtivo={filtros[c.key]} onFiltro={(col, vals) => setFiltros(f => ({ ...f, [col]: vals }))} />
+              )}
               {isAdmin && <th style={{ padding:'8px 10px', borderBottom:'2px solid var(--border)', width:60 }}></th>}
             </tr>
           </thead>
@@ -754,15 +749,14 @@ function AbaLivrarias({ livrarias, setLivrarias, editoras, isAdmin, showToast })
             ) : lista.map((l, i) => {
               const sel = selecionados.has(l.id)
               return (
-                <tr key={l.id}
-                  style={{ background: sel ? 'var(--accent-glow)' : i % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)' }}
+                <tr key={l.id} style={{ background: sel ? 'var(--accent-glow)' : i % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)' }}
                   onMouseEnter={el => { if (!sel) el.currentTarget.style.background = 'var(--accent-glow)' }}
                   onMouseLeave={el => { if (!sel) el.currentTarget.style.background = i % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)' }}>
                   <td style={{ padding:'7px 10px', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)' }}>
                     <input type="checkbox" checked={sel} onChange={() => toggleSel(l.id)} style={{ accentColor:'var(--accent)', cursor:'pointer' }} />
                   </td>
                   {colsAtivas.map(c => (
-                    <Celula key={c.key} width={c.key === 'nome' || c.key === 'editora' ? 200 : 160}>
+                    <Celula key={c.key} width={c.key === 'nome' || c.key === 'editora' || c.key === 'observacao' ? 200 : c.key === 'site' ? 180 : 140}>
                       {renderCelula(l, c.key)}
                     </Celula>
                   ))}
@@ -782,8 +776,7 @@ function AbaLivrarias({ livrarias, setLivrarias, editoras, isAdmin, showToast })
       </div>
 
       {modal && <ModalLivraria livraria={modal === 'new' ? null : modal} editoras={editoras} onSave={handleSalvar} onClose={() => setModal(null)} />}
-      {importar && <ModalImportar tipo="livraria" editoras={editoras} onClose={() => setImportar(false)}
-        onImported={async () => { setLivrarias(await getLivrarias()); showToast('Livrarias importadas!') }} />}
+      {importar && <ModalImportar tipo="livraria" editoras={editoras} onClose={() => setImportar(false)} onImported={async () => { setLivrarias(await getLivrarias()); showToast('Livrarias importadas com sucesso!') }} />}
     </div>
   )
 }
@@ -799,12 +792,11 @@ function AbaGrupos({ editoras, livrarias }) {
         const eds = editoras.filter(e => e.grupo_id === grupo.id)
         const comLiv = eds.filter(e => livrariaPorEditora[e.id]).sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR'))
         const semLiv = eds.filter(e => !livrariaPorEditora[e.id]).sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR'))
-        const titulo = formatarTituloGrupo(grupo.romano, grupo.label)
 
         return (
           <div key={grupo.id} style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:12, overflow:'hidden' }}>
             <div style={{ padding:'12px 16px', background:'var(--surface-2)', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <span style={{ fontSize:12, fontWeight:700, color:'var(--accent)' }}>{titulo}</span>
+              <span style={{ fontSize:12, fontWeight:700, color:'var(--accent)' }}>{grupo.romano} - {grupo.label}</span>
               <span style={{ fontSize:11, color:'var(--text-muted)', background:'var(--surface-3)', padding:'2px 8px', borderRadius:20, flexShrink:0, marginLeft:8 }}>{eds.length}</span>
             </div>
             <div style={{ padding:'8px 0' }}>
@@ -854,7 +846,7 @@ export default function EditorasLivrarias() {
     setLoading(true)
     Promise.all([getEditorasCompletas(), getLivrarias()])
       .then(([eds, livs]) => { setEditoras(eds); setLivrarias(livs) })
-      .catch(console.error)
+      .catch(() => showToast('Erro ao carregar dados.', 'error'))
       .finally(() => setLoading(false))
   }, [])
 
