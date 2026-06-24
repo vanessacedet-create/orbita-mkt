@@ -259,7 +259,7 @@ function ModalImportar({ tipo, editoras, onClose, onImported }) {
       onClose()
     } catch(e) {
       console.error(e)
-      setErro(e?.message || 'Erro ao importar. Verifique o console.')
+      setErro('Erro ao importar: ' + (e?.message || 'Verifique os dados e tente novamente.'))
     } finally { setImportando(false) }
   }
 
@@ -632,7 +632,4 @@ export default function EditorasLivrarias() {
         </>
       )}
 
-      {toast&&<div className={`toast ${toast.type}`}>{toast.msg}</div>}
-    </div>
-  )
-}
+      {toast&&<div className={`toast ${toast.type}`}>{toast.msg}<
