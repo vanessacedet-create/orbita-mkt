@@ -356,7 +356,7 @@ function AbaEditoras({ editoras, setEditoras, isAdmin, showToast }) {
   function renderCelula(e, key) {
     if (key === 'classificacao') return e.classificacao ? <span style={{ fontWeight:800, color:CLASS_COR[e.classificacao] || 'var(--accent)' }}>{e.classificacao}</span> : null
     if (key === 'status_parceria') {
-      const s = STATUS_COR[e.status_parceria || 'ativa']
+      const s = STATUS_COR[e.status_parceria] || STATUS_COR['ativa']
       return <span style={{ fontSize:11, fontWeight:700, color:s.cor, background:s.bg, padding:'2px 8px', borderRadius:20, whiteSpace:'nowrap' }}>{s.label}</span>
     }
     if (key === 'grupo_id') return e.grupo_id ? `${e.grupo_id} · ${GRUPOS.find(g => g.id === e.grupo_id)?.label || ''}` : null
@@ -566,8 +566,8 @@ function AbaGrupos({ editoras, livrarias }) {
                     <div key={e.id} style={{ padding:'7px 16px', display:'flex', alignItems:'center', gap:8, borderBottom:'1px solid var(--border)' }}>
                       {e.classificacao && <span style={{ fontSize:11, fontWeight:800, color:CLASS_COR[e.classificacao] || 'var(--accent)', minWidth:16 }}>{e.classificacao}</span>}
                       <span style={{ fontSize:13, color:'var(--text)', flex:1 }}>{e.nome}</span>
-                      <span style={{ fontSize:11, fontWeight:700, color:STATUS_COR[e.status_parceria || 'ativa']?.cor, background:STATUS_COR[e.status_parceria || 'ativa']?.bg, padding:'2px 8px', borderRadius:20 }}>
-                        {STATUS_COR[e.status_parceria || 'ativa']?.label}
+                      <span style={{ fontSize:11, fontWeight:700, color:(STATUS_COR[e.status_parceria] || STATUS_COR['ativa']).cor, background:(STATUS_COR[e.status_parceria] || STATUS_COR['ativa']).bg, padding:'2px 8px', borderRadius:20 }}>
+                        {(STATUS_COR[e.status_parceria] || STATUS_COR['ativa']).label}
                       </span>
                     </div>
                   ))}
