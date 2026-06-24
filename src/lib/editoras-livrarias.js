@@ -92,7 +92,6 @@ export async function importarEditorasPlanilha(rows) {
     posicionamento:  r[5]?.toString().trim() || null,
     grupo_id:        GRUPO_MAPA[r[6]?.toString().trim()] || null,
     status_parceria: r[7]?.toString().trim() || 'ativa',
-    tem_livraria:    r[1]?.toString().trim() !== '-' && r[1]?.toString().trim() !== '',
   })).filter(r => r.nome)
 
   // Inserir em lotes de 50 para evitar limite do Supabase
