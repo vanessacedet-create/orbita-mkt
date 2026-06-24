@@ -12,7 +12,7 @@ export const GRUPOS = [
 ]
 
 export const STATUS_PARCERIA = ['ativa', 'encerramento', 'finalizada', 'pendente']
-export const STATUS_LIVRARIA = ['ativa', 'encerramento', 'finalizada', 'pendente']
+export const STATUS_LIVRARIA = ['ativa', 'em_analise', 'encerramento', 'finalizada']
 
 function ordenarEditoras(lista) {
   const ordemClass = ['A','B','C','D','E','F','G','H']
