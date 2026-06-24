@@ -83,8 +83,6 @@ export async function desativarEditora(id) {
 }
 
 export async function importarEditorasPlanilha(rows) {
-  // Colunas esperadas na planilha:
-  // A=Nome, B=Livraria, C=Macro, D=Nicho, E=Sub-nicho, F=Posicionamento, G=Grupo(I-VIII), H=Status
   const GRUPO_MAPA = { 'I':1,'II':2,'III':3,'IV':4,'V':5,'VI':6,'VII':7,'VIII':8 }
   const data = rows.map(r => ({
     nome:            r[0]?.toString().trim() || null,
@@ -96,12 +94,20 @@ export async function importarEditorasPlanilha(rows) {
     status_parceria: r[7]?.toString().trim() || 'ativa',
     tem_livraria:    r[1]?.toString().trim() !== '-' && r[1]?.toString().trim() !== '',
   })).filter(r => r.nome)
-  const { data: inserted, error } = await supabase
-    .from('editoras_parceiras')
-    .insert(data)
-    .select('*')
-  if (error) throw error
-  return inserted || []
+
+  // Inserir em lotes de 50 para evitar limite do Supabase
+  const LOTE = 50
+  const resultado = []
+  for (let i = 0; i < data.length; i += LOTE) {
+    const lote = data.slice(i, i + LOTE)
+    const { data: inserted, error } = await supabase
+      .from('editoras_parceiras')
+      .insert(lote)
+      .select('*')
+    if (error) throw error
+    resultado.push(...(inserted || []))
+  }
+  return resultado
 }
 
 // ── LIVRARIAS ──────────────────────────────────────────────
