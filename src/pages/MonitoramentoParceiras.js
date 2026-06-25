@@ -611,10 +611,24 @@ export default function MonitoramentoParceiras() {
 
   const [editoras, setEditoras] = useState([])
   const [todasLivrarias, setTodasLivrarias] = useState([])
-  const [livrariasSel, setLivrariasSel] = useState([]) // IDs selecionadas para parceiras
-  const [livrariasCriatSel, setLivrariasCriatSel] = useState([]) // IDs selecionadas para criativo
+  const [livrariasSel, setLivrariasSel] = useState(() => {
+    try { const s = localStorage.getItem('monitor_livParceiras'); return s ? JSON.parse(s) : null } catch { return null }
+  })
+  const [livrariasCriatSel, setLivrariasCriatSel] = useState(() => {
+    try { const s = localStorage.getItem('monitor_livCriativo'); return s ? JSON.parse(s) : null } catch { return null }
+  })
   const [showSeletorLivParceiras, setShowSeletorLivParceiras] = useState(false)
   const [showSeletorLivCriativo, setShowSeletorLivCriativo] = useState(false)
+
+  function setLivrariasParceiras(ids) {
+    setLivrariasSel(ids)
+    try { localStorage.setItem('monitor_livParceiras', JSON.stringify(ids)) } catch {}
+  }
+
+  function setLivrariasCriativo(ids) {
+    setLivrariasCriatSel(ids)
+    try { localStorage.setItem('monitor_livCriativo', JSON.stringify(ids)) } catch {}
+  }
 
   const [checkagemMes, setCheckagemMes] = useState([])
   const [formatoSel, setFormatoSel] = useState('story')
@@ -645,10 +659,19 @@ export default function MonitoramentoParceiras() {
       const [eds, livs] = await Promise.all([getEditorasParceiras(), getLivrarias()])
       setEditoras(eds)
       setTodasLivrarias(livs)
-      // Por padrão, todas selecionadas
       const ids = livs.map(l => l.id)
-      setLivrariasSel(ids)
-      setLivrariasCriatSel(ids)
+      // Só inicializa com todas se não houver seleção salva
+      setLivrariasSel(prev => {
+        if (prev === null) { try { localStorage.setItem('monitor_livParceiras', JSON.stringify(ids)) } catch {}; return ids }
+        // Filtra IDs que ainda existem
+        const validos = prev.filter(id => ids.includes(id))
+        return validos.length > 0 ? validos : ids
+      })
+      setLivrariasCriatSel(prev => {
+        if (prev === null) { try { localStorage.setItem('monitor_livCriativo', JSON.stringify(ids)) } catch {}; return ids }
+        const validos = prev.filter(id => ids.includes(id))
+        return validos.length > 0 ? validos : ids
+      })
     } catch (e) { console.error(e) }
   }
 
@@ -862,11 +885,11 @@ export default function MonitoramentoParceiras() {
       {/* Modais */}
       {showSeletorLivParceiras && (
         <ModalSeletorLivrarias livrarias={todasLivrarias} selecionadas={livrariasSel}
-          onConfirm={setLivrariasSel} onClose={() => setShowSeletorLivParceiras(false)} />
+          onConfirm={setLivrariasParceiras} onClose={() => setShowSeletorLivParceiras(false)} />
       )}
       {showSeletorLivCriativo && (
         <ModalSeletorLivrarias livrarias={todasLivrarias} selecionadas={livrariasCriatSel}
-          onConfirm={setLivrariasCriatSel} onClose={() => setShowSeletorLivCriativo(false)} />
+          onConfirm={setLivrariasCriativo} onClose={() => setShowSeletorLivCriativo(false)} />
       )}
       {painelEditora && (
         <>
