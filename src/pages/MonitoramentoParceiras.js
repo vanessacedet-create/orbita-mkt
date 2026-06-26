@@ -3,11 +3,11 @@ import { useAuth } from '../context/AuthContext'
 import {
   getEditorasParceiras, createEditoraParceira, updateEditoraParceira,
   desativarEditoraParceira, importarEditorasPlanilha,
-  getCheckagemMes, upsertCheckagemDia, gerarChecklistDia, deleteCheckagemDia,
+  getCheckagemMes, upsertCheckagemDia, deleteCheckagemDia,
   getObservacoesEditora, createObservacao, deleteObservacao,
 } from '../lib/monitoramento-editoras'
 import { getCheckagemCriativoMes, upsertCheckagemCriativoDia } from '../lib/monitoramento-criativo'
-import { getLivrarias, updateLivraria } from '../lib/editoras-livrarias'
+import { getLivrarias, updateLivraria, getObsFormatoLote, upsertObsFormato } from '../lib/editoras-livrarias'
 import {
   Eye, Plus, X, Upload, ChevronLeft, ChevronRight,
   Pencil, Trash2, MessageSquare, LayoutGrid, List,
@@ -390,32 +390,23 @@ function PainelEditora({ editora, checkagemMes, ano, mes, usuario, onClose }) {
 }
 
 // ── CHECKLIST LIVRARIAS DE ED. PARCEIRAS ───────────────────
-function ViewChecklistParceiras({ livrarias, checkagemMes, formato, dataKey, onMarcar, onGerarDia, onSalvarObsFixa }) {
+function ViewChecklistParceiras({ livrarias, checkagemMes, formato, dataKey, onMarcar, onSalvarObsFixa, obsFormato }) {
   const registrosDoDia = checkagemMes.filter(r => r.formato === formato && r.data_esperada === dataKey)
   const mapa = {}
   for (const r of registrosDoDia) mapa[r.editora_id] = r
-  const semRegistro = livrarias.filter(l => !mapa[l.editora_id])
-  const [gerando, setGerando] = useState(false)
   const [obsFixaAberta, setObsFixaAberta] = useState(null)
   const [textoObsFixa, setTextoObsFixa] = useState('')
   const [notaAberta, setNotaAberta] = useState(null)
   const [textoNota, setTextoNota] = useState('')
 
-  async function gerar() { setGerando(true); try { await onGerarDia() } finally { setGerando(false) } }
-
   if (livrarias.length === 0) return <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '48px 0', fontSize: 13 }}>Nenhuma livraria cadastrada ainda.</div>
 
   return (
     <div>
-      {semRegistro.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 16px', marginBottom: 12, gap: 12 }}>
-          <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{semRegistro.length} livraria{semRegistro.length !== 1 ? 's' : ''} sem checagem neste dia.</span>
-          <button className="btn btn-primary btn-sm" onClick={gerar} disabled={gerando}>{gerando ? 'Gerando...' : 'Gerar checklist para todas'}</button>
-        </div>
-      )}
-      <div style={{ display: 'grid', gridTemplateColumns: '180px 130px 1fr 1fr auto', gap: 8, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '180px 110px 110px 1fr 1fr auto', gap: 8, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
         <span>Livraria</span>
         <span>Instagram</span>
+        <span>Instagram 2</span>
         <span>Observações</span>
         <span>Notas</span>
         <span style={{ minWidth: 220 }}>Status</span>
@@ -426,13 +417,13 @@ function ViewChecklistParceiras({ livrarias, checkagemMes, formato, dataKey, onM
           const reg = mapa[chaveId]
           const status = reg?.status || null
           const nota = reg?.observacao || ''
-          const obsFixa = livraria.observacao || ''
+          const obsFixa = obsFormato?.[livraria.id] || ''
           const editandoObsFixa = obsFixaAberta === livraria.id
           const editandoNota = notaAberta === livraria.id
 
           return (
             <div key={livraria.id}>
-              <div style={{ display: 'grid', gridTemplateColumns: '180px 130px 1fr 1fr auto', gap: 8, alignItems: 'center', padding: '7px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: (editandoObsFixa || editandoNota) ? '8px 8px 0 0' : 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '180px 110px 110px 1fr 1fr auto', gap: 8, alignItems: 'center', padding: '7px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: (editandoObsFixa || editandoNota) ? '8px 8px 0 0' : 8 }}>
                 {/* Livraria */}
                 <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={livraria.nome}>
                   {livraria.nome}
@@ -444,7 +435,13 @@ function ViewChecklistParceiras({ livrarias, checkagemMes, formato, dataKey, onM
                     : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>
                   }
                 </div>
-                {/* Observações — fixo da livraria */}
+                {/* Instagram 2 */}
+                <div style={{ fontSize: 12 }}>
+                  {livraria.instagram2
+                    ? <a href={`https://instagram.com/${livraria.instagram2.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 3 }}><Instagram size={10}/>{livraria.instagram2}</a>
+                    : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>
+                  }
+                </div>
                 <div style={{ fontSize: 12, color: obsFixa ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                   onClick={() => { setObsFixaAberta(editandoObsFixa ? null : livraria.id); setTextoObsFixa(obsFixa); setNotaAberta(null) }}
                   title={obsFixa || 'Clique para adicionar observação fixa'}>
@@ -498,7 +495,7 @@ function ViewChecklistParceiras({ livrarias, checkagemMes, formato, dataKey, onM
 }
 
 // ── CHECKLIST EQUIPE CEDET ─────────────────────────────────
-function ViewChecklistCriativo({ livrarias, checkagemCriativo, formato, dataKey, onMarcar, onSalvarObsFixa }) {
+function ViewChecklistCriativo({ livrarias, checkagemCriativo, formato, dataKey, onMarcar, onSalvarObsFixa, obsFormato }) {
   const registrosDoDia = checkagemCriativo.filter(r => r.formato === formato && r.data_esperada === dataKey)
   const mapa = {}
   for (const r of registrosDoDia) mapa[r.editora_id] = r
@@ -511,9 +508,10 @@ function ViewChecklistCriativo({ livrarias, checkagemCriativo, formato, dataKey,
 
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: '180px 130px 1fr 1fr 130px auto', gap: 8, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '180px 110px 110px 1fr 1fr 130px auto', gap: 8, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
         <span>Livraria</span>
         <span>Instagram</span>
+        <span>Instagram 2</span>
         <span>Observações</span>
         <span>Notas</span>
         <span>Responsável</span>
@@ -526,17 +524,22 @@ function ViewChecklistCriativo({ livrarias, checkagemCriativo, formato, dataKey,
           const status = reg?.status || null
           const responsavel = reg?.responsavel || ''
           const nota = reg?.observacao || ''
-          const obsFixa = livraria.observacao || ''
+          const obsFixa = obsFormato?.[livraria.id] || ''
           const editandoObsFixa = obsFixaAberta === livraria.id
           const editandoNota = notaAberta === livraria.id
 
           return (
             <div key={livraria.id}>
-              <div style={{ display: 'grid', gridTemplateColumns: '180px 130px 1fr 1fr 130px auto', gap: 8, alignItems: 'center', padding: '7px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: (editandoObsFixa || editandoNota) ? '8px 8px 0 0' : 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '180px 110px 110px 1fr 1fr 130px auto', gap: 8, alignItems: 'center', padding: '7px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: (editandoObsFixa || editandoNota) ? '8px 8px 0 0' : 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={livraria.nome}>{livraria.nome}</div>
                 <div style={{ fontSize: 12 }}>
                   {livraria.instagram
                     ? <a href={`https://instagram.com/${livraria.instagram.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 3 }}><Instagram size={10}/>{livraria.instagram}</a>
+                    : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>}
+                </div>
+                <div style={{ fontSize: 12 }}>
+                  {livraria.instagram2
+                    ? <a href={`https://instagram.com/${livraria.instagram2.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 3 }}><Instagram size={10}/>{livraria.instagram2}</a>
                     : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>}
                 </div>
                 <div style={{ fontSize: 12, color: obsFixa ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
@@ -680,7 +683,8 @@ export default function MonitoramentoParceiras() {
     try { localStorage.setItem('monitor_selCriativo', JSON.stringify(novo)) } catch {}
   }
 
-  const [checkagemMes, setCheckagemMes] = useState([])
+  const [obsFormatoParceiras, setObsFormatoParceiras] = useState({}) // { livraria_id: observacao }
+  const [obsFormatoCriativo, setObsFormatoCriativo] = useState({})
   const [formatoSel, setFormatoSel] = useState('story')
   const [dataSel, setDataSel] = useState(hojeKey())
 
@@ -710,6 +714,8 @@ export default function MonitoramentoParceiras() {
   useEffect(() => { carregarDados() }, [])
   useEffect(() => { carregarCheckagemMes() }, [ano, mes])
   useEffect(() => { carregarCheckagemCriativo() }, [ano, mes])
+  useEffect(() => { getObsFormatoLote(formatoSel).then(setObsFormatoParceiras).catch(console.error) }, [formatoSel])
+  useEffect(() => { getObsFormatoLote(formatoCriativoSel).then(setObsFormatoCriativo).catch(console.error) }, [formatoCriativoSel])
 
   async function carregarDados() {
     try {
@@ -799,10 +805,14 @@ export default function MonitoramentoParceiras() {
     } catch (e) { console.error(e); showToast('Erro ao gerar', 'error') }
   }
 
-  async function handleSalvarObsFixa(livrariaId, observacao) {
+  async function handleSalvarObsFixa(livrariaId, observacao, formato, aba) {
     try {
-      await updateLivraria(livrariaId, { observacao })
-      setTodasLivrarias(prev => prev.map(l => l.id === livrariaId ? { ...l, observacao } : l))
+      await upsertObsFormato(livrariaId, formato, observacao)
+      if (aba === 'parceiras') {
+        setObsFormatoParceiras(prev => ({ ...prev, [livrariaId]: observacao }))
+      } else {
+        setObsFormatoCriativo(prev => ({ ...prev, [livrariaId]: observacao }))
+      }
     } catch (e) { console.error(e); showToast('Erro ao salvar observação', 'error') }
   }
 
@@ -926,7 +936,7 @@ export default function MonitoramentoParceiras() {
           </div>
           {abaView === 'checklist' && (
             loading ? <div className="loading"><div className="spinner" /></div> : (
-              <ViewChecklistParceiras livrarias={livrarias} checkagemMes={checkagemMes} formato={formatoSel} dataKey={dataSel} onMarcar={handleMarcarParceira} onGerarDia={handleGerarDia} onSalvarObsFixa={handleSalvarObsFixa} />
+              <ViewChecklistParceiras livrarias={livrarias} checkagemMes={checkagemMes} formato={formatoSel} dataKey={dataSel} onMarcar={handleMarcarParceira} onSalvarObsFixa={(id, obs) => handleSalvarObsFixa(id, obs, formatoSel, 'parceiras')} obsFormato={obsFormatoParceiras} />
             )
           )}
           {abaView === 'dashboard' && (
@@ -948,7 +958,7 @@ export default function MonitoramentoParceiras() {
               <SlidersHorizontal size={13} /> {FORMATOS_CRIATIVO.find(f=>f.value===formatoCriativoSel)?.label} ({livrariasCriativo.length}/{todasLivrarias.length})
             </button>
           </div>
-          <ViewChecklistCriativo livrarias={livrariasCriativo} checkagemCriativo={checkagemCriativo} formato={formatoCriativoSel} dataKey={dataCriativoSel} onMarcar={handleMarcarCriativo} onSalvarObsFixa={handleSalvarObsFixa} />
+          <ViewChecklistCriativo livrarias={livrariasCriativo} checkagemCriativo={checkagemCriativo} formato={formatoCriativoSel} dataKey={dataCriativoSel} onMarcar={handleMarcarCriativo} onSalvarObsFixa={(id, obs) => handleSalvarObsFixa(id, obs, formatoCriativoSel, 'criativo')} obsFormato={obsFormatoCriativo} />
         </div>
       )}
 
