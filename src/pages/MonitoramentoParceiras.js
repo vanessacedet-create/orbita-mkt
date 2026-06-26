@@ -685,6 +685,8 @@ export default function MonitoramentoParceiras() {
 
   const [obsFormatoParceiras, setObsFormatoParceiras] = useState({}) // { livraria_id: observacao }
   const [obsFormatoCriativo, setObsFormatoCriativo] = useState({})
+
+  const [checkagemMes, setCheckagemMes] = useState([])
   const [formatoSel, setFormatoSel] = useState('story')
   const [dataSel, setDataSel] = useState(hojeKey())
 
