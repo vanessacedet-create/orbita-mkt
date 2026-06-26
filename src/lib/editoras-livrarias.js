@@ -132,9 +132,37 @@ export async function createLivraria(payload) {
   return data
 }
 
-export async function updateLivraria(id, payload) {
+export async function getObsFormato(livraria_id, formato) {
+  const { data, error } = await supabase
+    .from('livrarias_obs_formato')
+    .select('*')
+    .eq('livraria_id', livraria_id)
+    .eq('formato', formato)
+    .maybeSingle()
+  if (error) throw error
+  return data?.observacao || ''
+}
+
+export async function getObsFormatoLote(formato) {
+  const { data, error } = await supabase
+    .from('livrarias_obs_formato')
+    .select('livraria_id, observacao')
+    .eq('formato', formato)
+  if (error) throw error
+  // Retorna mapa { livraria_id: observacao }
+  const mapa = {}
+  for (const r of data || []) mapa[r.livraria_id] = r.observacao
+  return mapa
+}
+
+export async function upsertObsFormato(livraria_id, formato, observacao) {
+  const { error } = await supabase
+    .from('livrarias_obs_formato')
+    .upsert({ livraria_id, formato, observacao, atualizado_em: new Date().toISOString() }, { onConflict: 'livraria_id,formato' })
+  if (error) throw error
+}
   // Apenas campos válidos da tabela
-  const campos = ['nome','editora_id','contato','email','whatsapp','site','instagram','youtube','inauguracao','observacao','status','ativo']
+  const campos = ['nome','editora_id','contato','email','whatsapp','site','instagram','instagram2','youtube','inauguracao','observacao','status','ativo']
   const limpo = {}
   for (const k of campos) {
     if (k in payload) limpo[k] = payload[k] === '' ? null : payload[k]
