@@ -693,22 +693,26 @@ export default function MonitoramentoParceiras() {
 
   const agora = new Date()
   const [ano, setAno] = useState(() => {
-    try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).ano : agora.getFullYear() } catch { return agora.getFullYear() }
+    try { const s = localStorage.getItem('monitor_nav'); const v = s ? JSON.parse(s).ano : null; return (v && !isNaN(v)) ? Number(v) : agora.getFullYear() } catch { return agora.getFullYear() }
   })
   const [mes, setMes] = useState(() => {
-    try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).mes : agora.getMonth() + 1 } catch { return agora.getMonth() + 1 }
+    try { const s = localStorage.getItem('monitor_nav'); const v = s ? JSON.parse(s).mes : null; return (v && !isNaN(v)) ? Number(v) : agora.getMonth() + 1 } catch { return agora.getMonth() + 1 }
   })
   const [abaMonitor, setAbaMonitor] = useState(() => {
-    try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).aba : 'parceiras' } catch { return 'parceiras' }
+    try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).aba || 'parceiras' : 'parceiras' } catch { return 'parceiras' }
   })
   const [abaView, setAbaView] = useState(() => {
-    try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).view : 'checklist' } catch { return 'checklist' }
+    try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).view || 'checklist' : 'checklist' } catch { return 'checklist' }
   })
 
   function salvarNav(patch) {
     try {
       const atual = JSON.parse(localStorage.getItem('monitor_nav') || '{}')
-      localStorage.setItem('monitor_nav', JSON.stringify({ ...atual, ...patch }))
+      const novo = { ...atual, ...patch }
+      // Garantir que ano e mes são números válidos
+      if (novo.ano) novo.ano = Number(novo.ano)
+      if (novo.mes) novo.mes = Number(novo.mes)
+      localStorage.setItem('monitor_nav', JSON.stringify(novo))
     } catch {}
   }
 
@@ -826,19 +830,6 @@ export default function MonitoramentoParceiras() {
       const [eds, livs] = await Promise.all([getEditorasParceiras(), getLivrarias()])
       setEditoras(eds)
       setTodasLivrarias(livs.filter(l => l.editora_id))
-      const ids = livs.map(l => l.id)
-      // Só inicializa com todas se não houver seleção salva
-      setLivrariasSel(prev => {
-        if (prev === null) { try { localStorage.setItem('monitor_livParceiras', JSON.stringify(ids)) } catch {}; return ids }
-        // Filtra IDs que ainda existem
-        const validos = prev.filter(id => ids.includes(id))
-        return validos.length > 0 ? validos : ids
-      })
-      setLivrariasCriatSel(prev => {
-        if (prev === null) { try { localStorage.setItem('monitor_livCriativo', JSON.stringify(ids)) } catch {}; return ids }
-        const validos = prev.filter(id => ids.includes(id))
-        return validos.length > 0 ? validos : ids
-      })
     } catch (e) { console.error(e) }
   }
 
