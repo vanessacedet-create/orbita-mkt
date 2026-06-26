@@ -222,11 +222,14 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
 
   const statusAtual = parceiro.current_status || 'prospected'
   const stInfo = pipelineInfo(statusAtual)
-  // Reconhece "já ativo" mesmo em parceiros antigos sem current_status:
-  // basta ter tier ou situacao ativa/pausada (é como a aba Parceiros Ativos os enxerga).
+  // "Ativo" é determinado pelo status do pipeline (active/paused).
+  // tier/situação só valem como fallback para parceiros LEGADOS, que não têm
+  // nenhum status de pipeline registrado — assim um parceiro ainda em
+  // prospecção (mesmo com situacao='ativo' por padrão) NÃO é tratado como ativo.
   const ehEncerrado = statusAtual === 'closed' || parceiro.situacao === 'encerrado'
   const ehAtivo = !ehEncerrado && (
-    statusAtual === 'active' || !!parceiro.tier || ['ativo','pausado'].includes(parceiro.situacao)
+    statusAtual === 'active' || statusAtual === 'paused' ||
+    (!parceiro.current_status && (!!parceiro.tier || ['ativo','pausado'].includes(parceiro.situacao)))
   )
 
   function togglePlataforma(p) {
@@ -1371,7 +1374,7 @@ export default function CRM({ grupo, titulo }) {
       // Se moveu para 'active', ativar como Bronze automaticamente (modelos 2 e 3)
       if (novoStatus === 'active' && !parceiro.tier && MODELOS_COM_ESCADA.includes(parceiro.model)) {
         await ativarParceiroBronze(dragId, usuario?.id)
-        showToast(`${parceiro.nome} → Ativo · Bronze na Escada`)
+        showToast(`${parceiro.nome} → Parceiro ativo`)
       } else {
         await addStatusHistory(dragId, novoStatus, 'Status alterado via kanban')
         showToast(`${parceiro.nome} → ${pipelineInfo(novoStatus, pipeline).label}`)
@@ -1440,7 +1443,7 @@ export default function CRM({ grupo, titulo }) {
       <div style={{display:'flex',gap:0,marginBottom:20,borderBottom:'1px solid var(--border)'}}>
         {[
           {v:'prospeccao', l:'Prospecção'},
-          {v:'ativos', l:'Parceiros ativos (Escada)'},
+          {v:'ativos', l:'Parceiros ativos'},
           {v:'desempenho', l:'Desempenho'},
         ].map(({v,l})=>(
           <button key={v} onClick={()=>setVisao(v)}
