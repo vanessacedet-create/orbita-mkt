@@ -368,21 +368,56 @@ export const SITUACOES = {
 
 // Retorna parceiros ativos (com tier) para a aba "Parceiros ativos"
 export async function getParceirosComTier() {
-  // Busca todos os parceiros ativos (com ou sem tier)
-  // Parceiros de Livraria (modelo 1) aparecem sem tier
-  // Parceiros Book Time/Institucional (modelos 2/3) aparecem com tier
-  const { data, error } = await supabase
-    .from('parceiros')
-    .select('*, responsavel_interno:usuarios!responsavel_interno_id(id, nome)')
-    .or('tier.not.is.null,situacao.eq.ativo,situacao.eq.pausado,situacao.eq.encerrado')
-    .order('vendas_mes', { ascending: false, nullsFirst: false })
-  if (error) throw error
+  // A lista de "Parceiros Ativos" deve conter apenas parceiros cujo STATUS do
+  // pipeline seja active/paused/closed. Parceiros ainda em prospecção (ou em
+  // qualquer etapa pré-ativa) NÃO entram, mesmo que tenham situacao='ativo'
+  // (valor padrão da coluna). Parceiros legados, sem nenhum status de pipeline
+  // registrado, continuam aparecendo se já tiverem tier ou situação ativa.
+  const sel = '*, responsavel_interno:usuarios!responsavel_interno_id(id, nome)'
+  const STATUS_ATIVO = ['active', 'paused', 'closed']
 
-  return (data || []).map(p => ({
-    ...p,
-    responsavel_interno_nome: p.responsavel_interno?.nome || null,
-    pronto_para_subir: verificarPromocao(p),
-  }))
+  // 1. IDs que estão num status de pipeline considerado ativo
+  const { data: ativosRows } = await supabase
+    .from('parceiro_status_atual')
+    .select('partner_id')
+    .in('status', STATUS_ATIVO)
+  const idsPipeline = (ativosRows || []).map(r => r.partner_id)
+
+  // 2. Candidatos = parceiros por status de pipeline + legados (tier/situação)
+  const mapParceiros = new Map()
+  if (idsPipeline.length) {
+    const { data } = await supabase.from('parceiros').select(sel).in('id', idsPipeline)
+    for (const p of (data || [])) mapParceiros.set(p.id, p)
+  }
+  const { data: legados, error } = await supabase
+    .from('parceiros').select(sel)
+    .or('tier.not.is.null,situacao.eq.ativo,situacao.eq.pausado,situacao.eq.encerrado')
+  if (error) throw error
+  for (const p of (legados || [])) if (!mapParceiros.has(p.id)) mapParceiros.set(p.id, p)
+
+  const candidatos = [...mapParceiros.values()]
+  const ids = candidatos.map(p => p.id)
+
+  // 3. Status REAL (qualquer) de cada candidato — para excluir os pré-ativos
+  const statusMap = {}
+  if (ids.length) {
+    const { data: statusData } = await supabase
+      .from('parceiro_status_atual').select('partner_id, status').in('partner_id', ids)
+    for (const s of (statusData || [])) statusMap[s.partner_id] = s.status
+  }
+
+  // 4. Anexa current_status e filtra: ativo de verdade OU legado sem status
+  return candidatos
+    .map(p => ({
+      ...p,
+      current_status: statusMap[p.id] || null,
+      responsavel_interno_nome: p.responsavel_interno?.nome || null,
+      pronto_para_subir: verificarPromocao(p),
+    }))
+    .filter(p => p.current_status
+      ? STATUS_ATIVO.includes(p.current_status)
+      : (!!p.tier || ['ativo', 'pausado', 'encerrado'].includes(p.situacao)))
+    .sort((a, b) => (b.vendas_mes || 0) - (a.vendas_mes || 0))
 }
 
 // Verifica se o parceiro atingiu os critérios do próximo tier
