@@ -7,7 +7,7 @@ import {
   getObservacoesEditora, createObservacao, deleteObservacao,
 } from '../lib/monitoramento-editoras'
 import { getCheckagemCriativoMes, upsertCheckagemCriativoDia } from '../lib/monitoramento-criativo'
-import { getLivrarias } from '../lib/editoras-livrarias'
+import { getLivrarias, updateLivraria } from '../lib/editoras-livrarias'
 import {
   Eye, Plus, X, Upload, ChevronLeft, ChevronRight,
   Pencil, Trash2, MessageSquare, LayoutGrid, List,
@@ -390,15 +390,16 @@ function PainelEditora({ editora, checkagemMes, ano, mes, usuario, onClose }) {
 }
 
 // ── CHECKLIST LIVRARIAS DE ED. PARCEIRAS ───────────────────
-function ViewChecklistParceiras({ livrarias, checkagemMes, formato, dataKey, onMarcar, onGerarDia }) {
+function ViewChecklistParceiras({ livrarias, checkagemMes, formato, dataKey, onMarcar, onGerarDia, onSalvarObsFixa }) {
   const registrosDoDia = checkagemMes.filter(r => r.formato === formato && r.data_esperada === dataKey)
   const mapa = {}
   for (const r of registrosDoDia) mapa[r.editora_id] = r
-  const semRegistro = livrarias.filter(l => { const id = l.editora_id || l.id; return !mapa[id] })
+  const semRegistro = livrarias.filter(l => !mapa[l.editora_id])
   const [gerando, setGerando] = useState(false)
-  // Observações inline
-  const [obsAberta, setObsAberta] = useState(null)
-  const [textoObs, setTextoObs] = useState('')
+  const [obsFixaAberta, setObsFixaAberta] = useState(null)
+  const [textoObsFixa, setTextoObsFixa] = useState('')
+  const [notaAberta, setNotaAberta] = useState(null)
+  const [textoNota, setTextoNota] = useState('')
 
   async function gerar() { setGerando(true); try { await onGerarDia() } finally { setGerando(false) } }
 
@@ -412,11 +413,11 @@ function ViewChecklistParceiras({ livrarias, checkagemMes, formato, dataKey, onM
           <button className="btn btn-primary btn-sm" onClick={gerar} disabled={gerando}>{gerando ? 'Gerando...' : 'Gerar checklist para todas'}</button>
         </div>
       )}
-      {/* Cabeçalho da tabela */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 1fr auto', gap: 8, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '180px 130px 1fr 1fr auto', gap: 8, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
         <span>Livraria</span>
         <span>Instagram</span>
-        <span>Observação</span>
+        <span>Observações</span>
+        <span>Notas</span>
         <span style={{ minWidth: 220 }}>Status</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -424,12 +425,14 @@ function ViewChecklistParceiras({ livrarias, checkagemMes, formato, dataKey, onM
           const chaveId = livraria.editora_id
           const reg = mapa[chaveId]
           const status = reg?.status || null
-          const obs = reg?.observacao || ''
-          const editandoObs = obsAberta === livraria.id
+          const nota = reg?.observacao || ''
+          const obsFixa = livraria.observacao || ''
+          const editandoObsFixa = obsFixaAberta === livraria.id
+          const editandoNota = notaAberta === livraria.id
 
           return (
             <div key={livraria.id}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 1fr auto', gap: 8, alignItems: 'center', padding: '7px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: editandoObs ? '8px 8px 0 0' : 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '180px 130px 1fr 1fr auto', gap: 8, alignItems: 'center', padding: '7px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: (editandoObsFixa || editandoNota) ? '8px 8px 0 0' : 8 }}>
                 {/* Livraria */}
                 <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={livraria.nome}>
                   {livraria.nome}
@@ -441,32 +444,49 @@ function ViewChecklistParceiras({ livrarias, checkagemMes, formato, dataKey, onM
                     : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>
                   }
                 </div>
-                {/* Observação */}
-                <div style={{ fontSize: 12, color: obs ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                  onClick={() => { setObsAberta(editandoObs ? null : livraria.id); setTextoObs(obs) }}
-                  title={obs || 'Clique para adicionar observação'}>
-                  {obs || <span style={{ fontSize: 11, fontStyle: 'italic' }}>Adicionar...</span>}
+                {/* Observações — fixo da livraria */}
+                <div style={{ fontSize: 12, color: obsFixa ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  onClick={() => { setObsFixaAberta(editandoObsFixa ? null : livraria.id); setTextoObsFixa(obsFixa); setNotaAberta(null) }}
+                  title={obsFixa || 'Clique para adicionar observação fixa'}>
+                  {obsFixa || <span style={{ fontSize: 11, fontStyle: 'italic' }}>Adicionar...</span>}
+                </div>
+                {/* Notas — do dia */}
+                <div style={{ fontSize: 12, color: nota ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  onClick={() => { setNotaAberta(editandoNota ? null : livraria.id); setTextoNota(nota); setObsFixaAberta(null) }}
+                  title={nota || 'Clique para adicionar nota do dia'}>
+                  {nota || <span style={{ fontSize: 11, fontStyle: 'italic' }}>Adicionar...</span>}
                 </div>
                 {/* Botões */}
                 <div style={{ display: 'flex', gap: 5 }}>
                   {STATUS_PARCEIRAS.map(s => (
                     <button key={s.value}
-                      onClick={() => onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status === s.value ? null : s.value, observacao: obs })}
+                      onClick={() => onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status === s.value ? null : s.value, observacao: nota })}
                       style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `2px solid ${s.cor}`, background: status === s.value ? s.cor : 'transparent', color: status === s.value ? '#fff' : s.cor, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
                       {s.label}
                     </button>
                   ))}
                 </div>
               </div>
-              {editandoObs && (
-                <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px 12px', display: 'flex', gap: 8 }}>
-                  <input className="form-input" style={{ flex: 1, fontSize: 12 }} value={textoObs} onChange={e => setTextoObs(e.target.value)}
-                    placeholder="Observação..." autoFocus onKeyDown={e => {
-                      if (e.key === 'Enter') { onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status || 'pendente', observacao: textoObs }); setObsAberta(null) }
-                      if (e.key === 'Escape') setObsAberta(null)
-                    }} />
-                  <button className="btn btn-primary btn-sm" onClick={() => { onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status || 'pendente', observacao: textoObs }); setObsAberta(null) }}>Salvar</button>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setObsAberta(null)}>Cancelar</button>
+              {/* Editor de Observação fixa */}
+              {editandoObsFixa && (
+                <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px 12px', display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>Observação fixa:</span>
+                  <input className="form-input" style={{ flex: 1, fontSize: 12 }} value={textoObsFixa} onChange={e => setTextoObsFixa(e.target.value)}
+                    placeholder="Observação permanente da livraria..." autoFocus
+                    onKeyDown={e => { if (e.key === 'Enter') { onSalvarObsFixa(livraria.id, textoObsFixa); setObsFixaAberta(null) } if (e.key === 'Escape') setObsFixaAberta(null) }} />
+                  <button className="btn btn-primary btn-sm" onClick={() => { onSalvarObsFixa(livraria.id, textoObsFixa); setObsFixaAberta(null) }}>Salvar</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setObsFixaAberta(null)}>Cancelar</button>
+                </div>
+              )}
+              {/* Editor de Nota do dia */}
+              {editandoNota && (
+                <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px 12px', display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0 }}>Nota do dia:</span>
+                  <input className="form-input" style={{ flex: 1, fontSize: 12 }} value={textoNota} onChange={e => setTextoNota(e.target.value)}
+                    placeholder="O que aconteceu hoje..." autoFocus
+                    onKeyDown={e => { if (e.key === 'Enter') { onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status || 'pendente', observacao: textoNota }); setNotaAberta(null) } if (e.key === 'Escape') setNotaAberta(null) }} />
+                  <button className="btn btn-primary btn-sm" onClick={() => { onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status || 'pendente', observacao: textoNota }); setNotaAberta(null) }}>Salvar</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setNotaAberta(null)}>Cancelar</button>
                 </div>
               )}
             </div>
@@ -478,21 +498,24 @@ function ViewChecklistParceiras({ livrarias, checkagemMes, formato, dataKey, onM
 }
 
 // ── CHECKLIST EQUIPE CEDET ─────────────────────────────────
-function ViewChecklistCriativo({ livrarias, checkagemCriativo, formato, dataKey, onMarcar }) {
+function ViewChecklistCriativo({ livrarias, checkagemCriativo, formato, dataKey, onMarcar, onSalvarObsFixa }) {
   const registrosDoDia = checkagemCriativo.filter(r => r.formato === formato && r.data_esperada === dataKey)
   const mapa = {}
   for (const r of registrosDoDia) mapa[r.editora_id] = r
-  const [obsAberta, setObsAberta] = useState(null)
-  const [textoObs, setTextoObs] = useState('')
+  const [obsFixaAberta, setObsFixaAberta] = useState(null)
+  const [textoObsFixa, setTextoObsFixa] = useState('')
+  const [notaAberta, setNotaAberta] = useState(null)
+  const [textoNota, setTextoNota] = useState('')
 
   if (livrarias.length === 0) return <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '48px 0', fontSize: 13 }}>Nenhuma livraria cadastrada ainda.</div>
 
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 1fr 130px auto', gap: 8, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '180px 130px 1fr 1fr 130px auto', gap: 8, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
         <span>Livraria</span>
         <span>Instagram</span>
-        <span>Observação</span>
+        <span>Observações</span>
+        <span>Notas</span>
         <span>Responsável</span>
         <span style={{ minWidth: 240 }}>Status</span>
       </div>
@@ -502,28 +525,32 @@ function ViewChecklistCriativo({ livrarias, checkagemCriativo, formato, dataKey,
           const reg = mapa[chaveId]
           const status = reg?.status || null
           const responsavel = reg?.responsavel || ''
-          const obs = reg?.observacao || ''
-          const editandoObs = obsAberta === livraria.id
+          const nota = reg?.observacao || ''
+          const obsFixa = livraria.observacao || ''
+          const editandoObsFixa = obsFixaAberta === livraria.id
+          const editandoNota = notaAberta === livraria.id
 
           return (
             <div key={livraria.id}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 1fr 130px auto', gap: 8, alignItems: 'center', padding: '7px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: editandoObs ? '8px 8px 0 0' : 8 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={livraria.nome}>
-                  {livraria.nome}
-                </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '180px 130px 1fr 1fr 130px auto', gap: 8, alignItems: 'center', padding: '7px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: (editandoObsFixa || editandoNota) ? '8px 8px 0 0' : 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={livraria.nome}>{livraria.nome}</div>
                 <div style={{ fontSize: 12 }}>
                   {livraria.instagram
                     ? <a href={`https://instagram.com/${livraria.instagram.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 3 }}><Instagram size={10}/>{livraria.instagram}</a>
-                    : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>
-                  }
+                    : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>}
                 </div>
-                <div style={{ fontSize: 12, color: obs ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                  onClick={() => { setObsAberta(editandoObs ? null : livraria.id); setTextoObs(obs) }}
-                  title={obs || 'Clique para adicionar observação'}>
-                  {obs || <span style={{ fontSize: 11, fontStyle: 'italic' }}>Adicionar...</span>}
+                <div style={{ fontSize: 12, color: obsFixa ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  onClick={() => { setObsFixaAberta(editandoObsFixa ? null : livraria.id); setTextoObsFixa(obsFixa); setNotaAberta(null) }}
+                  title={obsFixa || 'Clique para adicionar observação fixa'}>
+                  {obsFixa || <span style={{ fontSize: 11, fontStyle: 'italic' }}>Adicionar...</span>}
+                </div>
+                <div style={{ fontSize: 12, color: nota ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  onClick={() => { setNotaAberta(editandoNota ? null : livraria.id); setTextoNota(nota); setObsFixaAberta(null) }}
+                  title={nota || 'Clique para adicionar nota do dia'}>
+                  {nota || <span style={{ fontSize: 11, fontStyle: 'italic' }}>Adicionar...</span>}
                 </div>
                 <select value={responsavel}
-                  onChange={e => onMarcar({ editora: { id: chaveId }, formato, dataKey, status, responsavel: e.target.value })}
+                  onChange={e => onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status || 'pendente', responsavel: e.target.value })}
                   style={{ padding: '4px 8px', borderRadius: 8, fontSize: 12, border: '1px solid var(--border)', background: responsavel ? 'var(--accent-glow)' : 'var(--surface-2)', color: responsavel ? 'var(--accent)' : 'var(--text-muted)', fontWeight: responsavel ? 700 : 400, cursor: 'pointer' }}>
                   <option value="">Responsável...</option>
                   {EQUIPE.map(n => <option key={n} value={n}>{n}</option>)}
@@ -538,15 +565,24 @@ function ViewChecklistCriativo({ livrarias, checkagemCriativo, formato, dataKey,
                   ))}
                 </div>
               </div>
-              {editandoObs && (
-                <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px 12px', display: 'flex', gap: 8 }}>
-                  <input className="form-input" style={{ flex: 1, fontSize: 12 }} value={textoObs} onChange={e => setTextoObs(e.target.value)}
-                    placeholder="Observação..." autoFocus onKeyDown={e => {
-                      if (e.key === 'Enter') { onMarcar({ editora: { id: chaveId }, formato, dataKey, status, responsavel, observacao: textoObs }); setObsAberta(null) }
-                      if (e.key === 'Escape') setObsAberta(null)
-                    }} />
-                  <button className="btn btn-primary btn-sm" onClick={() => { onMarcar({ editora: { id: chaveId }, formato, dataKey, status, responsavel, observacao: textoObs }); setObsAberta(null) }}>Salvar</button>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setObsAberta(null)}>Cancelar</button>
+              {editandoObsFixa && (
+                <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px 12px', display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>Observação fixa:</span>
+                  <input className="form-input" style={{ flex: 1, fontSize: 12 }} value={textoObsFixa} onChange={e => setTextoObsFixa(e.target.value)}
+                    placeholder="Observação permanente da livraria..." autoFocus
+                    onKeyDown={e => { if (e.key === 'Enter') { onSalvarObsFixa(livraria.id, textoObsFixa); setObsFixaAberta(null) } if (e.key === 'Escape') setObsFixaAberta(null) }} />
+                  <button className="btn btn-primary btn-sm" onClick={() => { onSalvarObsFixa(livraria.id, textoObsFixa); setObsFixaAberta(null) }}>Salvar</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setObsFixaAberta(null)}>Cancelar</button>
+                </div>
+              )}
+              {editandoNota && (
+                <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px 12px', display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0 }}>Nota do dia:</span>
+                  <input className="form-input" style={{ flex: 1, fontSize: 12 }} value={textoNota} onChange={e => setTextoNota(e.target.value)}
+                    placeholder="O que aconteceu hoje..." autoFocus
+                    onKeyDown={e => { if (e.key === 'Enter') { onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status || 'pendente', responsavel, observacao: textoNota }); setNotaAberta(null) } if (e.key === 'Escape') setNotaAberta(null) }} />
+                  <button className="btn btn-primary btn-sm" onClick={() => { onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status || 'pendente', responsavel, observacao: textoNota }); setNotaAberta(null) }}>Salvar</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setNotaAberta(null)}>Cancelar</button>
                 </div>
               )}
             </div>
@@ -556,6 +592,7 @@ function ViewChecklistCriativo({ livrarias, checkagemCriativo, formato, dataKey,
     </div>
   )
 }
+
 
 // ── DASHBOARD ──────────────────────────────────────────────
 function ViewDashboard({ livrarias, checkagemMes }) {
@@ -744,6 +781,13 @@ export default function MonitoramentoParceiras() {
     } catch (e) { console.error(e); showToast('Erro ao gerar', 'error') }
   }
 
+  async function handleSalvarObsFixa(livrariaId, observacao) {
+    try {
+      await updateLivraria(livrariaId, { observacao })
+      setTodasLivrarias(prev => prev.map(l => l.id === livrariaId ? { ...l, observacao } : l))
+    } catch (e) { console.error(e); showToast('Erro ao salvar observação', 'error') }
+  }
+
   async function handleMarcarCriativo({ editora, formato, dataKey, status, responsavel }) {
     try {
       const reg = await upsertCheckagemCriativoDia({ editora_id: editora.id, formato, data_esperada: dataKey, status, responsavel })
@@ -864,7 +908,7 @@ export default function MonitoramentoParceiras() {
           </div>
           {abaView === 'checklist' && (
             loading ? <div className="loading"><div className="spinner" /></div> : (
-              <ViewChecklistParceiras livrarias={livrarias} checkagemMes={checkagemMes} formato={formatoSel} dataKey={dataSel} onMarcar={handleMarcarParceira} onGerarDia={handleGerarDia} />
+              <ViewChecklistParceiras livrarias={livrarias} checkagemMes={checkagemMes} formato={formatoSel} dataKey={dataSel} onMarcar={handleMarcarParceira} onGerarDia={handleGerarDia} onSalvarObsFixa={handleSalvarObsFixa} />
             )
           )}
           {abaView === 'dashboard' && (
@@ -886,7 +930,7 @@ export default function MonitoramentoParceiras() {
               <SlidersHorizontal size={13} /> Livrarias ({(livrariasCriatSel || []).length}/{todasLivrarias.length})
             </button>
           </div>
-          <ViewChecklistCriativo livrarias={livrariasCriativo} checkagemCriativo={checkagemCriativo} formato={formatoCriativoSel} dataKey={dataCriativoSel} onMarcar={handleMarcarCriativo} />
+          <ViewChecklistCriativo livrarias={livrariasCriativo} checkagemCriativo={checkagemCriativo} formato={formatoCriativoSel} dataKey={dataCriativoSel} onMarcar={handleMarcarCriativo} onSalvarObsFixa={handleSalvarObsFixa} />
         </div>
       )}
 
