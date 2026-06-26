@@ -11,7 +11,7 @@ import { useAuth } from '../context/AuthContext'
 import {
   Users, Plus, X, ChevronRight, Clock, ExternalLink,
   Instagram, Youtube, Search, ArrowRight, Trash2, Settings2, GripVertical,
-  ArrowUp, ChevronUp
+  ArrowUp, ChevronUp, XCircle
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -111,6 +111,8 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
   const [savingPerf, setSavingPerf] = useState(false)
   const [savingTier, setSavingTier] = useState(false)
   const [ativando, setAtivando] = useState(false)
+  const [encerrando, setEncerrando] = useState(false)
+  const [motivoEncerrar, setMotivoEncerrar] = useState('')
   const [tierManual, setTierManual] = useState('')
   const ehAdminModal = usuario?.perfil === 'administrador' || usuario?.perfil === 'gerente'
 
@@ -208,8 +210,30 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
     } catch(e) { showToast('Erro ao ativar parceiro', 'error') } finally { setAtivando(false) }
   }
 
+  async function encerrarParceria() {
+    if (!motivoEncerrar.trim()) return
+    setEncerrando(true)
+    try {
+      await addStatusHistory(parceiro.id, 'closed', motivoEncerrar)
+      await updateSituacao(parceiro.id, 'encerrado')
+      const hist = await getStatusHistory(parceiro.id)
+      setHistory(hist)
+      const parceiroAtualizado = { ...parceiro, current_status: 'closed', situacao: 'encerrado' }
+      setParceiro(parceiroAtualizado)
+      onSave(parceiroAtualizado)
+      setMotivoEncerrar('')
+      showToast('Parceria encerrada.')
+    } catch(e) { showToast('Erro ao encerrar parceria', 'error') } finally { setEncerrando(false) }
+  }
+
   const statusAtual = parceiro.current_status || 'prospected'
   const stInfo = pipelineInfo(statusAtual)
+  // Reconhece "já ativo" mesmo em parceiros antigos sem current_status:
+  // basta ter tier ou situacao ativa/pausada (é como a aba Parceiros Ativos os enxerga).
+  const ehEncerrado = statusAtual === 'closed' || parceiro.situacao === 'encerrado'
+  const ehAtivo = !ehEncerrado && (
+    statusAtual === 'active' || !!parceiro.tier || ['ativo','pausado'].includes(parceiro.situacao)
+  )
 
   function togglePlataforma(p) {
     setForm(f => ({
@@ -255,7 +279,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
         </div>
 
         {/* Dica de próximo passo */}
-        {statusAtual !== 'active' && !parceiro.tier && (
+        {!ehAtivo && !ehEncerrado && (
           <div style={{padding:'10px 14px',marginBottom:16,borderRadius:8,background:'var(--surface-2)',border:'1px solid var(--border)',fontSize:12,color:'var(--text-muted)',display:'flex',alignItems:'center',gap:8}}>
             <Clock size={14} style={{flexShrink:0}}/>
             {statusAtual === 'found' && 'Próximo passo: avaliar o perfil e entrar em contato com o parceiro.'}
@@ -748,8 +772,8 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
               </button>
             </div>
 
-            {/* Ação de ciclo de vida: ativar parceiro */}
-            {statusAtual !== 'active' && (
+            {/* Ação de ciclo de vida: ativar parceiro (só para quem ainda não é ativo nem encerrado) */}
+            {!ehAtivo && !ehEncerrado && (
               <div style={{borderTop:'1px solid var(--border)',marginTop:16,paddingTop:16}}>
                 <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}}>Parceiros Ativos</div>
                 <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
@@ -769,6 +793,46 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                     Move o parceiro para a aba <strong>Parceiros Ativos</strong> e o torna visível em todo o Orbita.
                     {MODELOS_COM_ESCADA.includes(parceiro.model) && !parceiro.tier && ' Ele entra na Escada de Crescimento como Bronze.'}
                   </span>
+                </div>
+              </div>
+            )}
+
+            {/* Ação de ciclo de vida: encerrar parceria (só para parceiros ativos) */}
+            {ehAtivo && (
+              <div style={{borderTop:'1px solid var(--border)',marginTop:16,paddingTop:16}}>
+                <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}}>Encerrar parceria</div>
+                <div className="form-group">
+                  <label className="form-label">Motivo do encerramento *</label>
+                  <textarea className="form-textarea" rows={2} value={motivoEncerrar}
+                    onChange={e=>setMotivoEncerrar(e.target.value)}
+                    placeholder="Descreva o motivo do encerramento da parceria..."/>
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+                  <button
+                    onClick={encerrarParceria}
+                    disabled={encerrando || !motivoEncerrar.trim()}
+                    style={{
+                      display:'inline-flex',alignItems:'center',gap:8,
+                      background:'#ef4444',color:'#fff',border:'none',borderRadius:8,
+                      padding:'10px 18px',fontSize:14,fontWeight:700,
+                      cursor: (encerrando || !motivoEncerrar.trim()) ? 'default' : 'pointer',
+                      opacity: (encerrando || !motivoEncerrar.trim()) ? 0.6 : 1,
+                    }}>
+                    <XCircle size={16}/>
+                    {encerrando ? 'Encerrando...' : 'Encerrar parceria'}
+                  </button>
+                  <span style={{fontSize:12,color:'var(--text-muted)'}}>
+                    Marca a parceria como <strong>Encerrada</strong> e registra no histórico.
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Parceria já encerrada */}
+            {ehEncerrado && (
+              <div style={{borderTop:'1px solid var(--border)',marginTop:16,paddingTop:16}}>
+                <div style={{display:'inline-flex',alignItems:'center',gap:8,fontSize:13,fontWeight:700,color:'#ef4444'}}>
+                  <XCircle size={16}/> Parceria encerrada
                 </div>
               </div>
             )}
