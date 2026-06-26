@@ -1,12 +1,86 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import {
-  getEditorasCompletas, createEditora, updateEditora, desativarEditora, desativarEditorasLote, importarEditorasPlanilha,
-  getLivrarias, createLivraria, updateLivraria, desativarLivraria, desativarLivrariaLote, importarLivrariasPlanilha,
-  GRUPOS, STATUS_PARCERIA, STATUS_LIVRARIA,
-} from '../lib/editoras-livrarias'
-import { BookOpen, Plus, X, Upload, Pencil, Trash2, FileSpreadsheet, Building2, Library, LayoutGrid, Settings2, ChevronDown, Check } from 'lucide-react'
+  getEditorasParceiras, createEditoraParceira, updateEditoraParceira,
+  desativarEditoraParceira, importarEditorasPlanilha,
+  getCheckagemMes, upsertCheckagemDia, deleteCheckagemDia,
+  getObservacoesEditora, createObservacao, deleteObservacao,
+} from '../lib/monitoramento-editoras'
+import { getCheckagemCriativoMes, upsertCheckagemCriativoDia } from '../lib/monitoramento-criativo'
+import { getLivrarias, updateLivraria, getObsFormatoLote, upsertObsFormato } from '../lib/editoras-livrarias'
+import {
+  Eye, Plus, X, Upload, ChevronLeft, ChevronRight,
+  Pencil, Trash2, MessageSquare, LayoutGrid, List,
+  Instagram, FileSpreadsheet, Users, BookOpen, SlidersHorizontal,
+} from 'lucide-react'
 import * as XLSX from 'xlsx'
+
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+const DIAS_SEMANA = ['D','S','T','Q','Q','S','S']
+
+const FERIADOS_FIXOS = ['01-01','04-21','05-01','09-07','10-12','11-02','11-15','12-25']
+const FERIADOS_MOVEIS = {
+  2026: ['2026-02-16','2026-02-17','2026-04-03','2026-06-04'],
+  2025: ['2025-03-03','2025-03-04','2025-04-18','2025-06-19'],
+  2027: ['2027-02-08','2027-02-09','2027-03-26','2027-05-27'],
+}
+
+function isFeriado(ano, mes, dia) {
+  const mmdd = `${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`
+  if (FERIADOS_FIXOS.includes(mmdd)) return true
+  const key = `${ano}-${String(mes).padStart(2,'0')}-${String(dia).padStart(2,'0')}`
+  return (FERIADOS_MOVEIS[ano] || []).includes(key)
+}
+
+function isDiaNaoUtil(ano, mes, dia) {
+  const d = new Date(ano, mes - 1, dia)
+  const ds = d.getDay()
+  if (ds === 0 || ds === 6) return true
+  if (isFeriado(ano, mes, dia)) return true
+  return false
+}
+
+const FORMATOS_PARCEIRAS = [
+  { value: 'story', label: 'Story' },
+  { value: 'feed',  label: 'Feed' },
+  { value: 'reels', label: 'Reels' },
+]
+
+const FORMATOS_CRIATIVO = [
+  { value: 'story',         label: 'Story' },
+  { value: 'feed',          label: 'Feed' },
+  { value: 'reels_roteiro', label: 'Reels (Roteiro/Gravação)' },
+  { value: 'reels_edicao',  label: 'Reels (Edição)' },
+  { value: 'email_mkt',     label: 'E-mail Marketing' },
+  { value: 'email_revenda', label: 'E-mail Revendas' },
+]
+
+const STATUS_PARCEIRAS = [
+  { value: 'pendente',   label: 'Pendente',   cor: '#6b7280' },
+  { value: 'postou',     label: 'Postou',     cor: '#22c55e' },
+  { value: 'nao_postou', label: 'Não postou', cor: '#ef4444' },
+]
+
+const STATUS_CRIATIVO = [
+  { value: 'pendente',   label: 'Pendente',   cor: '#6b7280' },
+  { value: 'iniciado',   label: 'Iniciado',   cor: '#f59e0b' },
+  { value: 'finalizado', label: 'Finalizado', cor: '#22c55e' },
+]
+
+const EQUIPE = ['Viviane', 'Sarah', 'Vanessa', 'Gabriela']
+const CATEGORIAS_OBS = ['Comportamento', 'Resposta às mensagens', 'Vendas na livraria', 'Qualidade das postagens', 'Relacionamento', 'Outro']
+
+function pad(n) { return String(n).padStart(2, '0') }
+function toKey(a, m, d) { return `${a}-${pad(m)}-${pad(d)}` }
+function hojeKey() { const d = new Date(); return toKey(d.getFullYear(), d.getMonth() + 1, d.getDate()) }
+
+function diasDoMes(ano, mes) {
+  const total = new Date(ano, mes, 0).getDate()
+  return Array.from({ length: total }, (_, i) => {
+    const d = new Date(ano, mes - 1, i + 1)
+    return { dia: i + 1, key: toKey(ano, mes, i + 1), diaSemana: d.getDay(), naoUtil: isDiaNaoUtil(ano, mes, i + 1) }
+  })
+}
 
 function useToast() {
   const [toast, setToast] = useState(null)
@@ -14,307 +88,119 @@ function useToast() {
   return [toast, show]
 }
 
-const STATUS_COR = {
-  ativa:        { cor: '#22c55e', bg: '#22c55e18', label: 'Ativa' },
-  em_analise:   { cor: '#6366f1', bg: '#6366f118', label: 'Em análise' },
-  encerramento: { cor: '#ef4444', bg: '#ef444418', label: 'Encerramento' },
-  finalizada:   { cor: '#6b7280', bg: '#6b728018', label: 'Finalizada' },
-  pendente:     { cor: '#f59e0b', bg: '#f59e0b18', label: 'Pendente' },
-}
-const CLASS_COR = { A:'#22c55e', B:'#84cc16', C:'#f59e0b', D:'#fb923c', E:'#ef4444', F:'#6b7280' }
-function getStatusSafe(s) {
-  if (!s) return STATUS_COR['ativa']
-  const norm = s.toLowerCase().replace(/\s+/g, '_').replace(/[áà]/g, 'a').replace(/[éê]/g, 'e').replace(/[íî]/g, 'i').replace(/[óô]/g, 'o').replace(/[úû]/g, 'u')
-  return STATUS_COR[norm] || STATUS_COR[s.toLowerCase()] || STATUS_COR['ativa']
-}
-
-const TODAS_COLUNAS_EDITORAS = [
-  { key: 'classificacao',  label: 'Class.',        fixo: true },
-  { key: 'nome',           label: 'Nome',           fixo: true },
-  { key: 'livraria',       label: 'Livraria' },
-  { key: 'macro',          label: 'Macro' },
-  { key: 'nicho',          label: 'Nicho' },
-  { key: 'sub_nicho',      label: 'Sub-nicho' },
-  { key: 'posicionamento', label: 'Posicionamento' },
-  { key: 'grupo_id',       label: 'Grupo' },
-  { key: 'status_parceria',label: 'Status' },
-  { key: 'instagram',      label: 'Instagram' },
-  { key: 'youtube',        label: 'YouTube' },
-  { key: 'contato',        label: 'Contato' },
-  { key: 'email',          label: 'E-mail' },
-  { key: 'tem_grupo',      label: 'Tem grupo WA?' },
-  { key: 'selos',          label: 'Selos' },
-]
-
-const TODAS_COLUNAS_LIVRARIAS = [
-  { key: 'nome',        label: 'Livraria',         fixo: true },
-  { key: 'editora',     label: 'Editora vinculada', fixo: true },
-  { key: 'contato',     label: 'Contato' },
-  { key: 'site',        label: 'Site' },
-  { key: 'instagram',   label: 'Instagram' },
-  { key: 'youtube',     label: 'YouTube' },
-  { key: 'inauguracao', label: 'Inauguração' },
-  { key: 'observacao',  label: 'Observação' },
-  { key: 'status',      label: 'Status' },
-]
-
-const VISIVEIS_DEFAULT_EDITORAS = ['classificacao','nome','livraria','macro','nicho','sub_nicho','posicionamento','grupo_id','status_parceria']
-const VISIVEIS_DEFAULT_LIVRARIAS = ['nome','editora','contato','site','instagram','youtube','inauguracao','observacao','status']
-
-// ── SELETOR DE COLUNAS ─────────────────────────────────────
-function SeletorColunas({ colunas, ordem, onOrdemChange, visiveis, onVisiveisChange, onClose }) {
-  const ref = useRef(null)
-  const dragIdx = useRef(null)
-  const [drag, setDrag] = useState(null)
-
-  useEffect(() => {
-    function h(e) { if (ref.current && !ref.current.contains(e.target)) onClose() }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [onClose])
-
-  const naoFixas = ordem.map(k => colunas.find(c => c.key === k)).filter(c => c && !c.fixo)
-
-  function onDragStart(e, idx) { dragIdx.current = idx; setDrag(idx); e.dataTransfer.effectAllowed = 'move' }
-  function onDragOver(e, idx) {
-    e.preventDefault()
-    if (dragIdx.current === null || dragIdx.current === idx) return
-    const nova = [...naoFixas]; const [item] = nova.splice(dragIdx.current, 1); nova.splice(idx, 0, item)
-    dragIdx.current = idx
-    const fixas = ordem.filter(k => colunas.find(c => c.key === k)?.fixo)
-    onOrdemChange([...fixas, ...nova.map(c => c.key)])
-  }
-  function onDragEnd() { dragIdx.current = null; setDrag(null) }
-
+function BotaoFormato({ label, ativo, onClick }) {
   return (
-    <div ref={ref} style={{ position:'absolute', top:36, right:0, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:10, padding:12, zIndex:100, minWidth:240, boxShadow:'0 8px 24px rgba(0,0,0,0.25)' }}>
-      <div style={{ fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', marginBottom:8 }}>Colunas visíveis · arraste para reordenar</div>
-      {naoFixas.map((col, idx) => (
-        <div key={col.key} draggable onDragStart={e => onDragStart(e, idx)} onDragOver={e => onDragOver(e, idx)} onDragEnd={onDragEnd}
-          style={{ display:'flex', alignItems:'center', gap:8, padding:'5px 4px', borderRadius:6, background: drag === idx ? 'var(--surface-2)' : 'transparent', cursor:'grab', userSelect:'none' }}>
-          <span style={{ color:'var(--text-muted)', fontSize:13 }}>⠿</span>
-          <label style={{ display:'flex', alignItems:'center', gap:7, cursor:'pointer', flex:1, fontSize:13 }}>
-            <input type="checkbox" checked={visiveis.includes(col.key)}
-              onChange={e => e.target.checked ? onVisiveisChange([...visiveis, col.key]) : onVisiveisChange(visiveis.filter(k => k !== col.key))}
-              style={{ accentColor:'var(--accent)', cursor:'pointer', width:14, height:14 }} />
-            <span style={{ color:'var(--text)' }}>{col.label}</span>
-          </label>
-        </div>
-      ))}
-    </div>
+    <button onClick={onClick} style={{ padding: '6px 16px', borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: '2px solid var(--accent)', background: ativo ? 'var(--accent)' : 'transparent', color: ativo ? '#fff' : 'var(--accent)', transition: 'all 0.15s' }}>
+      {label}
+    </button>
   )
 }
 
-// ── FILTRO EXCEL ───────────────────────────────────────────
-function FiltroExcel({ valores, selecionados, onConfirm, onClose }) {
-  const ref = useRef(null)
-  const [busca, setBusca] = useState('')
-  const [sel, setSel] = useState(() => new Set(selecionados?.length ? selecionados : valores))
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      function h(e) { if (ref.current && !ref.current.contains(e.target)) onClose() }
-      document.addEventListener('mousedown', h)
-      return () => document.removeEventListener('mousedown', h)
-    }, 150)
-    return () => clearTimeout(t)
-  }, [onClose])
-
-  const filtrados = valores.filter(v => String(v).toLowerCase().includes(busca.toLowerCase()))
-  const todosSel = filtrados.length > 0 && filtrados.every(v => sel.has(v))
-
+// ── SELETOR DE DIAS COMPACTO ───────────────────────────────
+function SeletorDiasCompacto({ dias, mes, ano, dataSel, onSelect, indicadores }) {
   return (
-    <div ref={ref} onClick={e => e.stopPropagation()}
-      style={{ position:'absolute', top:'100%', left:0, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, zIndex:300, minWidth:200, maxWidth:280, boxShadow:'0 8px 24px rgba(0,0,0,0.25)', padding:8 }}>
-      <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Pesquisar..." autoFocus
-        style={{ width:'100%', padding:'5px 8px', borderRadius:6, border:'1px solid var(--border)', background:'var(--surface-2)', color:'var(--text)', fontSize:12, marginBottom:6, boxSizing:'border-box' }} />
-      <div style={{ maxHeight:200, overflowY:'auto', marginBottom:6 }}>
-        <label style={{ display:'flex', alignItems:'center', gap:6, padding:'3px 4px', fontSize:12, cursor:'pointer', fontWeight:600 }}>
-          <input type="checkbox" checked={todosSel}
-            onChange={() => setSel(prev => { const n = new Set(prev); todosSel ? filtrados.forEach(v => n.delete(v)) : filtrados.forEach(v => n.add(v)); return n })}
-            style={{ accentColor:'var(--accent)' }} />
-          (Selecionar Tudo)
-        </label>
-        {filtrados.map(v => (
-          <label key={v} style={{ display:'flex', alignItems:'center', gap:6, padding:'3px 4px', fontSize:12, cursor:'pointer' }}>
-            <input type="checkbox" checked={sel.has(v)}
-              onChange={() => setSel(prev => { const n = new Set(prev); n.has(v) ? n.delete(v) : n.add(v); return n })}
-              style={{ accentColor:'var(--accent)' }} />
-            {v || '(vazio)'}
-          </label>
-        ))}
-      </div>
-      <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
-        <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); onClose() }} style={{ fontSize:11 }}>Cancelar</button>
-        <button className="btn btn-primary btn-sm" onClick={e => { e.stopPropagation(); onConfirm([...sel]) }} style={{ fontSize:11 }}>OK</button>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 20, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 20px', marginBottom: 16, overflowX: 'auto' }}>
+      <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
+        {dias.map(d => {
+          const sel = dataSel === d.key
+          const hoje = d.key === hojeKey()
+          const ind = indicadores?.[d.key] || {}
+          return (
+            <button key={d.key} onClick={() => !d.naoUtil && onSelect(d.key)} disabled={d.naoUtil}
+              title={`${d.dia}/${mes}`}
+              style={{
+                width: 32, minWidth: 32, padding: '4px 0', borderRadius: 6, fontSize: 11, fontWeight: sel ? 700 : 400,
+                cursor: d.naoUtil ? 'not-allowed' : 'pointer',
+                border: `1.5px solid ${sel ? 'var(--accent)' : hoje && !d.naoUtil ? 'var(--accent)' : 'transparent'}`,
+                background: d.naoUtil ? 'transparent' : sel ? 'var(--accent)' : 'transparent',
+                color: d.naoUtil ? 'var(--text-muted)' : sel ? '#fff' : hoje && !d.naoUtil ? 'var(--accent)' : 'var(--text)',
+                opacity: d.naoUtil ? 0.35 : 1,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
+                transition: 'all 0.1s',
+              }}>
+              <span style={{ fontSize: 12, fontWeight: sel ? 700 : 500 }}>{d.dia}</span>
+              <span style={{ fontSize: 9, opacity: 0.7 }}>{DIAS_SEMANA[d.diaSemana]}</span>
+              {ind.total > 0 && (
+                <div style={{ display: 'flex', gap: 2, marginTop: 1 }}>
+                  {ind.ok > 0 && <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#22c55e', display: 'block' }} />}
+                  {ind.nok > 0 && <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#ef4444', display: 'block' }} />}
+                  {ind.ini > 0 && <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#f59e0b', display: 'block' }} />}
+                </div>
+              )}
+            </button>
+          )
+        })}
       </div>
     </div>
   )
 }
 
-function ThFiltro({ label, colKey, dados, filtroAtivo, onFiltro }) {
-  const [open, setOpen] = useState(false)
-  const valores = [...new Set(dados.map(r => {
-    if (colKey === 'grupo_id') return GRUPOS.find(g => g.id === r.grupo_id)?.romano || ''
-    if (colKey === 'status_parceria' || colKey === 'status') return getStatusSafe(r[colKey]).label
-    if (colKey === 'editora') return r.editora || ''
-    const v = r[colKey]; return v != null ? String(v) : ''
-  }).filter(v => v !== undefined))].sort()
-  const ativo = filtroAtivo && filtroAtivo.length < valores.length
+// ── MODAL SELETOR DE LIVRARIAS ─────────────────────────────
+function ModalSeletorLivrarias({ livrarias, selecionadas, titulo, onConfirm, onClose }) {
+  const [sel, setSel] = useState(new Set(selecionadas))
 
-  return (
-    <th onClick={() => setOpen(v => !v)}
-      style={{ padding:'8px 10px', textAlign:'left', fontWeight:700, color: ativo ? 'var(--accent)' : 'var(--text-muted)', fontSize:11, textTransform:'uppercase', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', whiteSpace:'nowrap', position:'relative', cursor:'pointer', userSelect:'none' }}>
-      <span style={{ display:'flex', alignItems:'center', gap:4 }}>
-        {label}
-        <ChevronDown size={10} style={{ opacity:0.6 }} />
-        {ativo && <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--accent)', flexShrink:0 }} />}
-      </span>
-      {open && (
-        <FiltroExcel valores={valores} selecionados={filtroAtivo || valores}
-          onConfirm={sel => { onFiltro(colKey, sel); setOpen(false) }}
-          onClose={() => setOpen(false)} />
-      )}
-    </th>
-  )
-}
-
-function Celula({ children, width = 140 }) {
-  const texto = typeof children === 'string' ? children : undefined
-  return (
-    <td title={texto} style={{ padding:'7px 10px', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)', fontSize:12, color:'var(--text)', maxWidth:width, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-      {children != null && children !== '' ? children : <span style={{ color:'var(--border)' }}>—</span>}
-    </td>
-  )
-}
-
-function BarraSel({ selecionados, total, onTodos, onLimpar, onExcluir, excluindo }) {
-  if (!selecionados) return null
-  return (
-    <div style={{ display:'flex', alignItems:'center', gap:12, padding:'8px 14px', background:'var(--accent-glow)', border:'1px solid var(--accent)', borderRadius:8, marginBottom:12 }}>
-      <span style={{ fontSize:13, color:'var(--accent)', fontWeight:600 }}>{selecionados} selecionado{selecionados !== 1 ? 's' : ''}</span>
-      <button className="btn btn-ghost btn-sm" onClick={onTodos} style={{ fontSize:12 }}>Selecionar todos ({total})</button>
-      <button className="btn btn-ghost btn-sm" onClick={onLimpar} style={{ fontSize:12 }}>Limpar</button>
-      <button onClick={onExcluir} disabled={excluindo}
-        style={{ marginLeft:'auto', background:'#ef4444', color:'#fff', border:'none', borderRadius:6, padding:'5px 14px', cursor:'pointer', fontSize:12, fontWeight:600, display:'flex', alignItems:'center', gap:5 }}>
-        <Trash2 size={12} /> {excluindo ? 'Removendo...' : `Remover ${selecionados}`}
-      </button>
-    </div>
-  )
-}
-
-// ── MODAIS ─────────────────────────────────────────────────
-function ModalEditora({ editora, onSave, onClose }) {
-  const empty = { nome:'', instagram:'', youtube:'', contato:'', email:'', tem_grupo:false, macro:'', nicho:'', sub_nicho:'', posicionamento:'', grupo_id:'', status_parceria:'ativa', selos:[] }
-  const [form, setForm] = useState(editora ? { ...editora, selos: editora.selos_editoriais?.map(s => s.nome) || [], grupo_id: editora.grupo_id ?? '' } : empty)
-  const [novoSelo, setNovoSelo] = useState('')
-  const [saving, setSaving] = useState(false)
-  function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
-  function addSelo() { const s = novoSelo.trim(); if (!s || form.selos.includes(s)) return; setForm(f => ({ ...f, selos: [...f.selos, s] })); setNovoSelo('') }
-  function rmSelo(s) { setForm(f => ({ ...f, selos: f.selos.filter(x => x !== s) })) }
-  async function salvar() {
-    if (!form.nome.trim()) return; setSaving(true)
-    try { await onSave({ ...form, grupo_id: form.grupo_id !== '' ? Number(form.grupo_id) : null }); onClose() }
-    catch (e) { console.error(e) } finally { setSaving(false) }
+  function toggle(id) { setSel(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
+  function toggleAll() {
+    if (sel.size === livrarias.length) setSel(new Set())
+    else setSel(new Set(livrarias.map(l => l.id)))
   }
-  const inp = (label, key, type = 'text') => (
-    <div className="form-group"><label className="form-label">{label}</label>
-      <input className="form-input" type={type} value={form[key] ?? ''} placeholder={label} onChange={e => set(key, e.target.value)} /></div>
-  )
+
   return (
     <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth:560, maxHeight:'90vh', overflowY:'auto' }}>
+      <div className="modal" style={{ maxWidth: 420, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
+        <div className="modal-header">
+          <h2 className="modal-title">{titulo || 'Selecionar livrarias'}</h2>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
+        </div>
+        <div style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 20px', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+            <input type="checkbox" checked={sel.size === livrarias.length} onChange={toggleAll} style={{ accentColor: 'var(--accent)' }} />
+            Selecionar todas ({livrarias.length})
+          </label>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+          {livrarias.map(l => (
+            <label key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 20px', cursor: 'pointer', fontSize: 13 }}>
+              <input type="checkbox" checked={sel.has(l.id)} onChange={() => toggle(l.id)} style={{ accentColor: 'var(--accent)' }} />
+              <span style={{ color: 'var(--text)' }}>{l.nome}</span>
+              {l.instagram && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{l.instagram}</span>}
+            </label>
+          ))}
+        </div>
+        <div className="form-actions" style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{sel.size} selecionada{sel.size !== 1 ? 's' : ''}</span>
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={() => { onConfirm([...sel]); onClose() }}>Aplicar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── MODAL EDITORA ──────────────────────────────────────────
+function ModalEditora({ editora, onSave, onClose }) {
+  const [form, setForm] = useState({ nome: editora?.nome || '', contato: editora?.contato || '', instagram: editora?.instagram || '' })
+  const [saving, setSaving] = useState(false)
+  async function salvar() {
+    if (!form.nome.trim()) return
+    setSaving(true)
+    try { await onSave(form); onClose() }
+    catch (e) { console.error(e) } finally { setSaving(false) }
+  }
+  return (
+    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 420 }}>
         <div className="modal-header">
           <h2 className="modal-title">{editora ? 'Editar editora' : 'Nova editora'}</h2>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
         </div>
-        <div className="form-grid" style={{ gridTemplateColumns:'1fr 1fr' }}>
-          {inp('Nome *', 'nome')}
-          <div className="form-group"><label className="form-label">Status</label>
-            <select className="form-select" value={form.status_parceria} onChange={e => set('status_parceria', e.target.value)}>
-              {STATUS_PARCERIA.map(s => <option key={s} value={s}>{STATUS_COR[s]?.label || s}</option>)}
-            </select></div>
-          {inp('Instagram', 'instagram')} {inp('YouTube', 'youtube')}
-          {inp('Contato', 'contato')} {inp('E-mail', 'email', 'email')}
-          {inp('Macro', 'macro')} {inp('Nicho', 'nicho')}
-          {inp('Sub-nicho', 'sub_nicho')} {inp('Posicionamento', 'posicionamento')}
-          <div className="form-group"><label className="form-label">Grupo</label>
-            <select className="form-select" value={form.grupo_id ?? ''} onChange={e => set('grupo_id', e.target.value)}>
-              <option value="">—</option>
-              {GRUPOS.map(g => <option key={g.id} value={g.id}>{g.romano} · {g.label}</option>)}
-            </select></div>
-          <div className="form-group" style={{ display:'flex', alignItems:'center', gap:10, marginTop:4 }}>
-            <label className="form-label" style={{ margin:0 }}>Tem grupo de WhatsApp?</label>
-            <input type="checkbox" checked={!!form.tem_grupo} onChange={e => set('tem_grupo', e.target.checked)}
-              style={{ width:16, height:16, cursor:'pointer', accentColor:'var(--accent)' }} />
-          </div>
-        </div>
-        <div className="form-group" style={{ marginTop:8 }}>
-          <label className="form-label">Selos editoriais</label>
-          <div style={{ display:'flex', gap:8, marginBottom:8, flexWrap:'wrap' }}>
-            {form.selos.map(s => (
-              <span key={s} style={{ display:'flex', alignItems:'center', gap:5, padding:'3px 10px', background:'var(--accent-glow)', border:'1px solid var(--accent)', borderRadius:20, fontSize:12, color:'var(--accent)' }}>
-                {s}<button onClick={() => rmSelo(s)} style={{ background:'none', border:'none', cursor:'pointer', padding:0, color:'var(--accent)', display:'flex' }}><X size={11} /></button>
-              </span>
-            ))}
-          </div>
-          <div style={{ display:'flex', gap:8 }}>
-            <input className="form-input" value={novoSelo} onChange={e => setNovoSelo(e.target.value)}
-              placeholder="Nome do selo" onKeyDown={e => e.key === 'Enter' && addSelo()} style={{ flex:1 }} />
-            <button className="btn btn-ghost btn-sm" onClick={addSelo}><Plus size={13} /> Adicionar</button>
-          </div>
-        </div>
-        <div className="form-actions" style={{ marginTop:16 }}>
-          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={salvar} disabled={saving || !form.nome.trim()}>{saving ? 'Salvando...' : 'Salvar'}</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function ModalLivraria({ livraria, editoras, onSave, onClose }) {
-  const empty = { nome:'', editora_id:'', contato:'', site:'', instagram:'', youtube:'', inauguracao:'', observacao:'', status:'ativa' }
-  const [form, setForm] = useState(livraria ? { ...livraria, editora_id: livraria.editora_id ?? '', inauguracao: livraria.inauguracao ?? '' } : empty)
-  const [saving, setSaving] = useState(false)
-  function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
-  async function salvar() {
-    if (!form.nome.trim()) return; setSaving(true)
-    try { await onSave({ ...form, editora_id: form.editora_id || null, inauguracao: form.inauguracao || null }); onClose() }
-    catch (e) { console.error(e) } finally { setSaving(false) }
-  }
-  return (
-    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth:500, maxHeight:'90vh', overflowY:'auto' }}>
-        <div className="modal-header">
-          <h2 className="modal-title">{livraria ? 'Editar livraria' : 'Nova livraria'}</h2>
-          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
-        </div>
-        <div className="form-grid" style={{ gridTemplateColumns:'1fr 1fr' }}>
-          <div className="form-group" style={{ gridColumn:'1/-1' }}>
-            <label className="form-label">Nome *</label>
-            <input className="form-input" value={form.nome} onChange={e => set('nome', e.target.value)} placeholder="Nome da livraria" />
-          </div>
-          <div className="form-group" style={{ gridColumn:'1/-1' }}>
-            <label className="form-label">Editora vinculada</label>
-            <select className="form-select" value={form.editora_id} onChange={e => set('editora_id', e.target.value)}>
-              <option value="">—</option>
-              {editoras.map(e => <option key={e.id} value={e.id}>{e.nome}</option>)}
-            </select>
-          </div>
-          <div className="form-group"><label className="form-label">Contato</label><input className="form-input" value={form.contato ?? ''} onChange={e => set('contato', e.target.value)} placeholder="Nome" /></div>
-          <div className="form-group"><label className="form-label">Site</label><input className="form-input" value={form.site ?? ''} onChange={e => set('site', e.target.value)} placeholder="https://" /></div>
-          <div className="form-group"><label className="form-label">Instagram</label><input className="form-input" value={form.instagram ?? ''} onChange={e => set('instagram', e.target.value)} placeholder="@livraria" /></div>
-          <div className="form-group"><label className="form-label">YouTube</label><input className="form-input" value={form.youtube ?? ''} onChange={e => set('youtube', e.target.value)} placeholder="@canal" /></div>
-          <div className="form-group"><label className="form-label">Inauguração</label><input className="form-input" type="date" value={form.inauguracao ?? ''} onChange={e => set('inauguracao', e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">Status</label>
-            <select className="form-select" value={form.status || 'ativa'} onChange={e => set('status', e.target.value)}>
-              {STATUS_LIVRARIA.map(s => <option key={s} value={s}>{STATUS_COR[s]?.label || s}</option>)}
-            </select></div>
-          <div className="form-group" style={{ gridColumn:'1/-1' }}>
-            <label className="form-label">Observação</label>
-            <textarea className="form-textarea" rows={2} value={form.observacao ?? ''} onChange={e => set('observacao', e.target.value)} placeholder="Observações" />
-          </div>
+        <div className="form-grid">
+          <div className="form-group"><label className="form-label">Nome *</label>
+            <input className="form-input" value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Nome da editora" /></div>
+          <div className="form-group"><label className="form-label">Contato</label>
+            <input className="form-input" value={form.contato} onChange={e => setForm(f => ({ ...f, contato: e.target.value }))} placeholder="Nome do responsável" /></div>
+          <div className="form-group"><label className="form-label">Instagram</label>
+            <input className="form-input" value={form.instagram} onChange={e => setForm(f => ({ ...f, instagram: e.target.value }))} placeholder="@usuario" /></div>
         </div>
         <div className="form-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
@@ -325,88 +211,67 @@ function ModalLivraria({ livraria, editoras, onSave, onClose }) {
   )
 }
 
-function ModalImportar({ tipo, editoras, onClose, onImported }) {
+// ── MODAL IMPORTAR ─────────────────────────────────────────
+function ModalImportar({ onClose, onImported }) {
   const fileRef = useRef()
   const [linhas, setLinhas] = useState([])
   const [etapa, setEtapa] = useState('upload')
   const [importando, setImportando] = useState(false)
-  const [erro, setErro] = useState(null)
-
   function baixarTemplate() {
     const wb = XLSX.utils.book_new()
-    if (tipo === 'editora') {
-      const ws = XLSX.utils.aoa_to_sheet([
-        ['Nome','Livraria (nome ou - se não tiver)','Macro','Nicho','Sub-nicho','Posicionamento','Grupo (I a VIII)','Status (ativa/Encerramento/pendente)'],
-        ['Editora Exemplo','-','Catolicismo','Formação católica','Espiritualidade','Conservadora','III','ativa'],
-      ])
-      ws['!cols'] = [28,24,16,28,24,18,14,16].map(w => ({ wch:w }))
-      XLSX.utils.book_append_sheet(wb, ws, 'Editoras')
-      XLSX.writeFile(wb, 'template_editoras.xlsx')
-    } else {
-      const ws = XLSX.utils.aoa_to_sheet([
-        ['Nome Livraria','Editora (nome exato)','Contato','Site','Instagram','YouTube','Data Inauguração (dd/mm/aaaa)','Observação','Status'],
-        ['Livraria Exemplo','Editora Exemplo','Maria Lima','https://livraria.com','@livraria','@canal','15/03/2024','','ativa'],
-      ])
-      ws['!cols'] = [24,24,16,24,14,14,22,24,12].map(w => ({ wch:w }))
-      XLSX.utils.book_append_sheet(wb, ws, 'Livrarias')
-      XLSX.writeFile(wb, 'template_livrarias.xlsx')
-    }
+    const ws = XLSX.utils.aoa_to_sheet([['Nome', 'Instagram'], ['Editora Exemplo', '@editoraexemplo']])
+    ws['!cols'] = [{ wch: 30 }, { wch: 20 }]
+    XLSX.utils.book_append_sheet(wb, ws, 'Editoras')
+    XLSX.writeFile(wb, 'template_editoras_parceiras.xlsx')
   }
-
   function processar(file) {
     const reader = new FileReader()
     reader.onload = e => {
-      const wb = XLSX.read(e.target.result, { type:'array', cellDates:false })
+      const wb = XLSX.read(e.target.result, { type: 'array' })
       const ws = wb.Sheets[wb.SheetNames[0]]
-      const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' })
-      setLinhas(rows.slice(1).filter(r => r[0]?.toString().trim()))
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
+      const dados = rows.slice(1).filter(r => r[0]?.toString().trim())
+      setLinhas(dados.map(r => ({ nome: r[0]?.toString().trim(), instagram: r[1]?.toString().trim() || '' })))
       setEtapa('revisao')
     }
     reader.readAsArrayBuffer(file)
   }
-
   async function confirmar() {
-    setImportando(true); setErro(null)
-    try {
-      if (tipo === 'editora') await importarEditorasPlanilha(linhas)
-      else await importarLivrariasPlanilha(linhas, editoras)
-      onImported(); onClose()
-    } catch (e) {
-      console.error(e)
-      setErro('Erro ao importar: ' + (e?.message || 'Verifique os dados e tente novamente.'))
-    } finally { setImportando(false) }
+    setImportando(true)
+    try { await importarEditorasPlanilha(linhas); onImported(); onClose() }
+    catch (e) { console.error(e) } finally { setImportando(false) }
   }
-
   return (
     <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth:520 }}>
+      <div className="modal" style={{ maxWidth: 500 }}>
         <div className="modal-header">
-          <h2 className="modal-title">Importar {tipo === 'editora' ? 'editoras' : 'livrarias'}</h2>
+          <h2 className="modal-title">Importar editoras via planilha</h2>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
         </div>
         {etapa === 'upload' && (
           <div>
-            <p style={{ fontSize:13, color:'var(--text-muted)', marginBottom:16 }}>Baixe o template, preencha e faça o upload.</p>
-            <button onClick={baixarTemplate} className="btn btn-ghost" style={{ width:'100%', marginBottom:12, justifyContent:'center' }}>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>Baixe o template, preencha e faça o upload.</p>
+            <button onClick={baixarTemplate} className="btn btn-ghost" style={{ width: '100%', marginBottom: 12, justifyContent: 'center' }}>
               <FileSpreadsheet size={14} /> Baixar template .xlsx
             </button>
             <div onClick={() => fileRef.current?.click()} onDragOver={e => e.preventDefault()}
               onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) processar(f) }}
-              style={{ border:'2px dashed var(--border)', borderRadius:12, padding:'36px 20px', textAlign:'center', cursor:'pointer', background:'var(--surface-2)' }}>
-              <Upload size={28} style={{ color:'var(--text-muted)', marginBottom:8 }} />
-              <div style={{ fontSize:13, color:'var(--text-muted)' }}>Clique ou arraste o arquivo .xlsx</div>
-              <input ref={fileRef} type="file" accept=".xlsx" style={{ display:'none' }}
+              style={{ border: '2px dashed var(--border)', borderRadius: 12, padding: '36px 20px', textAlign: 'center', cursor: 'pointer', background: 'var(--surface-2)' }}>
+              <Upload size={28} style={{ color: 'var(--text-muted)', marginBottom: 8 }} />
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Clique ou arraste o arquivo .xlsx</div>
+              <input ref={fileRef} type="file" accept=".xlsx" style={{ display: 'none' }}
                 onChange={e => { const f = e.target.files?.[0]; if (f) processar(f); e.target.value = '' }} />
             </div>
           </div>
         )}
         {etapa === 'revisao' && (
           <div>
-            <p style={{ fontSize:13, color:'var(--text-muted)', marginBottom:12 }}>{linhas.length} registro{linhas.length !== 1 ? 's' : ''} encontrado{linhas.length !== 1 ? 's' : ''}:</p>
-            <div style={{ maxHeight:280, overflowY:'auto', border:'1px solid var(--border)', borderRadius:8, marginBottom:16 }}>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>{linhas.length} editora{linhas.length !== 1 ? 's' : ''} encontrada{linhas.length !== 1 ? 's' : ''}:</p>
+            <div style={{ maxHeight: 300, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8, marginBottom: 16 }}>
               {linhas.map((l, i) => (
-                <div key={i} style={{ padding:'8px 14px', borderBottom:'1px solid var(--border)', fontSize:13, display:'flex', gap:12 }}>
-                  <span style={{ fontWeight:600, color:'var(--text)', flex:1 }}>{l[0]}</span>
+                <div key={i} style={{ padding: '8px 14px', borderBottom: '1px solid var(--border)', fontSize: 13, display: 'flex', gap: 12 }}>
+                  <span style={{ fontWeight: 600, color: 'var(--text)', flex: 1 }}>{l.nome}</span>
+                  {l.instagram && <span style={{ color: 'var(--text-muted)' }}>{l.instagram}</span>}
                 </div>
               ))}
             </div>
@@ -414,7 +279,6 @@ function ModalImportar({ tipo, editoras, onClose, onImported }) {
               <button className="btn btn-ghost" onClick={() => setEtapa('upload')}>Voltar</button>
               <button className="btn btn-primary" onClick={confirmar} disabled={importando}>{importando ? 'Importando...' : `Importar ${linhas.length}`}</button>
             </div>
-            {erro && <div style={{ marginTop:10, padding:'8px 12px', background:'#ef444418', border:'1px solid #ef4444', borderRadius:8, fontSize:12, color:'#ef4444' }}>{erro}</div>}
           </div>
         )}
       </div>
@@ -422,395 +286,353 @@ function ModalImportar({ tipo, editoras, onClose, onImported }) {
   )
 }
 
-// ── TABELA GENÉRICA ────────────────────────────────────────
-function TabelaLinhas({ colsAtivas, lista, dados, selecionados, toggleSel, renderCelula, isAdmin, onEditar, onExcluir, larguras }) {
-  return (
-    <div style={{ overflowX:'auto', border:'1px solid var(--border)', borderRadius:8 }}>
-      <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
-        <thead>
-          <tr style={{ background:'var(--surface-2)' }}>
-            <th style={{ padding:'8px 10px', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', width:36 }}>
-              <input type="checkbox"
-                checked={lista.length > 0 && lista.every(e => selecionados.has(e.id))}
-                onChange={e => e.target.checked ? lista.forEach(x => selecionados.add(x.id)) : selecionados.clear()}
-                style={{ accentColor:'var(--accent)', cursor:'pointer' }} />
-            </th>
-            {colsAtivas}
-            {isAdmin && <th style={{ padding:'8px 10px', borderBottom:'2px solid var(--border)', width:60 }}></th>}
-          </tr>
-        </thead>
-        <tbody>
-          {lista.length === 0 ? (
-            <tr><td colSpan={99} style={{ textAlign:'center', padding:'40px 0', color:'var(--text-muted)' }}>Nenhum registro encontrado.</td></tr>
-          ) : lista.map((item, i) => {
-            const sel = selecionados.has(item.id)
-            return (
-              <tr key={item.id}
-                style={{ background: sel ? 'var(--accent-glow)' : i % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)', transition:'background 0.1s' }}
-                onMouseEnter={el => { if (!sel) el.currentTarget.style.background = 'var(--accent-glow)' }}
-                onMouseLeave={el => { if (!sel) el.currentTarget.style.background = i % 2 === 0 ? 'var(--surface)' : 'var(--surface-2)' }}>
-                <td style={{ padding:'7px 10px', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)' }}>
-                  <input type="checkbox" checked={sel} onChange={() => toggleSel(item.id)} style={{ accentColor:'var(--accent)', cursor:'pointer' }} />
-                </td>
-                {renderCelula(item, i)}
-                {isAdmin && (
-                  <td style={{ padding:'7px 10px', borderBottom:'1px solid var(--border)', whiteSpace:'nowrap' }}>
-                    <div style={{ display:'flex', gap:6 }}>
-                      <button onClick={() => onEditar(item)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', display:'flex' }}><Pencil size={12} /></button>
-                      <button onClick={() => onExcluir(item)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', display:'flex', opacity:0.5 }}><Trash2 size={12} /></button>
-                    </div>
-                  </td>
-                )}
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
-  )
-}
+// ── PAINEL LATERAL ─────────────────────────────────────────
+function PainelEditora({ editora, checkagemMes, ano, mes, usuario, onClose }) {
+  const [obs, setObs] = useState([])
+  const [loadingObs, setLoadingObs] = useState(true)
+  const [novaObs, setNovaObs] = useState({ categoria: 'Comportamento', texto: '' })
+  const [salvandoObs, setSalvandoObs] = useState(false)
 
-// ── ABA EDITORAS ───────────────────────────────────────────
-function AbaEditoras({ editoras, livrarias, setEditoras, isAdmin, showToast }) {
-  const [ordem, setOrdem] = useState(TODAS_COLUNAS_EDITORAS.map(c => c.key))
-  const [visiveis, setVisiveis] = useState(VISIVEIS_DEFAULT_EDITORAS)
-  const [showColSel, setShowColSel] = useState(false)
-  const [filtros, setFiltros] = useState({})
-  const [buscaNome, setBuscaNome] = useState('')
-  const [modal, setModal] = useState(null)
-  const [importar, setImportar] = useState(false)
-  const [sel, setSel] = useState(new Set())
-  const [excluindo, setExcluindo] = useState(false)
+  useEffect(() => {
+    setLoadingObs(true)
+    getObservacoesEditora(editora.id).then(setObs).finally(() => setLoadingObs(false))
+  }, [editora.id])
 
-  const livrariaPorEditora = {}
-  for (const l of livrarias) { if (l.editora_id) livrariaPorEditora[l.editora_id] = l }
+  const registros = checkagemMes.filter(r => r.editora_id === editora.id)
+  const postou = registros.filter(r => r.status === 'postou').length
+  const naoPostou = registros.filter(r => r.status === 'nao_postou').length
+  const pendente = registros.filter(r => r.status === 'pendente').length
+  const total = registros.length
+  const pct = total > 0 ? Math.round((postou / total) * 100) : 0
+  const corSaude = pct >= 70 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444'
 
-  const dados = editoras.map(e => ({ ...e, livraria: livrariaPorEditora[e.id]?.nome || '' }))
-
-  const colDefs = ordem
-    .map(k => TODAS_COLUNAS_EDITORAS.find(c => c.key === k))
-    .filter(c => c && (c.fixo || visiveis.includes(c.key)))
-
-  const lista = dados.filter(e => {
-    if (buscaNome && !e.nome?.toLowerCase().includes(buscaNome.toLowerCase())) return false
-    for (const [col, vals] of Object.entries(filtros)) {
-      if (!vals?.length) continue
-      let v = col === 'grupo_id' ? (GRUPOS.find(g => g.id === e.grupo_id)?.romano || '')
-             : col === 'status_parceria' ? getStatusSafe(e.status_parceria).label
-             : (e[col] != null ? String(e[col]) : '')
-      if (!vals.includes(v) && !(vals.includes('(vazio)') && !v)) return false
-    }
-    return true
-  })
-
-  function toggleSel(id) { setSel(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
-
-  async function excluirLote() {
-    if (!window.confirm(`Remover ${sel.size} editora${sel.size !== 1 ? 's' : ''}?`)) return
-    setExcluindo(true)
-    try { await desativarEditorasLote([...sel]); setEditoras(prev => prev.filter(e => !sel.has(e.id))); setSel(new Set()); showToast('Editoras removidas!') }
-    catch { showToast('Erro ao remover editoras.', 'error') } finally { setExcluindo(false) }
-  }
-
-  async function salvar(form) {
+  async function salvarObs() {
+    if (!novaObs.texto.trim()) return
+    setSalvandoObs(true)
     try {
-      if (modal === 'new') { const n = await createEditora(form); setEditoras(prev => [...prev, n]); showToast('Editora cadastrada!') }
-      else { const u = await updateEditora(modal.id, form); setEditoras(prev => prev.map(e => e.id === u.id ? u : e)); showToast('Editora atualizada!') }
-    } catch { showToast('Erro ao salvar editora.', 'error') }
+      const nova = await createObservacao({ ...novaObs, editora_id: editora.id, criado_por: usuario?.id })
+      setObs(prev => [nova, ...prev])
+      setNovaObs(f => ({ ...f, texto: '' }))
+    } catch (e) { console.error(e) } finally { setSalvandoObs(false) }
   }
 
-  async function excluir(e) {
-    if (!window.confirm(`Remover ${e.nome}?`)) return
-    try { await desativarEditora(e.id); setEditoras(prev => prev.filter(x => x.id !== e.id)); showToast('Editora removida!') }
-    catch { showToast('Erro ao remover.', 'error') }
+  async function excluirObs(id) {
+    if (!window.confirm('Excluir observação?')) return
+    await deleteObservacao(id)
+    setObs(prev => prev.filter(o => o.id !== id))
   }
-
-  function renderCell(e) {
-    return colDefs.map(c => {
-      let content = null
-      if (c.key === 'classificacao') content = e.classificacao ? <span style={{ fontWeight:800, color:CLASS_COR[e.classificacao]||'var(--accent)' }}>{e.classificacao}</span> : null
-      else if (c.key === 'nome') content = e.nome
-      else if (c.key === 'livraria') content = e.livraria || null
-      else if (c.key === 'status_parceria') { const s = getStatusSafe(e.status_parceria); content = <span style={{ fontSize:11, fontWeight:700, color:s.cor, background:s.bg, padding:'2px 8px', borderRadius:20, whiteSpace:'nowrap' }}>{s.label}</span> }
-      else if (c.key === 'grupo_id') { const g = GRUPOS.find(x => x.id === e.grupo_id); content = g ? g.romano : null }
-      else if (c.key === 'tem_grupo') content = e.tem_grupo ? '✓' : null
-      else if (c.key === 'selos') content = e.selos_editoriais?.map(s => s.nome).join(', ') || null
-      else if (c.key === 'instagram' && e.instagram) content = <a href={`https://instagram.com/${e.instagram.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color:'var(--accent)' }}>{e.instagram}</a>
-      else if (c.key === 'youtube' && e.youtube) content = <a href={e.youtube.startsWith('http') ? e.youtube : `https://youtube.com/${e.youtube}`} target="_blank" rel="noreferrer" style={{ color:'var(--accent)' }}>{e.youtube}</a>
-      else content = e[c.key] || null
-      return <Celula key={c.key} width={c.key === 'nome' || c.key === 'livraria' ? 200 : c.key === 'grupo_id' || c.key === 'classificacao' ? 60 : 160}>{content}</Celula>
-    })
-  }
-
-  const cabecalhos = colDefs.map(c => c.fixo
-    ? <th key={c.key} style={{ padding:'8px 10px', textAlign:'left', fontWeight:700, color:'var(--text-muted)', fontSize:11, textTransform:'uppercase', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', whiteSpace:'nowrap' }}>{c.label}</th>
-    : <ThFiltro key={c.key} label={c.label} colKey={c.key} dados={dados} filtroAtivo={filtros[c.key]} onFiltro={(col, vals) => setFiltros(f => ({ ...f, [col]: vals }))} />
-  )
 
   return (
-    <div>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12, flexWrap:'wrap', gap:10 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ fontSize:13, color:'var(--text-muted)' }}>{lista.length} editora{lista.length !== 1 ? 's' : ''}</span>
-          {Object.values(filtros).some(v => v?.length) && <button className="btn btn-ghost btn-sm" onClick={() => setFiltros({})} style={{ fontSize:11 }}><X size={11} /> Limpar filtros</button>}
+    <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 380, background: 'var(--surface)', borderLeft: '1px solid var(--border)', zIndex: 100, display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 24px rgba(0,0,0,0.2)' }}>
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{editora.nome}</div>
+          {editora.instagram && (
+            <a href={`https://instagram.com/${editora.instagram.replace('@', '')}`} target="_blank" rel="noreferrer"
+              style={{ fontSize: 12, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <Instagram size={11} /> {editora.instagram}
+            </a>
+          )}
         </div>
-        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-          <input value={buscaNome} onChange={e => setBuscaNome(e.target.value)} placeholder="Buscar nome..."
-            style={{ padding:'6px 10px', borderRadius:8, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text)', fontSize:12, minWidth:160 }} />
-          <div style={{ position:'relative' }}>
-            <button className="btn btn-ghost btn-sm" onClick={() => setShowColSel(v => !v)}><Settings2 size={13} /> Colunas</button>
-            {showColSel && <SeletorColunas colunas={TODAS_COLUNAS_EDITORAS} ordem={ordem} onOrdemChange={setOrdem} visiveis={visiveis} onVisiveisChange={setVisiveis} onClose={() => setShowColSel(false)} />}
+        <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>{MESES[mes - 1]} {ano}</div>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+            {[{ n: postou, l: 'Postou', c: '#22c55e' }, { n: naoPostou, l: 'Não postou', c: '#ef4444' }, { n: pendente, l: 'Pendente', c: '#6b7280' }].map(({ n, l, c }) => (
+              <div key={l} style={{ flex: 1, textAlign: 'center', background: 'var(--surface-2)', borderRadius: 8, padding: '8px 4px' }}>
+                <div style={{ fontSize: 20, fontWeight: 800, color: c }}>{n}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{l}</div>
+              </div>
+            ))}
           </div>
-          {isAdmin && <>
-            <button className="btn btn-ghost btn-sm" onClick={() => setImportar(true)}><Upload size={13} /> Importar</button>
-            <button className="btn btn-primary btn-sm" onClick={() => setModal('new')}><Plus size={13} /> Nova editora</button>
-          </>}
+          {total > 0 && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+                <span>Taxa de postagem</span><span style={{ color: corSaude, fontWeight: 700 }}>{pct}%</span>
+              </div>
+              <div style={{ height: 6, borderRadius: 99, background: 'var(--surface-3)' }}>
+                <div style={{ height: '100%', width: `${pct}%`, background: corSaude, borderRadius: 99, transition: 'width 0.3s' }} />
+              </div>
+            </div>
+          )}
         </div>
-      </div>
-      <BarraSel selecionados={sel.size} total={lista.length}
-        onTodos={() => setSel(new Set(lista.map(e => e.id)))} onLimpar={() => setSel(new Set())}
-        onExcluir={excluirLote} excluindo={excluindo} />
-      <div style={{ overflowX:'auto', border:'1px solid var(--border)', borderRadius:8 }}>
-        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
-          <thead><tr style={{ background:'var(--surface-2)' }}>
-            <th style={{ padding:'8px 10px', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', width:36 }}>
-              <input type="checkbox" checked={lista.length > 0 && lista.every(e => sel.has(e.id))}
-                onChange={e => setSel(e.target.checked ? new Set(lista.map(x => x.id)) : new Set())}
-                style={{ accentColor:'var(--accent)', cursor:'pointer' }} />
-            </th>
-            {cabecalhos}
-            {isAdmin && <th style={{ padding:'8px 10px', borderBottom:'2px solid var(--border)', width:60 }}></th>}
-          </tr></thead>
-          <tbody>
-            {lista.length === 0 ? <tr><td colSpan={99} style={{ textAlign:'center', padding:'40px 0', color:'var(--text-muted)' }}>Nenhuma editora encontrada.</td></tr>
-            : lista.map((e, i) => {
-              const s = sel.has(e.id)
-              return (
-                <tr key={e.id} style={{ background: s ? 'var(--accent-glow)' : i%2===0 ? 'var(--surface)' : 'var(--surface-2)', transition:'background 0.1s' }}
-                  onMouseEnter={el => { if (!s) el.currentTarget.style.background='var(--accent-glow)' }}
-                  onMouseLeave={el => { if (!s) el.currentTarget.style.background = i%2===0 ? 'var(--surface)' : 'var(--surface-2)' }}>
-                  <td style={{ padding:'7px 10px', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)' }}>
-                    <input type="checkbox" checked={s} onChange={() => toggleSel(e.id)} style={{ accentColor:'var(--accent)', cursor:'pointer' }} />
-                  </td>
-                  {renderCell(e)}
-                  {isAdmin && <td style={{ padding:'7px 10px', borderBottom:'1px solid var(--border)', whiteSpace:'nowrap' }}>
-                    <div style={{ display:'flex', gap:6 }}>
-                      <button onClick={() => setModal(e)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', display:'flex' }}><Pencil size={12} /></button>
-                      <button onClick={() => excluir(e)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', display:'flex', opacity:0.5 }}><Trash2 size={12} /></button>
-                    </div>
-                  </td>}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-      {modal && <ModalEditora editora={modal === 'new' ? null : modal} onSave={salvar} onClose={() => setModal(null)} />}
-      {importar && <ModalImportar tipo="editora" editoras={editoras} onClose={() => setImportar(false)} onImported={async () => { setEditoras(await getEditorasCompletas()); showToast('Editoras importadas com sucesso!') }} />}
-    </div>
-  )
-}
-
-// ── ABA LIVRARIAS ──────────────────────────────────────────
-function AbaLivrarias({ livrarias, setLivrarias, editoras, isAdmin, showToast }) {
-  const [ordem, setOrdem] = useState(TODAS_COLUNAS_LIVRARIAS.map(c => c.key))
-  const [visiveis, setVisiveis] = useState(VISIVEIS_DEFAULT_LIVRARIAS)
-  const [showColSel, setShowColSel] = useState(false)
-  const [filtros, setFiltros] = useState({})
-  const [buscaNome, setBuscaNome] = useState('')
-  const [modal, setModal] = useState(null)
-  const [importar, setImportar] = useState(false)
-  const [sel, setSel] = useState(new Set())
-  const [excluindo, setExcluindo] = useState(false)
-
-  const dados = livrarias.map(l => ({ ...l, editora: l.editoras_parceiras?.nome || '' }))
-
-  const colDefs = ordem
-    .map(k => TODAS_COLUNAS_LIVRARIAS.find(c => c.key === k))
-    .filter(c => c && (c.fixo || visiveis.includes(c.key)))
-
-  const lista = dados.filter(l => {
-    if (buscaNome && !l.nome?.toLowerCase().includes(buscaNome.toLowerCase())) return false
-    for (const [col, vals] of Object.entries(filtros)) {
-      if (!vals?.length) continue
-      const v = col === 'status' ? getStatusSafe(l.status).label : (l[col] != null ? String(l[col]) : '')
-      if (!vals.includes(v) && !(vals.includes('(vazio)') && !v)) return false
-    }
-    return true
-  })
-
-  function toggleSel(id) { setSel(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
-
-  async function excluirLote() {
-    if (!window.confirm(`Remover ${sel.size} livraria${sel.size !== 1 ? 's' : ''}?`)) return
-    setExcluindo(true)
-    try { await desativarLivrariaLote([...sel]); setLivrarias(prev => prev.filter(l => !sel.has(l.id))); setSel(new Set()); showToast('Livrarias removidas!') }
-    catch { showToast('Erro ao remover livrarias.', 'error') } finally { setExcluindo(false) }
-  }
-
-  async function salvar(form) {
-    try {
-      if (modal === 'new') { const n = await createLivraria(form); setLivrarias(prev => [...prev, n].sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR'))); showToast('Livraria cadastrada!') }
-      else { const u = await updateLivraria(modal.id, form); setLivrarias(prev => prev.map(l => l.id === u.id ? u : l)); showToast('Livraria atualizada!') }
-    } catch { showToast('Erro ao salvar livraria.', 'error') }
-  }
-
-  async function excluir(l) {
-    if (!window.confirm(`Remover ${l.nome}?`)) return
-    try { await desativarLivraria(l.id); setLivrarias(prev => prev.filter(x => x.id !== l.id)); showToast('Livraria removida!') }
-    catch { showToast('Erro ao remover.', 'error') }
-  }
-
-  function renderCell(l) {
-    return colDefs.map(c => {
-      let content = null
-      if (c.key === 'nome') content = l.nome
-      else if (c.key === 'editora') content = l.editora || null
-      else if (c.key === 'site' && l.site) content = <a href={l.site.startsWith('http') ? l.site : `https://${l.site}`} target="_blank" rel="noreferrer" style={{ color:'var(--accent)', textDecoration:'underline' }}>🔗 {l.site}</a>
-      else if (c.key === 'instagram' && l.instagram) content = <a href={`https://instagram.com/${l.instagram.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color:'var(--accent)' }}>{l.instagram}</a>
-      else if (c.key === 'youtube' && l.youtube) content = <a href={l.youtube.startsWith('http') ? l.youtube : `https://youtube.com/${l.youtube}`} target="_blank" rel="noreferrer" style={{ color:'var(--accent)' }}>{l.youtube}</a>
-      else if (c.key === 'inauguracao' && l.inauguracao) content = new Date(l.inauguracao + 'T12:00:00').toLocaleDateString('pt-BR')
-      else if (c.key === 'status') { const s = getStatusSafe(l.status); content = <span style={{ fontSize:11, fontWeight:700, color:s.cor, background:s.bg, padding:'2px 8px', borderRadius:20, whiteSpace:'nowrap' }}>{s.label}</span> }
-      else content = l[c.key] || null
-      return <Celula key={c.key} width={c.key === 'nome' || c.key === 'editora' ? 180 : c.key === 'observacao' ? 160 : c.key === 'site' ? 120 : c.key === 'status' ? 100 : c.key === 'inauguracao' ? 90 : 120}>{content}</Celula>
-    })
-  }
-
-  const cabecalhos = colDefs.map(c => c.fixo
-    ? <th key={c.key} style={{ padding:'8px 10px', textAlign:'left', fontWeight:700, color:'var(--text-muted)', fontSize:11, textTransform:'uppercase', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', whiteSpace:'nowrap' }}>{c.label}</th>
-    : <ThFiltro key={c.key} label={c.label} colKey={c.key} dados={dados} filtroAtivo={filtros[c.key]} onFiltro={(col, vals) => setFiltros(f => ({ ...f, [col]: vals }))} />
-  )
-
-  return (
-    <div>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12, flexWrap:'wrap', gap:10 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ fontSize:13, color:'var(--text-muted)' }}>{lista.length} livraria{lista.length !== 1 ? 's' : ''}</span>
-          {Object.values(filtros).some(v => v?.length) && <button className="btn btn-ghost btn-sm" onClick={() => setFiltros({})} style={{ fontSize:11 }}><X size={11} /> Limpar filtros</button>}
-        </div>
-        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-          <input value={buscaNome} onChange={e => setBuscaNome(e.target.value)} placeholder="Buscar livraria..."
-            style={{ padding:'6px 10px', borderRadius:8, border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text)', fontSize:12, minWidth:160 }} />
-          <div style={{ position:'relative' }}>
-            <button className="btn btn-ghost btn-sm" onClick={() => setShowColSel(v => !v)}><Settings2 size={13} /> Colunas</button>
-            {showColSel && <SeletorColunas colunas={TODAS_COLUNAS_LIVRARIAS} ordem={ordem} onOrdemChange={setOrdem} visiveis={visiveis} onVisiveisChange={setVisiveis} onClose={() => setShowColSel(false)} />}
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Observações</div>
+          <div style={{ background: 'var(--surface-2)', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+            <select className="form-select" value={novaObs.categoria} onChange={e => setNovaObs(f => ({ ...f, categoria: e.target.value }))} style={{ marginBottom: 8, fontSize: 12 }}>
+              {CATEGORIAS_OBS.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <textarea className="form-textarea" rows={2} value={novaObs.texto} onChange={e => setNovaObs(f => ({ ...f, texto: e.target.value }))} placeholder="Escreva uma observação..." style={{ marginBottom: 8, fontSize: 12 }} />
+            <button className="btn btn-primary btn-sm" onClick={salvarObs} disabled={salvandoObs || !novaObs.texto.trim()}>
+              <MessageSquare size={12} /> Registrar
+            </button>
           </div>
-          {isAdmin && <>
-            <button className="btn btn-ghost btn-sm" onClick={() => setImportar(true)}><Upload size={13} /> Importar</button>
-            <button className="btn btn-primary btn-sm" onClick={() => setModal('new')}><Plus size={13} /> Nova livraria</button>
-          </>}
-        </div>
-      </div>
-      <BarraSel selecionados={sel.size} total={lista.length}
-        onTodos={() => setSel(new Set(lista.map(l => l.id)))} onLimpar={() => setSel(new Set())}
-        onExcluir={excluirLote} excluindo={excluindo} />
-      <div style={{ overflowX:'auto', border:'1px solid var(--border)', borderRadius:8 }}>
-        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
-          <thead><tr style={{ background:'var(--surface-2)' }}>
-            <th style={{ padding:'8px 10px', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', width:36 }}>
-              <input type="checkbox" checked={lista.length > 0 && lista.every(l => sel.has(l.id))}
-                onChange={e => setSel(e.target.checked ? new Set(lista.map(x => x.id)) : new Set())}
-                style={{ accentColor:'var(--accent)', cursor:'pointer' }} />
-            </th>
-            {cabecalhos}
-            {isAdmin && <th style={{ padding:'8px 10px', borderBottom:'2px solid var(--border)', width:60 }}></th>}
-          </tr></thead>
-          <tbody>
-            {lista.length === 0 ? <tr><td colSpan={99} style={{ textAlign:'center', padding:'40px 0', color:'var(--text-muted)' }}>Nenhuma livraria encontrada.</td></tr>
-            : lista.map((l, i) => {
-              const s = sel.has(l.id)
-              return (
-                <tr key={l.id} style={{ background: s ? 'var(--accent-glow)' : i%2===0 ? 'var(--surface)' : 'var(--surface-2)' }}
-                  onMouseEnter={el => { if (!s) el.currentTarget.style.background='var(--accent-glow)' }}
-                  onMouseLeave={el => { if (!s) el.currentTarget.style.background = i%2===0 ? 'var(--surface)' : 'var(--surface-2)' }}>
-                  <td style={{ padding:'7px 10px', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)' }}>
-                    <input type="checkbox" checked={s} onChange={() => toggleSel(l.id)} style={{ accentColor:'var(--accent)', cursor:'pointer' }} />
-                  </td>
-                  {renderCell(l)}
-                  {isAdmin && <td style={{ padding:'7px 10px', borderBottom:'1px solid var(--border)', whiteSpace:'nowrap' }}>
-                    <div style={{ display:'flex', gap:6 }}>
-                      <button onClick={() => setModal(l)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', display:'flex' }}><Pencil size={12} /></button>
-                      <button onClick={() => excluir(l)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', display:'flex', opacity:0.5 }}><Trash2 size={12} /></button>
-                    </div>
-                  </td>}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-      {modal && <ModalLivraria livraria={modal === 'new' ? null : modal} editoras={editoras} onSave={salvar} onClose={() => setModal(null)} />}
-      {importar && <ModalImportar tipo="livraria" editoras={editoras} onClose={() => setImportar(false)} onImported={async () => { setLivrarias(await getLivrarias()); showToast('Livrarias importadas com sucesso!') }} />}
-    </div>
-  )
-}
-
-// ── ABA GRUPOS ─────────────────────────────────────────────
-function AbaGrupos({ editoras, livrarias }) {
-  const [gruposLocais, setGruposLocais] = useState(GRUPOS.map(g => ({ ...g })))
-  const [editandoId, setEditandoId] = useState(null)
-  const [labelEdit, setLabelEdit] = useState('')
-
-  const livrariaPorEditora = {}
-  for (const l of livrarias) { if (l.editora_id) livrariaPorEditora[l.editora_id] = l }
-
-  function iniciarEdicao(g) { setEditandoId(g.id); setLabelEdit(g.label) }
-  function salvarEdicao(id) {
-    setGruposLocais(prev => prev.map(g => g.id === id ? { ...g, label: labelEdit } : g))
-    setEditandoId(null)
-  }
-
-  return (
-    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))', gap:16 }}>
-      {gruposLocais.map(grupo => {
-        const eds = editoras.filter(e => e.grupo_id === grupo.id)
-        const comLiv = eds.filter(e => livrariaPorEditora[e.id]).sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR'))
-        const semLiv = eds.filter(e => !livrariaPorEditora[e.id]).sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR'))
-
-        return (
-          <div key={grupo.id} style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:12, overflow:'hidden' }}>
-            <div style={{ padding:'12px 16px', background:'var(--surface-2)', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
-              {editandoId === grupo.id ? (
-                <div style={{ display:'flex', alignItems:'center', gap:6, flex:1 }}>
-                  <span style={{ fontSize:12, fontWeight:700, color:'var(--accent)', flexShrink:0 }}>{grupo.romano} -</span>
-                  <input value={labelEdit} onChange={e => setLabelEdit(e.target.value)}
-                    autoFocus onKeyDown={e => e.key === 'Enter' && salvarEdicao(grupo.id)}
-                    style={{ flex:1, padding:'2px 6px', borderRadius:4, border:'1px solid var(--accent)', background:'var(--surface)', color:'var(--text)', fontSize:12 }} />
-                  <button onClick={() => salvarEdicao(grupo.id)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--accent)', display:'flex' }}><Check size={14} /></button>
-                  <button onClick={() => setEditandoId(null)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', display:'flex' }}><X size={14} /></button>
+          {loadingObs ? <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Carregando...</div>
+          : obs.length === 0 ? <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '16px 0' }}>Nenhuma observação registrada.</div>
+          : obs.map(o => (
+            <div key={o.id} style={{ background: 'var(--surface-2)', borderRadius: 8, padding: '10px 12px', marginBottom: 8, borderLeft: '3px solid var(--accent)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)' }}>{o.categoria}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{new Date(o.criado_em).toLocaleDateString('pt-BR')}</span>
+                  <button onClick={() => excluirObs(o.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 0, opacity: 0.5, display: 'flex' }}><Trash2 size={11} /></button>
                 </div>
-              ) : (
-                <>
-                  <span style={{ fontSize:12, fontWeight:700, color:'var(--accent)' }}>{grupo.romano} - {grupo.label}</span>
-                  <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
-                    <button onClick={() => iniciarEdicao(grupo)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', display:'flex', padding:0 }}><Pencil size={12} /></button>
-                    <span style={{ fontSize:11, color:'var(--text-muted)', background:'var(--surface-3)', padding:'2px 8px', borderRadius:20 }}>{eds.length}</span>
-                  </div>
-                </>
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--text)', margin: 0 }}>{o.texto}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── CHECKLIST LIVRARIAS DE ED. PARCEIRAS ───────────────────
+function ViewChecklistParceiras({ livrarias, checkagemMes, formato, dataKey, onMarcar, onSalvarObsFixa, obsFormato }) {
+  const registrosDoDia = checkagemMes.filter(r => r.formato === formato && r.data_esperada === dataKey)
+  const mapa = {}
+  for (const r of registrosDoDia) mapa[r.editora_id] = r
+  const [obsFixaAberta, setObsFixaAberta] = useState(null)
+  const [textoObsFixa, setTextoObsFixa] = useState('')
+  const [notaAberta, setNotaAberta] = useState(null)
+  const [textoNota, setTextoNota] = useState('')
+
+  if (livrarias.length === 0) return <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '48px 0', fontSize: 13 }}>Nenhuma livraria cadastrada ainda.</div>
+
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: '180px 110px 110px 1fr 1fr auto', gap: 8, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
+        <span>Livraria</span>
+        <span>Instagram</span>
+        <span>Instagram 2</span>
+        <span>Observações</span>
+        <span>Notas</span>
+        <span style={{ minWidth: 220 }}>Status</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {livrarias.map(livraria => {
+          const chaveId = livraria.editora_id
+          const reg = mapa[chaveId]
+          const status = reg?.status || null
+          const nota = reg?.observacao || ''
+          const obsFixa = obsFormato?.[livraria.id] || ''
+          const editandoObsFixa = obsFixaAberta === livraria.id
+          const editandoNota = notaAberta === livraria.id
+
+          return (
+            <div key={livraria.id}>
+              <div style={{ display: 'grid', gridTemplateColumns: '180px 110px 110px 1fr 1fr auto', gap: 8, alignItems: 'center', padding: '7px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: (editandoObsFixa || editandoNota) ? '8px 8px 0 0' : 8 }}>
+                {/* Livraria */}
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={livraria.nome}>
+                  {livraria.nome}
+                </div>
+                {/* Instagram */}
+                <div style={{ fontSize: 12 }}>
+                  {livraria.instagram
+                    ? <a href={`https://instagram.com/${livraria.instagram.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 3 }}><Instagram size={10}/>{livraria.instagram}</a>
+                    : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>
+                  }
+                </div>
+                {/* Instagram 2 */}
+                <div style={{ fontSize: 12 }}>
+                  {livraria.instagram2
+                    ? <a href={`https://instagram.com/${livraria.instagram2.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 3 }}><Instagram size={10}/>{livraria.instagram2}</a>
+                    : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>
+                  }
+                </div>
+                <div style={{ fontSize: 12, color: obsFixa ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  onClick={() => { setObsFixaAberta(editandoObsFixa ? null : livraria.id); setTextoObsFixa(obsFixa); setNotaAberta(null) }}
+                  title={obsFixa || 'Clique para adicionar observação fixa'}>
+                  {obsFixa || <span style={{ fontSize: 11, fontStyle: 'italic' }}>Adicionar...</span>}
+                </div>
+                {/* Notas — do dia */}
+                <div style={{ fontSize: 12, color: nota ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  onClick={() => { setNotaAberta(editandoNota ? null : livraria.id); setTextoNota(nota); setObsFixaAberta(null) }}
+                  title={nota || 'Clique para adicionar nota do dia'}>
+                  {nota || <span style={{ fontSize: 11, fontStyle: 'italic' }}>Adicionar...</span>}
+                </div>
+                {/* Botões */}
+                <div style={{ display: 'flex', gap: 5 }}>
+                  {STATUS_PARCEIRAS.map(s => (
+                    <button key={s.value}
+                      onClick={() => onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status === s.value ? null : s.value, observacao: nota })}
+                      style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `2px solid ${s.cor}`, background: status === s.value ? s.cor : 'transparent', color: status === s.value ? '#fff' : s.cor, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Editor de Observação fixa */}
+              {editandoObsFixa && (
+                <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px 12px', display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>Observação fixa:</span>
+                  <input className="form-input" style={{ flex: 1, fontSize: 12 }} value={textoObsFixa} onChange={e => setTextoObsFixa(e.target.value)}
+                    placeholder="Observação permanente da livraria..." autoFocus
+                    onKeyDown={e => { if (e.key === 'Enter') { onSalvarObsFixa(livraria.id, textoObsFixa); setObsFixaAberta(null) } if (e.key === 'Escape') setObsFixaAberta(null) }} />
+                  <button className="btn btn-primary btn-sm" onClick={() => { onSalvarObsFixa(livraria.id, textoObsFixa); setObsFixaAberta(null) }}>Salvar</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setObsFixaAberta(null)}>Cancelar</button>
+                </div>
+              )}
+              {/* Editor de Nota do dia */}
+              {editandoNota && (
+                <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px 12px', display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0 }}>Nota do dia:</span>
+                  <input className="form-input" style={{ flex: 1, fontSize: 12 }} value={textoNota} onChange={e => setTextoNota(e.target.value)}
+                    placeholder="O que aconteceu hoje..." autoFocus
+                    onKeyDown={e => { if (e.key === 'Enter') { onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status || 'pendente', observacao: textoNota }); setNotaAberta(null) } if (e.key === 'Escape') setNotaAberta(null) }} />
+                  <button className="btn btn-primary btn-sm" onClick={() => { onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status || 'pendente', observacao: textoNota }); setNotaAberta(null) }}>Salvar</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setNotaAberta(null)}>Cancelar</button>
+                </div>
               )}
             </div>
-            <div style={{ padding:'8px 0' }}>
-              {eds.length === 0 ? (
-                <div style={{ padding:'12px 16px', fontSize:12, color:'var(--text-muted)', fontStyle:'italic' }}>Nenhuma editora neste grupo.</div>
-              ) : (
-                <>
-                  {comLiv.map(e => (
-                    <div key={e.id} style={{ padding:'7px 16px', display:'flex', alignItems:'center', gap:8, borderBottom:'1px solid var(--border)', background:'var(--accent-glow)' }}>
-                      {e.classificacao && <span style={{ fontSize:11, fontWeight:800, color:CLASS_COR[e.classificacao]||'var(--accent)', minWidth:16 }}>{e.classificacao}</span>}
-                      <span style={{ fontSize:12, color:'var(--text)', flex:1 }}>{e.nome}</span>
-                      <span style={{ fontSize:11, fontWeight:700, color:getStatusSafe(e.status_parceria).cor, background:getStatusSafe(e.status_parceria).bg, padding:'2px 6px', borderRadius:20, whiteSpace:'nowrap' }}>{getStatusSafe(e.status_parceria).label}</span>
-                    </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── CHECKLIST EQUIPE CEDET ─────────────────────────────────
+function ViewChecklistCriativo({ livrarias, checkagemCriativo, formato, dataKey, onMarcar, onSalvarObsFixa, obsFormato }) {
+  const registrosDoDia = checkagemCriativo.filter(r => r.formato === formato && r.data_esperada === dataKey)
+  const mapa = {}
+  for (const r of registrosDoDia) mapa[r.editora_id] = r
+  const [obsFixaAberta, setObsFixaAberta] = useState(null)
+  const [textoObsFixa, setTextoObsFixa] = useState('')
+  const [notaAberta, setNotaAberta] = useState(null)
+  const [textoNota, setTextoNota] = useState('')
+
+  if (livrarias.length === 0) return <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '48px 0', fontSize: 13 }}>Nenhuma livraria cadastrada ainda.</div>
+
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: '180px 110px 110px 1fr 1fr 130px auto', gap: 8, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
+        <span>Livraria</span>
+        <span>Instagram</span>
+        <span>Instagram 2</span>
+        <span>Observações</span>
+        <span>Notas</span>
+        <span>Responsável</span>
+        <span style={{ minWidth: 240 }}>Status</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {livrarias.map(livraria => {
+          const chaveId = livraria.editora_id
+          const reg = mapa[chaveId]
+          const status = reg?.status || null
+          const responsavel = reg?.responsavel || ''
+          const nota = reg?.observacao || ''
+          const obsFixa = obsFormato?.[livraria.id] || ''
+          const editandoObsFixa = obsFixaAberta === livraria.id
+          const editandoNota = notaAberta === livraria.id
+
+          return (
+            <div key={livraria.id}>
+              <div style={{ display: 'grid', gridTemplateColumns: '180px 110px 110px 1fr 1fr 130px auto', gap: 8, alignItems: 'center', padding: '7px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: (editandoObsFixa || editandoNota) ? '8px 8px 0 0' : 8 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={livraria.nome}>{livraria.nome}</div>
+                <div style={{ fontSize: 12 }}>
+                  {livraria.instagram
+                    ? <a href={`https://instagram.com/${livraria.instagram.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 3 }}><Instagram size={10}/>{livraria.instagram}</a>
+                    : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>}
+                </div>
+                <div style={{ fontSize: 12 }}>
+                  {livraria.instagram2
+                    ? <a href={`https://instagram.com/${livraria.instagram2.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 3 }}><Instagram size={10}/>{livraria.instagram2}</a>
+                    : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>}
+                </div>
+                <div style={{ fontSize: 12, color: obsFixa ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  onClick={() => { setObsFixaAberta(editandoObsFixa ? null : livraria.id); setTextoObsFixa(obsFixa); setNotaAberta(null) }}
+                  title={obsFixa || 'Clique para adicionar observação fixa'}>
+                  {obsFixa || <span style={{ fontSize: 11, fontStyle: 'italic' }}>Adicionar...</span>}
+                </div>
+                <div style={{ fontSize: 12, color: nota ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  onClick={() => { setNotaAberta(editandoNota ? null : livraria.id); setTextoNota(nota); setObsFixaAberta(null) }}
+                  title={nota || 'Clique para adicionar nota do dia'}>
+                  {nota || <span style={{ fontSize: 11, fontStyle: 'italic' }}>Adicionar...</span>}
+                </div>
+                <select value={responsavel}
+                  onChange={e => onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status || 'pendente', responsavel: e.target.value })}
+                  style={{ padding: '4px 8px', borderRadius: 8, fontSize: 12, border: '1px solid var(--border)', background: responsavel ? 'var(--accent-glow)' : 'var(--surface-2)', color: responsavel ? 'var(--accent)' : 'var(--text-muted)', fontWeight: responsavel ? 700 : 400, cursor: 'pointer' }}>
+                  <option value="">Responsável...</option>
+                  {EQUIPE.map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <div style={{ display: 'flex', gap: 5 }}>
+                  {STATUS_CRIATIVO.map(s => (
+                    <button key={s.value}
+                      onClick={() => onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status === s.value ? 'pendente' : s.value, responsavel })}
+                      style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `2px solid ${s.cor}`, background: status === s.value ? s.cor : 'transparent', color: status === s.value ? '#fff' : s.cor, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
+                      {s.label}
+                    </button>
                   ))}
-                  {semLiv.map(e => (
-                    <div key={e.id} style={{ padding:'7px 16px', display:'flex', alignItems:'center', gap:8, borderBottom:'1px solid var(--border)' }}>
-                      {e.classificacao && <span style={{ fontSize:11, fontWeight:800, color:CLASS_COR[e.classificacao]||'var(--accent)', minWidth:16 }}>{e.classificacao}</span>}
-                      <span style={{ fontSize:12, color:'var(--text)', flex:1 }}>{e.nome}</span>
-                      <span style={{ fontSize:11, fontWeight:700, color:getStatusSafe(e.status_parceria).cor, background:getStatusSafe(e.status_parceria).bg, padding:'2px 6px', borderRadius:20, whiteSpace:'nowrap' }}>{getStatusSafe(e.status_parceria).label}</span>
-                    </div>
-                  ))}
-                </>
+                </div>
+              </div>
+              {editandoObsFixa && (
+                <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px 12px', display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>Observação fixa:</span>
+                  <input className="form-input" style={{ flex: 1, fontSize: 12 }} value={textoObsFixa} onChange={e => setTextoObsFixa(e.target.value)}
+                    placeholder="Observação permanente da livraria..." autoFocus
+                    onKeyDown={e => { if (e.key === 'Enter') { onSalvarObsFixa(livraria.id, textoObsFixa); setObsFixaAberta(null) } if (e.key === 'Escape') setObsFixaAberta(null) }} />
+                  <button className="btn btn-primary btn-sm" onClick={() => { onSalvarObsFixa(livraria.id, textoObsFixa); setObsFixaAberta(null) }}>Salvar</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setObsFixaAberta(null)}>Cancelar</button>
+                </div>
+              )}
+              {editandoNota && (
+                <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px 12px', display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0 }}>Nota do dia:</span>
+                  <input className="form-input" style={{ flex: 1, fontSize: 12 }} value={textoNota} onChange={e => setTextoNota(e.target.value)}
+                    placeholder="O que aconteceu hoje..." autoFocus
+                    onKeyDown={e => { if (e.key === 'Enter') { onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status || 'pendente', responsavel, observacao: textoNota }); setNotaAberta(null) } if (e.key === 'Escape') setNotaAberta(null) }} />
+                  <button className="btn btn-primary btn-sm" onClick={() => { onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status || 'pendente', responsavel, observacao: textoNota }); setNotaAberta(null) }}>Salvar</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setNotaAberta(null)}>Cancelar</button>
+                </div>
               )}
             </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+
+// ── DASHBOARD ──────────────────────────────────────────────
+function ViewDashboard({ livrarias, checkagemMes }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
+      {livrarias.map(livraria => {
+        const id = livraria.editora_id || livraria.id
+        const regs = checkagemMes.filter(r => r.editora_id === id)
+        const postou = regs.filter(r => r.status === 'postou').length
+        const naoPostou = regs.filter(r => r.status === 'nao_postou').length
+        const pendente = regs.filter(r => r.status === 'pendente').length
+        const total = regs.length
+        const pct = total > 0 ? Math.round((postou / total) * 100) : null
+        const corSaude = pct === null ? '#6b7280' : pct >= 70 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444'
+        const labelSaude = pct === null ? 'Sem dados' : pct >= 70 ? 'Boa' : pct >= 40 ? 'Regular' : 'Crítica'
+        return (
+          <div key={livraria.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px', borderTop: `3px solid ${corSaude}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 2 }}>{livraria.nome}</div>
+                {livraria.instagram && <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}><Instagram size={10}/>{livraria.instagram}</div>}
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 700, color: corSaude, background: corSaude + '18', padding: '2px 8px', borderRadius: 20 }}>{labelSaude}</span>
+            </div>
+            {total > 0 ? (
+              <>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, color: '#22c55e', fontWeight: 700 }}>✅ {postou}</span>
+                  <span style={{ fontSize: 12, color: '#ef4444', fontWeight: 700 }}>❌ {naoPostou}</span>
+                  {pendente > 0 && <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 700 }}>🕐 {pendente}</span>}
+                </div>
+                <div style={{ height: 5, borderRadius: 99, background: 'var(--surface-3)' }}>
+                  <div style={{ height: '100%', width: `${pct}%`, background: corSaude, borderRadius: 99 }} />
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, textAlign: 'right' }}>{pct}% de postagem</div>
+              </>
+            ) : <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Sem checagens neste mês.</div>}
           </div>
         )
       })}
@@ -819,48 +641,352 @@ function AbaGrupos({ editoras, livrarias }) {
 }
 
 // ── PÁGINA PRINCIPAL ───────────────────────────────────────
-export default function EditorasLivrarias() {
+export default function MonitoramentoParceiras() {
   const { usuario } = useAuth()
   const isAdmin = usuario?.perfil === 'administrador' || usuario?.perfil === 'gerente' || usuario?.perfil === 'supervisor_parceiras'
-  const [aba, setAba] = useState('editoras')
+
+  const agora = new Date()
+  const [ano, setAno] = useState(agora.getFullYear())
+  const [mes, setMes] = useState(agora.getMonth() + 1)
+  const [abaMonitor, setAbaMonitor] = useState('parceiras')
+  const [abaView, setAbaView] = useState('checklist')
+
   const [editoras, setEditoras] = useState([])
-  const [livrarias, setLivrarias] = useState([])
+  const [todasLivrarias, setTodasLivrarias] = useState([])
+
+  // Seleção por formato: { story: [ids], feed: [ids], reels: [ids] }
+  const [selParceiras, setSelParceiras] = useState(() => {
+    try { const s = localStorage.getItem('monitor_selParceiras'); return s ? JSON.parse(s) : {} } catch { return {} }
+  })
+  const [selCriativo, setSelCriativo] = useState(() => {
+    try { const s = localStorage.getItem('monitor_selCriativo'); return s ? JSON.parse(s) : {} } catch { return {} }
+  })
+  const [showSeletorLiv, setShowSeletorLiv] = useState(false)
+
+  function getSelecionadasParceiras(formato) {
+    return selParceiras[formato] ?? null // null = ainda não configurado = todas
+  }
+
+  function getSelecionadasCriativo(formato) {
+    return selCriativo[formato] ?? null
+  }
+
+  function salvarSelParceiras(formato, ids) {
+    const novo = { ...selParceiras, [formato]: ids }
+    setSelParceiras(novo)
+    try { localStorage.setItem('monitor_selParceiras', JSON.stringify(novo)) } catch {}
+  }
+
+  function salvarSelCriativo(formato, ids) {
+    const novo = { ...selCriativo, [formato]: ids }
+    setSelCriativo(novo)
+    try { localStorage.setItem('monitor_selCriativo', JSON.stringify(novo)) } catch {}
+  }
+
+  const [obsFormatoParceiras, setObsFormatoParceiras] = useState({}) // { livraria_id: observacao }
+  const [obsFormatoCriativo, setObsFormatoCriativo] = useState({})
+  const [formatoSel, setFormatoSel] = useState('story')
+  const [dataSel, setDataSel] = useState(hojeKey())
+
+  const [checkagemCriativo, setCheckagemCriativo] = useState([])
+  const [formatoCriativoSel, setFormatoCriativoSel] = useState('story')
+  const [dataCriativoSel, setDataCriativoSel] = useState(hojeKey())
+
   const [loading, setLoading] = useState(true)
+  const [painelEditora, setPainelEditora] = useState(null)
+  const [modalEditora, setModalEditora] = useState(null)
+  const [showImportar, setShowImportar] = useState(false)
   const [toast, showToast] = useToast()
 
-  useEffect(() => {
+  const dias = diasDoMes(ano, mes)
+
+  // Livrarias do formato atual filtradas pela seleção
+  const selAtualParceiras = getSelecionadasParceiras(formatoSel)
+  const livrarias = selAtualParceiras === null
+    ? todasLivrarias
+    : todasLivrarias.filter(l => selAtualParceiras.includes(l.id))
+
+  const selAtualCriativo = getSelecionadasCriativo(formatoCriativoSel)
+  const livrariasCriativo = selAtualCriativo === null
+    ? todasLivrarias
+    : todasLivrarias.filter(l => selAtualCriativo.includes(l.id))
+
+  useEffect(() => { carregarDados() }, [])
+  useEffect(() => { carregarCheckagemMes() }, [ano, mes])
+  useEffect(() => { carregarCheckagemCriativo() }, [ano, mes])
+  useEffect(() => { getObsFormatoLote(formatoSel).then(setObsFormatoParceiras).catch(console.error) }, [formatoSel])
+  useEffect(() => { getObsFormatoLote(formatoCriativoSel).then(setObsFormatoCriativo).catch(console.error) }, [formatoCriativoSel])
+
+  async function carregarDados() {
+    try {
+      const [eds, livs] = await Promise.all([getEditorasParceiras(), getLivrarias()])
+      setEditoras(eds)
+      setTodasLivrarias(livs.filter(l => l.editora_id))
+      const ids = livs.map(l => l.id)
+      // Só inicializa com todas se não houver seleção salva
+      setLivrariasSel(prev => {
+        if (prev === null) { try { localStorage.setItem('monitor_livParceiras', JSON.stringify(ids)) } catch {}; return ids }
+        // Filtra IDs que ainda existem
+        const validos = prev.filter(id => ids.includes(id))
+        return validos.length > 0 ? validos : ids
+      })
+      setLivrariasCriatSel(prev => {
+        if (prev === null) { try { localStorage.setItem('monitor_livCriativo', JSON.stringify(ids)) } catch {}; return ids }
+        const validos = prev.filter(id => ids.includes(id))
+        return validos.length > 0 ? validos : ids
+      })
+    } catch (e) { console.error(e) }
+  }
+
+  async function carregarCheckagemMes() {
     setLoading(true)
-    Promise.all([getEditorasCompletas(), getLivrarias()])
-      .then(([eds, livs]) => { setEditoras(eds); setLivrarias(livs) })
-      .catch(() => showToast('Erro ao carregar dados.', 'error'))
-      .finally(() => setLoading(false))
-  }, [])
+    try { setCheckagemMes(await getCheckagemMes({ ano, mes })) }
+    catch (e) { console.error(e) } finally { setLoading(false) }
+  }
+
+  async function carregarCheckagemCriativo() {
+    try { setCheckagemCriativo(await getCheckagemCriativoMes({ ano, mes })) }
+    catch (e) { console.error(e) }
+  }
+
+  function navMes(d) {
+    let nm = mes + d, na = ano
+    if (nm > 12) { nm = 1; na++ }
+    if (nm < 1) { nm = 12; na-- }
+    setMes(nm); setAno(na)
+  }
+
+  function indicadoresParceiras(formato) {
+    const ind = {}
+    for (const d of dias) {
+      const regs = checkagemMes.filter(r => r.formato === formato && r.data_esperada === d.key)
+      if (regs.length > 0) ind[d.key] = { total: regs.length, ok: regs.filter(r => r.status === 'postou').length, nok: regs.filter(r => r.status === 'nao_postou').length, ini: 0 }
+    }
+    return ind
+  }
+
+  function indicadoresCriativo(formato) {
+    const ind = {}
+    for (const d of dias) {
+      const regs = checkagemCriativo.filter(r => r.formato === formato && r.data_esperada === d.key)
+      if (regs.length > 0) ind[d.key] = { total: regs.length, ok: regs.filter(r => r.status === 'finalizado').length, nok: 0, ini: regs.filter(r => r.status === 'iniciado').length }
+    }
+    return ind
+  }
+
+  async function handleMarcarParceira({ editora, formato, dataKey, status, observacao }) {
+    try {
+      if (status === null) {
+        // Destick — remove o registro
+        await deleteCheckagemDia({ editora_id: editora.id, formato, data_esperada: dataKey })
+        setCheckagemMes(prev => prev.filter(r => !(r.editora_id === editora.id && r.formato === formato && r.data_esperada === dataKey)))
+        return
+      }
+      const reg = await upsertCheckagemDia({ editora_id: editora.id, formato, data_esperada: dataKey, status, observacao })
+      setCheckagemMes(prev => {
+        const idx = prev.findIndex(r => r.editora_id === editora.id && r.formato === formato && r.data_esperada === dataKey)
+        if (idx >= 0) { const n = [...prev]; n[idx] = reg; return n }
+        return [...prev, reg]
+      })
+    } catch (e) { console.error(e); showToast('Erro ao salvar', 'error') }
+  }
+
+  async function handleGerarDia() {
+    try {
+      const editorasParaGerar = livrarias.map(l => ({ id: l.editora_id || l.id }))
+      const novos = await gerarChecklistDia({ editoras: editorasParaGerar, formato: formatoSel, data_esperada: dataSel })
+      setCheckagemMes(prev => {
+        const mapa = {}
+        for (const r of prev) mapa[`${r.editora_id}-${r.formato}-${r.data_esperada}`] = r
+        for (const r of novos) mapa[`${r.editora_id}-${r.formato}-${r.data_esperada}`] = r
+        return Object.values(mapa)
+      })
+      showToast('Checklist gerado!')
+    } catch (e) { console.error(e); showToast('Erro ao gerar', 'error') }
+  }
+
+  async function handleSalvarObsFixa(livrariaId, observacao, formato, aba) {
+    try {
+      await upsertObsFormato(livrariaId, formato, observacao)
+      if (aba === 'parceiras') {
+        setObsFormatoParceiras(prev => ({ ...prev, [livrariaId]: observacao }))
+      } else {
+        setObsFormatoCriativo(prev => ({ ...prev, [livrariaId]: observacao }))
+      }
+    } catch (e) { console.error(e); showToast('Erro ao salvar observação', 'error') }
+  }
+
+  async function handleMarcarCriativo({ editora, formato, dataKey, status, responsavel }) {
+    try {
+      const reg = await upsertCheckagemCriativoDia({ editora_id: editora.id, formato, data_esperada: dataKey, status, responsavel })
+      setCheckagemCriativo(prev => {
+        const idx = prev.findIndex(r => r.editora_id === editora.id && r.formato === formato && r.data_esperada === dataKey)
+        if (idx >= 0) { const n = [...prev]; n[idx] = reg; return n }
+        return [...prev, reg]
+      })
+    } catch (e) { console.error(e); showToast('Erro ao salvar', 'error') }
+  }
+
+  async function handleSalvarEditora(form) {
+    if (modalEditora && modalEditora !== 'new') {
+      const upd = await updateEditoraParceira(modalEditora.id, form)
+      setEditoras(prev => prev.map(e => e.id === upd.id ? upd : e))
+      showToast('Editora atualizada!')
+    } else {
+      const nova = await createEditoraParceira(form)
+      setEditoras(prev => [...prev, nova].sort((a, b) => a.nome.localeCompare(b.nome)))
+      showToast('Editora cadastrada!')
+    }
+  }
+
+  const totalPostou = checkagemMes.filter(r => r.status === 'postou').length
+  const totalNao    = checkagemMes.filter(r => r.status === 'nao_postou').length
+  const totalPend   = checkagemMes.filter(r => r.status === 'pendente').length
+  const totalFinalizado = checkagemCriativo.filter(r => r.status === 'finalizado').length
+  const totalIniciado   = checkagemCriativo.filter(r => r.status === 'iniciado').length
+  const totalPendCriat  = checkagemCriativo.filter(r => r.status === 'pendente').length
 
   function tabStyle(ativa) {
-    return { padding:'10px 24px', fontSize:13, fontWeight:700, cursor:'pointer', border:'none', borderBottom: ativa ? '2px solid var(--accent)' : '2px solid transparent', background:'transparent', color: ativa ? 'var(--accent)' : 'var(--text-muted)', transition:'all 0.15s', display:'flex', alignItems:'center', gap:6 }
+    return { padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', borderBottom: ativa ? '2px solid var(--accent)' : '2px solid transparent', background: 'transparent', color: ativa ? 'var(--accent)' : 'var(--text-muted)', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 6 }
   }
 
   return (
     <div>
-      <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:20 }}>
-        <BookOpen size={22} color="var(--accent)" />
-        <div>
-          <h1 className="page-title" style={{ margin:0 }}>Editoras & Livrarias</h1>
-          <p style={{ fontSize:12, color:'var(--text-muted)', margin:0 }}>{editoras.length} editoras · {livrarias.length} livrarias</p>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <Eye size={22} color="var(--accent)" />
+          <div>
+            <h1 className="page-title" style={{ margin: 0 }}>Monitoramento</h1>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>{todasLivrarias.length} livrarias · {MESES[mes - 1]} {ano}</p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          {abaMonitor === 'parceiras' ? (
+            <div style={{ display: 'flex', gap: 14 }}>
+              {[{ n: totalPostou, l: 'Postaram', c: '#22c55e' }, { n: totalNao, l: 'Não postaram', c: '#ef4444' }, { n: totalPend, l: 'Pendentes', c: '#6b7280' }].map(({ n, l, c }) => (
+                <div key={l} style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: c, lineHeight: 1 }}>{n}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: 2 }}>{l}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 14 }}>
+              {[{ n: totalFinalizado, l: 'Finalizados', c: '#22c55e' }, { n: totalIniciado, l: 'Iniciados', c: '#f59e0b' }, { n: totalPendCriat, l: 'Pendentes', c: '#6b7280' }].map(({ n, l, c }) => (
+                <div key={l} style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: c, lineHeight: 1 }}>{n}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: 2 }}>{l}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {isAdmin && <>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowImportar(true)}><Upload size={13} /> Importar editoras</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setModalEditora('new')}><Plus size={13} /> Nova editora</button>
+          </>}
+          {abaMonitor === 'parceiras' && (
+            <div style={{ display: 'flex', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+              <button onClick={() => setAbaView('checklist')} style={{ padding: '7px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: abaView === 'checklist' ? 'var(--accent)' : 'transparent', color: abaView === 'checklist' ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <List size={13} /> Checklist
+              </button>
+              <button onClick={() => setAbaView('dashboard')} style={{ padding: '7px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: abaView === 'dashboard' ? 'var(--accent)' : 'transparent', color: abaView === 'dashboard' ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <LayoutGrid size={13} /> Dashboard
+              </button>
+            </div>
+          )}
         </div>
       </div>
-      <div style={{ display:'flex', borderBottom:'1px solid var(--border)', marginBottom:24 }}>
-        <button style={tabStyle(aba === 'editoras')} onClick={() => setAba('editoras')}><Building2 size={14} /> Editoras</button>
-        <button style={tabStyle(aba === 'livrarias')} onClick={() => setAba('livrarias')}><Library size={14} /> Livrarias</button>
-        <button style={tabStyle(aba === 'grupos')} onClick={() => setAba('grupos')}><LayoutGrid size={14} /> Grupos</button>
+
+      {/* Abas */}
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 16 }}>
+        <button style={tabStyle(abaMonitor === 'parceiras')} onClick={() => setAbaMonitor('parceiras')}>
+          <BookOpen size={14} /> Livrarias de ed. parceiras
+        </button>
+        <button style={tabStyle(abaMonitor === 'criativo')} onClick={() => setAbaMonitor('criativo')}>
+          <Users size={14} /> Equipe Cedet
+        </button>
       </div>
-      {loading ? <div className="loading"><div className="spinner" /></div> : (
+
+      {/* Navegação de mês + dias integrados */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '8px 16px' }}>
+        <button className="btn btn-ghost btn-icon" onClick={() => navMes(-1)} style={{ flexShrink: 0 }}><ChevronLeft size={18} /></button>
+        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', flexShrink: 0, minWidth: 110, textAlign: 'center' }}>{MESES[mes - 1]} {ano}</span>
+        <button className="btn btn-ghost btn-icon" onClick={() => navMes(1)} style={{ flexShrink: 0 }}><ChevronRight size={18} /></button>
+        <div style={{ flex: 1, overflowX: 'auto' }}>
+          <SeletorDiasCompacto
+            dias={dias} mes={mes} ano={ano}
+            dataSel={abaMonitor === 'parceiras' ? dataSel : dataCriativoSel}
+            onSelect={abaMonitor === 'parceiras' ? setDataSel : setDataCriativoSel}
+            indicadores={abaMonitor === 'parceiras' ? indicadoresParceiras(formatoSel) : indicadoresCriativo(formatoCriativoSel)}
+          />
+        </div>
+      </div>
+
+      {/* ABA: LIVRARIAS DE ED. PARCEIRAS */}
+      {abaMonitor === 'parceiras' && (
         <>
-          {aba === 'editoras' && <AbaEditoras editoras={editoras} livrarias={livrarias} setEditoras={setEditoras} isAdmin={isAdmin} showToast={showToast} />}
-          {aba === 'livrarias' && <AbaLivrarias livrarias={livrarias} setLivrarias={setLivrarias} editoras={editoras} isAdmin={isAdmin} showToast={showToast} />}
-          {aba === 'grupos' && <AbaGrupos editoras={editoras} livrarias={livrarias} />}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            {FORMATOS_PARCEIRAS.map(fmt => (
+              <BotaoFormato key={fmt.value} label={fmt.label} ativo={formatoSel === fmt.value} onClick={() => setFormatoSel(fmt.value)} />
+            ))}
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowSeletorLiv('parceiras')} style={{ marginLeft: 'auto' }}>
+              <SlidersHorizontal size={13} /> {FORMATOS_PARCEIRAS.find(f=>f.value===formatoSel)?.label} ({livrarias.length}/{todasLivrarias.length})
+            </button>
+          </div>
+          {abaView === 'checklist' && (
+            loading ? <div className="loading"><div className="spinner" /></div> : (
+              <ViewChecklistParceiras livrarias={livrarias} checkagemMes={checkagemMes} formato={formatoSel} dataKey={dataSel} onMarcar={handleMarcarParceira} onSalvarObsFixa={(id, obs) => handleSalvarObsFixa(id, obs, formatoSel, 'parceiras')} obsFormato={obsFormatoParceiras} />
+            )
+          )}
+          {abaView === 'dashboard' && (
+            loading ? <div className="loading"><div className="spinner" /></div> : (
+              <ViewDashboard livrarias={livrarias} checkagemMes={checkagemMes} />
+            )
+          )}
         </>
       )}
+
+      {/* ABA: EQUIPE CEDET */}
+      {abaMonitor === 'criativo' && (
+        <div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            {FORMATOS_CRIATIVO.map(fmt => (
+              <BotaoFormato key={fmt.value} label={fmt.label} ativo={formatoCriativoSel === fmt.value} onClick={() => setFormatoCriativoSel(fmt.value)} />
+            ))}
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowSeletorLiv('criativo')} style={{ marginLeft: 'auto' }}>
+              <SlidersHorizontal size={13} /> {FORMATOS_CRIATIVO.find(f=>f.value===formatoCriativoSel)?.label} ({livrariasCriativo.length}/{todasLivrarias.length})
+            </button>
+          </div>
+          <ViewChecklistCriativo livrarias={livrariasCriativo} checkagemCriativo={checkagemCriativo} formato={formatoCriativoSel} dataKey={dataCriativoSel} onMarcar={handleMarcarCriativo} onSalvarObsFixa={(id, obs) => handleSalvarObsFixa(id, obs, formatoCriativoSel, 'criativo')} obsFormato={obsFormatoCriativo} />
+        </div>
+      )}
+
+      {/* Modais */}
+      {showSeletorLiv === 'parceiras' && (
+        <ModalSeletorLivrarias
+          livrarias={todasLivrarias}
+          selecionadas={getSelecionadasParceiras(formatoSel) ?? todasLivrarias.map(l => l.id)}
+          titulo={`Livrarias — ${FORMATOS_PARCEIRAS.find(f=>f.value===formatoSel)?.label}`}
+          onConfirm={ids => salvarSelParceiras(formatoSel, ids)}
+          onClose={() => setShowSeletorLiv(false)} />
+      )}
+      {showSeletorLiv === 'criativo' && (
+        <ModalSeletorLivrarias
+          livrarias={todasLivrarias}
+          selecionadas={getSelecionadasCriativo(formatoCriativoSel) ?? todasLivrarias.map(l => l.id)}
+          titulo={`Livrarias — ${FORMATOS_CRIATIVO.find(f=>f.value===formatoCriativoSel)?.label}`}
+          onConfirm={ids => salvarSelCriativo(formatoCriativoSel, ids)}
+          onClose={() => setShowSeletorLiv(false)} />
+      )}
+      {painelEditora && (
+        <>
+          <div onClick={() => setPainelEditora(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 99 }} />
+          <PainelEditora editora={painelEditora} checkagemMes={checkagemMes} ano={ano} mes={mes} usuario={usuario} onClose={() => setPainelEditora(null)} />
+        </>
+      )}
+      {modalEditora && <ModalEditora editora={modalEditora === 'new' ? null : modalEditora} onSave={handleSalvarEditora} onClose={() => setModalEditora(null)} />}
+      {showImportar && <ModalImportar onClose={() => setShowImportar(false)} onImported={() => { carregarDados(); showToast('Editoras importadas!') }} />}
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
     </div>
   )
