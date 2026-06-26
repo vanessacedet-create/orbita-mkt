@@ -692,10 +692,30 @@ export default function MonitoramentoParceiras() {
   const isAdmin = usuario?.perfil === 'administrador' || usuario?.perfil === 'gerente' || usuario?.perfil === 'supervisor_parceiras'
 
   const agora = new Date()
-  const [ano, setAno] = useState(agora.getFullYear())
-  const [mes, setMes] = useState(agora.getMonth() + 1)
-  const [abaMonitor, setAbaMonitor] = useState('parceiras')
-  const [abaView, setAbaView] = useState('checklist')
+  const [ano, setAno] = useState(() => {
+    try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).ano : agora.getFullYear() } catch { return agora.getFullYear() }
+  })
+  const [mes, setMes] = useState(() => {
+    try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).mes : agora.getMonth() + 1 } catch { return agora.getMonth() + 1 }
+  })
+  const [abaMonitor, setAbaMonitor] = useState(() => {
+    try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).aba : 'parceiras' } catch { return 'parceiras' }
+  })
+  const [abaView, setAbaView] = useState(() => {
+    try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).view : 'checklist' } catch { return 'checklist' }
+  })
+
+  function salvarNav(patch) {
+    try {
+      const atual = JSON.parse(localStorage.getItem('monitor_nav') || '{}')
+      localStorage.setItem('monitor_nav', JSON.stringify({ ...atual, ...patch }))
+    } catch {}
+  }
+
+  function setAnoNav(v) { setAno(v); salvarNav({ ano: v }) }
+  function setMesNav(v) { setMes(v); salvarNav({ mes: v }) }
+  function setAbaMonitorNav(v) { setAbaMonitor(v); salvarNav({ aba: v }) }
+  function setAbaViewNav(v) { setAbaView(v); salvarNav({ view: v }) }
 
   const [editoras, setEditoras] = useState([])
   const [todasLivrarias, setTodasLivrarias] = useState([])
@@ -733,12 +753,26 @@ export default function MonitoramentoParceiras() {
   const [obsFormatoCriativo, setObsFormatoCriativo] = useState({})
 
   const [checkagemMes, setCheckagemMes] = useState([])
-  const [formatoSel, setFormatoSel] = useState('story')
-  const [dataSel, setDataSel] = useState(hojeKey())
+  const [formatoSel, setFormatoSelRaw] = useState(() => {
+    try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).formatoSel || 'story' : 'story' } catch { return 'story' }
+  })
+  const [dataSel, setDataSelRaw] = useState(() => {
+    try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).dataSel || hojeKey() : hojeKey() } catch { return hojeKey() }
+  })
+
+  const [formatoCriativoSel, setFormatoCriativoSelRaw] = useState(() => {
+    try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).formatoCriativo || 'story' : 'story' } catch { return 'story' }
+  })
+  const [dataCriativoSel, setDataCriativoSelRaw] = useState(() => {
+    try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).dataCriativo || hojeKey() : hojeKey() } catch { return hojeKey() }
+  })
+
+  function setFormatoSel(v) { setFormatoSelRaw(v); salvarNav({ formatoSel: v }) }
+  function setDataSel(v) { setDataSelRaw(v); salvarNav({ dataSel: v }) }
+  function setFormatoCriativoSel(v) { setFormatoCriativoSelRaw(v); salvarNav({ formatoCriativo: v }) }
+  function setDataCriativoSel(v) { setDataCriativoSelRaw(v); salvarNav({ dataCriativo: v }) }
 
   const [checkagemCriativo, setCheckagemCriativo] = useState([])
-  const [formatoCriativoSel, setFormatoCriativoSel] = useState('story')
-  const [dataCriativoSel, setDataCriativoSel] = useState(hojeKey())
 
   const [loading, setLoading] = useState(true)
   const [painelEditora, setPainelEditora] = useState(null)
@@ -754,16 +788,26 @@ export default function MonitoramentoParceiras() {
     ? todasLivrarias
     : todasLivrarias.filter(l => selAtualParceiras.includes(l.id))
 
-  // Para formatos compartilhados (story/feed/reels): usa seleção e obs de parceiras
-  // Para email_mkt: seleção independente
-  // Para email_revenda: linha única fixa
+  // Mapeamento de formato criativo → formato parceiras correspondente
+  const MAPA_FORMATO_PARCEIRAS = {
+    'story': 'story',
+    'feed': 'feed',
+    'reels_roteiro': 'reels',
+    'reels_edicao': 'reels',
+  }
+
   const isFormatoCompartilhado = FORMATOS_CRIATIVO_COMPARTILHADOS.includes(formatoCriativoSel)
+  const formatoParceirasCorrespondente = MAPA_FORMATO_PARCEIRAS[formatoCriativoSel]
 
   const selAtualCriativo = getSelecionadasCriativo(formatoCriativoSel)
+  // Formatos compartilhados usam a seleção do formato parceiras correspondente
   const livrariasCriativo = isFormatoCompartilhado
-    ? livrarias // mesma lista e seleção de parceiras (já filtrada por formatoCriativoSel = story/feed/reels)
+    ? (() => {
+        const sel = getSelecionadasParceiras(formatoParceirasCorrespondente)
+        return sel === null ? todasLivrarias : todasLivrarias.filter(l => sel.includes(l.id))
+      })()
     : formatoCriativoSel === 'email_revenda'
-      ? [] // linha única, não usa lista
+      ? []
       : selAtualCriativo === null ? todasLivrarias : todasLivrarias.filter(l => selAtualCriativo.includes(l.id))
 
   useEffect(() => { carregarDados() }, [])
@@ -772,7 +816,7 @@ export default function MonitoramentoParceiras() {
   useEffect(() => { getObsFormatoLote(formatoSel).then(setObsFormatoParceiras).catch(console.error) }, [formatoSel])
   useEffect(() => {
     const fmt = FORMATOS_CRIATIVO_COMPARTILHADOS.includes(formatoCriativoSel)
-      ? formatoCriativoSel // usa obs do mesmo formato
+      ? MAPA_FORMATO_PARCEIRAS[formatoCriativoSel]
       : formatoCriativoSel
     getObsFormatoLote(fmt).then(setObsFormatoCriativo).catch(console.error)
   }, [formatoCriativoSel])
@@ -813,7 +857,7 @@ export default function MonitoramentoParceiras() {
     let nm = mes + d, na = ano
     if (nm > 12) { nm = 1; na++ }
     if (nm < 1) { nm = 12; na-- }
-    setMes(nm); setAno(na)
+    setMesNav(nm); setAnoNav(na)
   }
 
   function indicadoresParceiras(formato) {
@@ -947,10 +991,10 @@ export default function MonitoramentoParceiras() {
           </>}
           {abaMonitor === 'parceiras' && (
             <div style={{ display: 'flex', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
-              <button onClick={() => setAbaView('checklist')} style={{ padding: '7px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: abaView === 'checklist' ? 'var(--accent)' : 'transparent', color: abaView === 'checklist' ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <button onClick={() => setAbaViewNav('checklist')} style={{ padding: '7px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: abaView === 'checklist' ? 'var(--accent)' : 'transparent', color: abaView === 'checklist' ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
                 <List size={13} /> Checklist
               </button>
-              <button onClick={() => setAbaView('dashboard')} style={{ padding: '7px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: abaView === 'dashboard' ? 'var(--accent)' : 'transparent', color: abaView === 'dashboard' ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <button onClick={() => setAbaViewNav('dashboard')} style={{ padding: '7px 14px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: abaView === 'dashboard' ? 'var(--accent)' : 'transparent', color: abaView === 'dashboard' ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
                 <LayoutGrid size={13} /> Dashboard
               </button>
             </div>
@@ -960,10 +1004,10 @@ export default function MonitoramentoParceiras() {
 
       {/* Abas */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 16 }}>
-        <button style={tabStyle(abaMonitor === 'parceiras')} onClick={() => setAbaMonitor('parceiras')}>
+        <button style={tabStyle(abaMonitor === 'parceiras')} onClick={() => setAbaMonitorNav('parceiras')}>
           <BookOpen size={14} /> Livrarias de ed. parceiras
         </button>
-        <button style={tabStyle(abaMonitor === 'criativo')} onClick={() => setAbaMonitor('criativo')}>
+        <button style={tabStyle(abaMonitor === 'criativo')} onClick={() => setAbaMonitorNav('criativo')}>
           <Users size={14} /> Equipe Cedet
         </button>
       </div>
@@ -1029,7 +1073,7 @@ export default function MonitoramentoParceiras() {
                 formato={formatoCriativoSel}
                 dataKey={dataCriativoSel}
                 onMarcar={handleMarcarCriativo}
-                onSalvarObsFixa={(id, obs) => handleSalvarObsFixa(id, obs, formatoCriativoSel, isFormatoCompartilhado ? 'parceiras' : 'criativo')}
+                onSalvarObsFixa={(id, obs) => handleSalvarObsFixa(id, obs, isFormatoCompartilhado ? formatoParceirasCorrespondente : formatoCriativoSel, isFormatoCompartilhado ? 'parceiras' : 'criativo')}
                 obsFormato={isFormatoCompartilhado ? obsFormatoParceiras : obsFormatoCriativo}
               />
           }
