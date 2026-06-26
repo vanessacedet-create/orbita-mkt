@@ -86,7 +86,6 @@ export async function desativarEditorasLote(ids) {
 
 export async function importarEditorasPlanilha(rows) {
   const GRUPO_MAPA = { 'I':1,'II':2,'III':3,'IV':4,'V':5,'VI':6,'VII':7,'VIII':8 }
-
   const dados = rows
     .filter(r => r[0]?.toString().trim())
     .map(r => ({
@@ -99,7 +98,6 @@ export async function importarEditorasPlanilha(rows) {
       status_parceria: r[7]?.toString().trim().toLowerCase() || 'ativa',
       ativo:           true,
     }))
-
   const LOTE = 50
   for (let i = 0; i < dados.length; i += LOTE) {
     const { error } = await supabase
@@ -132,42 +130,12 @@ export async function createLivraria(payload) {
   return data
 }
 
-export async function getObsFormato(livraria_id, formato) {
-  const { data, error } = await supabase
-    .from('livrarias_obs_formato')
-    .select('*')
-    .eq('livraria_id', livraria_id)
-    .eq('formato', formato)
-    .maybeSingle()
-  if (error) throw error
-  return data?.observacao || ''
-}
-
-export async function getObsFormatoLote(formato) {
-  const { data, error } = await supabase
-    .from('livrarias_obs_formato')
-    .select('livraria_id, observacao')
-    .eq('formato', formato)
-  if (error) throw error
-  // Retorna mapa { livraria_id: observacao }
-  const mapa = {}
-  for (const r of data || []) mapa[r.livraria_id] = r.observacao
-  return mapa
-}
-
-export async function upsertObsFormato(livraria_id, formato, observacao) {
-  const { error } = await supabase
-    .from('livrarias_obs_formato')
-    .upsert({ livraria_id, formato, observacao, atualizado_em: new Date().toISOString() }, { onConflict: 'livraria_id,formato' })
-  if (error) throw error
-}
-  // Apenas campos válidos da tabela
+export async function updateLivraria(id, payload) {
   const campos = ['nome','editora_id','contato','email','whatsapp','site','instagram','instagram2','youtube','inauguracao','observacao','status','ativo']
   const limpo = {}
   for (const k of campos) {
     if (k in payload) limpo[k] = payload[k] === '' ? null : payload[k]
   }
-
   const { data, error } = await supabase
     .from('livrarias')
     .update(limpo)
@@ -175,7 +143,6 @@ export async function upsertObsFormato(livraria_id, formato, observacao) {
     .select('*')
     .single()
   if (error) throw error
-
   if (data.editora_id) {
     const { data: ed } = await supabase
       .from('editoras_parceiras')
@@ -197,19 +164,40 @@ export async function desativarLivrariaLote(ids) {
   if (error) throw error
 }
 
+// ── OBSERVAÇÕES POR FORMATO ────────────────────────────────
+
+export async function getObsFormatoLote(formato) {
+  const { data, error } = await supabase
+    .from('livrarias_obs_formato')
+    .select('livraria_id, observacao')
+    .eq('formato', formato)
+  if (error) throw error
+  const mapa = {}
+  for (const r of data || []) mapa[r.livraria_id] = r.observacao
+  return mapa
+}
+
+export async function upsertObsFormato(livraria_id, formato, observacao) {
+  const { error } = await supabase
+    .from('livrarias_obs_formato')
+    .upsert(
+      { livraria_id, formato, observacao, atualizado_em: new Date().toISOString() },
+      { onConflict: 'livraria_id,formato' }
+    )
+  if (error) throw error
+}
+
+// ── IMPORTAÇÃO DE LIVRARIAS ────────────────────────────────
+
 function parseDataExcel(val) {
   if (!val || val === '-') return null
-  // Se for objeto Date (cellDates:true)
   if (val instanceof Date) return val.toISOString().split('T')[0]
-  // Se for número serial do Excel
   if (typeof val === 'number') {
     const d = new Date(Math.round((val - 25569) * 86400 * 1000))
     return d.toISOString().split('T')[0]
   }
-  // Se for string, tenta parsear
   const str = val.toString().trim()
   if (!str || str === '-') return null
-  // Tenta formato dd/mm/yyyy
   const partes = str.split('/')
   if (partes.length === 3) {
     const [d, m, a] = partes
@@ -225,16 +213,11 @@ function limparTexto(val) {
 }
 
 export async function importarLivrariasPlanilha(rows, editoras) {
-  // Colunas esperadas:
-  // A=Nome Livraria, B=Editora, C=Contato, D=Site, E=Instagram, F=YouTube, G=Data Inauguração, H=Observação, I=Status
-
   const dados = rows
     .filter(r => r[0]?.toString().trim())
     .map(r => {
       const nomeEditora = limparTexto(r[1])
-      const editora = editoras.find(e =>
-        e.nome?.toLowerCase().trim() === nomeEditora?.toLowerCase()
-      )
+      const editora = editoras.find(e => e.nome?.toLowerCase().trim() === nomeEditora?.toLowerCase())
       return {
         nome:        limparTexto(r[0]),
         editora_id:  editora?.id || null,
@@ -244,11 +227,10 @@ export async function importarLivrariasPlanilha(rows, editoras) {
         youtube:     limparTexto(r[5]),
         inauguracao: parseDataExcel(r[6]),
         observacao:  limparTexto(r[7]),
-        status:      limparTexto(r[8])?.toLowerCase().replace(/\s+/g, '_').replace(/[áà]/g,'a').replace(/[éê]/g,'e').replace(/[íî]/g,'i').replace(/[óô]/g,'o').replace(/[úû]/g,'u') || 'ativa',
+        status:      limparTexto(r[8])?.toLowerCase().replace(/\s+/g,'_').replace(/[áà]/g,'a').replace(/[éê]/g,'e').replace(/[íî]/g,'i').replace(/[óô]/g,'o').replace(/[úû]/g,'u') || 'ativa',
         ativo:       true,
       }
     })
-
   const LOTE = 50
   const resultado = []
   for (let i = 0; i < dados.length; i += LOTE) {
