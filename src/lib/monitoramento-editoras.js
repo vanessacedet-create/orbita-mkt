@@ -63,7 +63,6 @@ export async function getCheckagemMes({ ano, mes }) {
 }
 
 export async function upsertCheckagemDia({ editora_id, formato, data_esperada, status, observacao }) {
-  // Verifica se já existe
   const { data: existing } = await supabase
     .from('monitoramento_parceiras')
     .select('id')
@@ -90,7 +89,6 @@ export async function upsertCheckagemDia({ editora_id, formato, data_esperada, s
     id = inserted.id
   }
 
-  // Busca o registro atualizado
   const { data, error } = await supabase
     .from('monitoramento_parceiras')
     .select('*')
@@ -109,6 +107,8 @@ export async function deleteCheckagemDia({ editora_id, formato, data_esperada })
     .eq('data_esperada', data_esperada)
   if (error) throw error
 }
+
+export async function gerarChecklistDia({ editoras, formato, data_esperada }) {
   const rows = editoras.map(e => ({ editora_id: e.id, formato, data_esperada, status: 'pendente' }))
   const { data, error } = await supabase
     .from('monitoramento_parceiras')
