@@ -46,6 +46,7 @@ const FORMATOS_PARCEIRAS = [
   { value: 'reels', label: 'Reels' },
 ]
 
+const FORMATOS_CRIATIVO_COMPARTILHADOS = ['story','feed','reels_roteiro','reels_edicao']
 const FORMATOS_CRIATIVO = [
   { value: 'story',         label: 'Story' },
   { value: 'feed',          label: 'Feed' },
@@ -597,6 +598,51 @@ function ViewChecklistCriativo({ livrarias, checkagemCriativo, formato, dataKey,
 }
 
 
+// ── EMAIL REVENDAS — LINHA ÚNICA ───────────────────────────
+function ViewEmailRevenda({ dataKey, onMarcarRevenda }) {
+  const storageKey = `email_revenda_${dataKey}`
+  const [status, setStatus] = useState(() => {
+    try { const s = localStorage.getItem(storageKey); return s ? JSON.parse(s).status : null } catch { return null }
+  })
+  const [responsavel, setResponsavel] = useState(() => {
+    try { const s = localStorage.getItem(storageKey); return s ? JSON.parse(s).responsavel : '' } catch { return '' }
+  })
+
+  function salvar(novoStatus, novoResponsavel) {
+    try { localStorage.setItem(storageKey, JSON.stringify({ status: novoStatus, responsavel: novoResponsavel })) } catch {}
+    setStatus(novoStatus)
+    setResponsavel(novoResponsavel)
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px auto', gap: 8, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
+        <span>Destino</span>
+        <span>Responsável</span>
+        <span style={{ minWidth: 240 }}>Status</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px auto', gap: 8, alignItems: 'center', padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>E-mail Revendas</div>
+        <select value={responsavel}
+          onChange={e => salvar(status, e.target.value)}
+          style={{ padding: '4px 8px', borderRadius: 8, fontSize: 12, border: '1px solid var(--border)', background: responsavel ? 'var(--accent-glow)' : 'var(--surface-2)', color: responsavel ? 'var(--accent)' : 'var(--text-muted)', fontWeight: responsavel ? 700 : 400, cursor: 'pointer' }}>
+          <option value="">Responsável...</option>
+          {EQUIPE.map(n => <option key={n} value={n}>{n}</option>)}
+        </select>
+        <div style={{ display: 'flex', gap: 5 }}>
+          {STATUS_CRIATIVO.map(s => (
+            <button key={s.value}
+              onClick={() => salvar(status === s.value ? null : s.value, responsavel)}
+              style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `2px solid ${s.cor}`, background: status === s.value ? s.cor : 'transparent', color: status === s.value ? '#fff' : s.cor, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── DASHBOARD ──────────────────────────────────────────────
 function ViewDashboard({ livrarias, checkagemMes }) {
   return (
@@ -708,16 +754,28 @@ export default function MonitoramentoParceiras() {
     ? todasLivrarias
     : todasLivrarias.filter(l => selAtualParceiras.includes(l.id))
 
+  // Para formatos compartilhados (story/feed/reels): usa seleção e obs de parceiras
+  // Para email_mkt: seleção independente
+  // Para email_revenda: linha única fixa
+  const isFormatoCompartilhado = FORMATOS_CRIATIVO_COMPARTILHADOS.includes(formatoCriativoSel)
+
   const selAtualCriativo = getSelecionadasCriativo(formatoCriativoSel)
-  const livrariasCriativo = selAtualCriativo === null
-    ? todasLivrarias
-    : todasLivrarias.filter(l => selAtualCriativo.includes(l.id))
+  const livrariasCriativo = isFormatoCompartilhado
+    ? livrarias // mesma lista e seleção de parceiras (já filtrada por formatoCriativoSel = story/feed/reels)
+    : formatoCriativoSel === 'email_revenda'
+      ? [] // linha única, não usa lista
+      : selAtualCriativo === null ? todasLivrarias : todasLivrarias.filter(l => selAtualCriativo.includes(l.id))
 
   useEffect(() => { carregarDados() }, [])
   useEffect(() => { carregarCheckagemMes() }, [ano, mes])
   useEffect(() => { carregarCheckagemCriativo() }, [ano, mes])
   useEffect(() => { getObsFormatoLote(formatoSel).then(setObsFormatoParceiras).catch(console.error) }, [formatoSel])
-  useEffect(() => { getObsFormatoLote(formatoCriativoSel).then(setObsFormatoCriativo).catch(console.error) }, [formatoCriativoSel])
+  useEffect(() => {
+    const fmt = FORMATOS_CRIATIVO_COMPARTILHADOS.includes(formatoCriativoSel)
+      ? formatoCriativoSel // usa obs do mesmo formato
+      : formatoCriativoSel
+    getObsFormatoLote(fmt).then(setObsFormatoCriativo).catch(console.error)
+  }, [formatoCriativoSel])
 
   async function carregarDados() {
     try {
@@ -956,11 +1014,25 @@ export default function MonitoramentoParceiras() {
             {FORMATOS_CRIATIVO.map(fmt => (
               <BotaoFormato key={fmt.value} label={fmt.label} ativo={formatoCriativoSel === fmt.value} onClick={() => setFormatoCriativoSel(fmt.value)} />
             ))}
-            <button className="btn btn-ghost btn-sm" onClick={() => setShowSeletorLiv('criativo')} style={{ marginLeft: 'auto' }}>
-              <SlidersHorizontal size={13} /> {FORMATOS_CRIATIVO.find(f=>f.value===formatoCriativoSel)?.label} ({livrariasCriativo.length}/{todasLivrarias.length})
-            </button>
+            {/* Seletor só aparece para formatos com lista de livrarias */}
+            {formatoCriativoSel !== 'email_revenda' && (
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowSeletorLiv('criativo')} style={{ marginLeft: 'auto' }}>
+                <SlidersHorizontal size={13} /> {FORMATOS_CRIATIVO.find(f=>f.value===formatoCriativoSel)?.label} ({livrariasCriativo.length}/{todasLivrarias.length})
+              </button>
+            )}
           </div>
-          <ViewChecklistCriativo livrarias={livrariasCriativo} checkagemCriativo={checkagemCriativo} formato={formatoCriativoSel} dataKey={dataCriativoSel} onMarcar={handleMarcarCriativo} onSalvarObsFixa={(id, obs) => handleSalvarObsFixa(id, obs, formatoCriativoSel, 'criativo')} obsFormato={obsFormatoCriativo} />
+          {formatoCriativoSel === 'email_revenda'
+            ? <ViewEmailRevenda dataKey={dataCriativoSel} />
+            : <ViewChecklistCriativo
+                livrarias={livrariasCriativo}
+                checkagemCriativo={checkagemCriativo}
+                formato={formatoCriativoSel}
+                dataKey={dataCriativoSel}
+                onMarcar={handleMarcarCriativo}
+                onSalvarObsFixa={(id, obs) => handleSalvarObsFixa(id, obs, formatoCriativoSel, isFormatoCompartilhado ? 'parceiras' : 'criativo')}
+                obsFormato={isFormatoCompartilhado ? obsFormatoParceiras : obsFormatoCriativo}
+              />
+          }
         </div>
       )}
 
@@ -976,9 +1048,13 @@ export default function MonitoramentoParceiras() {
       {showSeletorLiv === 'criativo' && (
         <ModalSeletorLivrarias
           livrarias={todasLivrarias}
-          selecionadas={getSelecionadasCriativo(formatoCriativoSel) ?? todasLivrarias.map(l => l.id)}
+          selecionadas={
+            isFormatoCompartilhado
+              ? (getSelecionadasParceiras(formatoCriativoSel) ?? todasLivrarias.map(l => l.id))
+              : (getSelecionadasCriativo(formatoCriativoSel) ?? todasLivrarias.map(l => l.id))
+          }
           titulo={`Livrarias — ${FORMATOS_CRIATIVO.find(f=>f.value===formatoCriativoSel)?.label}`}
-          onConfirm={ids => salvarSelCriativo(formatoCriativoSel, ids)}
+          onConfirm={ids => isFormatoCompartilhado ? salvarSelParceiras(formatoCriativoSel, ids) : salvarSelCriativo(formatoCriativoSel, ids)}
           onClose={() => setShowSeletorLiv(false)} />
       )}
       {painelEditora && (
