@@ -136,7 +136,7 @@ function SeletorDiasCompacto({ dias, mes, ano, dataSel, onSelect, indicadores })
 }
 
 // ── MODAL SELETOR DE LIVRARIAS ─────────────────────────────
-function ModalSeletorLivrarias({ livrarias, selecionadas, onConfirm, onClose }) {
+function ModalSeletorLivrarias({ livrarias, selecionadas, titulo, onConfirm, onClose }) {
   const [sel, setSel] = useState(new Set(selecionadas))
 
   function toggle(id) { setSel(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
@@ -149,7 +149,7 @@ function ModalSeletorLivrarias({ livrarias, selecionadas, onConfirm, onClose }) 
     <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{ maxWidth: 420, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
         <div className="modal-header">
-          <h2 className="modal-title">Selecionar livrarias</h2>
+          <h2 className="modal-title">{titulo || 'Selecionar livrarias'}</h2>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
         </div>
         <div style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
@@ -650,23 +650,34 @@ export default function MonitoramentoParceiras() {
 
   const [editoras, setEditoras] = useState([])
   const [todasLivrarias, setTodasLivrarias] = useState([])
-  const [livrariasSel, setLivrariasSel] = useState(() => {
-    try { const s = localStorage.getItem('monitor_livParceiras'); return s ? JSON.parse(s) : null } catch { return null }
-  })
-  const [livrariasCriatSel, setLivrariasCriatSel] = useState(() => {
-    try { const s = localStorage.getItem('monitor_livCriativo'); return s ? JSON.parse(s) : null } catch { return null }
-  })
-  const [showSeletorLivParceiras, setShowSeletorLivParceiras] = useState(false)
-  const [showSeletorLivCriativo, setShowSeletorLivCriativo] = useState(false)
 
-  function setLivrariasParceiras(ids) {
-    setLivrariasSel(ids)
-    try { localStorage.setItem('monitor_livParceiras', JSON.stringify(ids)) } catch {}
+  // Seleção por formato: { story: [ids], feed: [ids], reels: [ids] }
+  const [selParceiras, setSelParceiras] = useState(() => {
+    try { const s = localStorage.getItem('monitor_selParceiras'); return s ? JSON.parse(s) : {} } catch { return {} }
+  })
+  const [selCriativo, setSelCriativo] = useState(() => {
+    try { const s = localStorage.getItem('monitor_selCriativo'); return s ? JSON.parse(s) : {} } catch { return {} }
+  })
+  const [showSeletorLiv, setShowSeletorLiv] = useState(false)
+
+  function getSelecionadasParceiras(formato) {
+    return selParceiras[formato] ?? null // null = ainda não configurado = todas
   }
 
-  function setLivrariasCriativo(ids) {
-    setLivrariasCriatSel(ids)
-    try { localStorage.setItem('monitor_livCriativo', JSON.stringify(ids)) } catch {}
+  function getSelecionadasCriativo(formato) {
+    return selCriativo[formato] ?? null
+  }
+
+  function salvarSelParceiras(formato, ids) {
+    const novo = { ...selParceiras, [formato]: ids }
+    setSelParceiras(novo)
+    try { localStorage.setItem('monitor_selParceiras', JSON.stringify(novo)) } catch {}
+  }
+
+  function salvarSelCriativo(formato, ids) {
+    const novo = { ...selCriativo, [formato]: ids }
+    setSelCriativo(novo)
+    try { localStorage.setItem('monitor_selCriativo', JSON.stringify(novo)) } catch {}
   }
 
   const [checkagemMes, setCheckagemMes] = useState([])
@@ -685,9 +696,16 @@ export default function MonitoramentoParceiras() {
 
   const dias = diasDoMes(ano, mes)
 
-  // Livrarias filtradas pelo seletor
-  const livrarias = todasLivrarias.filter(l => (livrariasSel || []).includes(l.id))
-  const livrariasCriativo = todasLivrarias.filter(l => (livrariasCriatSel || []).includes(l.id))
+  // Livrarias do formato atual filtradas pela seleção
+  const selAtualParceiras = getSelecionadasParceiras(formatoSel)
+  const livrarias = selAtualParceiras === null
+    ? todasLivrarias
+    : todasLivrarias.filter(l => selAtualParceiras.includes(l.id))
+
+  const selAtualCriativo = getSelecionadasCriativo(formatoCriativoSel)
+  const livrariasCriativo = selAtualCriativo === null
+    ? todasLivrarias
+    : todasLivrarias.filter(l => selAtualCriativo.includes(l.id))
 
   useEffect(() => { carregarDados() }, [])
   useEffect(() => { carregarCheckagemMes() }, [ano, mes])
@@ -902,8 +920,8 @@ export default function MonitoramentoParceiras() {
             {FORMATOS_PARCEIRAS.map(fmt => (
               <BotaoFormato key={fmt.value} label={fmt.label} ativo={formatoSel === fmt.value} onClick={() => setFormatoSel(fmt.value)} />
             ))}
-            <button className="btn btn-ghost btn-sm" onClick={() => setShowSeletorLivParceiras(true)} style={{ marginLeft: 'auto' }}>
-              <SlidersHorizontal size={13} /> Livrarias ({(livrariasSel || []).length}/{todasLivrarias.length})
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowSeletorLiv('parceiras')} style={{ marginLeft: 'auto' }}>
+              <SlidersHorizontal size={13} /> {FORMATOS_PARCEIRAS.find(f=>f.value===formatoSel)?.label} ({livrarias.length}/{todasLivrarias.length})
             </button>
           </div>
           {abaView === 'checklist' && (
@@ -926,8 +944,8 @@ export default function MonitoramentoParceiras() {
             {FORMATOS_CRIATIVO.map(fmt => (
               <BotaoFormato key={fmt.value} label={fmt.label} ativo={formatoCriativoSel === fmt.value} onClick={() => setFormatoCriativoSel(fmt.value)} />
             ))}
-            <button className="btn btn-ghost btn-sm" onClick={() => setShowSeletorLivCriativo(true)} style={{ marginLeft: 'auto' }}>
-              <SlidersHorizontal size={13} /> Livrarias ({(livrariasCriatSel || []).length}/{todasLivrarias.length})
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowSeletorLiv('criativo')} style={{ marginLeft: 'auto' }}>
+              <SlidersHorizontal size={13} /> {FORMATOS_CRIATIVO.find(f=>f.value===formatoCriativoSel)?.label} ({livrariasCriativo.length}/{todasLivrarias.length})
             </button>
           </div>
           <ViewChecklistCriativo livrarias={livrariasCriativo} checkagemCriativo={checkagemCriativo} formato={formatoCriativoSel} dataKey={dataCriativoSel} onMarcar={handleMarcarCriativo} onSalvarObsFixa={handleSalvarObsFixa} />
@@ -935,13 +953,21 @@ export default function MonitoramentoParceiras() {
       )}
 
       {/* Modais */}
-      {showSeletorLivParceiras && (
-        <ModalSeletorLivrarias livrarias={todasLivrarias} selecionadas={livrariasSel}
-          onConfirm={setLivrariasParceiras} onClose={() => setShowSeletorLivParceiras(false)} />
+      {showSeletorLiv === 'parceiras' && (
+        <ModalSeletorLivrarias
+          livrarias={todasLivrarias}
+          selecionadas={getSelecionadasParceiras(formatoSel) ?? todasLivrarias.map(l => l.id)}
+          titulo={`Livrarias — ${FORMATOS_PARCEIRAS.find(f=>f.value===formatoSel)?.label}`}
+          onConfirm={ids => salvarSelParceiras(formatoSel, ids)}
+          onClose={() => setShowSeletorLiv(false)} />
       )}
-      {showSeletorLivCriativo && (
-        <ModalSeletorLivrarias livrarias={todasLivrarias} selecionadas={livrariasCriatSel}
-          onConfirm={setLivrariasCriativo} onClose={() => setShowSeletorLivCriativo(false)} />
+      {showSeletorLiv === 'criativo' && (
+        <ModalSeletorLivrarias
+          livrarias={todasLivrarias}
+          selecionadas={getSelecionadasCriativo(formatoCriativoSel) ?? todasLivrarias.map(l => l.id)}
+          titulo={`Livrarias — ${FORMATOS_CRIATIVO.find(f=>f.value===formatoCriativoSel)?.label}`}
+          onConfirm={ids => salvarSelCriativo(formatoCriativoSel, ids)}
+          onClose={() => setShowSeletorLiv(false)} />
       )}
       {painelEditora && (
         <>
