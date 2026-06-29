@@ -1,6 +1,8 @@
-import { Settings, Sun, Moon, Palette, Check } from 'lucide-react'
+import { useState } from 'react'
+import { Settings, Sun, Moon, Palette, Check, User, Lock, Eye, EyeOff } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/client'
 
-// ── Cores de destaque disponíveis ──────────────────────────
 const CORES_DESTAQUE = [
   { label: 'Laranja',  h: 21,  s: '73%', l: '53%', hex: '#e06030' },
   { label: 'Vermelho', h: 0,   s: '72%', l: '51%', hex: '#e03030' },
@@ -12,7 +14,42 @@ const CORES_DESTAQUE = [
   { label: 'Amarelo',  h: 38,  s: '90%', l: '48%', hex: '#d4860a' },
 ]
 
+function useToast() {
+  const [toast, setToast] = useState(null)
+  function show(msg, type = 'success') { setToast({ msg, type }); setTimeout(() => setToast(null), 3500) }
+  return [toast, show]
+}
+
 export default function Configuracoes({ tema, corDestaque, onTemaChange, onCorChange }) {
+  const { usuario } = useAuth()
+  const [toast, showToast] = useToast()
+
+  // Troca de senha
+  const [senhaAtual, setSenhaAtual] = useState('')
+  const [senhaNova, setSenhaNova] = useState('')
+  const [senhaConfirm, setSenhaConfirm] = useState('')
+  const [showSenhaAtual, setShowSenhaAtual] = useState(false)
+  const [showSenhaNova, setShowSenhaNova] = useState(false)
+  const [showSenhaConfirm, setShowSenhaConfirm] = useState(false)
+  const [salvandoSenha, setSalvandoSenha] = useState(false)
+
+  async function trocarSenha() {
+    if (!senhaNova || senhaNova.length < 6) { showToast('A nova senha deve ter pelo menos 6 caracteres.', 'error'); return }
+    if (senhaNova !== senhaConfirm) { showToast('As senhas não coincidem.', 'error'); return }
+    setSalvandoSenha(true)
+    try {
+      const { error } = await supabase.auth.updateUser({ password: senhaNova })
+      if (error) throw error
+      showToast('Senha alterada com sucesso!')
+      setSenhaAtual(''); setSenhaNova(''); setSenhaConfirm('')
+    } catch (e) {
+      showToast('Erro ao alterar senha: ' + (e?.message || 'Tente novamente.'), 'error')
+    } finally { setSalvandoSenha(false) }
+  }
+
+  const cardStyle = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 24, maxWidth: 560, marginBottom: 20 }
+  const secaoLabel = { fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 10 }
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
@@ -20,16 +57,68 @@ export default function Configuracoes({ tema, corDestaque, onTemaChange, onCorCh
         <h1 className="page-title" style={{ margin: 0 }}>Configurações</h1>
       </div>
 
+      {/* Perfil */}
+      <div style={cardStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+          <User size={16} color="var(--accent)" />
+          <h2 style={{ fontFamily: 'Syne, sans-serif', fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0 }}>Perfil</h2>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <p style={secaoLabel}>Nome</p>
+            <p style={{ fontSize: 14, color: 'var(--text)', fontWeight: 600 }}>{usuario?.nome || '—'}</p>
+          </div>
+          <div>
+            <p style={secaoLabel}>E-mail</p>
+            <p style={{ fontSize: 14, color: 'var(--text)', fontWeight: 600 }}>{usuario?.email || '—'}</p>
+          </div>
+          <div>
+            <p style={secaoLabel}>Perfil de acesso</p>
+            <p style={{ fontSize: 14, color: 'var(--text)', fontWeight: 600, textTransform: 'capitalize' }}>{usuario?.perfil?.replace(/_/g, ' ') || '—'}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Troca de senha */}
+      <div style={cardStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+          <Lock size={16} color="var(--accent)" />
+          <h2 style={{ fontFamily: 'Syne, sans-serif', fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0 }}>Alterar senha</h2>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {[
+            { label: 'Nova senha', value: senhaNova, set: setSenhaNova, show: showSenhaNova, setShow: setShowSenhaNova },
+            { label: 'Confirmar nova senha', value: senhaConfirm, set: setSenhaConfirm, show: showSenhaConfirm, setShow: setShowSenhaConfirm },
+          ].map(({ label, value, set, show, setShow }) => (
+            <div key={label} className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">{label}</label>
+              <div style={{ position: 'relative' }}>
+                <input className="form-input" type={show ? 'text' : 'password'} value={value}
+                  onChange={e => set(e.target.value)} placeholder="••••••••"
+                  style={{ paddingRight: 40 }} />
+                <button onClick={() => setShow(v => !v)}
+                  style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
+                  {show ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+          ))}
+          <button className="btn btn-primary" onClick={trocarSenha} disabled={salvandoSenha || !senhaNova || !senhaConfirm}
+            style={{ alignSelf: 'flex-start', marginTop: 4 }}>
+            {salvandoSenha ? 'Salvando...' : 'Alterar senha'}
+          </button>
+        </div>
+      </div>
+
       {/* Aparência */}
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12, padding: 24, maxWidth: 560 }}>
+      <div style={cardStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
           <Palette size={16} color="var(--accent)" />
           <h2 style={{ fontFamily: 'Syne, sans-serif', fontSize: 16, fontWeight: 700, color: 'var(--text)', margin: 0 }}>Aparência</h2>
         </div>
 
-        {/* Tema */}
         <div style={{ marginBottom: 24 }}>
-          <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 10 }}>Tema</p>
+          <p style={secaoLabel}>Tema</p>
           <div style={{ display: 'flex', gap: 10 }}>
             {[
               { value: 'light', label: 'Claro', Icon: Sun },
@@ -47,9 +136,8 @@ export default function Configuracoes({ tema, corDestaque, onTemaChange, onCorCh
           </div>
         </div>
 
-        {/* Cor de destaque */}
         <div>
-          <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 10 }}>Cor de destaque</p>
+          <p style={secaoLabel}>Cor de destaque</p>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             {CORES_DESTAQUE.map(cor => {
               const ativo = corDestaque === cor.hex
@@ -65,9 +153,8 @@ export default function Configuracoes({ tema, corDestaque, onTemaChange, onCorCh
           </p>
         </div>
 
-        {/* Preview */}
         <div style={{ marginTop: 24, padding: 16, background: 'var(--surface-2)', borderRadius: 8, border: '1px solid var(--border)' }}>
-          <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 12 }}>Preview</p>
+          <p style={secaoLabel}>Preview</p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 14px' }}>Botão principal</button>
             <button className="btn btn-ghost" style={{ fontSize: 12, padding: '6px 14px' }}>Botão secundário</button>
@@ -76,6 +163,8 @@ export default function Configuracoes({ tema, corDestaque, onTemaChange, onCorCh
           </div>
         </div>
       </div>
+
+      {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
     </div>
   )
 }
