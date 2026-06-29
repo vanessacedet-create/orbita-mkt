@@ -174,7 +174,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
     if (!novoStatus) return
     setSavingStatus(true)
     try {
-      await addStatusHistory(parceiro.id, novoStatus, motivo)
+      await addStatusHistory(parceiro.id, novoStatus, motivo, usuario?.id)
       const hist = await getStatusHistory(parceiro.id)
       setHistory(hist)
       const parceiroAtualizado = { ...parceiro, current_status: novoStatus }
@@ -193,7 +193,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
       if (!parceiro.tier && MODELOS_COM_ESCADA.includes(parceiro.model)) {
         await ativarParceiroBronze(parceiro.id, usuario?.id)
       } else {
-        await addStatusHistory(parceiro.id, 'active', 'Parceiro ativado')
+        await addStatusHistory(parceiro.id, 'active', 'Parceiro ativado', usuario?.id)
       }
       const hist = await getStatusHistory(parceiro.id)
       setHistory(hist)
@@ -208,7 +208,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
     if (!motivoEncerrar.trim()) return
     setEncerrando(true)
     try {
-      await addStatusHistory(parceiro.id, 'closed', motivoEncerrar)
+      await addStatusHistory(parceiro.id, 'closed', motivoEncerrar, usuario?.id)
       await updateSituacao(parceiro.id, 'encerrado')
       const hist = await getStatusHistory(parceiro.id)
       setHistory(hist)
@@ -254,6 +254,12 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
             <span style={{display:'inline-flex',alignItems:'center',gap:5,background:stInfo.bg,border:`1px solid ${stInfo.cor}40`,borderRadius:20,padding:'2px 10px',fontSize:11,fontWeight:700,color:stInfo.cor}}>
               {stInfo.label}
             </span>
+            {history[0]?.changed_at && (
+              <span style={{display:'block',fontSize:11,color:'var(--text-muted)',marginTop:4}}>
+                Última atualização de status: {format(new Date(history[0].changed_at),'dd/MM/yyyy HH:mm',{locale:ptBR})}
+                {history[0].changed_by_nome && ` · por ${history[0].changed_by_nome}`}
+              </span>
+            )}
           </div>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
         </div>
@@ -715,6 +721,8 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
               ? <p style={{fontSize:13,color:'var(--text-muted)'}}>Nenhuma mudança de status registrada.</p>
               : history.map((h,i)=>{
                   const st = pipelineInfo(h.status)
+                  // history vem em ordem decrescente: o status anterior é o item mais antigo (i+1)
+                  const anterior = history[i+1] ? pipelineInfo(history[i+1].status) : null
                   return (
                     <div key={h.id} style={{display:'flex',gap:12,marginBottom:16}}>
                       <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:0}}>
@@ -722,11 +730,20 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                         {i<history.length-1&&<div style={{width:2,flex:1,background:'var(--border)',marginTop:4}}/>}
                       </div>
                       <div style={{flex:1,paddingBottom:12}}>
-                        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:2}}>
-                          <span style={{fontSize:13,fontWeight:700,color:st.cor}}>{st.label}</span>
+                        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:2,flexWrap:'wrap'}}>
+                          {anterior
+                            ? <span style={{fontSize:13,fontWeight:700,display:'inline-flex',alignItems:'center',gap:6}}>
+                                <span style={{color:anterior.cor}}>{anterior.label}</span>
+                                <span style={{color:'var(--text-muted)'}}>→</span>
+                                <span style={{color:st.cor}}>{st.label}</span>
+                              </span>
+                            : <span style={{fontSize:13,fontWeight:700,color:st.cor}}>{st.label}</span>}
                           <span style={{fontSize:11,color:'var(--text-muted)'}}>
                             {format(new Date(h.changed_at),'dd/MM/yyyy HH:mm',{locale:ptBR})}
                           </span>
+                        </div>
+                        <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:2}}>
+                          por {h.changed_by_nome || '—'}
                         </div>
                         {h.reason&&<div style={{fontSize:12,color:'var(--text-muted)',background:'var(--surface-2)',borderRadius:6,padding:'6px 10px',marginTop:4}}>{h.reason}</div>}
                       </div>
@@ -1376,7 +1393,7 @@ export default function CRM({ grupo, titulo }) {
         await ativarParceiroBronze(dragId, usuario?.id)
         showToast(`${parceiro.nome} → Parceiro ativo`)
       } else {
-        await addStatusHistory(dragId, novoStatus, 'Status alterado via kanban')
+        await addStatusHistory(dragId, novoStatus, 'Status alterado via kanban', usuario?.id)
         showToast(`${parceiro.nome} → ${pipelineInfo(novoStatus, pipeline).label}`)
       }
     } catch(e) {
