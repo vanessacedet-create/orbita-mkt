@@ -822,6 +822,15 @@ export default function MonitoramentoParceiras() {
     getObsFormatoLote(fmt).then(setObsFormatoCriativo).catch(console.error)
   }, [formatoCriativoSel])
 
+  // Atualização automática a cada 30 segundos
+  useEffect(() => {
+    const intervalo = setInterval(() => {
+      carregarCheckagemMes()
+      carregarCheckagemCriativo()
+    }, 30000)
+    return () => clearInterval(intervalo)
+  }, [ano, mes])
+
   async function carregarDados() {
     try {
       const [eds, livs, confParceiras, confCriativo] = await Promise.all([
