@@ -208,6 +208,30 @@ export async function createParceiroCRM(payload, statusInicial = 'prospected') {
   return data
 }
 
+// Importação em lote de possíveis parceiros (via planilha).
+// Insere todos os parceiros e registra o status inicial de cada um no histórico.
+export async function createParceirosLote(lista, { grupo = null, statusInicial = 'prospected', changed_by = null } = {}) {
+  if (!lista || !lista.length) return []
+  const payloads = lista.map(p => ({ ...p, grupo }))
+  const { data, error } = await supabase
+    .from('parceiros')
+    .insert(payloads)
+    .select('*')
+  if (error) throw error
+
+  const histRows = (data || []).map(d => ({
+    partner_id: d.id,
+    status: statusInicial,
+    reason: 'Importado via planilha',
+    changed_by: changed_by || null,
+  }))
+  if (histRows.length) {
+    const { error: he } = await supabase.from('partner_status_history').insert(histRows)
+    if (he) throw he
+  }
+  return data || []
+}
+
 export async function getCRMParceiros() {
   const { data, error } = await supabase
     .from('parceiros')
