@@ -15,7 +15,15 @@ export async function getCheckagemCriativoMes({ ano, mes }) {
   return data || []
 }
 
-export async function upsertCheckagemCriativoDia({ editora_id, formato, data_esperada, status, responsavel }) {
+export async function deleteCheckagemCriativoDia({ editora_id, formato, data_esperada }) {
+  const { error } = await supabase
+    .from('monitoramento_criativo')
+    .delete()
+    .eq('editora_id', editora_id)
+    .eq('formato', formato)
+    .eq('data_esperada', data_esperada)
+  if (error) throw error
+} editora_id, formato, data_esperada, status, responsavel }) {
   // Tenta atualizar primeiro
   const { data: existing } = await supabase
     .from('monitoramento_criativo')
