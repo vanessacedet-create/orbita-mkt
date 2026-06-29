@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   getParceiros, getParceirosAtivos, getEditoras, getUsuarios,
-  getCRMParceiros, updateParceiroCRM, getStatusHistory, addStatusHistory, createParceiroCRM, deleteParceiro,
+  getCRMParceiros, updateParceiroCRM, getStatusHistory, addStatusHistory, createParceiroCRM, createParceirosLote, deleteParceiro,
   getCRMStatusConfig, saveCRMStatusConfig, corParaBg, getLivros,
   MODELOS_COM_ESCADA, updateSituacao,
   ativarParceiroBronze,
@@ -10,10 +10,11 @@ import { useAuth } from '../context/AuthContext'
 import {
   Users, Plus, X, ChevronRight, Clock, ExternalLink,
   Instagram, Youtube, Search, ArrowRight, Trash2, Settings2, GripVertical,
-  ArrowUp, XCircle
+  ArrowUp, XCircle, Upload
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+import * as XLSX from 'xlsx'
 import TabelaAtivos from '../components/crm/TabelaAtivos'
 import DesempenhoMensal from '../components/crm/DesempenhoMensal'
 
@@ -826,7 +827,7 @@ function KanbanCard({ parceiro, onClick, onDragStart, onDragEnd, isDragging, onD
 
 
 // ── MODAL NOVO PARCEIRO ────────────────────────────────────
-function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
+function ModalNovoParceiro({ onSave, onClose, pipeline, grupo, parceirosExistentes = [] }) {
   const TIPOS_PARCERIA = ['Livraria de influencer', 'Booktime', 'Divulgação editoras próprias']
   const [form, setForm] = useState({
     nome: '', tipo_parceria: '', cpf: '', livraria: '',
@@ -913,6 +914,15 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
     } catch(e) { console.error(e) } finally { setSaving(false) }
   }
 
+  // Detecta parceiros que provavelmente já existem (mesmo nome, @ ou link do perfil)
+  const userDerivadoForm = extrairUsername(form.profile_url, form.username)
+  const duplicados = (parceirosExistentes || []).filter(p => {
+    const mesmoNome = form.nome.trim() && normalizaCab(p.nome) === normalizaCab(form.nome)
+    const mesmoUser = userDerivadoForm && p.username && normalizaCab(p.username) === normalizaCab(userDerivadoForm)
+    const mesmoLink = form.profile_url && p.profile_url && normalizaCab(p.profile_url) === normalizaCab(form.profile_url)
+    return mesmoNome || mesmoUser || mesmoLink
+  })
+
   return (
     <div className="modal-backdrop">
       <div className="modal" style={{maxWidth:780,maxHeight:'90vh',overflowY:'auto'}}>
@@ -926,6 +936,16 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo }) {
             <label className="form-label">Nome *</label>
             <input className="form-input" value={form.nome} onChange={e=>setForm(f=>({...f,nome:e.target.value}))} placeholder="Nome completo"/>
           </div>
+
+          {duplicados.length > 0 && (
+            <div style={{gridColumn:'1 / -1',display:'flex',gap:8,alignItems:'flex-start',padding:'10px 14px',borderRadius:8,background:'rgba(245,158,11,0.12)',border:'1px solid rgba(245,158,11,0.4)',fontSize:12,color:'var(--text)'}}>
+              <Clock size={14} style={{flexShrink:0,marginTop:2,color:'#f59e0b'}}/>
+              <div>
+                Já existe parceiro com esses dados no CRM: <strong>{duplicados.slice(0,3).map(p=>p.nome).join(', ')}</strong>
+                {duplicados.length>3 && ` e mais ${duplicados.length-3}`}. Verifique antes de cadastrar para não duplicar.
+              </div>
+            </div>
+          )}
 
           {/* Link do perfil (clicável) */}
           <div className="form-group">
@@ -1305,6 +1325,240 @@ function ModalConfigStatus({ grupo, pipeline, onSave, onClose }) {
   )
 }
 
+// ── IMPORTAÇÃO DE POSSÍVEIS PARCEIROS POR PLANILHA ──────────
+const CAMPOS_IMPORT = [
+  { key:'nome',            label:'Nome *',               syn:['nome','name','parceiro','influenciador','influencer'] },
+  { key:'profile_url',     label:'Link do perfil',       syn:['link do perfil','profile','instagram','insta','perfil'] },
+  { key:'username',        label:'Usuário (@)',          syn:['usuario','username','arroba','handle'] },
+  { key:'contact_value',   label:'Contato',              syn:['contato','email','e-mail','telefone','whatsapp','whats','celular','fone','phone'] },
+  { key:'platforms',       label:'Plataformas',          syn:['plataformas','plataforma','redes','rede','platform'] },
+  { key:'tipo_parceria',   label:'Tipo de parceria',     syn:['tipo de parceria','tipo_parceria','tipo'] },
+  { key:'model',           label:'Modelo (1/2/3)',       syn:['modelo','model'] },
+  { key:'source',          label:'Origem',               syn:['origem','fonte','source'] },
+  { key:'livraria',        label:'Livraria',             syn:['livraria'] },
+  { key:'temas',           label:'Temas',                syn:['temas','tema','nicho','assunto'] },
+  { key:'editoras_divulga',label:'Editoras que divulga', syn:['editoras que divulga','editoras','editora'] },
+  { key:'engagement_rate', label:'Engajamento (%)',      syn:['engajamento','engagement','taxa de engajamento'] },
+  { key:'coupon_code',     label:'Cupom',                syn:['cupom','coupon','codigo'] },
+  { key:'library_url',     label:'Link da livraria',     syn:['link da livraria','url da livraria','library'] },
+]
+
+function normalizaCab(s) {
+  return (s==null?'':s.toString()).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim()
+}
+
+// Mapeamento automático: para cada campo (em ordem de prioridade) pega a primeira
+// coluna AINDA não usada cujo cabeçalho contenha um sinônimo (apenas forward,
+// nunca reverso — evita o bug "Nome" casar com "nomeloja"). usados impede duplicidade.
+function autoMapear(headers) {
+  const map = {}
+  const usados = new Set()
+  for (const campo of CAMPOS_IMPORT) {
+    let achou = -1
+    for (let i=0;i<headers.length;i++) {
+      if (usados.has(i)) continue
+      const h = normalizaCab(headers[i])
+      if (!h) continue
+      if (campo.syn.some(s => h === s || h.includes(s))) { achou = i; break }
+    }
+    map[campo.key] = achou
+    if (achou >= 0) usados.add(achou)
+  }
+  return map
+}
+
+function valorCampoImport(key, raw) {
+  const v = (raw==null?'':raw.toString()).trim()
+  if (!v) return key==='platforms' ? [] : null
+  if (key === 'platforms') return v.split(/[;,/|]/).map(x=>x.trim()).filter(Boolean)
+  if (key === 'engagement_rate') {
+    const n = Number(v.replace('%','').replace(/\./g,'').replace(',','.').trim())
+    return isNaN(n) ? null : n
+  }
+  if (key === 'model') {
+    const n = parseInt(v.replace(/\D/g,''),10)
+    return (n>=1 && n<=3) ? n : null
+  }
+  return v
+}
+
+function ModalImportarPlanilha({ grupo, userId, nomesExistentes = [], onClose, onDone }) {
+  const [step, setStep]           = useState('upload') // 'upload' | 'mapear'
+  const [fileName, setFileName]   = useState('')
+  const [headers, setHeaders]     = useState([])
+  const [rows, setRows]           = useState([])
+  const [mapeamento, setMapeamento] = useState({})
+  const [importando, setImportando] = useState(false)
+  const [erro, setErro]           = useState('')
+
+  const existentesSet = new Set((nomesExistentes||[]).map(n => normalizaCab(n)))
+
+  async function onFile(e) {
+    const file = e.target.files && e.target.files[0]
+    if (!file) return
+    setErro('')
+    try {
+      const buf = await file.arrayBuffer()
+      const wb = XLSX.read(buf, { type:'array' })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const aoa = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', blankrows:false })
+      if (!aoa.length) { setErro('A planilha está vazia.'); return }
+      const hdr  = aoa[0].map(c => (c==null?'':c.toString()))
+      const body = aoa.slice(1).filter(r => r.some(c => c!=null && c.toString().trim()!==''))
+      if (!body.length) { setErro('Nenhuma linha de dados encontrada (só o cabeçalho).'); return }
+      setFileName(file.name)
+      setHeaders(hdr)
+      setRows(body)
+      setMapeamento(autoMapear(hdr))
+      setStep('mapear')
+    } catch(err) {
+      console.error(err)
+      setErro('Não consegui ler o arquivo. Use .xlsx, .xls ou .csv.')
+    }
+  }
+
+  function construirLinhas() {
+    return rows.map(r => {
+      const obj = {}
+      for (const campo of CAMPOS_IMPORT) {
+        const idx = mapeamento[campo.key]
+        obj[campo.key] = idx>=0 ? valorCampoImport(campo.key, r[idx]) : (campo.key==='platforms'?[]:null)
+      }
+      // username derivado do link do perfil quando não veio na planilha
+      if (!obj.username && obj.profile_url) obj.username = extrairUsername(obj.profile_url, null) || null
+      return obj
+    }).filter(o => o.nome && o.nome.toString().trim())
+  }
+
+  const linhasValidas = construirLinhas()
+  const qtdDuplicados = linhasValidas.filter(l => existentesSet.has(normalizaCab(l.nome))).length
+  const nomeMapeado = mapeamento['nome'] >= 0
+
+  async function importar() {
+    const linhas = construirLinhas()
+    if (!linhas.length) { setErro('Nenhuma linha com nome preenchido.'); return }
+    setImportando(true)
+    setErro('')
+    try {
+      await createParceirosLote(linhas, { grupo, statusInicial:'prospected', changed_by:userId })
+      onDone(linhas.length)
+    } catch(err) {
+      console.error(err)
+      setErro('Erro ao importar: ' + (err.message || 'tente novamente.'))
+    } finally {
+      setImportando(false)
+    }
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <div className="modal" style={{maxWidth:720,maxHeight:'90vh',overflowY:'auto'}}>
+        <div className="modal-header">
+          <h2 className="modal-title">Importar possíveis parceiros</h2>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
+        </div>
+
+        {step==='upload' && (
+          <div>
+            <p style={{fontSize:13,color:'var(--text-muted)',marginBottom:14}}>
+              Suba uma planilha (.xlsx, .xls ou .csv) com os possíveis parceiros. A primeira linha deve ser o cabeçalho.
+              Eles entram no pipeline como <strong>Prospectado</strong>.
+            </p>
+            <label className="btn btn-primary" style={{display:'inline-flex',alignItems:'center',gap:6,cursor:'pointer'}}>
+              <Upload size={15}/> Escolher arquivo
+              <input type="file" accept=".xlsx,.xls,.csv" onChange={onFile} style={{display:'none'}}/>
+            </label>
+            <div style={{fontSize:12,color:'var(--text-muted)',marginTop:16,lineHeight:1.6}}>
+              Colunas reconhecidas automaticamente: Nome, Link do perfil, Usuário, Contato, Plataformas,
+              Tipo de parceria, Modelo, Origem, Livraria, Temas, Editoras que divulga, Engajamento, Cupom.
+              Só o <strong>Nome</strong> é obrigatório; o resto você ajusta no próximo passo.
+            </div>
+            {erro && <div style={{fontSize:12,color:'var(--danger, #ef4444)',marginTop:12}}>{erro}</div>}
+          </div>
+        )}
+
+        {step==='mapear' && (
+          <div>
+            <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:12}}>
+              <strong>{fileName}</strong> · {rows.length} linha{rows.length!==1?'s':''} detectada{rows.length!==1?'s':''}.
+              Confira o mapeamento das colunas:
+            </div>
+
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}}>
+              {CAMPOS_IMPORT.map(campo => (
+                <div key={campo.key} className="form-group" style={{marginBottom:0}}>
+                  <label className="form-label" style={{fontSize:12}}>{campo.label}</label>
+                  <select
+                    className="form-select"
+                    value={mapeamento[campo.key] ?? -1}
+                    onChange={e=>setMapeamento(m=>({...m,[campo.key]:Number(e.target.value)}))}>
+                    <option value={-1}>— ignorar —</option>
+                    {headers.map((h,i)=>(
+                      <option key={i} value={i}>{h || `Coluna ${i+1}`}</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+
+            {!nomeMapeado && (
+              <div style={{fontSize:12,color:'var(--danger, #ef4444)',marginBottom:10}}>
+                Mapeie a coluna de <strong>Nome</strong> para continuar.
+              </div>
+            )}
+
+            {/* Preview */}
+            <div style={{fontSize:12,fontWeight:700,margin:'8px 0 6px'}}>
+              Prévia ({linhasValidas.length} parceiro{linhasValidas.length!==1?'s':''} válido{linhasValidas.length!==1?'s':''})
+            </div>
+            {qtdDuplicados>0 && (
+              <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:8}}>
+                ⚠ {qtdDuplicados} com nome igual a parceiro já existente — serão importados mesmo assim.
+              </div>
+            )}
+            <div style={{border:'1px solid var(--border)',borderRadius:8,overflow:'hidden',marginBottom:16}}>
+              <table style={{width:'100%',fontSize:12,borderCollapse:'collapse'}}>
+                <thead>
+                  <tr style={{background:'var(--surface-2)'}}>
+                    <th style={{textAlign:'left',padding:'6px 10px'}}>Nome</th>
+                    <th style={{textAlign:'left',padding:'6px 10px'}}>Usuário</th>
+                    <th style={{textAlign:'left',padding:'6px 10px'}}>Contato</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {linhasValidas.slice(0,5).map((l,i)=>(
+                    <tr key={i} style={{borderTop:'1px solid var(--border)'}}>
+                      <td style={{padding:'6px 10px'}}>{l.nome}</td>
+                      <td style={{padding:'6px 10px',color:'var(--text-muted)'}}>{l.username||'—'}</td>
+                      <td style={{padding:'6px 10px',color:'var(--text-muted)'}}>{l.contact_value||'—'}</td>
+                    </tr>
+                  ))}
+                  {linhasValidas.length===0 && (
+                    <tr><td colSpan={3} style={{padding:'10px',textAlign:'center',color:'var(--text-muted)'}}>Nenhuma linha com nome preenchido.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {erro && <div style={{fontSize:12,color:'var(--danger, #ef4444)',marginBottom:10}}>{erro}</div>}
+
+            <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
+              <button className="btn btn-ghost" onClick={()=>{setStep('upload');setErro('')}} disabled={importando}>
+                Voltar
+              </button>
+              <button className="btn btn-primary" onClick={importar}
+                disabled={importando || !nomeMapeado || linhasValidas.length===0}>
+                {importando ? 'Importando...' : `Importar ${linhasValidas.length} parceiro${linhasValidas.length!==1?'s':''}`}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+
 export default function CRM({ grupo, titulo }) {
   const { usuario } = useAuth()
   const ehAdmin = usuario?.perfil === 'administrador'
@@ -1319,6 +1573,7 @@ export default function CRM({ grupo, titulo }) {
   const [search, setSearch]           = useState('')
   const [modalParceiro, setModalParceiro] = useState(null)
   const [modalNovo, setModalNovo]       = useState(false)
+  const [modalImport, setModalImport]   = useState(false)
   const [modalConfig, setModalConfig]   = useState(false)
   const [dragId, setDragId]             = useState(null)
   const [dragOverCol, setDragOverCol]   = useState(null)
@@ -1447,6 +1702,9 @@ export default function CRM({ grupo, titulo }) {
         <div style={{display:'flex',alignItems:'center',gap:10}}>
           <button className="btn btn-primary" onClick={()=>setModalNovo(true)} style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
             <Plus size={15}/> Novo Parceiro
+          </button>
+          <button className="btn btn-ghost" onClick={()=>setModalImport(true)} style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}} title="Importar possíveis parceiros por planilha">
+            <Upload size={15}/> Importar planilha
           </button>
           {visao==='prospeccao' && (
             <button className="btn btn-ghost btn-sm" onClick={()=>setModalConfig(true)} title="Configurar status do CRM" style={{marginLeft:6}}>
@@ -1578,7 +1836,16 @@ export default function CRM({ grupo, titulo }) {
           onSave={handleNovoParceiro}
           onClose={()=>setModalNovo(false)}
           pipeline={pipeline}
-          grupo={grupoAtivo}/>
+          grupo={grupoAtivo}
+          parceirosExistentes={parceiros}/>
+      )}
+      {modalImport && (
+        <ModalImportarPlanilha
+          grupo={grupoAtivo}
+          userId={usuario?.id}
+          nomesExistentes={parceiros.map(p=>p.nome)}
+          onClose={()=>setModalImport(false)}
+          onDone={(qtd)=>{ setModalImport(false); showToast(`${qtd} parceiro${qtd!==1?'s':''} importado${qtd!==1?'s':''}!`); carregar() }}/>
       )}
       {modalParceiro && (
         <ModalParceiroCRM
