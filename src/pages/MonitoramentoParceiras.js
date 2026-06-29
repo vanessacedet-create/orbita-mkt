@@ -973,12 +973,12 @@ export default function MonitoramentoParceiras() {
     }
   }
 
-  const totalPostou = checkagemMes.filter(r => r.status === 'postou' && r.formato === formatoSel).length
-  const totalNao    = checkagemMes.filter(r => r.status === 'nao_postou' && r.formato === formatoSel).length
-  const totalPend   = checkagemMes.filter(r => r.status === 'pendente' && r.formato === formatoSel).length
-  const totalFinalizado = checkagemCriativo.filter(r => r.status === 'finalizado' && r.formato === formatoCriativoSel).length
-  const totalIniciado   = checkagemCriativo.filter(r => r.status === 'iniciado' && r.formato === formatoCriativoSel).length
-  const totalPendCriat  = checkagemCriativo.filter(r => r.status === 'pendente' && r.formato === formatoCriativoSel).length
+  const totalPostou = checkagemMes.filter(r => r.status === 'postou' && r.formato === formatoSel && r.data_esperada === dataSel).length
+  const totalNao    = checkagemMes.filter(r => r.status === 'nao_postou' && r.formato === formatoSel && r.data_esperada === dataSel).length
+  const totalPend   = checkagemMes.filter(r => r.status === 'pendente' && r.formato === formatoSel && r.data_esperada === dataSel).length
+  const totalFinalizado = checkagemCriativo.filter(r => r.status === 'finalizado' && r.formato === formatoCriativoSel && r.data_esperada === dataCriativoSel).length
+  const totalIniciado   = checkagemCriativo.filter(r => r.status === 'iniciado' && r.formato === formatoCriativoSel && r.data_esperada === dataCriativoSel).length
+  const totalPendCriat  = checkagemCriativo.filter(r => r.status === 'pendente' && r.formato === formatoCriativoSel && r.data_esperada === dataCriativoSel).length
 
   function tabStyle(ativa) {
     return { padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', borderBottom: ativa ? '2px solid var(--accent)' : '2px solid transparent', background: 'transparent', color: ativa ? 'var(--accent)' : 'var(--text-muted)', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 6 }
