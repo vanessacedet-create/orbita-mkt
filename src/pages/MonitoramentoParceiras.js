@@ -7,7 +7,7 @@ import {
   getObservacoesEditora, createObservacao, deleteObservacao,
 } from '../lib/monitoramento-editoras'
 import { getCheckagemCriativoMes, upsertCheckagemCriativoDia } from '../lib/monitoramento-criativo'
-import { getLivrarias, updateLivraria, getObsFormatoLote, upsertObsFormato } from '../lib/editoras-livrarias'
+import { getLivrarias, updateLivraria, getObsFormatoLote, upsertObsFormato, getConfigEquipe, setConfigEquipe } from '../lib/editoras-livrarias'
 import {
   Eye, Plus, X, Upload, ChevronLeft, ChevronRight,
   Pencil, Trash2, MessageSquare, LayoutGrid, List,
@@ -724,33 +724,30 @@ export default function MonitoramentoParceiras() {
   const [editoras, setEditoras] = useState([])
   const [todasLivrarias, setTodasLivrarias] = useState([])
 
-  // Seleção por formato: { story: [ids], feed: [ids], reels: [ids] }
-  const [selParceiras, setSelParceiras] = useState(() => {
-    try { const s = localStorage.getItem('monitor_selParceiras'); return s ? JSON.parse(s) : {} } catch { return {} }
-  })
-  const [selCriativo, setSelCriativo] = useState(() => {
-    try { const s = localStorage.getItem('monitor_selCriativo'); return s ? JSON.parse(s) : {} } catch { return {} }
-  })
+  // Seleção por formato salva no banco (global para equipe)
+  // { story: [ids], feed: [ids], reels: [ids], email_mkt: [ids] }
+  const [selParceiras, setSelParceiras] = useState({})
+  const [selCriativo, setSelCriativo] = useState({})
   const [showSeletorLiv, setShowSeletorLiv] = useState(false)
 
   function getSelecionadasParceiras(formato) {
-    return selParceiras[formato] ?? null // null = ainda não configurado = todas
+    return selParceiras[formato] ?? null
   }
 
   function getSelecionadasCriativo(formato) {
     return selCriativo[formato] ?? null
   }
 
-  function salvarSelParceiras(formato, ids) {
+  async function salvarSelParceiras(formato, ids) {
     const novo = { ...selParceiras, [formato]: ids }
     setSelParceiras(novo)
-    try { localStorage.setItem('monitor_selParceiras', JSON.stringify(novo)) } catch {}
+    try { await setConfigEquipe('sel_parceiras', novo) } catch (e) { console.error(e) }
   }
 
-  function salvarSelCriativo(formato, ids) {
+  async function salvarSelCriativo(formato, ids) {
     const novo = { ...selCriativo, [formato]: ids }
     setSelCriativo(novo)
-    try { localStorage.setItem('monitor_selCriativo', JSON.stringify(novo)) } catch {}
+    try { await setConfigEquipe('sel_criativo', novo) } catch (e) { console.error(e) }
   }
 
   const [obsFormatoParceiras, setObsFormatoParceiras] = useState({}) // { livraria_id: observacao }
@@ -827,9 +824,16 @@ export default function MonitoramentoParceiras() {
 
   async function carregarDados() {
     try {
-      const [eds, livs] = await Promise.all([getEditorasParceiras(), getLivrarias()])
+      const [eds, livs, confParceiras, confCriativo] = await Promise.all([
+        getEditorasParceiras(),
+        getLivrarias(),
+        getConfigEquipe('sel_parceiras'),
+        getConfigEquipe('sel_criativo'),
+      ])
       setEditoras(eds)
       setTodasLivrarias(livs.filter(l => l.editora_id))
+      if (confParceiras) setSelParceiras(confParceiras)
+      if (confCriativo) setSelCriativo(confCriativo)
     } catch (e) { console.error(e) }
   }
 
