@@ -250,17 +250,20 @@ export async function updateParceiroCRM(id, updates) {
 export async function getStatusHistory(parceiro_id) {
   const { data, error } = await supabase
     .from('partner_status_history')
-    .select('*')
+    .select('*, autor:usuarios!changed_by(id, nome)')
     .eq('partner_id', parceiro_id)
     .order('changed_at', { ascending: false })
   if (error) throw error
-  return data || []
+  return (data || []).map(h => ({
+    ...h,
+    changed_by_nome: h.autor?.nome || null,
+  }))
 }
 
-export async function addStatusHistory(parceiro_id, status, reason) {
+export async function addStatusHistory(parceiro_id, status, reason, changed_by) {
   const { data, error } = await supabase
     .from('partner_status_history')
-    .insert([{ partner_id: parceiro_id, status, reason: reason||null }])
+    .insert([{ partner_id: parceiro_id, status, reason: reason||null, changed_by: changed_by||null }])
     .select('*')
     .single()
   if (error) throw error
@@ -591,7 +594,7 @@ export async function ativarParceiroBronze(parceiroId, userId) {
   }
 
   // Registrar no histórico de status do CRM também
-  await addStatusHistory(parceiroId, 'active', 'Parceiro ativado via Escada de Crescimento')
+  await addStatusHistory(parceiroId, 'active', 'Parceiro ativado via Escada de Crescimento', userId)
 
   return data
 }
