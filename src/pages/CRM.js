@@ -1382,7 +1382,25 @@ function valorCampoImport(key, raw) {
   return v
 }
 
-function ModalImportarPlanilha({ grupo, userId, nomesExistentes = [], onClose, onDone }) {
+// Colunas da planilha modelo (cabeçalhos batem com o reconhecimento automático)
+const MODELO_COLUNAS = [
+  { header:'Nome',                 exemplo:'Maria Souza' },
+  { header:'Link do perfil',       exemplo:'https://instagram.com/maria.souza' },
+  { header:'Usuário',              exemplo:'@maria.souza' },
+  { header:'Contato',              exemplo:'maria@email.com' },
+  { header:'Plataformas',          exemplo:'Instagram, YouTube' },
+  { header:'Tipo de parceria',     exemplo:'Booktime' },
+  { header:'Modelo',               exemplo:'2' },
+  { header:'Origem',               exemplo:'Indicação' },
+  { header:'Livraria',             exemplo:'' },
+  { header:'Temas',                exemplo:'Espiritualidade, Clássicos' },
+  { header:'Editoras que divulga', exemplo:'Ecclesiae' },
+  { header:'Engajamento',          exemplo:'3,5' },
+  { header:'Cupom',                exemplo:'MARIA10' },
+  { header:'Link da livraria',     exemplo:'' },
+]
+
+function ModalImportarPlanilha({ grupo, userId, nomesExistentes = [], pipeline = [], onClose, onDone }) {
   const [step, setStep]           = useState('upload') // 'upload' | 'mapear'
   const [fileName, setFileName]   = useState('')
   const [headers, setHeaders]     = useState([])
@@ -1390,6 +1408,20 @@ function ModalImportarPlanilha({ grupo, userId, nomesExistentes = [], onClose, o
   const [mapeamento, setMapeamento] = useState({})
   const [importando, setImportando] = useState(false)
   const [erro, setErro]           = useState('')
+  const [statusInicial, setStatusInicial] = useState(() => {
+    const tem = (pipeline||[]).some(s => s.value === 'prospected')
+    return tem ? 'prospected' : ((pipeline||[])[0]?.value || 'prospected')
+  })
+
+  function baixarModelo() {
+    const ws = XLSX.utils.aoa_to_sheet([
+      MODELO_COLUNAS.map(c => c.header),
+      MODELO_COLUNAS.map(c => c.exemplo),
+    ])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Parceiros')
+    XLSX.writeFile(wb, 'modelo-parceiros.xlsx')
+  }
 
   const existentesSet = new Set((nomesExistentes||[]).map(n => normalizaCab(n)))
 
@@ -1440,7 +1472,7 @@ function ModalImportarPlanilha({ grupo, userId, nomesExistentes = [], onClose, o
     setImportando(true)
     setErro('')
     try {
-      await createParceirosLote(linhas, { grupo, statusInicial:'prospected', changed_by:userId })
+      await createParceirosLote(linhas, { grupo, statusInicial, changed_by:userId })
       onDone(linhas.length)
     } catch(err) {
       console.error(err)
@@ -1462,12 +1494,17 @@ function ModalImportarPlanilha({ grupo, userId, nomesExistentes = [], onClose, o
           <div>
             <p style={{fontSize:13,color:'var(--text-muted)',marginBottom:14}}>
               Suba uma planilha (.xlsx, .xls ou .csv) com os possíveis parceiros. A primeira linha deve ser o cabeçalho.
-              Eles entram no pipeline como <strong>Prospectado</strong>.
+              O status inicial você escolhe na próxima etapa.
             </p>
-            <label className="btn btn-primary" style={{display:'inline-flex',alignItems:'center',gap:6,cursor:'pointer'}}>
-              <Upload size={15}/> Escolher arquivo
-              <input type="file" accept=".xlsx,.xls,.csv" onChange={onFile} style={{display:'none'}}/>
-            </label>
+            <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+              <label className="btn btn-primary" style={{display:'inline-flex',alignItems:'center',gap:6,cursor:'pointer'}}>
+                <Upload size={15}/> Escolher arquivo
+                <input type="file" accept=".xlsx,.xls,.csv" onChange={onFile} style={{display:'none'}}/>
+              </label>
+              <button className="btn btn-ghost" onClick={baixarModelo} style={{display:'inline-flex',alignItems:'center',gap:6}}>
+                Baixar planilha modelo
+              </button>
+            </div>
             <div style={{fontSize:12,color:'var(--text-muted)',marginTop:16,lineHeight:1.6}}>
               Colunas reconhecidas automaticamente: Nome, Link do perfil, Usuário, Contato, Plataformas,
               Tipo de parceria, Modelo, Origem, Livraria, Temas, Editoras que divulga, Engajamento, Cupom.
@@ -1538,6 +1575,15 @@ function ModalImportarPlanilha({ grupo, userId, nomesExistentes = [], onClose, o
                   )}
                 </tbody>
               </table>
+            </div>
+
+            <div className="form-group" style={{maxWidth:280,marginBottom:14}}>
+              <label className="form-label" style={{fontSize:12}}>Status inicial dos importados</label>
+              <select className="form-select" value={statusInicial} onChange={e=>setStatusInicial(e.target.value)}>
+                {(pipeline||[]).map(s=>(
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
             </div>
 
             {erro && <div style={{fontSize:12,color:'var(--danger, #ef4444)',marginBottom:10}}>{erro}</div>}
@@ -1844,6 +1890,7 @@ export default function CRM({ grupo, titulo }) {
           grupo={grupoAtivo}
           userId={usuario?.id}
           nomesExistentes={parceiros.map(p=>p.nome)}
+          pipeline={pipeline}
           onClose={()=>setModalImport(false)}
           onDone={(qtd)=>{ setModalImport(false); showToast(`${qtd} parceiro${qtd!==1?'s':''} importado${qtd!==1?'s':''}!`); carregar() }}/>
       )}
