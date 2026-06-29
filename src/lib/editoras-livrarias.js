@@ -164,7 +164,24 @@ export async function desativarLivrariaLote(ids) {
   if (error) throw error
 }
 
-// ── OBSERVAÇÕES POR FORMATO ────────────────────────────────
+// ── CONFIGURAÇÃO GLOBAL DA EQUIPE ─────────────────────────
+
+export async function getConfigEquipe(chave) {
+  const { data, error } = await supabase
+    .from('monitor_config_equipe')
+    .select('valor')
+    .eq('chave', chave)
+    .maybeSingle()
+  if (error) throw error
+  return data?.valor ?? null
+}
+
+export async function setConfigEquipe(chave, valor) {
+  const { error } = await supabase
+    .from('monitor_config_equipe')
+    .upsert({ chave, valor, atualizado_em: new Date().toISOString() }, { onConflict: 'chave' })
+  if (error) throw error
+}
 
 export async function getObsFormatoLote(formato) {
   const { data, error } = await supabase
