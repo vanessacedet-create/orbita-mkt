@@ -37,7 +37,7 @@ export {
   saveParceiroCPF, getParceiroCPF,
   getParceiros, getParceirosAtivos, getTodosParceiros, getParceirosComPontuacao,
   createParceiro, updateParceiro, deleteParceiro,
-  createParceiroCRM, getCRMParceiros, updateParceiroCRM,
+  createParceiroCRM, createParceirosLote, getCRMParceiros, updateParceiroCRM,
   getStatusHistory, addStatusHistory,
   vincularDivulgadorComoParceiro,
   // ── NOVAS FUNÇÕES (Escada de Crescimento) ──
