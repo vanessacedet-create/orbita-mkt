@@ -832,8 +832,34 @@ export default function MonitoramentoParceiras() {
       ])
       setEditoras(eds)
       setTodasLivrarias(livs.filter(l => l.editora_id))
-      if (confParceiras) setSelParceiras(confParceiras)
-      if (confCriativo) setSelCriativo(confCriativo)
+
+      // Se já tem config no banco, usa ela
+      if (confParceiras) {
+        setSelParceiras(confParceiras)
+      } else {
+        // Migra do localStorage para o banco (primeira vez)
+        try {
+          const local = localStorage.getItem('monitor_selParceiras')
+          if (local) {
+            const parsed = JSON.parse(local)
+            setSelParceiras(parsed)
+            await setConfigEquipe('sel_parceiras', parsed)
+          }
+        } catch {}
+      }
+
+      if (confCriativo) {
+        setSelCriativo(confCriativo)
+      } else {
+        try {
+          const local = localStorage.getItem('monitor_selCriativo')
+          if (local) {
+            const parsed = JSON.parse(local)
+            setSelCriativo(parsed)
+            await setConfigEquipe('sel_criativo', parsed)
+          }
+        } catch {}
+      }
     } catch (e) { console.error(e) }
   }
 
@@ -938,12 +964,12 @@ export default function MonitoramentoParceiras() {
     }
   }
 
-  const totalPostou = checkagemMes.filter(r => r.status === 'postou').length
-  const totalNao    = checkagemMes.filter(r => r.status === 'nao_postou').length
-  const totalPend   = checkagemMes.filter(r => r.status === 'pendente').length
-  const totalFinalizado = checkagemCriativo.filter(r => r.status === 'finalizado').length
-  const totalIniciado   = checkagemCriativo.filter(r => r.status === 'iniciado').length
-  const totalPendCriat  = checkagemCriativo.filter(r => r.status === 'pendente').length
+  const totalPostou = checkagemMes.filter(r => r.status === 'postou' && r.formato === formatoSel).length
+  const totalNao    = checkagemMes.filter(r => r.status === 'nao_postou' && r.formato === formatoSel).length
+  const totalPend   = checkagemMes.filter(r => r.status === 'pendente' && r.formato === formatoSel).length
+  const totalFinalizado = checkagemCriativo.filter(r => r.status === 'finalizado' && r.formato === formatoCriativoSel).length
+  const totalIniciado   = checkagemCriativo.filter(r => r.status === 'iniciado' && r.formato === formatoCriativoSel).length
+  const totalPendCriat  = checkagemCriativo.filter(r => r.status === 'pendente' && r.formato === formatoCriativoSel).length
 
   function tabStyle(ativa) {
     return { padding: '10px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none', borderBottom: ativa ? '2px solid var(--accent)' : '2px solid transparent', background: 'transparent', color: ativa ? 'var(--accent)' : 'var(--text-muted)', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 6 }
@@ -967,6 +993,7 @@ export default function MonitoramentoParceiras() {
                 <div key={l} style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: 18, fontWeight: 800, color: c, lineHeight: 1 }}>{n}</div>
                   <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: 2 }}>{l}</div>
+                  <div style={{ fontSize: 9, color: 'var(--accent)', marginTop: 1, fontWeight: 600 }}>{FORMATOS_PARCEIRAS.find(f => f.value === formatoSel)?.label}</div>
                 </div>
               ))}
             </div>
@@ -976,6 +1003,7 @@ export default function MonitoramentoParceiras() {
                 <div key={l} style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: 18, fontWeight: 800, color: c, lineHeight: 1 }}>{n}</div>
                   <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: 2 }}>{l}</div>
+                  <div style={{ fontSize: 9, color: 'var(--accent)', marginTop: 1, fontWeight: 600 }}>{FORMATOS_CRIATIVO.find(f => f.value === formatoCriativoSel)?.label}</div>
                 </div>
               ))}
             </div>
