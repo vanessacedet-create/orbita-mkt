@@ -3,7 +3,7 @@
 // Uso: <TabelaAtivos onOpenParceiro={fn} />
 
 import { useEffect, useState } from 'react'
-import { getParceirosComTier } from '../../lib/supabase'
+import { getParceirosComTier, getUsuarios, updateParceirosLote } from '../../lib/supabase'
 import { BadgeSituacao } from './BadgeTier'
 import { Search, X } from 'lucide-react'
 
@@ -56,6 +56,11 @@ export default function TabelaAtivos({ onOpenParceiro }) {
   const [filtroSituacao, setFiltroSituacao] = useState('ativo')
   const [filtroPlat, setFiltroPlat] = useState('')
   const [filtroResp, setFiltroResp] = useState('')
+  const [usuarios, setUsuarios] = useState([])
+  const [selecionados, setSelecionados] = useState(() => new Set())
+  const [acaoMassa, setAcaoMassa] = useState(null) // 'responsavel' | 'tipo' | null
+  const [valorMassa, setValorMassa] = useState('')
+  const [salvando, setSalvando] = useState(false)
 
   async function carregar() {
     setLoading(true)
@@ -69,7 +74,10 @@ export default function TabelaAtivos({ onOpenParceiro }) {
     }
   }
 
-  useEffect(() => { carregar() }, [])
+  useEffect(() => {
+    carregar()
+    getUsuarios().then(setUsuarios).catch(console.error)
+  }, [])
 
   // ── Filtros ──
   const filtrados = parceiros.filter(p => {
@@ -86,6 +94,51 @@ export default function TabelaAtivos({ onOpenParceiro }) {
   })
 
   const temFiltro = filtroTipo || filtroPlat || filtroResp || filtroSituacao !== 'ativo'
+
+  // ── Seleção em massa ──
+  const idsVisiveis = filtrados.map(p => p.id)
+  const todosSelecionados = idsVisiveis.length > 0 && idsVisiveis.every(id => selecionados.has(id))
+  const algunsSelecionados = idsVisiveis.some(id => selecionados.has(id))
+
+  function toggleSelecionado(id) {
+    setSelecionados(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+  function toggleTodos() {
+    setSelecionados(prev => {
+      const next = new Set(prev)
+      if (todosSelecionados) idsVisiveis.forEach(id => next.delete(id))
+      else idsVisiveis.forEach(id => next.add(id))
+      return next
+    })
+  }
+  function limparSelecao() {
+    setSelecionados(new Set()); setAcaoMassa(null); setValorMassa('')
+  }
+  function escolherAcao(acao) {
+    setAcaoMassa(acao); setValorMassa('')
+  }
+  async function aplicarMassa() {
+    const ids = [...selecionados]
+    if (!ids.length || !acaoMassa || valorMassa === '') return
+    const updates = acaoMassa === 'responsavel'
+      ? { responsavel_interno_id: valorMassa }
+      : { model: Number(valorMassa) }
+    setSalvando(true)
+    try {
+      await updateParceirosLote(ids, updates)
+      await carregar()
+      limparSelecao()
+    } catch (e) {
+      console.error('Erro na alteração em massa:', e)
+      alert('Não foi possível aplicar a alteração em massa.')
+    } finally {
+      setSalvando(false)
+    }
+  }
 
   // ── Métricas ──
   const ativos = parceiros.filter(p => p.situacao === 'ativo')
@@ -159,6 +212,64 @@ export default function TabelaAtivos({ onOpenParceiro }) {
         )}
       </div>
 
+      {/* Barra de ação em massa */}
+      {selecionados.size > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          background: 'var(--surface-2)', border: '1px solid var(--brand, var(--border))',
+          borderRadius: 10, padding: '10px 14px', marginBottom: 14,
+        }}>
+          <span style={{ fontSize: 13, fontWeight: 700 }}>
+            {selecionados.size} selecionado{selecionados.size > 1 ? 's' : ''}
+          </span>
+
+          {!acaoMassa && (
+            <>
+              <button className="btn btn-sm" onClick={() => escolherAcao('responsavel')}>
+                Alterar responsável
+              </button>
+              <button className="btn btn-sm" onClick={() => escolherAcao('tipo')}>
+                Alterar tipo de parceria
+              </button>
+            </>
+          )}
+
+          {acaoMassa === 'responsavel' && (
+            <>
+              <select className="form-select" style={{ width: 'auto', fontSize: 12, padding: '6px 10px' }}
+                value={valorMassa} onChange={e => setValorMassa(e.target.value)}>
+                <option value="">Selecione o responsável…</option>
+                {usuarios.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
+              </select>
+              <button className="btn btn-primary btn-sm" disabled={!valorMassa || salvando} onClick={aplicarMassa}>
+                {salvando ? 'Aplicando…' : 'Aplicar'}
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => escolherAcao(null)}>Voltar</button>
+            </>
+          )}
+
+          {acaoMassa === 'tipo' && (
+            <>
+              <select className="form-select" style={{ width: 'auto', fontSize: 12, padding: '6px 10px' }}
+                value={valorMassa} onChange={e => setValorMassa(e.target.value)}>
+                <option value="">Selecione o tipo…</option>
+                <option value="1">Livraria</option>
+                <option value="2">Book Time</option>
+                <option value="3">Institucional</option>
+              </select>
+              <button className="btn btn-primary btn-sm" disabled={!valorMassa || salvando} onClick={aplicarMassa}>
+                {salvando ? 'Aplicando…' : 'Aplicar'}
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => escolherAcao(null)}>Voltar</button>
+            </>
+          )}
+
+          <button className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }} onClick={limparSelecao}>
+            <X size={12} /> Limpar seleção
+          </button>
+        </div>
+      )}
+
       {/* Tabela */}
       {loading ? (
         <div className="loading"><div className="spinner" /></div>
@@ -174,6 +285,14 @@ export default function TabelaAtivos({ onOpenParceiro }) {
           <table>
             <thead>
               <tr>
+                <th style={{ width: 36 }}>
+                  <input
+                    type="checkbox"
+                    checked={todosSelecionados}
+                    ref={el => { if (el) el.indeterminate = algunsSelecionados && !todosSelecionados }}
+                    onChange={toggleTodos}
+                  />
+                </th>
                 <th>Nome</th>
                 <th>Tipo de parceria</th>
                 <th>Plataformas</th>
@@ -190,6 +309,13 @@ export default function TabelaAtivos({ onOpenParceiro }) {
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
+                  <td style={{ width: 36 }} onClick={e => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selecionados.has(p.id)}
+                      onChange={() => toggleSelecionado(p.id)}
+                    />
+                  </td>
                   <td>
                     <div className="td-strong">{p.nome}</div>
                     {p.username && (
