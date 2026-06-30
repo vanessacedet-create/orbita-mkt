@@ -196,6 +196,21 @@ export async function deleteParceiro(id) {
   if (error) throw error
 }
 
+// Atualização em massa de campos de parceiros (CRM de influencers).
+// ids: array de ids; updates: objeto com os campos a alterar
+// (ex.: { responsavel_interno_id: '...' } ou { model: 2 }).
+// Faz um único UPDATE com IN(ids) — bem mais eficiente que um loop.
+export async function updateParceirosLote(ids, updates) {
+  if (!ids || !ids.length) return []
+  const { data, error } = await supabase
+    .from('parceiros')
+    .update(updates)
+    .in('id', ids)
+    .select('id')
+  if (error) throw error
+  return data || []
+}
+
 // ── CRM DE INFLUENCERS ─────────────────────────────────────
 export async function createParceiroCRM(payload, statusInicial = 'prospected') {
   const { data, error } = await supabase
