@@ -36,7 +36,7 @@ export {
 export {
   saveParceiroCPF, getParceiroCPF,
   getParceiros, getParceirosAtivos, getTodosParceiros, getParceirosComPontuacao,
-  createParceiro, updateParceiro, deleteParceiro,
+  createParceiro, updateParceiro, deleteParceiro, updateParceirosLote,
   createParceiroCRM, createParceirosLote, getCRMParceiros, updateParceiroCRM,
   getStatusHistory, addStatusHistory,
   vincularDivulgadorComoParceiro,
