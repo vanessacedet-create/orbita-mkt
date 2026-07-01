@@ -68,6 +68,7 @@ const Configuracoes         = lazy(() => import('./pages/Configuracoes'))
 const BlocoNotas            = lazy(() => import('./pages/BlocoNotas'))
 const MonitoramentoParceiras = lazy(() => import('./pages/MonitoramentoParceiras'))
 const EditorasLivrarias     = lazy(() => import('./pages/EditorasLivrarias'))
+const CRMEditoras           = lazy(() => import('./pages/CRMEditoras'))
 
 const MENU = [
   { path: '/dashboard',             label: 'Dashboard',           icon: LayoutDashboard, modulo: 'dashboard', ocultarPerfis: ['supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'] },
@@ -82,6 +83,7 @@ const MENU = [
   { path: '/tarefas-parceiras',     label: 'Tarefas Parceiras',   icon: CheckSquare,     modulo: 'tarefas_parceiras' },
   { path: '/agenda',                label: 'Agenda',              icon: CalendarRange,   modulo: 'tarefas_parceiras' },
   { path: '/editoras-livrarias',    label: 'Editoras & Livrarias',icon: LibraryBig,      modulo: 'tarefas_parceiras' },
+  { path: '/classificacao-editoras',label: 'Classificação',       icon: TrendingUp,      modulo: 'tarefas_parceiras' },
   { path: '/monitoramento-parceiras', label: 'Monitoramento',     icon: Eye,             modulo: 'tarefas_parceiras' },
   { path: '/notas',                 label: 'Bloco de Notas',      icon: BookMarked,      modulo: 'dashboard', sempreVisivel: true },
   { path: '/configuracoes',         label: 'Configurações',       icon: Settings,        modulo: 'dashboard', sempreVisivel: true },
@@ -404,6 +406,7 @@ function Shell() {
                 <Route path="/tarefas-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><Tarefas grupo="parceiras" titulo="Tarefas — Editoras Parceiras" /></RequireAuth>} />
                 <Route path="/agenda" element={<RequireAuth modulo="tarefas_parceiras"><Agenda /></RequireAuth>} />
                 <Route path="/editoras-livrarias" element={<RequireAuth modulo="tarefas_parceiras"><EditorasLivrarias /></RequireAuth>} />
+                <Route path="/classificacao-editoras" element={<RequireAuth modulo="tarefas_parceiras"><CRMEditoras /></RequireAuth>} />
                 <Route path="/monitoramento-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><MonitoramentoParceiras /></RequireAuth>} />
                 <Route path="/treinamentos" element={<RequireAuth modulo="treinamentos"><Treinamentos /></RequireAuth>} />
                 <Route path="/pda" element={<RequireAuth modulo="pda"><PDA /></RequireAuth>} />
