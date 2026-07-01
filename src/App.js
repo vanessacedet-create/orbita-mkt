@@ -49,7 +49,6 @@ const Usuarios               = lazy(() => import('./pages/Usuarios'))
 const Campanhas              = lazy(() => import('./pages/Campanhas'))
 const Lancamentos            = lazy(() => import('./pages/Lancamentos'))
 const Tarefas                = lazy(() => import('./pages/Tarefas'))
-const TarefasParceiras       = lazy(() => import('./pages/TarefasParceiras'))
 const Parceiros              = lazy(() => import('./pages/Parceiros'))
 const Monitoramento          = lazy(() => import('./pages/Monitoramento'))
 const MonitoramentoParceiras = lazy(() => import('./pages/MonitoramentoParceiras'))
@@ -417,7 +416,7 @@ function Shell() {
                 <Route path="/eventos" element={<RequireAuth modulo="eventos"><Eventos /></RequireAuth>} />
                 <Route path="/lancamentos" element={<RequireAuth modulo="lancamentos"><Lancamentos /></RequireAuth>} />
                 <Route path="/tarefas" element={<RequireAuth modulo="tarefas"><Tarefas /></RequireAuth>} />
-                <Route path="/tarefas-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><TarefasParceiras /></RequireAuth>} />
+                <Route path="/tarefas-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><Tarefas grupo="parceiras" titulo="Tarefas — Editoras Parceiras" /></RequireAuth>} />
                 <Route path="/agenda" element={<RequireAuth modulo="tarefas_parceiras"><Agenda /></RequireAuth>} />
                 <Route path="/treinamentos" element={<RequireAuth modulo="treinamentos"><Treinamentos /></RequireAuth>} />
                 <Route path="/pda" element={<RequireAuth modulo="pda"><PDA /></RequireAuth>} />
