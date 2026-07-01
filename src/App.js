@@ -71,29 +71,35 @@ const EditorasLivrarias      = lazy(() => import('./pages/EditorasLivrarias'))
 const CRMEditorasParceiras   = lazy(() => import('./pages/CRMEditorasParceiras'))
 
 const MENU = [
-  { path: '/dashboard',              label: 'Dashboard',           icon: LayoutDashboard, modulo: 'dashboard', ocultarPerfis: ['supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'] },
-  { path: '/dashboard-parceiras',    label: 'Dashboard',           icon: LayoutDashboard, modulo: 'tarefas_parceiras' },
+  // ── Menu geral (não parceiras) ──
+  { path: '/dashboard',              label: 'Dashboard',           icon: LayoutDashboard, modulo: 'dashboard',        ocultarPerfis: ['supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'] },
   { path: '/crm-influencers',        label: 'CRM Influencers',     icon: Network,         modulo: 'crm_influencers' },
-  { path: '/crm-parceiras',          label: 'CRM Parceiras',       icon: Network,         modulo: 'crm_parceiras' },
+  { path: '/crm-parceiras',          label: 'CRM Parceiras',       icon: Network,         modulo: 'crm_parceiras',    ocultarPerfis: ['supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'] },
   { path: '/cortesias',              label: 'Cortesias',           icon: BookOpen,        modulo: 'cortesias' },
-  { path: '/campanhas',              label: 'Campanhas',           icon: Megaphone,       modulo: 'campanhas' },
-  { path: '/monitoramento',          label: 'Monitoramento',       icon: Eye,             modulo: 'monitoramento', ocultarPerfis: ['supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'] },
-  { path: '/lancamentos',            label: 'Lançamentos',         icon: CalendarDays,    modulo: 'lancamentos' },
+  { path: '/campanhas',              label: 'Campanhas',           icon: Megaphone,       modulo: 'campanhas',        ocultarPerfis: ['supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'] },
+  { path: '/monitoramento',          label: 'Monitoramento',       icon: Eye,             modulo: 'monitoramento',    ocultarPerfis: ['supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'] },
+  { path: '/lancamentos',            label: 'Lançamentos',         icon: CalendarDays,    modulo: 'lancamentos',      ocultarPerfis: ['supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'] },
   { path: '/tarefas',                label: 'Tarefas',             icon: CheckSquare,     modulo: 'tarefas' },
-  { path: '/tarefas-parceiras',      label: 'Tarefas Parceiras',   icon: CheckSquare,     modulo: 'tarefas_parceiras' },
-  { path: '/agenda',                 label: 'Agenda',              icon: CalendarRange,   modulo: 'tarefas_parceiras' },
-  { path: '/editoras-livrarias',     label: 'Editoras & Livrarias',icon: LibraryBig,      modulo: 'tarefas_parceiras' },
-  { path: '/crm-editoras-parceiras', label: 'CRM Editoras',        icon: TrendingUp,      modulo: 'tarefas_parceiras' },
-  { path: '/monitoramento-parceiras',label: 'Monitoramento',       icon: Eye,             modulo: 'tarefas_parceiras' },
-  { path: '/notas',                  label: 'Bloco de Notas',      icon: BookMarked,      modulo: 'dashboard', sempreVisivel: true },
-  { path: '/configuracoes',          label: 'Configurações',       icon: Settings,        modulo: 'dashboard', sempreVisivel: true },
   { path: '/rh',                     label: 'RH',                  icon: HeartHandshake,  modulo: 'rh' },
   { path: '/pda',                    label: 'PDA',                 icon: Target,          modulo: 'pda' },
   { path: '/treinamentos',           label: 'Treinamentos',        icon: GraduationCap,   modulo: 'treinamentos' },
   { path: '/eventos',                label: 'Eventos',             icon: CalendarCheck,   modulo: 'eventos' },
   { path: '/vitrine-admin',          label: 'Vitrine',             icon: Store,           modulo: 'parceiros' },
-  { path: '/acessos-equipe',         label: 'Acessos da Equipe',   icon: Users,           modulo: 'acessos_equipe' },
+  { path: '/acessos-equipe',         label: 'Acessos da Equipe',   icon: Users,           modulo: 'acessos_equipe',   ocultarPerfis: ['supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'] },
   { path: '/usuarios',               label: 'Usuários',            icon: Users,           modulo: 'usuarios' },
+
+  // ── Menu editoras parceiras (ordem definida por Viniane) ──
+  { path: '/dashboard-parceiras',    label: 'Dashboard',           icon: LayoutDashboard, modulo: 'tarefas_parceiras' },
+  { path: '/notas',                  label: 'Bloco de Notas',      icon: BookMarked,      modulo: 'tarefas_parceiras', sempreVisivel: true },
+  { path: '/agenda',                 label: 'Agenda',              icon: CalendarRange,   modulo: 'tarefas_parceiras' },
+  { path: '/tarefas-parceiras',      label: 'Tarefas Parceiras',   icon: CheckSquare,     modulo: 'tarefas_parceiras' },
+  { path: '/monitoramento-parceiras',label: 'Monitoramento',       icon: Eye,             modulo: 'tarefas_parceiras' },
+  { path: '/editoras-livrarias',     label: 'Editoras & Livrarias',icon: LibraryBig,      modulo: 'tarefas_parceiras' },
+  { path: '/crm-editoras-parceiras', label: 'CRM Editoras',        icon: TrendingUp,      modulo: 'tarefas_parceiras' },
+  { path: '/lancamentos',            label: 'Lançamentos',         icon: CalendarDays,    modulo: 'lancamentos',      ocultarPerfis: ['administrador', 'gerente', 'estagiario_proprias', 'analista_proprias', 'supervisor_proprias', 'estagiario_influencers', 'analista_influencers', 'estagiario_marketplaces', 'analista_marketplaces'] },
+  { path: '/campanhas',              label: 'Campanhas',           icon: Megaphone,       modulo: 'campanhas',        ocultarPerfis: ['administrador', 'gerente', 'estagiario_proprias', 'analista_proprias', 'supervisor_proprias', 'estagiario_influencers', 'analista_influencers', 'estagiario_marketplaces', 'analista_marketplaces'] },
+  { path: '/configuracoes',          label: 'Configurações',       icon: Settings,        modulo: 'tarefas_parceiras', sempreVisivel: true },
+  { path: '/acessos-equipe',         label: 'Acessos da Equipe',   icon: Users,           modulo: 'acessos_equipe',   ocultarPerfis: ['administrador', 'gerente', 'estagiario_proprias', 'analista_proprias', 'supervisor_proprias', 'estagiario_influencers', 'analista_influencers', 'estagiario_marketplaces', 'analista_marketplaces'] },
 ]
 
 const PERFIL_LABEL = {
@@ -317,10 +323,12 @@ function Shell() {
     await signOut()
   }
 
+  // Remove duplicatas mantendo a primeira ocorrência válida para o perfil ativo
   const menuVisivel = MENU.filter((m) => {
     if (m.ocultarPerfis && m.ocultarPerfis.includes(perfilAtivo)) return false
     return m.sempreVisivel || canAtivo(m.modulo)
-  })
+  }).filter((m, idx, arr) => arr.findIndex(x => x.path === m.path) === idx)
+
   const usuarioDisplay = viewAs || usuario
 
   const viewAsValue = {
