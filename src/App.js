@@ -253,7 +253,7 @@ function BannerVerComo({ viewAs, onSair }) {
 }
 
 function Shell() {
-  const { usuario } = useAuth()
+  const { usuario, session } = useAuth()
   const [pedidosNovos, setPedidosNovos] = useState(0)
 
   const [tema, setTema] = useState(() => {
@@ -335,7 +335,7 @@ function Shell() {
     await signOut()
   }
 
-  const ehDono = (usuario?.email || '').toLowerCase() === DONO_EMAIL.toLowerCase()
+  const ehDono = (session?.user?.email || '').toLowerCase() === DONO_EMAIL.toLowerCase()
 
   const menuVisivel = MENU.filter((m) => {
     if (m.soEmail && !ehDono) return false
