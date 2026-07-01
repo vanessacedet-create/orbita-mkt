@@ -41,6 +41,7 @@ import Login from './pages/Login'
 import ResetPassword from './pages/ResetPassword'
 
 const Dashboard              = lazy(() => import('./pages/Dashboard'))
+const TarefasParceiras       = lazy(() => import('./pages/TarefasParceiras'))
 const DashboardParceiras     = lazy(() => import('./pages/DashboardParceiras'))
 const BemVindo               = lazy(() => import('./pages/BemVindo'))
 const AcessosEquipe          = lazy(() => import('./pages/AcessosEquipe'))
@@ -416,7 +417,7 @@ function Shell() {
                 <Route path="/eventos" element={<RequireAuth modulo="eventos"><Eventos /></RequireAuth>} />
                 <Route path="/lancamentos" element={<RequireAuth modulo="lancamentos"><Lancamentos /></RequireAuth>} />
                 <Route path="/tarefas" element={<RequireAuth modulo="tarefas"><Tarefas /></RequireAuth>} />
-                <Route path="/tarefas-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><Tarefas grupo="parceiras" titulo="Tarefas — Editoras Parceiras" /></RequireAuth>} />
+                <Route path="/tarefas-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><TarefasParceiras grupo="parceiras" titulo="Tarefas — Editoras Parceiras" /></RequireAuth>} />
                 <Route path="/agenda" element={<RequireAuth modulo="tarefas_parceiras"><Agenda /></RequireAuth>} />
                 <Route path="/treinamentos" element={<RequireAuth modulo="treinamentos"><Treinamentos /></RequireAuth>} />
                 <Route path="/pda" element={<RequireAuth modulo="pda"><PDA /></RequireAuth>} />
