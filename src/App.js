@@ -1,3 +1,4 @@
+import BaseComando from './pages/BaseComando'
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { lazy, Suspense, useState, useEffect } from 'react'
 import { AuthProvider, useAuth, MODULOS_PERMISSOES } from './context/AuthContext'
@@ -77,6 +78,7 @@ const MENU = [
   // Dashboard — cada perfil vê o seu
   { path: '/dashboard',              label: 'Dashboard',          icon: LayoutDashboard, modulo: 'dashboard',         ocultarPerfis: PERFIS_PARCEIRAS },
   { path: '/dashboard-parceiras',   label: 'Dashboard',          icon: LayoutDashboard, modulo: 'tarefas_parceiras' },
+  { path: '/base-comando', label: 'Base de Comando', modulo: 'base_comando' }
 
   // Módulos gerais (ocultos para parceiras)
   { path: '/crm-influencers',       label: 'CRM Influencers',    icon: Network,         modulo: 'crm_influencers',   ocultarPerfis: PERFIS_PARCEIRAS },
@@ -451,6 +453,7 @@ export default function App() {
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/vitrine" element={<VitrinePublica />} />
             <Route path="/*" element={<RequireAuth><Shell /></RequireAuth>} />
+            <Route path="/base-comando" element={<BaseComando />} />
           </Routes>
         </Suspense>
       </BrowserRouter>
