@@ -1,4 +1,3 @@
-import BaseComando from './pages/BaseComando'
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { lazy, Suspense, useState, useEffect } from 'react'
 import { AuthProvider, useAuth, MODULOS_PERMISSOES } from './context/AuthContext'
@@ -51,6 +50,7 @@ const Usuarios               = lazy(() => import('./pages/Usuarios'))
 const Campanhas              = lazy(() => import('./pages/Campanhas'))
 const Lancamentos            = lazy(() => import('./pages/Lancamentos'))
 const Tarefas                = lazy(() => import('./pages/Tarefas'))
+const BaseComando            = lazy(() => import('./pages/BaseComando'))
 const Parceiros              = lazy(() => import('./pages/Parceiros'))
 const Monitoramento          = lazy(() => import('./pages/Monitoramento'))
 const MonitoramentoParceiras = lazy(() => import('./pages/MonitoramentoParceiras'))
@@ -74,11 +74,17 @@ const BlocoNotas             = lazy(() => import('./pages/BlocoNotas'))
 
 const PERFIS_PARCEIRAS = ['supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras']
 
+// ⚠️ TROQUE pelo SEU e-mail de login (o MESMO que está em BaseComando.js).
+// Só esse e-mail vê o item "Base de Comando" no menu.
+const DONO_EMAIL = 'SEU-EMAIL@cedet.com.br'
+
 const MENU = [
   // Dashboard — cada perfil vê o seu
   { path: '/dashboard',              label: 'Dashboard',          icon: LayoutDashboard, modulo: 'dashboard',         ocultarPerfis: PERFIS_PARCEIRAS },
   { path: '/dashboard-parceiras',   label: 'Dashboard',          icon: LayoutDashboard, modulo: 'tarefas_parceiras' },
-  { path: '/base-comando', label: 'Base de Comando', modulo: 'base_comando' }
+
+  // Área pessoal — visível somente para o DONO_EMAIL
+  { path: '/base-comando',          label: 'Base de Comando',    icon: Activity,        modulo: 'base_comando',      sempreVisivel: true, soEmail: true },
 
   // Módulos gerais (ocultos para parceiras)
   { path: '/crm-influencers',       label: 'CRM Influencers',    icon: Network,         modulo: 'crm_influencers',   ocultarPerfis: PERFIS_PARCEIRAS },
@@ -329,7 +335,10 @@ function Shell() {
     await signOut()
   }
 
+  const ehDono = (usuario?.email || '').toLowerCase() === DONO_EMAIL.toLowerCase()
+
   const menuVisivel = MENU.filter((m) => {
+    if (m.soEmail && !ehDono) return false
     if (m.ocultarPerfis && m.ocultarPerfis.includes(perfilAtivo)) return false
     return m.sempreVisivel || canAtivo(m.modulo)
   }).filter((m, idx, arr) => arr.findIndex(x => x.path === m.path) === idx)
@@ -403,6 +412,7 @@ function Shell() {
                 <Route path="/" element={<RequireAuth><BemVindo menu={menuVisivel} /></RequireAuth>} />
                 <Route path="/dashboard" element={<RequireAuth modulo="dashboard"><Dashboard /></RequireAuth>} />
                 <Route path="/dashboard-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><DashboardParceiras /></RequireAuth>} />
+                <Route path="/base-comando" element={<RequireAuth><BaseComando /></RequireAuth>} />
                 <Route path="/cortesias" element={<RequireAuth modulo="cortesias"><Cortesias /></RequireAuth>} />
                 <Route path="/parceiros" element={<RequireAuth modulo="parceiros"><Parceiros /></RequireAuth>} />
                 <Route path="/usuarios" element={<RequireAuth modulo="usuarios"><Usuarios /></RequireAuth>} />
@@ -453,7 +463,6 @@ export default function App() {
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/vitrine" element={<VitrinePublica />} />
             <Route path="/*" element={<RequireAuth><Shell /></RequireAuth>} />
-            <Route path="/base-comando" element={<BaseComando />} />
           </Routes>
         </Suspense>
       </BrowserRouter>
