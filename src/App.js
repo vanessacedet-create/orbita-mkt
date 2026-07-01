@@ -40,60 +40,60 @@ import './App.css'
 import Login from './pages/Login'
 import ResetPassword from './pages/ResetPassword'
 
-const Dashboard             = lazy(() => import('./pages/Dashboard'))
-const DashboardParceiras    = lazy(() => import('./pages/DashboardParceiras'))
-const BemVindo              = lazy(() => import('./pages/BemVindo'))
-const AcessosEquipe         = lazy(() => import('./pages/AcessosEquipe'))
-const Cortesias             = lazy(() => import('./pages/Cortesias'))
-const Usuarios              = lazy(() => import('./pages/Usuarios'))
-const Campanhas             = lazy(() => import('./pages/Campanhas'))
-const Lancamentos           = lazy(() => import('./pages/Lancamentos'))
-const Tarefas               = lazy(() => import('./pages/Tarefas'))
-const Parceiros             = lazy(() => import('./pages/Parceiros'))
-const Monitoramento         = lazy(() => import('./pages/Monitoramento'))
-const CRM                   = lazy(() => import('./pages/CRM'))
-const Calculadora           = lazy(() => import('./pages/Calculadora'))
-const RH                    = lazy(() => import('./pages/RH'))
-const Eventos               = lazy(() => import('./pages/Eventos'))
-const Treinamentos          = lazy(() => import('./pages/Treinamentos'))
-const PDA                   = lazy(() => import('./pages/PDA'))
-const VitrinePublica        = lazy(() => import('./pages/VitrinePublica'))
-const VitrineAdmin          = lazy(() => import('./pages/VitrineAdmin'))
-const GuiaParcerias         = lazy(() => import('./pages/GuiaParcerias'))
-const CacLtv                = lazy(() => import('./pages/CacLtv'))
-const PedidosCRM            = lazy(() => import('./pages/PedidosCRM'))
-const CRMInteligencia       = lazy(() => import('./pages/CRMInteligencia'))
-const Agenda                = lazy(() => import('./pages/Agenda'))
-const Configuracoes         = lazy(() => import('./pages/Configuracoes'))
-const BlocoNotas            = lazy(() => import('./pages/BlocoNotas'))
+const Dashboard              = lazy(() => import('./pages/Dashboard'))
+const DashboardParceiras     = lazy(() => import('./pages/DashboardParceiras'))
+const BemVindo               = lazy(() => import('./pages/BemVindo'))
+const AcessosEquipe          = lazy(() => import('./pages/AcessosEquipe'))
+const Cortesias              = lazy(() => import('./pages/Cortesias'))
+const Usuarios               = lazy(() => import('./pages/Usuarios'))
+const Campanhas              = lazy(() => import('./pages/Campanhas'))
+const Lancamentos            = lazy(() => import('./pages/Lancamentos'))
+const Tarefas                = lazy(() => import('./pages/Tarefas'))
+const Parceiros              = lazy(() => import('./pages/Parceiros'))
+const Monitoramento          = lazy(() => import('./pages/Monitoramento'))
+const CRM                    = lazy(() => import('./pages/CRM'))
+const Calculadora            = lazy(() => import('./pages/Calculadora'))
+const RH                     = lazy(() => import('./pages/RH'))
+const Eventos                = lazy(() => import('./pages/Eventos'))
+const Treinamentos           = lazy(() => import('./pages/Treinamentos'))
+const PDA                    = lazy(() => import('./pages/PDA'))
+const VitrinePublica         = lazy(() => import('./pages/VitrinePublica'))
+const VitrineAdmin           = lazy(() => import('./pages/VitrineAdmin'))
+const GuiaParcerias          = lazy(() => import('./pages/GuiaParcerias'))
+const CacLtv                 = lazy(() => import('./pages/CacLtv'))
+const PedidosCRM             = lazy(() => import('./pages/PedidosCRM'))
+const CRMInteligencia        = lazy(() => import('./pages/CRMInteligencia'))
+const Agenda                 = lazy(() => import('./pages/Agenda'))
+const Configuracoes          = lazy(() => import('./pages/Configuracoes'))
+const BlocoNotas             = lazy(() => import('./pages/BlocoNotas'))
 const MonitoramentoParceiras = lazy(() => import('./pages/MonitoramentoParceiras'))
-const EditorasLivrarias     = lazy(() => import('./pages/EditorasLivrarias'))
-const CRMEditoras           = lazy(() => import('./pages/CRMEditoras'))
+const EditorasLivrarias      = lazy(() => import('./pages/EditorasLivrarias'))
+const CRMEditorasParceiras   = lazy(() => import('./pages/CRMEditorasParceiras'))
 
 const MENU = [
-  { path: '/dashboard',             label: 'Dashboard',           icon: LayoutDashboard, modulo: 'dashboard', ocultarPerfis: ['supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'] },
-  { path: '/dashboard-parceiras',   label: 'Dashboard',           icon: LayoutDashboard, modulo: 'tarefas_parceiras' },
-  { path: '/crm-influencers',       label: 'CRM Influencers',     icon: Network,         modulo: 'crm_influencers' },
-  { path: '/crm-parceiras',         label: 'CRM Parceiras',       icon: Network,         modulo: 'crm_parceiras' },
-  { path: '/cortesias',             label: 'Cortesias',           icon: BookOpen,        modulo: 'cortesias' },
-  { path: '/campanhas',             label: 'Campanhas',           icon: Megaphone,       modulo: 'campanhas' },
-  { path: '/monitoramento',         label: 'Monitoramento',       icon: Eye,             modulo: 'monitoramento', ocultarPerfis: ['supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'] },
-  { path: '/lancamentos',           label: 'Lançamentos',         icon: CalendarDays,    modulo: 'lancamentos' },
-  { path: '/tarefas',               label: 'Tarefas',             icon: CheckSquare,     modulo: 'tarefas' },
-  { path: '/tarefas-parceiras',     label: 'Tarefas Parceiras',   icon: CheckSquare,     modulo: 'tarefas_parceiras' },
-  { path: '/agenda',                label: 'Agenda',              icon: CalendarRange,   modulo: 'tarefas_parceiras' },
-  { path: '/editoras-livrarias',    label: 'Editoras & Livrarias',icon: LibraryBig,      modulo: 'tarefas_parceiras' },
-  { path: '/classificacao-editoras',label: 'Classificação',       icon: TrendingUp,      modulo: 'tarefas_parceiras' },
-  { path: '/monitoramento-parceiras', label: 'Monitoramento',     icon: Eye,             modulo: 'tarefas_parceiras' },
-  { path: '/notas',                 label: 'Bloco de Notas',      icon: BookMarked,      modulo: 'dashboard', sempreVisivel: true },
-  { path: '/configuracoes',         label: 'Configurações',       icon: Settings,        modulo: 'dashboard', sempreVisivel: true },
-  { path: '/rh',                    label: 'RH',                  icon: HeartHandshake,  modulo: 'rh' },
-  { path: '/pda',                   label: 'PDA',                 icon: Target,          modulo: 'pda' },
-  { path: '/treinamentos',          label: 'Treinamentos',        icon: GraduationCap,   modulo: 'treinamentos' },
-  { path: '/eventos',               label: 'Eventos',             icon: CalendarCheck,   modulo: 'eventos' },
-  { path: '/vitrine-admin',         label: 'Vitrine',             icon: Store,           modulo: 'parceiros' },
-  { path: '/acessos-equipe',        label: 'Acessos da Equipe',   icon: Users,           modulo: 'acessos_equipe' },
-  { path: '/usuarios',              label: 'Usuários',            icon: Users,           modulo: 'usuarios' },
+  { path: '/dashboard',              label: 'Dashboard',           icon: LayoutDashboard, modulo: 'dashboard', ocultarPerfis: ['supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'] },
+  { path: '/dashboard-parceiras',    label: 'Dashboard',           icon: LayoutDashboard, modulo: 'tarefas_parceiras' },
+  { path: '/crm-influencers',        label: 'CRM Influencers',     icon: Network,         modulo: 'crm_influencers' },
+  { path: '/crm-parceiras',          label: 'CRM Parceiras',       icon: Network,         modulo: 'crm_parceiras' },
+  { path: '/cortesias',              label: 'Cortesias',           icon: BookOpen,        modulo: 'cortesias' },
+  { path: '/campanhas',              label: 'Campanhas',           icon: Megaphone,       modulo: 'campanhas' },
+  { path: '/monitoramento',          label: 'Monitoramento',       icon: Eye,             modulo: 'monitoramento', ocultarPerfis: ['supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'] },
+  { path: '/lancamentos',            label: 'Lançamentos',         icon: CalendarDays,    modulo: 'lancamentos' },
+  { path: '/tarefas',                label: 'Tarefas',             icon: CheckSquare,     modulo: 'tarefas' },
+  { path: '/tarefas-parceiras',      label: 'Tarefas Parceiras',   icon: CheckSquare,     modulo: 'tarefas_parceiras' },
+  { path: '/agenda',                 label: 'Agenda',              icon: CalendarRange,   modulo: 'tarefas_parceiras' },
+  { path: '/editoras-livrarias',     label: 'Editoras & Livrarias',icon: LibraryBig,      modulo: 'tarefas_parceiras' },
+  { path: '/crm-editoras-parceiras', label: 'CRM Editoras',        icon: TrendingUp,      modulo: 'tarefas_parceiras' },
+  { path: '/monitoramento-parceiras',label: 'Monitoramento',       icon: Eye,             modulo: 'tarefas_parceiras' },
+  { path: '/notas',                  label: 'Bloco de Notas',      icon: BookMarked,      modulo: 'dashboard', sempreVisivel: true },
+  { path: '/configuracoes',          label: 'Configurações',       icon: Settings,        modulo: 'dashboard', sempreVisivel: true },
+  { path: '/rh',                     label: 'RH',                  icon: HeartHandshake,  modulo: 'rh' },
+  { path: '/pda',                    label: 'PDA',                 icon: Target,          modulo: 'pda' },
+  { path: '/treinamentos',           label: 'Treinamentos',        icon: GraduationCap,   modulo: 'treinamentos' },
+  { path: '/eventos',                label: 'Eventos',             icon: CalendarCheck,   modulo: 'eventos' },
+  { path: '/vitrine-admin',          label: 'Vitrine',             icon: Store,           modulo: 'parceiros' },
+  { path: '/acessos-equipe',         label: 'Acessos da Equipe',   icon: Users,           modulo: 'acessos_equipe' },
+  { path: '/usuarios',               label: 'Usuários',            icon: Users,           modulo: 'usuarios' },
 ]
 
 const PERFIL_LABEL = {
@@ -406,7 +406,7 @@ function Shell() {
                 <Route path="/tarefas-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><Tarefas grupo="parceiras" titulo="Tarefas — Editoras Parceiras" /></RequireAuth>} />
                 <Route path="/agenda" element={<RequireAuth modulo="tarefas_parceiras"><Agenda /></RequireAuth>} />
                 <Route path="/editoras-livrarias" element={<RequireAuth modulo="tarefas_parceiras"><EditorasLivrarias /></RequireAuth>} />
-                <Route path="/classificacao-editoras" element={<RequireAuth modulo="tarefas_parceiras"><CRMEditoras /></RequireAuth>} />
+                <Route path="/crm-editoras-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><CRMEditorasParceiras /></RequireAuth>} />
                 <Route path="/monitoramento-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><MonitoramentoParceiras /></RequireAuth>} />
                 <Route path="/treinamentos" element={<RequireAuth modulo="treinamentos"><Treinamentos /></RequireAuth>} />
                 <Route path="/pda" element={<RequireAuth modulo="pda"><PDA /></RequireAuth>} />
