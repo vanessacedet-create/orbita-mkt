@@ -1132,7 +1132,7 @@ function ViewBancoTarefas({ usuarios, usuario }) {
             </div>
           ) : (
             // Kanban
-            <div style={{ overflowX:'auto', overflowY:'auto', width:'100%', height:'calc(100vh - 280px)', scrollbarColor:'var(--border) var(--surface-2)', scrollbarWidth:'thin' }}>
+            <div style={{ overflowX:'auto', overflowY:'auto', width:'100%', height:'calc(100vh - 180px)', scrollbarColor:'var(--border) var(--surface-2)', scrollbarWidth:'thin' }}>
               <div style={{ display:'flex', gap:12, paddingBottom:16, alignItems:'flex-start', width:'max-content', minWidth:'100%' }}>
               {getGrupos().map(grupo => {
                 const largura = getLarguraColuna(grupo.id)
