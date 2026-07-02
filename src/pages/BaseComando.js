@@ -191,7 +191,7 @@ function LinhaTarefa({ t, onToggle, onStatus, onDelete }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: '1px solid var(--border, rgba(255,255,255,0.08))' }}>
       <input type="checkbox" checked={feita} onChange={() => onToggle(t)} style={{ width: 18, height: 18, cursor: 'pointer' }} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, color: feita ? '#94a3b8' : '#0f172a', textDecoration: feita ? 'line-through' : 'none' }}>{t.titulo}</div>
+        <div style={{ fontSize: 14, color: feita ? 'var(--text-muted, #94a3b8)' : 'var(--text, #f1f5f9)', textDecoration: feita ? 'line-through' : 'none' }}>{t.titulo}</div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
           <span style={s.badge(PRIO_COR[t.prioridade])}>{PRIO_LABEL[t.prioridade]}</span>
           {t.responsavel && <span style={{ fontSize: 11, color: 'var(--text-muted, #94a3b8)' }}>👤 {t.responsavel}</span>}
@@ -200,7 +200,7 @@ function LinhaTarefa({ t, onToggle, onStatus, onDelete }) {
       </div>
       <select value={t.status} onChange={(e) => onStatus(t, e.target.value)}
         style={{ border: `1px solid ${STATUS_COR[t.status]}`, color: STATUS_COR[t.status], borderRadius: 8, padding: '4px 8px', fontSize: 12, fontWeight: 600, background: 'var(--card-bg, rgba(255,255,255,0.05))' }}>
-        {Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        {Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k} style={{ color: '#0f172a', background: '#fff' }}>{v}</option>)}
       </select>
       <button onClick={() => onDelete(t.id)} style={{ ...s.btnGhost, padding: '4px 10px', color: '#ef4444' }}>×</button>
     </div>
@@ -259,8 +259,8 @@ function ModalTarefa({ projetos, onClose, onSaved }) {
       <input style={s.input} value={form.titulo} onChange={(e) => setForm({ ...form, titulo: e.target.value })} placeholder="Ex: Definir preço e margem" />
       <label style={s.label}>Projeto</label>
       <select style={s.input} value={form.projeto_id} onChange={(e) => setForm({ ...form, projeto_id: e.target.value })}>
-        <option value="">— Nenhum (demanda avulsa) —</option>
-        {projetos.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+        <option value="" style={{ color: '#0f172a', background: '#fff' }}>— Nenhum (demanda avulsa) —</option>
+        {projetos.map((p) => <option key={p.id} value={p.id} style={{ color: '#0f172a', background: '#fff' }}>{p.nome}</option>)}
       </select>
       <label style={s.label}>Descrição</label>
       <textarea style={{ ...s.input, minHeight: 60 }} value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} />
@@ -268,7 +268,7 @@ function ModalTarefa({ projetos, onClose, onSaved }) {
         <div style={{ flex: 1 }}>
           <label style={s.label}>Prioridade</label>
           <select style={s.input} value={form.prioridade} onChange={(e) => setForm({ ...form, prioridade: e.target.value })}>
-            {Object.entries(PRIO_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            {Object.entries(PRIO_LABEL).map(([k, v]) => <option key={k} value={k} style={{ color: '#0f172a', background: '#fff' }}>{v}</option>)}
           </select>
         </div>
         <div style={{ flex: 1 }}>
