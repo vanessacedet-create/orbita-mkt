@@ -965,20 +965,23 @@ function ModalScoreTrimestralEditora({ editora, score, onSave, onClose }) {
 }
 
 // ── MODAL IMPORTAR VENDAS ──────────────────────────────────
-function ModalImportarVendas({ tipo, onClose, onImported, showToast }) {
+function ModalImportarVendas({ tipo, periodo, onClose, onImported, showToast }) {
   const hoje = new Date()
   const trimestresOpcoes = getTrimestresDisponiveis(8)
+  const mesesOpcoes = getMesesDisponiveis(24)
   const [trimestre, setTrimestre] = useState(trimestreAtual())
+  const [mes, setMes] = useState(hoje.getMonth()+1)
   const [ano, setAno] = useState(hoje.getFullYear())
   const [importando, setImportando] = useState(false)
   const fileRef = useRef()
+  const eMensal = periodo === 'mensal'
 
   function baixarTemplate() {
     const wb = XLSX.utils.book_new()
     const col = tipo === 'livraria' ? 'livraria_nome' : 'editora_nome'
     const ws = XLSX.utils.aoa_to_sheet([[col, 'vendas'], [tipo === 'livraria' ? 'Nome da Livraria' : 'Nome da Editora', 150]])
     XLSX.utils.book_append_sheet(wb, ws, 'Vendas')
-    XLSX.writeFile(wb, `template_vendas_${tipo}_trimestral.xlsx`)
+    XLSX.writeFile(wb, `template_vendas_${tipo}_${eMensal?'mensal':'trimestral'}.xlsx`)
   }
 
   async function processarArquivo(file) {
@@ -990,7 +993,9 @@ function ModalImportarVendas({ tipo, onClose, onImported, showToast }) {
       const ws = wb.Sheets[wb.SheetNames[0]]
       const rows = XLSX.utils.sheet_to_json(ws, { defval:'' })
       const fn = tipo === 'livraria' ? importarVendasLivraria : importarVendasEditora
-      const resultado = await fn(rows, ano, trimestre)
+      const resultado = eMensal
+        ? await fn(rows, ano, null, mes)
+        : await fn(rows, ano, trimestre)
       let msg = `${resultado.importados} registro(s) importado(s).`
       if (resultado.naoEncontrados.length > 0) msg += ` Não encontrados: ${resultado.naoEncontrados.join(', ')}.`
       showToast(msg, resultado.erros.length > 0 ? 'error' : 'success')
@@ -1003,15 +1008,24 @@ function ModalImportarVendas({ tipo, onClose, onImported, showToast }) {
     <div className="modal-backdrop" onClick={e => e.target===e.currentTarget&&onClose()}>
       <div className="modal" style={{ maxWidth:480 }}>
         <div className="modal-header">
-          <h2 className="modal-title">Importar vendas — {tipo === 'livraria' ? 'Livrarias' : 'Editoras'}</h2>
+          <h2 className="modal-title">Importar vendas {eMensal?'mensais':'trimestrais'} — {tipo === 'livraria' ? 'Livrarias' : 'Editoras'}</h2>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
         </div>
-        <div className="form-group">
-          <label className="form-label">Trimestre de referência</label>
-          <select className="form-select" value={`${ano}-${trimestre}`} onChange={e => { const [a,t]=e.target.value.split('-'); setAno(Number(a)); setTrimestre(Number(t)) }}>
-            {trimestresOpcoes.map(({ trimestre:t, ano:a }) => <option key={`${a}-${t}`} value={`${a}-${t}`}>{TRIMESTRES_LABEL[t]} / {a}</option>)}
-          </select>
-        </div>
+        {eMensal ? (
+          <div className="form-group">
+            <label className="form-label">Mês de referência</label>
+            <select className="form-select" value={`${ano}-${mes}`} onChange={e => { const [a,m]=e.target.value.split('-'); setAno(Number(a)); setMes(Number(m)) }}>
+              {mesesOpcoes.map(({ mes:m, ano:a }) => <option key={`${a}-${m}`} value={`${a}-${m}`}>{mesAnoLabel(m,a)}</option>)}
+            </select>
+          </div>
+        ) : (
+          <div className="form-group">
+            <label className="form-label">Trimestre de referência</label>
+            <select className="form-select" value={`${ano}-${trimestre}`} onChange={e => { const [a,t]=e.target.value.split('-'); setAno(Number(a)); setTrimestre(Number(t)) }}>
+              {trimestresOpcoes.map(({ trimestre:t, ano:a }) => <option key={`${a}-${t}`} value={`${a}-${t}`}>{TRIMESTRES_LABEL[t]} / {a}</option>)}
+            </select>
+          </div>
+        )}
         <button onClick={baixarTemplate} className="btn btn-ghost" style={{ width:'100%', marginBottom:12, justifyContent:'center', gap:8 }}><Download size={14} /> Baixar template .xlsx</button>
         <div onClick={() => fileRef.current?.click()} style={{ border:'2px dashed var(--border)', borderRadius:10, padding:'32px 20px', textAlign:'center', cursor:'pointer', background:'var(--surface-2)' }}>
           <FileSpreadsheet size={28} style={{ color:'var(--text-muted)', marginBottom:8 }} />
@@ -1108,11 +1122,9 @@ function AbaClassificacao() {
             <Search size={14} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)' }} />
             <input className="search-input" style={{ paddingLeft:32, width:'100%' }} placeholder={`Buscar ${subAba==='editoras'?'editora':'livraria'}...`} value={search} onChange={e => setSearch(e.target.value)} />
           </div>
-          {periodoAba === 'trimestral' && (
-            <button className="btn btn-ghost btn-sm" onClick={() => setModalImportar(subAba==='livraria'?'livraria':'editora')} style={{ display:'flex', alignItems:'center', gap:5, flexShrink:0 }}>
-              <Upload size={13} /> Importar vendas
-            </button>
-          )}
+          <button className="btn btn-ghost btn-sm" onClick={() => setModalImportar(subAba==='livrarias'?'livraria':'editora')} style={{ display:'flex', alignItems:'center', gap:5, flexShrink:0 }}>
+            <Upload size={13} /> Importar vendas
+          </button>
         </div>
       </div>
 
@@ -1192,7 +1204,7 @@ function AbaClassificacao() {
       {modalLivMensal && <ModalScoreLivrariatMensal livraria={modalLivMensal.livraria} score={modalLivMensal.score} onSave={async (id, a, m, d) => { const upd = await upsertScoreLivraria(id, a, m, d); setScoresLivMensal(prev => { const ex=prev.find(s=>s.livraria_id===id&&s.ano===a&&s.mes===m); return ex?prev.map(s=>s.livraria_id===id?upd:s):[...prev,upd] }) }} onClose={() => setModalLivMensal(null)} />}
       {modalEdTri && <ModalScoreTrimestralEditora editora={modalEdTri.editora} score={modalEdTri.score} onSave={async (id, a, t, d) => { await upsertScoreTrimestralEditora(id, a, t, d); await recarregarTri() }} onClose={() => setModalEdTri(null)} />}
       {modalLivTri && <ModalScoreTrimestralLivraria livraria={modalLivTri.livraria} score={modalLivTri.score} onSave={async (id, a, t, d) => { await upsertScoreTrimestralLivraria(id, a, t, d); await recarregarTri() }} onClose={() => setModalLivTri(null)} />}
-      {modalImportar && <ModalImportarVendas tipo={modalImportar} onClose={() => setModalImportar(null)} onImported={recarregarTri} showToast={showToast} />}
+      {modalImportar && <ModalImportarVendas tipo={modalImportar} periodo={periodoAba} onClose={() => setModalImportar(null)} onImported={periodoAba==='mensal'?async()=>{const [sEdM,sLivM]=await Promise.all([getAllScoreEditorasMes(ano,mes),getAllScoreLivrariasMes(ano,mes)]);setScoresEdMensal(sEdM);setScoresLivMensal(sLivM)}:recarregarTri} showToast={showToast} />}
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
     </div>
   )
