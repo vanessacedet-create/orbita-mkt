@@ -108,6 +108,46 @@ export async function deleteCheckagemDia({ editora_id, formato, data_esperada })
   if (error) throw error
 }
 
+// Gera registros pendentes para todas as livrarias ativas em todos os dias
+// úteis de uma semana (seg–sex), para um determinado formato.
+// Livrarias com observação SUSPENSA ou PROMOCIONAL são ignoradas.
+export async function gerarPendentesSemana({ livrariasAtivas, formato, diasSemana }) {
+  if (!livrariasAtivas.length || !diasSemana.length) return []
+
+  // Busca registros já existentes para não sobrescrever
+  const ids = livrariasAtivas.map(l => l.editora_id)
+  const { data: existentes } = await supabase
+    .from('monitoramento_parceiras')
+    .select('editora_id, formato, data_esperada')
+    .in('editora_id', ids)
+    .eq('formato', formato)
+    .in('data_esperada', diasSemana)
+
+  const existMap = new Set(
+    (existentes || []).map(r => `${r.editora_id}|${r.formato}|${r.data_esperada}`)
+  )
+
+  // Monta apenas os que ainda não existem
+  const rows = []
+  for (const livraria of livrariasAtivas) {
+    for (const dia of diasSemana) {
+      const chave = `${livraria.editora_id}|${formato}|${dia}`
+      if (!existMap.has(chave)) {
+        rows.push({ editora_id: livraria.editora_id, formato, data_esperada: dia, status: 'pendente' })
+      }
+    }
+  }
+
+  if (!rows.length) return []
+
+  const { data, error } = await supabase
+    .from('monitoramento_parceiras')
+    .insert(rows)
+    .select('*')
+  if (error) throw error
+  return data || []
+}
+
 export async function gerarChecklistDia({ editoras, formato, data_esperada }) {
   const rows = editoras.map(e => ({ editora_id: e.id, formato, data_esperada, status: 'pendente' }))
   const { data, error } = await supabase
