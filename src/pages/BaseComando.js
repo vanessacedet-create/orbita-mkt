@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
 // ⚠️ TROQUE pelo SEU e-mail de login no Orbita (só você acessa esta tela)
-const DONO_EMAIL = 'SEU-EMAIL@cedet.com.br'
+const DONO_EMAIL = 'vanessa@cedet.com.br'
 
 // ── Paleta / helpers de estilo ──────────────────────────────────
 const CORES_PROJETO = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6']
