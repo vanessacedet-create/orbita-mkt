@@ -1032,13 +1032,6 @@ export default function MonitoramentoParceiras() {
         </div>
       </div>
 
-      {/* Label da semana */}
-      {abaMonitor === 'parceiras' && labelSemana && (
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', marginBottom: 10, padding: '4px 12px', background: 'var(--accent-glow)', border: '1px solid var(--accent)', borderRadius: 20, display: 'inline-block' }}>
-          {labelSemana} {gerandoPendentes && <span style={{ opacity: 0.6 }}>· gerando pendentes...</span>}
-        </div>
-      )}
-
       {/* ABA PARCEIRAS */}
       {abaMonitor === 'parceiras' && (
         <>
