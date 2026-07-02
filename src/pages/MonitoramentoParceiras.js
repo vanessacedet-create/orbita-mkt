@@ -727,7 +727,6 @@ export default function MonitoramentoParceiras() {
 
   const [checkagemCriativo, setCheckagemCriativo] = useState([])
   const [loading, setLoading] = useState(true)
-  const [gerandoPendentes, setGerandoPendentes] = useState(false)
   const [painelEditora, setPainelEditora] = useState(null)
   const [modalEditora, setModalEditora] = useState(null)
   const [showImportar, setShowImportar] = useState(false)
@@ -774,27 +773,6 @@ export default function MonitoramentoParceiras() {
     const fmt = FORMATOS_CRIATIVO_COMPARTILHADOS.includes(formatoCriativoSel) ? MAPA_FORMATO_PARCEIRAS[formatoCriativoSel] : formatoCriativoSel
     getObsFormatoLote(fmt).then(setObsFormatoCriativo).catch(console.error)
   }, [formatoCriativoSel])
-
-  // Gera pendentes automaticamente quando a semana muda e há livrarias carregadas
-  useEffect(() => {
-    if (!livrarias.length || !diasSemanaAtual.length || formatoSel === 'reels') return
-    const livrariasAtivas = livrarias.filter(l => !isSuspensaOuPromocional(obsFormatoParceiras[l.id]))
-    if (!livrariasAtivas.length) return
-    setGerandoPendentes(true)
-    gerarPendentesSemana({ livrariasAtivas, formato: formatoSel, diasSemana: diasSemanaAtual })
-      .then(novos => {
-        if (novos.length > 0) {
-          setCheckagemMes(prev => {
-            const mapa = {}
-            for (const r of prev) mapa[`${r.editora_id}|${r.formato}|${r.data_esperada}`] = r
-            for (const r of novos) mapa[`${r.editora_id}|${r.formato}|${r.data_esperada}`] = r
-            return Object.values(mapa)
-          })
-        }
-      })
-      .catch(console.error)
-      .finally(() => setGerandoPendentes(false))
-  }, [dataSel, formatoSel, livrarias.length, obsFormatoParceiras])
 
   // Atualização silenciosa a cada 30s
   const silentRefMes = useRef(null)
@@ -937,7 +915,17 @@ export default function MonitoramentoParceiras() {
 
   const totalPostou = realizadoSemanaHeader
   const totalNao    = checkagemMes.filter(r => r.status === 'nao_postou' && r.formato === formatoSel && diasSemanaAtual.includes(r.data_esperada)).length
-  const totalPend   = checkagemMes.filter(r => r.status === 'pendente' && r.formato === formatoSel && diasSemanaAtual.includes(r.data_esperada)).length
+
+  // Pendentes = livrarias sem nenhum registro "postou" ou "nao_postou" na semana (exceto suspensas/promocionais)
+  const livrariasComAcao = new Set(
+    checkagemMes
+      .filter(r => (r.status === 'postou' || r.status === 'nao_postou') && r.formato === formatoSel && diasSemanaAtual.includes(r.data_esperada))
+      .map(r => r.editora_id)
+  )
+  const livrariasPendentes = livrariasNaContagemHeader.filter(l => !livrariasComAcao.has(l.editora_id))
+  const totalPend = livrariasPendentes.length
+
+  const [showTooltipPendentes, setShowTooltipPendentes] = useState(false)
   const totalFinalizado = checkagemCriativo.filter(r => r.status === 'finalizado' && r.formato === formatoCriativoSel && r.data_esperada === dataCriativoSel).length
   const totalIniciado   = checkagemCriativo.filter(r => r.status === 'iniciado' && r.formato === formatoCriativoSel && r.data_esperada === dataCriativoSel).length
   const totalPendCriat  = checkagemCriativo.filter(r => r.status === 'pendente' && r.formato === formatoCriativoSel && r.data_esperada === dataCriativoSel).length
@@ -975,10 +963,22 @@ export default function MonitoramentoParceiras() {
                 <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: 2 }}>Não postaram</div>
                 <div style={{ fontSize: 9, color: 'var(--accent)', marginTop: 1, fontWeight: 600 }}>{FORMATOS_PARCEIRAS.find(f => f.value === formatoSel)?.label}</div>
               </div>
-              <div style={{ textAlign: 'center' }}>
+              <div style={{ textAlign: 'center', position: 'relative', cursor: totalPend > 0 ? 'pointer' : 'default' }}
+                onMouseEnter={() => totalPend > 0 && setShowTooltipPendentes(true)}
+                onMouseLeave={() => setShowTooltipPendentes(false)}>
                 <div style={{ fontSize: 18, fontWeight: 800, color: '#6b7280', lineHeight: 1 }}>{totalPend}</div>
                 <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: 2 }}>Pendentes</div>
                 <div style={{ fontSize: 9, color: 'var(--accent)', marginTop: 1, fontWeight: 600 }}>{FORMATOS_PARCEIRAS.find(f => f.value === formatoSel)?.label}</div>
+                {showTooltipPendentes && livrariasPendentes.length > 0 && (
+                  <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 8, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', zIndex: 200, minWidth: 200, maxWidth: 280, boxShadow: '0 8px 24px rgba(0,0,0,0.25)', textAlign: 'left' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8 }}>Faltam conferir</div>
+                    {livrariasPendentes.map(l => (
+                      <div key={l.id} style={{ fontSize: 12, color: 'var(--text)', padding: '3px 0', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {l.nome}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               {freqHeader > 0 && (
                 <div style={{ textAlign: 'center', borderLeft: '1px solid var(--border)', paddingLeft: 14 }}>
