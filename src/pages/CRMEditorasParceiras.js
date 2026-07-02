@@ -1,1092 +1,637 @@
-import { useState, useEffect, useMemo } from 'react'
-import { useAuth } from '../context/AuthContext'
-import {
-  getCRMEditoras, createCRMEditora, updateCRMEditora, deleteCRMEditora,
-  getStatusHistoryEditora, addStatusHistoryEditora,
-  getEditorasParceirasAtivas, getLivrariasParceirasAtivas,
-  getAllScoreEditorasMes, getAllScoreLivrariasMes,
-  getScoreMensalEditoras, getScoreMensalLivraria,
-  upsertScoreEditora, upsertScoreLivraria,
-  calcularScoreEditora, calcularScoreLivraria,
-  PIPELINE_EDITORAS, TIPOS_CONTATO, ORIGENS_EDITORAS,
-  pipelineInfo, mesAnoLabel, getMesesDisponiveis, corScore, MESES_LABEL,
-} from '../lib/crm-editoras-parceiras'
-import { getUsuarios } from '../lib/supabase'
-import {
-  Building2, Plus, X, ChevronRight, Clock, Search,
-  ArrowRight, Trash2, Settings2, XCircle, Users,
-  BarChart2, BookOpen, Library,
-} from 'lucide-react'
-import { format } from 'date-fns'
-import { ptBR } from 'date-fns/locale'
+import { supabase } from './client'
 
-function useToast() {
-  const [t, setT] = useState(null)
-  function show(msg, type = 'success') { setT({ msg, type }); setTimeout(() => setT(null), 4000) }
-  return [t, show]
+// ── PIPELINE PADRÃO ────────────────────────────────────────
+export const PIPELINE_EDITORAS = [
+  { value: 'novo_contato',  label: 'Novo contato',  cor: '#06b6d4', bg: 'rgba(6,182,212,0.12)'   },
+  { value: 'em_andamento',  label: 'Em andamento',  cor: '#eab308', bg: 'rgba(234,179,8,0.12)'   },
+  { value: 'negociando',    label: 'Negociando',    cor: '#f97316', bg: 'rgba(249,115,22,0.12)'  },
+  { value: 'ativo',         label: 'Ativo',         cor: '#22c55e', bg: 'rgba(34,197,94,0.12)'   },
+  { value: 'pausado',       label: 'Pausado',       cor: '#6b7280', bg: 'rgba(107,114,128,0.12)' },
+  { value: 'sem_retorno',   label: 'Sem retorno',   cor: '#94a3b8', bg: 'rgba(148,163,184,0.12)' },
+  { value: 'recusou',       label: 'Recusou',       cor: '#ef4444', bg: 'rgba(239,68,68,0.12)'   },
+]
+
+export const TIPOS_CONTATO = [
+  { value: 'editora',     label: 'Parceria Editora'   },
+  { value: 'livraria',    label: 'Parceria Livraria'  },
+  { value: 'marketplace', label: 'Marketplace'        },
+  { value: 'cupom',       label: 'Cupom'              },
+]
+
+export const ORIGENS_EDITORAS = [
+  { value: 'busca_ativa', label: 'Busca ativa'  },
+  { value: 'indicacao',   label: 'Indicação'    },
+  { value: 'inbound',     label: 'Inbound'      },
+  { value: 'evento',      label: 'Evento'       },
+]
+
+export function pipelineInfo(value) {
+  return PIPELINE_EDITORAS.find(p => p.value === value) || PIPELINE_EDITORAS[0]
 }
 
-// ── BADGE TIPO ─────────────────────────────────────────────
-const TIPO_CORES = {
-  editora:     { cor: '#a855f7', bg: 'rgba(168,85,247,0.12)' },
-  livraria:    { cor: '#22c55e', bg: 'rgba(34,197,94,0.12)'  },
-  marketplace: { cor: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
-  cupom:       { cor: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
-}
-function BadgeTipo({ tipo }) {
-  const c = TIPO_CORES[tipo] || TIPO_CORES.editora
-  const label = TIPOS_CONTATO.find(t => t.value === tipo)?.label || tipo
-  return (
-    <span style={{ display:'inline-flex', alignItems:'center', background:c.bg, border:`1px solid ${c.cor}55`, borderRadius:20, padding:'3px 12px', fontSize:12, fontWeight:700, color:c.cor }}>
-      {label}
-    </span>
-  )
-}
+// ── CONTATOS / PROSPECÇÃO ──────────────────────────────────
 
-// ── CARD KANBAN ────────────────────────────────────────────
-function KanbanCard({ contato, onClick, onDragStart, onDragEnd, isDragging, onDelete }) {
-  return (
-    <div draggable
-      onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; onDragStart && onDragStart() }}
-      onDragEnd={() => onDragEnd && onDragEnd()}
-      onClick={() => !isDragging && onClick()}
-      style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:8, padding:'10px 12px', cursor:'grab', marginBottom:8, opacity:isDragging?0.4:1, userSelect:'none', position:'relative' }}
-      onMouseEnter={e => { if (!isDragging) e.currentTarget.style.borderColor = 'var(--accent)' }}
-      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
-      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:4, marginBottom:6 }}>
-        <div style={{ fontWeight:700, fontSize:13, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>
-          {contato.nome}
-        </div>
-        {onDelete && (
-          <button onClick={e => { e.stopPropagation(); onDelete() }}
-            style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', padding:2, flexShrink:0, display:'flex' }}>
-            <Trash2 size={12} />
-          </button>
-        )}
-      </div>
-      <BadgeTipo tipo={contato.tipo} />
-      {contato.responsavel_nome && (
-        <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:6 }}>
-          <div style={{ width:14, height:14, borderRadius:'50%', background:'var(--surface-2)', border:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:8, fontWeight:700, color:'var(--text-muted)' }}>
-            {contato.responsavel_nome[0].toUpperCase()}
-          </div>
-          <span style={{ fontSize:10, color:'var(--text-muted)' }}>{contato.responsavel_nome}</span>
-        </div>
-      )}
-    </div>
-  )
+export async function getCRMEditoras() {
+  const { data, error } = await supabase
+    .from('editoras_crm_contatos')
+    .select('*, responsavel:usuarios!responsavel_id(id, nome)')
+    .eq('ativo', true)
+    .order('nome')
+  if (error) throw error
+
+  const ids = (data || []).map(c => c.id)
+  if (!ids.length) return []
+
+  const { data: statusData } = await supabase
+    .from('editoras_crm_status_history')
+    .select('contato_id, status, changed_at')
+    .in('contato_id', ids)
+    .order('changed_at', { ascending: false })
+
+  const statusMap = {}
+  for (const s of (statusData || [])) {
+    if (!statusMap[s.contato_id]) statusMap[s.contato_id] = s.status
+  }
+
+  return (data || []).map(c => ({
+    ...c,
+    current_status: statusMap[c.id] || 'novo_contato',
+    responsavel_nome: c.responsavel?.nome || null,
+  }))
 }
 
-// ── MODAL NOVO/EDITAR CONTATO ──────────────────────────────
-function ModalContato({ contato, onSave, onClose, pipeline, usuarios }) {
-  const { usuario } = useAuth()
-  const empty = { nome:'', tipo:'editora', contato:'', email:'', instagram:'', site:'', origem:'', responsavel_id:'', observacao:'' }
-  const [form, setForm] = useState(contato ? { ...contato } : empty)
-  const [statusInicial, setStatusInicial] = useState('novo_contato')
-  const [saving, setSaving] = useState(false)
+export async function createCRMEditora(payload, statusInicial = 'novo_contato') {
+  const { data, error } = await supabase
+    .from('editoras_crm_contatos')
+    .insert([payload])
+    .select('*')
+    .single()
+  if (error) throw error
+  await addStatusHistoryEditora(data.id, statusInicial, 'Contato cadastrado via CRM')
+  return data
+}
 
-  async function salvar() {
-    if (!form.nome.trim()) return
-    setSaving(true)
+export async function updateCRMEditora(id, payload) {
+  const { data, error } = await supabase
+    .from('editoras_crm_contatos')
+    .update({ ...payload, atualizado_em: new Date().toISOString() })
+    .eq('id', id)
+    .select('*')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteCRMEditora(id) {
+  const { error } = await supabase
+    .from('editoras_crm_contatos')
+    .update({ ativo: false })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function getStatusHistoryEditora(contato_id) {
+  const { data, error } = await supabase
+    .from('editoras_crm_status_history')
+    .select('*, autor:usuarios!changed_by(id, nome)')
+    .eq('contato_id', contato_id)
+    .order('changed_at', { ascending: false })
+  if (error) throw error
+  return (data || []).map(h => ({ ...h, changed_by_nome: h.autor?.nome || null }))
+}
+
+export async function addStatusHistoryEditora(contato_id, status, reason, changed_by) {
+  const { data, error } = await supabase
+    .from('editoras_crm_status_history')
+    .insert([{ contato_id, status, reason: reason || null, changed_by: changed_by || null }])
+    .select('*')
+    .single()
+  if (error) throw error
+  return data
+}
+
+// ── PARCEIROS ATIVOS ───────────────────────────────────────
+
+export async function getEditorasParceirasAtivas() {
+  const { data, error } = await supabase
+    .from('editoras_parceiras')
+    .select('*, selos_editoriais(*)')
+    .eq('ativo', true)
+    .neq('status_parceria', 'finalizada')
+    .order('classificacao', { ascending: true, nullsFirst: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function getLivrariasParceirasAtivas() {
+  const { data, error } = await supabase
+    .from('livrarias')
+    .select('*, editoras_parceiras(id, nome, classificacao)')
+    .eq('ativo', true)
+    .order('nome', { ascending: true })
+  if (error) throw error
+  return data || []
+}
+
+// ── SCORE MENSAL — EDITORAS ────────────────────────────────
+
+const PESOS_EDITORA = {
+  promocao_geral:      { confirmou: 10, sem_retorno: 3, recusou: 2, nao_participou: 0 },
+  promocao_particular: { confirmou: 10, sem_retorno: 3, recusou: 2, nao_participou: 0 },
+  campanha:            { confirmou: 10, sem_retorno: 3, recusou: 2, nao_participou: 0 },
+  teve_lancamento:     5,
+  qtd_lancamentos:     2,
+  fez_reuniao:         5,
+  respondeu_whatsapp:  5,
+  publicou_feed:       3,
+  publicou_story:      3,
+  publicou_reels:      4,
+  vendas_editora:      0.1,
+  responde_artes:      5,
+  faz_cortesia:        5,
+  cria_cupom:          3,
+}
+
+export function calcularScoreEditora(dados) {
+  let pts = 0
+  const p = PESOS_EDITORA
+  pts += p.promocao_geral[dados.promocao_geral] || 0
+  pts += p.promocao_particular[dados.promocao_particular] || 0
+  pts += p.campanha[dados.campanha] || 0
+  if (dados.teve_lancamento) pts += p.teve_lancamento
+  pts += Math.min(10, (dados.qtd_lancamentos || 0) * p.qtd_lancamentos)
+  if (dados.fez_reuniao) pts += p.fez_reuniao
+  if (dados.respondeu_whatsapp) pts += p.respondeu_whatsapp
+  if (dados.publicou_feed) pts += p.publicou_feed
+  if (dados.publicou_story) pts += p.publicou_story
+  if (dados.publicou_reels) pts += p.publicou_reels
+  pts += Math.min(10, (dados.vendas_editora || 0) * p.vendas_editora)
+  if (dados.responde_artes) pts += p.responde_artes
+  if (dados.faz_cortesia) pts += p.faz_cortesia
+  if (dados.cria_cupom) pts += p.cria_cupom
+  const max = 79
+  return Math.min(10, Math.round((pts / max) * 10 * 10) / 10)
+}
+
+export async function getScoreMensalEditoras(editora_id) {
+  const { data, error } = await supabase
+    .from('editoras_score_mensal')
+    .select('*')
+    .eq('editora_id', editora_id)
+    .order('ano', { ascending: false })
+    .order('mes', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function getAllScoreEditorasMes(ano, mes) {
+  const { data, error } = await supabase
+    .from('editoras_score_mensal')
+    .select('*, editoras_parceiras(id, nome, classificacao)')
+    .eq('ano', ano)
+    .eq('mes', mes)
+  if (error) throw error
+  return data || []
+}
+
+export async function upsertScoreEditora(editora_id, ano, mes, dados) {
+  const score = calcularScoreEditora(dados)
+  const { data, error } = await supabase
+    .from('editoras_score_mensal')
+    .upsert(
+      { editora_id, ano, mes, ...dados, score, atualizado_em: new Date().toISOString() },
+      { onConflict: 'editora_id,ano,mes' }
+    )
+    .select()
+    .single()
+  if (error) throw error
+  return { ...data, score }
+}
+
+// ── SCORE MENSAL — LIVRARIAS ───────────────────────────────
+
+const PESOS_LIVRARIA = {
+  promocao_geral:      { confirmou: 10, sem_retorno: 3, recusou: 2, nao_participou: 0 },
+  promocao_particular: { confirmou: 10, sem_retorno: 3, recusou: 2, nao_participou: 0 },
+  campanha:            { confirmou: 10, sem_retorno: 3, recusou: 2, nao_participou: 0 },
+  publicou_feed:       3,
+  publicou_story:      3,
+  publicou_reels:      4,
+  vendas_livraria:     0.1,
+  responde_artes:      5,
+}
+
+export function calcularScoreLivraria(dados) {
+  let pts = 0
+  const p = PESOS_LIVRARIA
+  pts += p.promocao_geral[dados.promocao_geral] || 0
+  pts += p.promocao_particular[dados.promocao_particular] || 0
+  pts += p.campanha[dados.campanha] || 0
+  if (dados.publicou_feed) pts += p.publicou_feed
+  if (dados.publicou_story) pts += p.publicou_story
+  if (dados.publicou_reels) pts += p.publicou_reels
+  pts += Math.min(10, (dados.vendas_livraria || 0) * p.vendas_livraria)
+  if (dados.responde_artes) pts += p.responde_artes
+  const max = 44
+  return Math.min(10, Math.round((pts / max) * 10 * 10) / 10)
+}
+
+export async function getScoreMensalLivraria(livraria_id) {
+  const { data, error } = await supabase
+    .from('livrarias_score_mensal')
+    .select('*')
+    .eq('livraria_id', livraria_id)
+    .order('ano', { ascending: false })
+    .order('mes', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function getAllScoreLivrariasMes(ano, mes) {
+  const { data, error } = await supabase
+    .from('livrarias_score_mensal')
+    .select('*, livrarias(id, nome, editora_id, editoras_parceiras(nome))')
+    .eq('ano', ano)
+    .eq('mes', mes)
+  if (error) throw error
+  return data || []
+}
+
+export async function upsertScoreLivraria(livraria_id, ano, mes, dados) {
+  const score = calcularScoreLivraria(dados)
+  const { data, error } = await supabase
+    .from('livrarias_score_mensal')
+    .upsert(
+      { livraria_id, ano, mes, ...dados, score, atualizado_em: new Date().toISOString() },
+      { onConflict: 'livraria_id,ano,mes' }
+    )
+    .select()
+    .single()
+  if (error) throw error
+  return { ...data, score }
+}
+
+// ── CALENDÁRIO DE PROMOÇÕES ────────────────────────────────
+
+export async function getCalendarioPromocoes() {
+  const { data, error } = await supabase
+    .from('calendario_promocoes')
+    .select('*')
+    .eq('ativo', true)
+    .order('data_inicio', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function createPromocao(payload) {
+  const { data, error } = await supabase
+    .from('calendario_promocoes')
+    .insert([payload])
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+// ── SCORE TRIMESTRAL — LIVRARIAS ───────────────────────────
+
+// Faixas de vendas (35 pts)
+function pontosVendasLivraria(vendas) {
+  if (vendas >= 300) return 35
+  if (vendas >= 200) return 28
+  if (vendas >= 100) return 21
+  if (vendas >= 50)  return 14
+  if (vendas >= 1)   return 7
+  return 0
+}
+
+// Pontos de publicações (30 pts) — % de semanas que postou
+function pontosPublicacoes(semanas_previstas, semanas_postou) {
+  if (!semanas_previstas || semanas_previstas === 0) return 0
+  const pct = semanas_postou / semanas_previstas
+  if (pct >= 0.90) return 30
+  if (pct >= 0.70) return 22
+  if (pct >= 0.50) return 15
+  if (pct >= 0.30) return 8
+  return 0
+}
+
+// Pontos de promoções (20 pts)
+function pontosPromocaoTrimestral(participacao) {
+  if (participacao === 'confirmou')    return 20
+  if (participacao === 'sem_retorno')  return 8
+  if (participacao === 'recusou')      return 2
+  return 0 // nao_aplica
+}
+
+// Pontos de comunicação (15 pts)
+function pontosComunicacao(comunicacao) {
+  if (comunicacao === 'sempre')       return 15
+  if (comunicacao === 'as_vezes')     return 7
+  if (comunicacao === 'nao_responde') return 0
+  return 0 // nao_aplica
+}
+
+export function calcularScoreTrimestralLivraria(dados) {
+  let total = 0
+  let maxPossivel = 0
+
+  // Vendas
+  if (!dados.vendas_nao_aplica) {
+    total += pontosVendasLivraria(dados.vendas || 0)
+    maxPossivel += 35
+  }
+
+  // Publicações
+  if (!dados.publicacoes_nao_aplica) {
+    const postou = (dados.semanas_postou_feed || 0) + (dados.semanas_postou_story || 0)
+    const previstas = (dados.semanas_previstas || 0) * 2 // feed + story
+    total += pontosPublicacoes(previstas, postou)
+    maxPossivel += 30
+  }
+
+  // Promoções
+  if (!dados.promocoes_nao_aplica) {
+    total += pontosPromocaoTrimestral(dados.participacao_promocao)
+    maxPossivel += 20
+  }
+
+  // Comunicação
+  if (dados.comunicacao !== 'nao_aplica') {
+    total += pontosComunicacao(dados.comunicacao)
+    maxPossivel += 15
+  }
+
+  if (maxPossivel === 0) return { score: 0, classificacao: 'N/A' }
+
+  const pct = (total / maxPossivel) * 100
+  return {
+    score: Math.round(pct * 10) / 10,
+    classificacao: classificacaoPorPct(pct),
+  }
+}
+
+// Score trimestral editoras (80/10/10)
+function pontosVendasEditora(vendas, faixas) {
+  // faixas definidas futuramente — por ora retorna proporcional
+  if (!faixas) return Math.min(80, (vendas || 0) * 0.1)
+  for (const f of faixas) {
+    if (vendas >= f.min) return f.pts
+  }
+  return 0
+}
+
+export function calcularScoreTrimestralEditora(dados) {
+  let total = 0
+  let maxPossivel = 0
+
+  // Vendas
+  if (!dados.vendas_nao_aplica) {
+    total += pontosVendasEditora(dados.vendas || 0)
+    maxPossivel += 80
+  }
+
+  // Promoções
+  if (!dados.promocoes_nao_aplica) {
+    total += pontosPromocaoTrimestral(dados.participacao_promocao) * 0.5 // escala 20→10
+    maxPossivel += 10
+  }
+
+  // Comunicação
+  if (dados.comunicacao !== 'nao_aplica') {
+    total += pontosComunicacao(dados.comunicacao) * (10/15) // escala 15→10
+    maxPossivel += 10
+  }
+
+  if (maxPossivel === 0) return { score: 0, classificacao: 'N/A' }
+
+  const pct = (total / maxPossivel) * 100
+  return {
+    score: Math.round(pct * 10) / 10,
+    classificacao: classificacaoPorPct(pct),
+  }
+}
+
+export function classificacaoPorPct(pct) {
+  if (pct >= 85) return 'A'
+  if (pct >= 70) return 'B'
+  if (pct >= 55) return 'C'
+  if (pct >= 40) return 'D'
+  if (pct >= 25) return 'E'
+  return 'F'
+}
+
+export async function upsertScoreTrimestralLivraria(livraria_id, ano, trimestre, dados) {
+  const { score, classificacao } = calcularScoreTrimestralLivraria(dados)
+  const { data, error } = await supabase
+    .from('livrarias_score_trimestral')
+    .upsert(
+      { livraria_id, ano, trimestre, ...dados, score, atualizado_em: new Date().toISOString() },
+      { onConflict: 'livraria_id,ano,trimestre' }
+    )
+    .select()
+    .single()
+  if (error) throw error
+  return { ...data, score, classificacao }
+}
+
+export async function getScoreTrimestralLivrarias(ano) {
+  const { data, error } = await supabase
+    .from('livrarias_score_trimestral')
+    .select('*, livrarias(id, nome, editoras_parceiras(nome))')
+    .eq('ano', ano)
+    .order('trimestre', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function getScoreTrimestralLivraria(livraria_id) {
+  const { data, error } = await supabase
+    .from('livrarias_score_trimestral')
+    .select('*')
+    .eq('livraria_id', livraria_id)
+    .order('ano', { ascending: false })
+    .order('trimestre', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function upsertScoreTrimestralEditora(editora_id, ano, trimestre, dados) {
+  const { score, classificacao } = calcularScoreTrimestralEditora(dados)
+  const { data, error } = await supabase
+    .from('editoras_score_trimestral')
+    .upsert(
+      { editora_id, ano, trimestre, ...dados, score, classificacao, atualizado_em: new Date().toISOString() },
+      { onConflict: 'editora_id,ano,trimestre' }
+    )
+    .select()
+    .single()
+  if (error) throw error
+  return { ...data, score, classificacao }
+}
+
+export async function getScoreTrimestralEditoras(ano) {
+  const { data, error } = await supabase
+    .from('editoras_score_trimestral')
+    .select('*, editoras_parceiras(id, nome, classificacao)')
+    .eq('ano', ano)
+    .order('trimestre', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function getScoreTrimestralEditora(editora_id) {
+  const { data, error } = await supabase
+    .from('editoras_score_trimestral')
+    .select('*')
+    .eq('editora_id', editora_id)
+    .order('ano', { ascending: false })
+    .order('trimestre', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+// Importação de vendas por planilha
+export async function importarVendasLivraria(rows, ano, trimestre) {
+  // rows: [{ livraria_nome, vendas }]
+  const { data: livrarias } = await supabase.from('livrarias').select('id, nome').eq('ativo', true)
+  const resultados = { importados: 0, naoEncontrados: [], erros: [] }
+
+  for (const row of rows) {
+    const livraria = (livrarias || []).find(l =>
+      l.nome.toLowerCase().trim() === String(row.livraria_nome || '').toLowerCase().trim()
+    )
+    if (!livraria) { resultados.naoEncontrados.push(row.livraria_nome); continue }
     try {
-      await onSave(form, statusInicial)
-      onClose()
-    } catch (e) { console.error(e) } finally { setSaving(false) }
-  }
+      const existente = await supabase
+        .from('livrarias_score_trimestral')
+        .select('*')
+        .eq('livraria_id', livraria.id)
+        .eq('ano', ano)
+        .eq('trimestre', trimestre)
+        .maybeSingle()
 
-  return (
-    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth:560, maxHeight:'90vh', overflowY:'auto' }}>
-        <div className="modal-header">
-          <h2 className="modal-title">{contato ? 'Editar contato' : 'Novo contato'}</h2>
-          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
-        </div>
-        <div className="form-grid" style={{ gridTemplateColumns:'1fr 1fr' }}>
-          <div className="form-group" style={{ gridColumn:'1/-1' }}>
-            <label className="form-label">Nome *</label>
-            <input className="form-input" value={form.nome} onChange={e => setForm(f => ({ ...f, nome:e.target.value }))} placeholder="Nome da editora ou livraria" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Modalidade</label>
-            <select className="form-select" value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo:e.target.value }))}>
-              {TIPOS_CONTATO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Origem</label>
-            <select className="form-select" value={form.origem} onChange={e => setForm(f => ({ ...f, origem:e.target.value }))}>
-              <option value="">Selecionar...</option>
-              {ORIGENS_EDITORAS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Contato</label>
-            <input className="form-input" value={form.contato ?? ''} onChange={e => setForm(f => ({ ...f, contato:e.target.value }))} placeholder="Nome da pessoa" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">E-mail</label>
-            <input className="form-input" type="email" value={form.email ?? ''} onChange={e => setForm(f => ({ ...f, email:e.target.value }))} placeholder="email@editora.com" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Instagram</label>
-            <input className="form-input" value={form.instagram ?? ''} onChange={e => setForm(f => ({ ...f, instagram:e.target.value }))} placeholder="@editora" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Site</label>
-            <input className="form-input" value={form.site ?? ''} onChange={e => setForm(f => ({ ...f, site:e.target.value }))} placeholder="https://" />
-          </div>
-          <div className="form-group" style={{ gridColumn:'1/-1' }}>
-            <label className="form-label">Responsável</label>
-            <select className="form-select" value={form.responsavel_id ?? ''} onChange={e => setForm(f => ({ ...f, responsavel_id:e.target.value }))}>
-              <option value="">Sem responsável</option>
-              {usuarios.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
-            </select>
-          </div>
-          <div className="form-group" style={{ gridColumn:'1/-1' }}>
-            <label className="form-label">Observação</label>
-            <textarea className="form-textarea" rows={2} value={form.observacao ?? ''} onChange={e => setForm(f => ({ ...f, observacao:e.target.value }))} />
-          </div>
-          {!contato && (
-            <div className="form-group" style={{ gridColumn:'1/-1' }}>
-              <label className="form-label">Status inicial</label>
-              <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-                {pipeline.map(s => (
-                  <button key={s.value} type="button" onClick={() => setStatusInicial(s.value)}
-                    style={{ padding:'4px 12px', borderRadius:20, fontSize:12, fontWeight:600, cursor:'pointer', border:`2px solid ${s.cor}`, background:statusInicial===s.value?s.cor:'transparent', color:statusInicial===s.value?'#fff':s.cor, transition:'all 0.15s' }}>
-                    {s.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-        <div className="form-actions">
-          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={salvar} disabled={saving || !form.nome.trim()}>
-            {saving ? 'Salvando...' : contato ? 'Salvar' : 'Criar contato'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── MODAL DETALHE CONTATO ──────────────────────────────────
-function ModalDetalheContato({ contato: inicial, onSave, onClose, pipeline, usuarios }) {
-  const { usuario } = useAuth()
-  const [contato, setContato] = useState(inicial)
-  const [history, setHistory] = useState([])
-  const [aba, setAba] = useState('perfil')
-  const [novoStatus, setNovoStatus] = useState('')
-  const [motivo, setMotivo] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [savingStatus, setSavingStatus] = useState(false)
-  const [toast, showToast] = useToast()
-
-  useEffect(() => {
-    getStatusHistoryEditora(inicial.id).then(setHistory).catch(console.error)
-  }, [inicial.id])
-
-  async function salvarPerfil() {
-    setSaving(true)
-    try {
-      const upd = await updateCRMEditora(contato.id, contato)
-      setContato(upd)
-      onSave(upd)
-      showToast('Salvo!')
-    } catch { showToast('Erro ao salvar', 'error') } finally { setSaving(false) }
-  }
-
-  async function avancarStatus() {
-    if (!novoStatus) return
-    setSavingStatus(true)
-    try {
-      await addStatusHistoryEditora(contato.id, novoStatus, motivo, usuario?.id)
-      const hist = await getStatusHistoryEditora(contato.id)
-      setHistory(hist)
-      const atualizado = { ...contato, current_status: novoStatus }
-      setContato(atualizado)
-      onSave(atualizado)
-      setNovoStatus(''); setMotivo('')
-      showToast('Status atualizado!')
-    } catch { showToast('Erro', 'error') } finally { setSavingStatus(false) }
-  }
-
-  const statusAtual = contato.current_status || 'novo_contato'
-  const stInfo = pipelineInfo(statusAtual)
-  const STATUS_FINAIS = ['ativo', 'pausado', 'recusou']
-  const pipelineProspeccao = pipeline.filter(s => !STATUS_FINAIS.includes(s.value))
-
-  return (
-    <div className="modal-backdrop">
-      <div className="modal" style={{ maxWidth:680, maxHeight:'90vh', overflowY:'auto' }}>
-        <div className="modal-header" style={{ position:'sticky', top:0, background:'var(--surface)', zIndex:10, borderBottom:'1px solid var(--border)' }}>
-          <div>
-            <div style={{ fontSize:16, fontWeight:700, color:'var(--text)' }}>{contato.nome}</div>
-            <span style={{ display:'inline-flex', alignItems:'center', gap:5, background:stInfo.bg, border:`1px solid ${stInfo.cor}40`, borderRadius:20, padding:'2px 10px', fontSize:11, fontWeight:700, color:stInfo.cor, marginTop:4 }}>
-              {stInfo.label}
-            </span>
-          </div>
-          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
-        </div>
-
-        <div style={{ display:'flex', gap:4, padding:'12px 0 0', borderBottom:'1px solid var(--border)', marginBottom:16 }}>
-          {[{ v:'perfil', l:'Perfil' }, { v:'pipeline', l:'Pipeline' }, { v:'historico', l:`Histórico (${history.length})` }].map(({ v, l }) => (
-            <button key={v} onClick={() => setAba(v)} className={`btn btn-sm ${aba===v?'btn-primary':'btn-ghost'}`} style={{ borderRadius:'6px 6px 0 0' }}>{l}</button>
-          ))}
-        </div>
-
-        {aba === 'perfil' && (
-          <div className="form-grid" style={{ gridTemplateColumns:'1fr 1fr' }}>
-            <div className="form-group">
-              <label className="form-label">Nome</label>
-              <input className="form-input" value={contato.nome} onChange={e => setContato(c => ({ ...c, nome:e.target.value }))} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Modalidade</label>
-              <select className="form-select" value={contato.tipo} onChange={e => setContato(c => ({ ...c, tipo:e.target.value }))}>
-                {TIPOS_CONTATO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Contato</label>
-              <input className="form-input" value={contato.contato ?? ''} onChange={e => setContato(c => ({ ...c, contato:e.target.value }))} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">E-mail</label>
-              <input className="form-input" type="email" value={contato.email ?? ''} onChange={e => setContato(c => ({ ...c, email:e.target.value }))} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Instagram</label>
-              <input className="form-input" value={contato.instagram ?? ''} onChange={e => setContato(c => ({ ...c, instagram:e.target.value }))} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Origem</label>
-              <select className="form-select" value={contato.origem ?? ''} onChange={e => setContato(c => ({ ...c, origem:e.target.value }))}>
-                <option value="">—</option>
-                {ORIGENS_EDITORAS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-            <div className="form-group" style={{ gridColumn:'1/-1' }}>
-              <label className="form-label">Responsável</label>
-              <select className="form-select" value={contato.responsavel_id ?? ''} onChange={e => setContato(c => ({ ...c, responsavel_id:e.target.value }))}>
-                <option value="">Sem responsável</option>
-                {usuarios.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
-              </select>
-            </div>
-            <div className="form-group" style={{ gridColumn:'1/-1' }}>
-              <label className="form-label">Observação</label>
-              <textarea className="form-textarea" rows={2} value={contato.observacao ?? ''} onChange={e => setContato(c => ({ ...c, observacao:e.target.value }))} />
-            </div>
-            <div style={{ gridColumn:'1/-1', display:'flex', justifyContent:'flex-end', paddingTop:8, borderTop:'1px solid var(--border)' }}>
-              <button className="btn btn-primary" onClick={salvarPerfil} disabled={saving}>{saving?'Salvando...':'Salvar perfil'}</button>
-            </div>
-          </div>
-        )}
-
-        {aba === 'pipeline' && (
-          <div>
-            <div style={{ marginBottom:20 }}>
-              <div style={{ fontSize:12, color:'var(--text-muted)', marginBottom:8, fontWeight:700, textTransform:'uppercase' }}>Status atual</div>
-              <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
-                {pipelineProspeccao.map((s, i) => (
-                  <div key={s.value} style={{ display:'flex', alignItems:'center', gap:4 }}>
-                    <div style={{ padding:'6px 14px', borderRadius:20, fontSize:12, fontWeight:700, background:statusAtual===s.value?s.cor:s.bg, color:statusAtual===s.value?'#fff':s.cor, border:`2px solid ${s.cor}` }}>{s.label}</div>
-                    {i < pipelineProspeccao.length-1 && <ChevronRight size={14} color="var(--border)" />}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div style={{ borderTop:'1px solid var(--border)', paddingTop:16 }}>
-              <div style={{ fontSize:12, color:'var(--text-muted)', marginBottom:10, fontWeight:700, textTransform:'uppercase' }}>Mover para</div>
-              <div className="form-group">
-                <select className="form-select" value={novoStatus} onChange={e => setNovoStatus(e.target.value)}>
-                  <option value="">Selecionar...</option>
-                  {pipeline.filter(s => s.value !== statusAtual).map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
-              </div>
-              {novoStatus && (
-                <div className="form-group">
-                  <label className="form-label">Motivo (opcional)</label>
-                  <textarea className="form-textarea" rows={2} value={motivo} onChange={e => setMotivo(e.target.value)} />
-                </div>
-              )}
-              <button className="btn btn-primary" onClick={avancarStatus} disabled={savingStatus || !novoStatus}>
-                {savingStatus ? 'Salvando...' : 'Confirmar mudança'}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {aba === 'historico' && (
-          <div>
-            {history.length === 0 ? <p style={{ fontSize:13, color:'var(--text-muted)' }}>Nenhuma mudança registrada.</p>
-            : history.map((h, i) => {
-              const st = pipelineInfo(h.status)
-              const anterior = history[i+1] ? pipelineInfo(history[i+1].status) : null
-              return (
-                <div key={h.id} style={{ display:'flex', gap:12, marginBottom:16 }}>
-                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
-                    <div style={{ width:12, height:12, borderRadius:'50%', background:st.cor, flexShrink:0, marginTop:3 }} />
-                    {i < history.length-1 && <div style={{ width:2, flex:1, background:'var(--border)', marginTop:4 }} />}
-                  </div>
-                  <div style={{ flex:1, paddingBottom:12 }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:2 }}>
-                      {anterior
-                        ? <span style={{ fontSize:13, fontWeight:700 }}><span style={{ color:anterior.cor }}>{anterior.label}</span><span style={{ color:'var(--text-muted)', margin:'0 4px' }}>→</span><span style={{ color:st.cor }}>{st.label}</span></span>
-                        : <span style={{ fontSize:13, fontWeight:700, color:st.cor }}>{st.label}</span>}
-                      <span style={{ fontSize:11, color:'var(--text-muted)' }}>
-                        {format(new Date(h.changed_at), 'dd/MM/yyyy HH:mm', { locale:ptBR })}
-                      </span>
-                    </div>
-                    <div style={{ fontSize:11, color:'var(--text-muted)' }}>por {h.changed_by_nome || '—'}</div>
-                    {h.reason && <div style={{ fontSize:12, color:'var(--text-muted)', background:'var(--surface-2)', borderRadius:6, padding:'6px 10px', marginTop:4 }}>{h.reason}</div>}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
-      </div>
-    </div>
-  )
-}
-
-// ── ABA PROSPECÇÃO ─────────────────────────────────────────
-function AbaProspeccao({ pipeline, usuarios, toast, showToast }) {
-  const { usuario } = useAuth()
-  const [contatos, setContatos] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [filtroStatus, setFiltroStatus] = useState('')
-  const [filtroTipo, setFiltroTipo] = useState('')
-  const [filtroResp, setFiltroResp] = useState('')
-  const [filtroOrigem, setFiltroOrigem] = useState('')
-  const [modalNovo, setModalNovo] = useState(false)
-  const [modalDetalhe, setModalDetalhe] = useState(null)
-  const [dragId, setDragId] = useState(null)
-  const [dragOverCol, setDragOverCol] = useState(null)
-
-  useEffect(() => {
-    getCRMEditoras().then(setContatos).finally(() => setLoading(false))
-  }, [])
-
-  async function handleNovo(form, statusInicial) {
-    const novo = await createCRMEditora({ ...form, responsavel_id: form.responsavel_id || null }, statusInicial)
-    setContatos(prev => [...prev, { ...novo, current_status: statusInicial, responsavel_nome: usuarios.find(u => u.id === form.responsavel_id)?.nome || null }])
-    showToast('Contato criado!')
-  }
-
-  async function handleSave(upd) {
-    setContatos(prev => prev.map(c => c.id === upd.id ? { ...c, ...upd } : c))
-  }
-
-  async function handleDelete(id, nome) {
-    if (!window.confirm(`Excluir "${nome}"?`)) return
-    await deleteCRMEditora(id)
-    setContatos(prev => prev.filter(c => c.id !== id))
-    showToast(`${nome} excluído.`)
-  }
-
-  async function handleDrop(novoStatus) {
-    if (!dragId || !novoStatus) { setDragId(null); setDragOverCol(null); return }
-    const contato = contatos.find(c => c.id === dragId)
-    if (!contato || contato.current_status === novoStatus) { setDragId(null); setDragOverCol(null); return }
-    setContatos(prev => prev.map(c => c.id === dragId ? { ...c, current_status: novoStatus } : c))
-    setDragId(null); setDragOverCol(null)
-    try {
-      await addStatusHistoryEditora(dragId, novoStatus, 'Status alterado via kanban', usuario?.id)
-      showToast(`${contato.nome} → ${pipelineInfo(novoStatus).label}`)
-    } catch {
-      setContatos(prev => prev.map(c => c.id === dragId ? { ...c, current_status: contato.current_status } : c))
-      showToast('Erro ao atualizar status', 'error')
+      const dadosBase = existente.data || {}
+      await upsertScoreTrimestralLivraria(livraria.id, ano, trimestre, {
+        ...dadosBase,
+        vendas: Number(row.vendas) || 0,
+        vendas_nao_aplica: false,
+      })
+      resultados.importados++
+    } catch (e) {
+      resultados.erros.push(`${row.livraria_nome}: ${e.message}`)
     }
   }
-
-  const STATUS_CICLO = ['ativo', 'pausado', 'recusou']
-  const pipelineKanban = pipeline.filter(s => !STATUS_CICLO.includes(s.value))
-
-  const filtrados = contatos.filter(c => {
-    const q = search.toLowerCase()
-    if (q && !c.nome.toLowerCase().includes(q)) return false
-    if (filtroStatus && c.current_status !== filtroStatus) return false
-    if (filtroTipo && c.tipo !== filtroTipo) return false
-    if (filtroResp && c.responsavel_id !== filtroResp) return false
-    if (filtroOrigem && c.origem !== filtroOrigem) return false
-    return true
-  })
-
-  const porStatus = {}
-  for (const s of pipeline) porStatus[s.value] = filtrados.filter(c => c.current_status === s.value)
-
-  const temFiltro = filtroStatus || filtroTipo || filtroResp || filtroOrigem
-  const responsaveis = [...new Map(contatos.filter(c => c.responsavel_id && c.responsavel_nome).map(c => [c.responsavel_id, c.responsavel_nome])).entries()]
-
-  return (
-    <div>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16, flexWrap:'wrap', gap:10 }}>
-        <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', flex:1 }}>
-          <div style={{ position:'relative' }}>
-            <Search size={14} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)' }} />
-            <input className="search-input" style={{ paddingLeft:32 }} placeholder="Buscar contato..." value={search} onChange={e => setSearch(e.target.value)} />
-          </div>
-          <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 10px' }} value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}>
-            <option value="">Todos os status</option>
-            {pipeline.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-          </select>
-          <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 10px' }} value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}>
-            <option value="">Todas as modalidades</option>
-            {TIPOS_CONTATO.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-          </select>
-          <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 10px' }} value={filtroResp} onChange={e => setFiltroResp(e.target.value)}>
-            <option value="">Todos os responsáveis</option>
-            {responsaveis.map(([id, nome]) => <option key={id} value={id}>{nome}</option>)}
-          </select>
-          <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 10px' }} value={filtroOrigem} onChange={e => setFiltroOrigem(e.target.value)}>
-            <option value="">Todas as origens</option>
-            {ORIGENS_EDITORAS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          {temFiltro && <button className="btn btn-ghost btn-sm" onClick={() => { setFiltroStatus(''); setFiltroTipo(''); setFiltroResp(''); setFiltroOrigem('') }}><X size={12} /> Limpar</button>}
-        </div>
-        <button className="btn btn-primary" onClick={() => setModalNovo(true)} style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
-          <Plus size={15} /> Novo contato
-        </button>
-      </div>
-
-      {loading ? <div className="loading"><div className="spinner" /></div> : (
-        <div style={{ overflowX:'auto', paddingBottom:16 }}>
-          <div style={{ display:'flex', gap:14, minWidth:'max-content' }}>
-            {pipelineKanban.map(st => {
-              const items = porStatus[st.value] || []
-              return (
-                <div key={st.value} style={{ width:220, flexShrink:0 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10, padding:'6px 10px', background:st.bg, border:`1px solid ${st.cor}30`, borderRadius:8 }}>
-                    <div style={{ width:10, height:10, borderRadius:'50%', background:st.cor }} />
-                    <span style={{ fontSize:12, fontWeight:700, color:st.cor, flex:1 }}>{st.label}</span>
-                    <span style={{ fontSize:11, color:st.cor, background:'var(--surface)', border:`1px solid ${st.cor}30`, borderRadius:20, padding:'1px 7px' }}>{items.length}</span>
-                  </div>
-                  <div onDragOver={e => { e.preventDefault(); setDragOverCol(st.value) }}
-                    onDragLeave={() => setDragOverCol(null)}
-                    onDrop={e => { e.preventDefault(); handleDrop(st.value) }}
-                    style={{ minHeight:60, borderRadius:8, transition:'background 0.15s', background:dragOverCol===st.value?`${st.cor}18`:'transparent', border:dragOverCol===st.value?`2px dashed ${st.cor}`:'2px solid transparent', padding:2 }}>
-                    {items.length === 0
-                      ? <div style={{ padding:'16px 10px', textAlign:'center', fontSize:12, color:'var(--text-muted)' }}>{dragOverCol===st.value?'Soltar aqui':'Vazio'}</div>
-                      : items.map(c => (
-                          <KanbanCard key={c.id} contato={c}
-                            onClick={() => setModalDetalhe(c)}
-                            onDragStart={() => setDragId(c.id)}
-                            onDragEnd={() => { setDragId(null); setDragOverCol(null) }}
-                            isDragging={dragId === c.id}
-                            onDelete={() => handleDelete(c.id, c.nome)} />
-                        ))
-                    }
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {modalNovo && <ModalContato onSave={handleNovo} onClose={() => setModalNovo(false)} pipeline={pipeline} usuarios={usuarios} />}
-      {modalDetalhe && <ModalDetalheContato contato={modalDetalhe} onSave={handleSave} onClose={() => setModalDetalhe(null)} pipeline={pipeline} usuarios={usuarios} />}
-    </div>
-  )
+  return resultados
 }
 
-// ── ABA PARCEIROS ATIVOS ───────────────────────────────────
-function AbaParceirosAtivos() {
-  const [editoras, setEditoras] = useState([])
-  const [livrarias, setLivrarias] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [filtroTipo, setFiltroTipo] = useState('')
-  const [filtroStatus, setFiltroStatus] = useState('')
+export async function importarVendasEditora(rows, ano, trimestre) {
+  const { data: editoras } = await supabase.from('editoras_parceiras').select('id, nome').eq('ativo', true)
+  const resultados = { importados: 0, naoEncontrados: [], erros: [] }
 
-  useEffect(() => {
-    Promise.all([getEditorasParceirasAtivas(), getLivrariasParceirasAtivas()])
-      .then(([eds, livs]) => { setEditoras(eds); setLivrarias(livs) })
-      .finally(() => setLoading(false))
-  }, [])
-
-  const totalEditoras = editoras.length
-  const totalLivrarias = livrarias.length
-  const totalAtivas = editoras.filter(e => e.status_parceria === 'ativa').length
-  const totalEncerramento = editoras.filter(e => e.status_parceria === 'encerramento').length
-
-  const dadosCombinados = [
-    ...editoras.map(e => ({ ...e, _tipo:'editora', _nome:e.nome, _status:e.status_parceria })),
-    ...livrarias.map(l => ({ ...l, _tipo:'livraria', _nome:l.nome, _status:l.status })),
-  ]
-
-  const filtrados = dadosCombinados.filter(item => {
-    if (search && !item._nome.toLowerCase().includes(search.toLowerCase())) return false
-    if (filtroTipo && item._tipo !== filtroTipo) return false
-    if (filtroStatus && item._status !== filtroStatus) return false
-    return true
-  })
-
-  return (
-    <div>
-      <div style={{ display:'flex', gap:12, marginBottom:20, flexWrap:'wrap' }}>
-        {[
-          { label:'Total editoras', value:totalEditoras, cor:'var(--accent)' },
-          { label:'Total livrarias', value:totalLivrarias, cor:'#22c55e' },
-          { label:'Parcerias ativas', value:totalAtivas, cor:'#3b82f6' },
-          { label:'Em encerramento', value:totalEncerramento, cor:'#ef4444' },
-        ].map(({ label, value, cor }) => (
-          <div key={label} style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:10, padding:'14px 18px', minWidth:130 }}>
-            <div style={{ fontSize:12, color:'var(--text-muted)', marginBottom:4 }}>{label}</div>
-            <div style={{ fontSize:26, fontWeight:800, color:cor }}>{value}</div>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ display:'flex', gap:8, marginBottom:16, flexWrap:'wrap', alignItems:'center' }}>
-        <div style={{ position:'relative', flex:1, minWidth:200 }}>
-          <Search size={14} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)' }} />
-          <input className="search-input" style={{ paddingLeft:32, width:'100%' }} placeholder="Buscar por nome..." value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-        <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 10px' }} value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}>
-          <option value="">Editoras e livrarias</option>
-          <option value="editora">Apenas editoras</option>
-          <option value="livraria">Apenas livrarias</option>
-        </select>
-        <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 10px' }} value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}>
-          <option value="">Todos os status</option>
-          <option value="ativa">Ativa</option>
-          <option value="encerramento">Encerramento</option>
-          <option value="pendente">Pendente</option>
-          <option value="finalizada">Finalizada</option>
-        </select>
-      </div>
-
-      {loading ? <div className="loading"><div className="spinner" /></div> : (
-        <div className="table-card">
-          <div className="table-toolbar">
-            <span className="table-title">Parceiros ({filtrados.length})</span>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Nome</th>
-                <th>Tipo</th>
-                <th>Classificação</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtrados.map(item => (
-                <tr key={`${item._tipo}-${item.id}`}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  <td>
-                    <div className="td-strong">{item._nome}</div>
-                    {item._tipo === 'livraria' && item.editoras_parceiras?.nome && (
-                      <div style={{ fontSize:11, color:'var(--text-muted)' }}>{item.editoras_parceiras.nome}</div>
-                    )}
-                  </td>
-                  <td><BadgeTipo tipo={item._tipo} /></td>
-                  <td>
-                    {item.classificacao
-                      ? <span style={{ fontWeight:800, color:{ A:'#22c55e', B:'#84cc16', C:'#f59e0b', D:'#fb923c', E:'#ef4444', F:'#6b7280' }[item.classificacao] || 'var(--text)' }}>{item.classificacao}</span>
-                      : <span style={{ color:'var(--text-muted)', fontSize:12 }}>—</span>}
-                  </td>
-                  <td>
-                    <span style={{ fontSize:11, fontWeight:700, color:item._status === 'ativa' ? '#22c55e' : item._status === 'encerramento' ? '#ef4444' : 'var(--text-muted)' }}>
-                      {item._status || '—'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── ABA CLASSIFICAÇÃO ──────────────────────────────────────
-function CirculoScore({ nota, size = 36 }) {
-  const c = corScore(nota)
-  if (nota === null || nota === undefined) return <span style={{ color:'var(--text-muted)', fontSize:12 }}>—</span>
-  return (
-    <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:size, height:size, borderRadius:'50%', background:c.bg, color:c.cor, fontWeight:800, fontSize:size > 34 ? 13 : 12, border:`${size > 34 ? 2 : 1}px solid ${c.cor}40` }}>
-      {nota.toFixed(1)}
-    </span>
-  )
-}
-
-function nomeMes(mesAno) {
-  const [ano, mes] = mesAno.split('-')
-  return `${MESES_LABEL[parseInt(mes)-1]}/${ano.slice(2)}`
-}
-
-// Modal para registrar score de editora
-function ModalScoreEditora({ editora, score, onSave, onClose }) {
-  const hoje = new Date()
-  const mesesOpcoes = getMesesDisponiveis(24)
-  const [mes, setMes] = useState(score?.mes || hoje.getMonth() + 1)
-  const [ano, setAno] = useState(score?.ano || hoje.getFullYear())
-  const [form, setForm] = useState({
-    promocao_geral: score?.promocao_geral || 'nao_participou',
-    promocao_particular: score?.promocao_particular || 'nao_participou',
-    campanha: score?.campanha || 'nao_participou',
-    teve_lancamento: score?.teve_lancamento || false,
-    qtd_lancamentos: score?.qtd_lancamentos || 0,
-    fez_reuniao: score?.fez_reuniao || false,
-    respondeu_whatsapp: score?.respondeu_whatsapp || false,
-    publicou_feed: score?.publicou_feed || false,
-    publicou_story: score?.publicou_story || false,
-    publicou_reels: score?.publicou_reels || false,
-    vendas_editora: score?.vendas_editora || 0,
-    responde_artes: score?.responde_artes || false,
-    faz_cortesia: score?.faz_cortesia || false,
-    cria_cupom: score?.cria_cupom || false,
-    observacao: score?.observacao || '',
-  })
-  const [saving, setSaving] = useState(false)
-  const preview = calcularScoreEditora(form)
-  const c = corScore(preview)
-
-  const opcoes = [
-    { value:'confirmou', label:'Confirmou' },
-    { value:'sem_retorno', label:'Sem retorno' },
-    { value:'recusou', label:'Recusou' },
-    { value:'nao_participou', label:'Não participou' },
-  ]
-
-  async function salvar() {
-    setSaving(true)
-    try { await onSave(editora.id, ano, mes, form); onClose() }
-    catch (e) { console.error(e) } finally { setSaving(false) }
-  }
-
-  function Check({ field, label }) {
-    return (
-      <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', padding:'6px 0' }}>
-        <input type="checkbox" checked={!!form[field]} onChange={e => setForm(f => ({ ...f, [field]:e.target.checked }))} style={{ accentColor:'var(--accent)', width:15, height:15 }} />
-        <span style={{ fontSize:13 }}>{label}</span>
-      </label>
+  for (const row of rows) {
+    const editora = (editoras || []).find(e =>
+      e.nome.toLowerCase().trim() === String(row.editora_nome || '').toLowerCase().trim()
     )
+    if (!editora) { resultados.naoEncontrados.push(row.editora_nome); continue }
+    try {
+      const existente = await supabase
+        .from('editoras_score_trimestral')
+        .select('*')
+        .eq('editora_id', editora.id)
+        .eq('ano', ano)
+        .eq('trimestre', trimestre)
+        .maybeSingle()
+
+      const dadosBase = existente.data || {}
+      await upsertScoreTrimestralEditora(editora.id, ano, trimestre, {
+        ...dadosBase,
+        vendas: Number(row.vendas) || 0,
+        vendas_nao_aplica: false,
+      })
+      resultados.importados++
+    } catch (e) {
+      resultados.erros.push(`${row.editora_nome}: ${e.message}`)
+    }
   }
-
-  function Select({ field, label }) {
-    return (
-      <div className="form-group">
-        <label className="form-label">{label}</label>
-        <select className="form-select" value={form[field]} onChange={e => setForm(f => ({ ...f, [field]:e.target.value }))}>
-          {opcoes.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-      </div>
-    )
-  }
-
-  return (
-    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth:560, maxHeight:'90vh', overflowY:'auto' }}>
-        <div className="modal-header">
-          <div>
-            <h2 className="modal-title">Score mensal — Editora</h2>
-            <div style={{ fontSize:12, color:'var(--text-muted)' }}>{editora.nome}</div>
-          </div>
-          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Mês de referência</label>
-          <select className="form-select" value={`${ano}-${mes}`} onChange={e => { const [a,m] = e.target.value.split('-'); setAno(Number(a)); setMes(Number(m)) }}>
-            {mesesOpcoes.map(({ mes:m, ano:a }) => <option key={`${a}-${m}`} value={`${a}-${m}`}>{mesAnoLabel(m, a)}</option>)}
-          </select>
-        </div>
-
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
-          <Select field="promocao_geral" label="Promoção geral" />
-          <Select field="promocao_particular" label="Promoção particular" />
-          <Select field="campanha" label="Campanha" />
-          <div className="form-group">
-            <label className="form-label">Vendas (editora)</label>
-            <input className="form-input" type="number" min={0} value={form.vendas_editora} onChange={e => setForm(f => ({ ...f, vendas_editora:Number(e.target.value) }))} />
-          </div>
-        </div>
-
-        <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'12px 16px', marginBottom:12 }}>
-          <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)', marginBottom:8 }}>Lançamentos</div>
-          <div style={{ display:'flex', gap:16, alignItems:'center' }}>
-            <Check field="teve_lancamento" label="Teve lançamento no mês?" />
-            {form.teve_lancamento && (
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <span style={{ fontSize:12, color:'var(--text-muted)' }}>Quantos?</span>
-                <input className="form-input" type="number" min={1} value={form.qtd_lancamentos} onChange={e => setForm(f => ({ ...f, qtd_lancamentos:Number(e.target.value) }))} style={{ width:80 }} />
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'12px 16px', marginBottom:12 }}>
-          <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)', marginBottom:8 }}>Comunicação & publicações</div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:4 }}>
-            <Check field="fez_reuniao" label="Fez reunião" />
-            <Check field="respondeu_whatsapp" label="Respondeu WhatsApp" />
-            <Check field="publicou_feed" label="Publicou feed" />
-            <Check field="publicou_story" label="Publicou story" />
-            <Check field="publicou_reels" label="Publicou reels" />
-            <Check field="responde_artes" label="Responde sobre artes" />
-            <Check field="faz_cortesia" label="Faz envio de cortesia" />
-            <Check field="cria_cupom" label="Cria cupom de venda" />
-          </div>
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Observação (opcional)</label>
-          <textarea className="form-textarea" rows={2} value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao:e.target.value }))} />
-        </div>
-
-        <div style={{ padding:'14px 16px', background:c.bg, border:`1px solid ${c.cor}40`, borderRadius:10, display:'flex', alignItems:'center', gap:14, marginBottom:16 }}>
-          <span style={{ fontSize:36, fontWeight:900, color:c.cor }}>{preview.toFixed(1)}</span>
-          <div style={{ fontSize:13, fontWeight:700, color:c.cor }}>Score calculado</div>
-        </div>
-
-        <div className="form-actions">
-          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={salvar} disabled={saving}>{saving?'Salvando...':'Salvar score'}</button>
-        </div>
-      </div>
-    </div>
-  )
+  return resultados
 }
 
-// Modal para registrar score de livraria
-function ModalScoreLivraria({ livraria, score, onSave, onClose }) {
+// ── HELPERS ────────────────────────────────────────────────
+
+export const MESES_LABEL = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+
+export const TRIMESTRES_LABEL = {
+  1: 'T1 — Jan/Fev/Mar',
+  2: 'T2 — Abr/Mai/Jun',
+  3: 'T3 — Jul/Ago/Set',
+  4: 'T4 — Out/Nov/Dez',
+}
+
+export function trimestreAtual() {
+  const m = new Date().getMonth() + 1
+  if (m <= 3) return 1
+  if (m <= 6) return 2
+  if (m <= 9) return 3
+  return 4
+}
+
+export function mesAnoLabel(mes, ano) {
+  return `${MESES_LABEL[mes - 1]}/${String(ano).slice(2)}`
+}
+
+export function getMesesDisponiveis(n = 12) {
   const hoje = new Date()
-  const mesesOpcoes = getMesesDisponiveis(24)
-  const [mes, setMes] = useState(score?.mes || hoje.getMonth() + 1)
-  const [ano, setAno] = useState(score?.ano || hoje.getFullYear())
-  const [form, setForm] = useState({
-    promocao_geral: score?.promocao_geral || 'nao_participou',
-    promocao_particular: score?.promocao_particular || 'nao_participou',
-    campanha: score?.campanha || 'nao_participou',
-    publicou_feed: score?.publicou_feed || false,
-    publicou_story: score?.publicou_story || false,
-    publicou_reels: score?.publicou_reels || false,
-    vendas_livraria: score?.vendas_livraria || 0,
-    responde_artes: score?.responde_artes || false,
-    observacao: score?.observacao || '',
-  })
-  const [saving, setSaving] = useState(false)
-  const preview = calcularScoreLivraria(form)
-  const c = corScore(preview)
-
-  const opcoes = [
-    { value:'confirmou', label:'Confirmou' },
-    { value:'sem_retorno', label:'Sem retorno' },
-    { value:'recusou', label:'Recusou' },
-    { value:'nao_participou', label:'Não participou' },
-  ]
-
-  async function salvar() {
-    setSaving(true)
-    try { await onSave(livraria.id, ano, mes, form); onClose() }
-    catch (e) { console.error(e) } finally { setSaving(false) }
+  const meses = []
+  for (let i = 0; i < n; i++) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1)
+    meses.push({ mes: d.getMonth() + 1, ano: d.getFullYear() })
   }
-
-  function Check({ field, label }) {
-    return (
-      <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', padding:'6px 0' }}>
-        <input type="checkbox" checked={!!form[field]} onChange={e => setForm(f => ({ ...f, [field]:e.target.checked }))} style={{ accentColor:'var(--accent)', width:15, height:15 }} />
-        <span style={{ fontSize:13 }}>{label}</span>
-      </label>
-    )
-  }
-
-  return (
-    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth:520, maxHeight:'90vh', overflowY:'auto' }}>
-        <div className="modal-header">
-          <div>
-            <h2 className="modal-title">Score mensal — Livraria</h2>
-            <div style={{ fontSize:12, color:'var(--text-muted)' }}>{livraria.nome}</div>
-          </div>
-          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Mês de referência</label>
-          <select className="form-select" value={`${ano}-${mes}`} onChange={e => { const [a,m] = e.target.value.split('-'); setAno(Number(a)); setMes(Number(m)) }}>
-            {mesesOpcoes.map(({ mes:m, ano:a }) => <option key={`${a}-${m}`} value={`${a}-${m}`}>{mesAnoLabel(m, a)}</option>)}
-          </select>
-        </div>
-
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
-          {['promocao_geral','promocao_particular','campanha'].map(field => (
-            <div key={field} className="form-group">
-              <label className="form-label">{{ promocao_geral:'Promoção geral', promocao_particular:'Promoção particular', campanha:'Campanha' }[field]}</label>
-              <select className="form-select" value={form[field]} onChange={e => setForm(f => ({ ...f, [field]:e.target.value }))}>
-                {opcoes.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-          ))}
-          <div className="form-group">
-            <label className="form-label">Vendas (livraria)</label>
-            <input className="form-input" type="number" min={0} value={form.vendas_livraria} onChange={e => setForm(f => ({ ...f, vendas_livraria:Number(e.target.value) }))} />
-          </div>
-        </div>
-
-        <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'12px 16px', marginBottom:12 }}>
-          <div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)', marginBottom:8 }}>Publicações</div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:4 }}>
-            <Check field="publicou_feed" label="Feed" />
-            <Check field="publicou_story" label="Story" />
-            <Check field="publicou_reels" label="Reels" />
-            <Check field="responde_artes" label="Responde sobre artes" />
-          </div>
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Observação (opcional)</label>
-          <textarea className="form-textarea" rows={2} value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao:e.target.value }))} />
-        </div>
-
-        <div style={{ padding:'14px 16px', background:c.bg, border:`1px solid ${c.cor}40`, borderRadius:10, display:'flex', alignItems:'center', gap:14, marginBottom:16 }}>
-          <span style={{ fontSize:36, fontWeight:900, color:c.cor }}>{preview.toFixed(1)}</span>
-          <div style={{ fontSize:13, fontWeight:700, color:c.cor }}>Score calculado</div>
-        </div>
-
-        <div className="form-actions">
-          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={salvar} disabled={saving}>{saving?'Salvando...':'Salvar score'}</button>
-        </div>
-      </div>
-    </div>
-  )
+  return meses
 }
 
-function AbaClassificacao() {
-  const [subAba, setSubAba] = useState('editoras')
-  const [editoras, setEditoras] = useState([])
-  const [livrarias, setLivrarias] = useState([])
-  const [scoresEditoras, setScoresEditoras] = useState([])
-  const [scoresLivrarias, setScoresLivrarias] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [modalEditora, setModalEditora] = useState(null)
-  const [modalLivraria, setModalLivraria] = useState(null)
-  const hoje = new Date()
-  const [mes] = useState(hoje.getMonth() + 1)
-  const [ano] = useState(hoje.getFullYear())
-
-  useEffect(() => {
-    setLoading(true)
-    Promise.all([
-      getEditorasParceirasAtivas(),
-      getLivrariasParceirasAtivas(),
-      getAllScoreEditorasMes(ano, mes),
-      getAllScoreLivrariasMes(ano, mes),
-    ]).then(([eds, livs, sEds, sLivs]) => {
-      setEditoras(eds); setLivrarias(livs)
-      setScoresEditoras(sEds); setScoresLivrarias(sLivs)
-    }).finally(() => setLoading(false))
-  }, [ano, mes])
-
-  const scoreMapEditoras = {}
-  for (const s of scoresEditoras) scoreMapEditoras[s.editora_id] = s
-
-  const scoreMapLivrarias = {}
-  for (const s of scoresLivrarias) scoreMapLivrarias[s.livraria_id] = s
-
-  async function salvarScoreEditora(editora_id, ano, mes, dados) {
-    const upd = await upsertScoreEditora(editora_id, ano, mes, dados)
-    setScoresEditoras(prev => {
-      const exists = prev.find(s => s.editora_id === editora_id && s.ano === ano && s.mes === mes)
-      if (exists) return prev.map(s => s.editora_id === editora_id ? upd : s)
-      return [...prev, upd]
-    })
+export function getTrimestresDisponiveis(n = 6) {
+  const trimestres = []
+  let ano = new Date().getFullYear()
+  let tri = trimestreAtual()
+  for (let i = 0; i < n; i++) {
+    trimestres.push({ trimestre: tri, ano })
+    tri--
+    if (tri < 1) { tri = 4; ano-- }
   }
-
-  async function salvarScoreLivraria(livraria_id, ano, mes, dados) {
-    const upd = await upsertScoreLivraria(livraria_id, ano, mes, dados)
-    setScoresLivrarias(prev => {
-      const exists = prev.find(s => s.livraria_id === livraria_id && s.ano === ano && s.mes === mes)
-      if (exists) return prev.map(s => s.livraria_id === livraria_id ? upd : s)
-      return [...prev, upd]
-    })
-  }
-
-  const editorasFiltradas = editoras.filter(e => !search || e.nome.toLowerCase().includes(search.toLowerCase()))
-  const livrariasFiltradas = livrarias.filter(l => !search || l.nome.toLowerCase().includes(search.toLowerCase()))
-
-  const mesesColunas = useMemo(() => getMesesDisponiveis(6).reverse(), [])
-
-  function tabStyle(ativa) {
-    return { padding:'8px 16px', fontSize:12, fontWeight:700, cursor:'pointer', border:'none', borderBottom:ativa?'2px solid var(--accent)':'2px solid transparent', background:'transparent', color:ativa?'var(--accent)':'var(--text-muted)', transition:'all 0.15s', display:'flex', alignItems:'center', gap:6 }
-  }
-
-  return (
-    <div>
-      <div style={{ display:'flex', borderBottom:'1px solid var(--border)', marginBottom:20 }}>
-        <button style={tabStyle(subAba==='editoras')} onClick={() => setSubAba('editoras')}><Building2 size={13} /> Editoras</button>
-        <button style={tabStyle(subAba==='livrarias')} onClick={() => setSubAba('livrarias')}><Library size={13} /> Livrarias</button>
-      </div>
-
-      <div style={{ display:'flex', gap:8, marginBottom:16, alignItems:'center' }}>
-        <div style={{ position:'relative', flex:1 }}>
-          <Search size={14} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)' }} />
-          <input className="search-input" style={{ paddingLeft:32, width:'100%' }} placeholder={`Buscar ${subAba==='editoras'?'editora':'livraria'}...`} value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-      </div>
-
-      <div style={{ fontSize:11, color:'var(--text-muted)', marginBottom:12 }}>
-        Score calculado com base em: promoções gerais/particulares, campanhas, lançamentos, comunicação e publicações — mês atual: {mesAnoLabel(mes, ano)}
-      </div>
-
-      {loading ? <div className="loading"><div className="spinner" /></div> : (
-        <div style={{ overflowX:'auto' }}>
-          <table style={{ width:'100%', borderCollapse:'collapse', minWidth:400 + mesesColunas.length * 90 }}>
-            <thead>
-              <tr style={{ borderBottom:'1px solid var(--border)' }}>
-                <th style={{ padding:'10px 14px', textAlign:'left', fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', position:'sticky', left:0, background:'var(--surface)', zIndex:2, minWidth:220 }}>
-                  {subAba === 'editoras' ? 'Editora' : 'Livraria'}
-                </th>
-                <th style={{ padding:'10px 14px', textAlign:'center', fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', minWidth:80 }}>Registrar</th>
-                {mesesColunas.map(({ mes:m, ano:a }) => (
-                  <th key={`${a}-${m}`} style={{ padding:'10px 14px', textAlign:'center', fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', minWidth:80 }}>
-                    {mesAnoLabel(m, a)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {subAba === 'editoras' && editorasFiltradas.map(e => {
-                const scoreAtual = scoreMapEditoras[e.id]
-                return (
-                  <tr key={e.id} style={{ borderBottom:'1px solid var(--border)' }}
-                    onMouseEnter={el => el.currentTarget.style.background = 'var(--surface-2)'}
-                    onMouseLeave={el => el.currentTarget.style.background = 'transparent'}>
-                    <td style={{ padding:'10px 14px', position:'sticky', left:0, background:'var(--surface)', zIndex:1 }}>
-                      <div style={{ fontWeight:700, fontSize:13, color:'var(--text)' }}>{e.nome}</div>
-                      {e.classificacao && <div style={{ fontSize:11, color:'var(--text-muted)' }}>Classe {e.classificacao}</div>}
-                    </td>
-                    <td style={{ padding:'10px 14px', textAlign:'center' }}>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setModalEditora({ editora:e, score:scoreAtual })}>
-                        <Plus size={12} />
-                      </button>
-                    </td>
-                    {mesesColunas.map(({ mes:m, ano:a }) => {
-                      const s = a === ano && m === mes ? scoreAtual : null
-                      return (
-                        <td key={`${a}-${m}`} style={{ padding:'10px 14px', textAlign:'center' }}>
-                          <CirculoScore nota={s?.score} size={32} />
-                        </td>
-                      )
-                    })}
-                  </tr>
-                )
-              })}
-              {subAba === 'livrarias' && livrariasFiltradas.map(l => {
-                const scoreAtual = scoreMapLivrarias[l.id]
-                return (
-                  <tr key={l.id} style={{ borderBottom:'1px solid var(--border)' }}
-                    onMouseEnter={el => el.currentTarget.style.background = 'var(--surface-2)'}
-                    onMouseLeave={el => el.currentTarget.style.background = 'transparent'}>
-                    <td style={{ padding:'10px 14px', position:'sticky', left:0, background:'var(--surface)', zIndex:1 }}>
-                      <div style={{ fontWeight:700, fontSize:13, color:'var(--text)' }}>{l.nome}</div>
-                      {l.editoras_parceiras?.nome && <div style={{ fontSize:11, color:'var(--text-muted)' }}>{l.editoras_parceiras.nome}</div>}
-                    </td>
-                    <td style={{ padding:'10px 14px', textAlign:'center' }}>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setModalLivraria({ livraria:l, score:scoreAtual })}>
-                        <Plus size={12} />
-                      </button>
-                    </td>
-                    {mesesColunas.map(({ mes:m, ano:a }) => {
-                      const s = a === ano && m === mes ? scoreAtual : null
-                      return (
-                        <td key={`${a}-${m}`} style={{ padding:'10px 14px', textAlign:'center' }}>
-                          <CirculoScore nota={s?.score} size={32} />
-                        </td>
-                      )
-                    })}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {modalEditora && (
-        <ModalScoreEditora
-          editora={modalEditora.editora}
-          score={modalEditora.score}
-          onSave={salvarScoreEditora}
-          onClose={() => setModalEditora(null)}
-        />
-      )}
-      {modalLivraria && (
-        <ModalScoreLivraria
-          livraria={modalLivraria.livraria}
-          score={modalLivraria.score}
-          onSave={salvarScoreLivraria}
-          onClose={() => setModalLivraria(null)}
-        />
-      )}
-    </div>
-  )
+  return trimestres
 }
 
-// ── PÁGINA PRINCIPAL ───────────────────────────────────────
-export default function CRMEditorasParceiras() {
-  const [aba, setAba] = useState('prospeccao')
-  const [usuarios, setUsuarios] = useState([])
-  const [toast, showToast] = useToast()
+export function corScore(nota) {
+  if (nota === null || nota === undefined) return { bg: 'transparent', cor: 'var(--text-muted)' }
+  if (nota >= 8) return { bg: 'rgba(245,158,11,0.15)', cor: '#f59e0b' }
+  if (nota >= 6) return { bg: 'rgba(148,163,184,0.15)', cor: '#94a3b8' }
+  if (nota >= 4) return { bg: 'rgba(180,83,9,0.15)', cor: '#b45309' }
+  if (nota > 0)  return { bg: 'rgba(239,68,68,0.12)', cor: '#ef4444' }
+  return { bg: 'transparent', cor: 'var(--text-muted)' }
+}
 
-  useEffect(() => {
-    getUsuarios().then(setUsuarios).catch(console.error)
-  }, [])
-
-  const pipeline = PIPELINE_EDITORAS
-  const total = 0
-
-  function tabStyle(ativa) {
-    return { padding:'10px 20px', background:'none', border:'none', cursor:'pointer', fontSize:13, fontWeight:700, color:ativa?'var(--accent)':'var(--text-muted)', borderBottom:`2px solid ${ativa?'var(--accent)':'transparent'}`, marginBottom:-1, transition:'all 0.15s' }
+export function corClassificacao(cls) {
+  const mapa = {
+    A: '#22c55e', B: '#84cc16', C: '#f59e0b',
+    D: '#fb923c', E: '#ef4444', F: '#6b7280',
   }
+  return mapa[cls] || 'var(--text-muted)'
+}
 
-  return (
-    <div>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20, flexWrap:'wrap', gap:12 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:14 }}>
-          <Building2 size={22} color="var(--accent)" />
-          <div>
-            <h1 className="page-title" style={{ margin:0 }}>CRM — Editoras Parceiras</h1>
-            <p style={{ fontSize:12, color:'var(--text-muted)', margin:0 }}>Prospecção, parceiros ativos e classificação</p>
-          </div>
-        </div>
-      </div>
+export async function getAtivacoesporMes() {
+  const { data, error } = await supabase
+    .from('editoras_crm_status_history')
+    .select('changed_at, status')
+    .eq('status', 'ativo')
+    .order('changed_at', { ascending: false })
+  if (error) throw error
 
-      <div style={{ display:'flex', gap:0, marginBottom:24, borderBottom:'1px solid var(--border)' }}>
-        {[
-          { v:'prospeccao', l:'Prospecção' },
-          { v:'ativos', l:'Parceiros ativos' },
-          { v:'desempenho', l:'Desempenho' },
-          { v:'classificacao', l:'Classificação' },
-        ].map(({ v, l }) => (
-          <button key={v} onClick={() => setAba(v)} style={tabStyle(aba===v)}>{l}</button>
-        ))}
-      </div>
-
-      {aba === 'prospeccao' && <AbaProspeccao pipeline={pipeline} usuarios={usuarios} toast={toast} showToast={showToast} />}
-      {aba === 'ativos' && <AbaParceirosAtivos />}
-      {aba === 'desempenho' && (
-        <div style={{ textAlign:'center', padding:'60px 0', color:'var(--text-muted)' }}>
-          <BarChart2 size={40} style={{ opacity:0.3, marginBottom:12 }} />
-          <p style={{ fontSize:14 }}>Em desenvolvimento</p>
-        </div>
-      )}
-      {aba === 'classificacao' && <AbaClassificacao />}
-
-      {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
-    </div>
-  )
+  const porMes = {}
+  for (const r of (data || [])) {
+    const d = new Date(r.changed_at)
+    const chave = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    porMes[chave] = (porMes[chave] || 0) + 1
+  }
+  return porMes
 }
