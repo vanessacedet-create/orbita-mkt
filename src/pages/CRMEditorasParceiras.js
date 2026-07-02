@@ -887,6 +887,7 @@ function ModalImportarVendas({ tipo, onClose, onImported, showToast }) {
 function AbaClassificacao() {
   const [subAba, setSubAba] = useState('editoras')
   const [periodoAba, setPeriodoAba] = useState('mensal') // 'mensal' | 'trimestral'
+  const [larguraColunaNome, setLarguraColunaNome] = useState(220)
   const [editoras, setEditoras] = useState([])
   const [livrarias, setLivrarias] = useState([])
   const [scoresEdMensal, setScoresEdMensal] = useState([])
@@ -926,6 +927,16 @@ function AbaClassificacao() {
 
   const mesesColunas = useMemo(() => getMesesDisponiveis(6).reverse(), [])
   const triColunas = useMemo(() => getTrimestresDisponiveis(4).reverse(), [])
+
+  function iniciarResize(e) {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = larguraColunaNome
+    function onMove(ev) { setLarguraColunaNome(Math.max(120, Math.min(400, startW + ev.clientX - startX))) }
+    function onUp() { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
 
   const editorasFiltradas = editoras.filter(e => !search || e.nome.toLowerCase().includes(search.toLowerCase()))
   const livrariasFiltradas = livrarias.filter(l => !search || l.nome.toLowerCase().includes(search.toLowerCase()))
@@ -970,7 +981,7 @@ function AbaClassificacao() {
           {periodoAba === 'mensal' && (
             <table style={{ width:'100%', borderCollapse:'collapse', minWidth:400 + mesesColunas.length * 90 }}>
               <thead><tr style={{ borderBottom:'1px solid var(--border)' }}>
-                <th style={{ padding:'10px 14px', textAlign:'left', fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', position:'sticky', left:0, background:'var(--surface)', zIndex:2, minWidth:220 }}>{subAba==='editoras'?'Editora':'Livraria'}</th>
+                <th style={{ padding:'10px 14px', textAlign:'left', fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', position:'sticky', left:0, background:'var(--surface)', zIndex:2, width:larguraColunaNome, minWidth:120, maxWidth:400 }}><div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}><span>{subAba==='editoras'?'Editora':'Livraria'}</span><div onMouseDown={iniciarResize} style={{ width:6, height:16, cursor:'col-resize', background:'var(--border)', borderRadius:3, flexShrink:0, marginLeft:8, opacity:0.6 }} onMouseEnter={e=>e.currentTarget.style.opacity='1'} onMouseLeave={e=>e.currentTarget.style.opacity='0.6'} /></div></th>
                 <th style={{ padding:'10px 14px', textAlign:'center', fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', minWidth:80 }}>Registrar</th>
                 {mesesColunas.map(({ mes:m, ano:a }) => <th key={`${a}-${m}`} style={{ padding:'10px 14px', textAlign:'center', fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', minWidth:80 }}>{mesAnoLabel(m,a)}</th>)}
               </tr></thead>
@@ -978,7 +989,7 @@ function AbaClassificacao() {
                 {subAba === 'editoras' && editorasFiltradas.map(e => {
                   const s = mapEdMensal[e.id]
                   return <tr key={e.id} style={{ borderBottom:'1px solid var(--border)' }} onMouseEnter={el => el.currentTarget.style.background='var(--surface-2)'} onMouseLeave={el => el.currentTarget.style.background='transparent'}>
-                    <td style={{ padding:'10px 14px', position:'sticky', left:0, background:'var(--surface)', zIndex:1 }}><div style={{ fontWeight:700, fontSize:13 }}>{e.nome}</div>{e.classificacao&&<div style={{ fontSize:11, color:'var(--text-muted)' }}>Classe {e.classificacao}</div>}</td>
+                    <td style={{ padding:'10px 14px', position:'sticky', left:0, background:'var(--surface)', zIndex:1, width:larguraColunaNome, maxWidth:400 }}><div style={{ fontWeight:700, fontSize:13 }}>{e.nome}</div>{e.classificacao&&<div style={{ fontSize:11, color:'var(--text-muted)' }}>Classe {e.classificacao}</div>}</td>
                     <td style={{ padding:'10px 14px', textAlign:'center' }}><button className="btn btn-ghost btn-sm" onClick={() => setModalEdMensal({ editora:e, score:s })}><Plus size={12} /></button></td>
                     {mesesColunas.map(({ mes:m, ano:a }) => <td key={`${a}-${m}`} style={{ padding:'10px 14px', textAlign:'center' }}><CirculoScore nota={a===ano&&m===mes?s?.score:null} size={32} /></td>)}
                   </tr>
@@ -986,7 +997,7 @@ function AbaClassificacao() {
                 {subAba === 'livrarias' && livrariasFiltradas.map(l => {
                   const s = mapLivMensal[l.id]
                   return <tr key={l.id} style={{ borderBottom:'1px solid var(--border)' }} onMouseEnter={el => el.currentTarget.style.background='var(--surface-2)'} onMouseLeave={el => el.currentTarget.style.background='transparent'}>
-                    <td style={{ padding:'10px 14px', position:'sticky', left:0, background:'var(--surface)', zIndex:1 }}><div style={{ fontWeight:700, fontSize:13 }}>{l.nome}</div>{l.editoras_parceiras?.nome&&<div style={{ fontSize:11, color:'var(--text-muted)' }}>{l.editoras_parceiras.nome}</div>}</td>
+                    <td style={{ padding:'10px 14px', position:'sticky', left:0, background:'var(--surface)', zIndex:1, width:larguraColunaNome, maxWidth:400 }}><div style={{ fontWeight:700, fontSize:13 }}>{l.nome}</div>{l.editoras_parceiras?.nome&&<div style={{ fontSize:11, color:'var(--text-muted)' }}>{l.editoras_parceiras.nome}</div>}</td>
                     <td style={{ padding:'10px 14px', textAlign:'center' }}><button className="btn btn-ghost btn-sm" onClick={() => setModalLivMensal({ livraria:l, score:s })}><Plus size={12} /></button></td>
                     {mesesColunas.map(({ mes:m, ano:a }) => <td key={`${a}-${m}`} style={{ padding:'10px 14px', textAlign:'center' }}><CirculoScore nota={a===ano&&m===mes?s?.score:null} size={32} /></td>)}
                   </tr>
@@ -999,7 +1010,7 @@ function AbaClassificacao() {
           {periodoAba === 'trimestral' && (
             <table style={{ width:'100%', borderCollapse:'collapse', minWidth:400 + triColunas.length * 100 }}>
               <thead><tr style={{ borderBottom:'1px solid var(--border)' }}>
-                <th style={{ padding:'10px 14px', textAlign:'left', fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', position:'sticky', left:0, background:'var(--surface)', zIndex:2, minWidth:220 }}>{subAba==='editoras'?'Editora':'Livraria'}</th>
+                <th style={{ padding:'10px 14px', textAlign:'left', fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', position:'sticky', left:0, background:'var(--surface)', zIndex:2, width:larguraColunaNome, minWidth:120, maxWidth:400 }}><div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}><span>{subAba==='editoras'?'Editora':'Livraria'}</span><div onMouseDown={iniciarResize} style={{ width:6, height:16, cursor:'col-resize', background:'var(--border)', borderRadius:3, flexShrink:0, marginLeft:8, opacity:0.6 }} onMouseEnter={e=>e.currentTarget.style.opacity='1'} onMouseLeave={e=>e.currentTarget.style.opacity='0.6'} /></div></th>
                 <th style={{ padding:'10px 14px', textAlign:'center', fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', minWidth:90 }}>Registrar</th>
                 {triColunas.map(({ trimestre:t, ano:a }) => <th key={`${a}-${t}`} style={{ padding:'10px 14px', textAlign:'center', fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', minWidth:100 }}>{TRIMESTRES_LABEL[t].split(' ')[0]} {a}</th>)}
               </tr></thead>
@@ -1007,7 +1018,7 @@ function AbaClassificacao() {
                 {subAba === 'editoras' && editorasFiltradas.map(e => {
                   const sTri = mapEdTri[e.id]
                   return <tr key={e.id} style={{ borderBottom:'1px solid var(--border)' }} onMouseEnter={el => el.currentTarget.style.background='var(--surface-2)'} onMouseLeave={el => el.currentTarget.style.background='transparent'}>
-                    <td style={{ padding:'10px 14px', position:'sticky', left:0, background:'var(--surface)', zIndex:1 }}><div style={{ fontWeight:700, fontSize:13 }}>{e.nome}</div>{sTri?.classificacao&&<BadgeClasse cls={sTri.classificacao} />}</td>
+                    <td style={{ padding:'10px 14px', position:'sticky', left:0, background:'var(--surface)', zIndex:1, width:larguraColunaNome, maxWidth:400 }}><div style={{ fontWeight:700, fontSize:13 }}>{e.nome}</div>{sTri?.classificacao&&<BadgeClasse cls={sTri.classificacao} />}</td>
                     <td style={{ padding:'10px 14px', textAlign:'center' }}><button className="btn btn-ghost btn-sm" onClick={() => setModalEdTri({ editora:e, score:sTri })}><Plus size={12} /></button></td>
                     {triColunas.map(({ trimestre:t, ano:a }) => {
                       const s = scoresEdTri.find(x => x.editora_id===e.id && x.trimestre===t && x.ano===a)
@@ -1020,7 +1031,7 @@ function AbaClassificacao() {
                 {subAba === 'livrarias' && livrariasFiltradas.map(l => {
                   const sTri = mapLivTri[l.id]
                   return <tr key={l.id} style={{ borderBottom:'1px solid var(--border)' }} onMouseEnter={el => el.currentTarget.style.background='var(--surface-2)'} onMouseLeave={el => el.currentTarget.style.background='transparent'}>
-                    <td style={{ padding:'10px 14px', position:'sticky', left:0, background:'var(--surface)', zIndex:1 }}><div style={{ fontWeight:700, fontSize:13 }}>{l.nome}</div>{l.editoras_parceiras?.nome&&<div style={{ fontSize:11, color:'var(--text-muted)' }}>{l.editoras_parceiras.nome}</div>}{sTri?.classificacao&&<BadgeClasse cls={sTri.classificacao} />}</td>
+                    <td style={{ padding:'10px 14px', position:'sticky', left:0, background:'var(--surface)', zIndex:1, width:larguraColunaNome, maxWidth:400 }}><div style={{ fontWeight:700, fontSize:13 }}>{l.nome}</div>{l.editoras_parceiras?.nome&&<div style={{ fontSize:11, color:'var(--text-muted)' }}>{l.editoras_parceiras.nome}</div>}{sTri?.classificacao&&<BadgeClasse cls={sTri.classificacao} />}</td>
                     <td style={{ padding:'10px 14px', textAlign:'center' }}><button className="btn btn-ghost btn-sm" onClick={() => setModalLivTri({ livraria:l, score:sTri })}><Plus size={12} /></button></td>
                     {triColunas.map(({ trimestre:t, ano:a }) => {
                       const s = scoresLivTri.find(x => x.livraria_id===l.id && x.trimestre===t && x.ano===a)
