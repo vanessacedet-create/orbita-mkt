@@ -582,15 +582,19 @@ export default function MonitoramentoParceiras() {
   function getObsFormato(aba,fmt){return obsMap[obsKey(aba,fmt)]||{}}
   function setObsFormato(aba,fmt,mapa){setObsMap(prev=>({...prev,[obsKey(aba,fmt)]:mapa}))}
 
-  // Carrega observações quando aba+formato mudam
+  // Carrega obs fixas — tenta nova chave, se vazio usa chave antiga (retrocompatibilidade)
   useEffect(()=>{
-    // Para parceiras: chave = `parceiras_${formatoSel}`
     const k=obsKey('parceiras',formatoSel)
     if(!obsMap[k]){
       getObsFormatoLote(`parceiras_${formatoSel}`).then(mapa=>{
-        setObsMap(prev=>({...prev,[k]:mapa}))
+        if(Object.keys(mapa).length>0){
+          setObsMap(prev=>({...prev,[k]:mapa}))
+        } else {
+          getObsFormatoLote(formatoSel).then(mapaAntigo=>{
+            setObsMap(prev=>({...prev,[k]:mapaAntigo}))
+          }).catch(console.error)
+        }
       }).catch(()=>{
-        // Fallback: tenta sem prefixo (retrocompatibilidade)
         getObsFormatoLote(formatoSel).then(mapa=>setObsMap(prev=>({...prev,[k]:mapa}))).catch(console.error)
       })
     }
@@ -601,7 +605,13 @@ export default function MonitoramentoParceiras() {
     const k=obsKey('cedet',formatoCriativoSel)
     if(!obsMap[k]){
       getObsFormatoLote(`cedet_${formatoCriativoSel}`).then(mapa=>{
-        setObsMap(prev=>({...prev,[k]:mapa}))
+        if(Object.keys(mapa).length>0){
+          setObsMap(prev=>({...prev,[k]:mapa}))
+        } else {
+          getObsFormatoLote(formatoCriativoSel).then(mapaAntigo=>{
+            setObsMap(prev=>({...prev,[k]:mapaAntigo}))
+          }).catch(console.error)
+        }
       }).catch(()=>{
         getObsFormatoLote(formatoCriativoSel).then(mapa=>setObsMap(prev=>({...prev,[k]:mapa}))).catch(console.error)
       })
