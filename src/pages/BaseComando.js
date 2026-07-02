@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
 // ⚠️ TROQUE pelo SEU e-mail de login no Orbita (só você acessa esta tela)
-const DONO_EMAIL = 'vanessa@cedet.com.br'
+const DONO_EMAIL = 'SEU-EMAIL@cedet.com.br'
 
 // ── Paleta / helpers de estilo ──────────────────────────────────
 const CORES_PROJETO = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6']
@@ -16,14 +16,14 @@ const PROJ_STATUS  = { ativo: 'Ativo', pausado: 'Pausado', concluido: 'Concluíd
 const fmtData = (d) => (d ? new Date(d + 'T00:00:00').toLocaleDateString('pt-BR') : null)
 
 const s = {
-  page:    { padding: 24, maxWidth: 1100, margin: '0 auto' },
-  h1:      { fontSize: 24, fontWeight: 700, margin: 0, color: '#0f172a' },
-  sub:     { color: '#64748b', marginTop: 4, fontSize: 14 },
-  btn:     { background: '#6366f1', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 14, fontWeight: 600, cursor: 'pointer' },
-  btnGhost:{ background: '#fff', color: '#334155', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 14px', fontSize: 14, cursor: 'pointer' },
-  card:    { background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16, marginBottom: 16 },
-  input:   { width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 14, boxSizing: 'border-box' },
-  label:   { fontSize: 13, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4, marginTop: 10 },
+  page:    { padding: 24, maxWidth: 1100, margin: '0 auto', color: 'var(--text, #e5e7eb)' },
+  h1:      { fontSize: 24, fontWeight: 700, margin: 0, color: 'var(--text, #f1f5f9)' },
+  sub:     { color: 'var(--text-muted, #94a3b8)', marginTop: 4, fontSize: 14 },
+  btn:     { background: 'var(--accent, #6366f1)', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 16px', fontSize: 14, fontWeight: 600, cursor: 'pointer' },
+  btnGhost:{ background: 'var(--card-bg, rgba(255,255,255,0.04))', color: 'var(--text, #e5e7eb)', border: '1px solid var(--border, rgba(255,255,255,0.12))', borderRadius: 8, padding: '8px 14px', fontSize: 14, cursor: 'pointer' },
+  card:    { background: 'var(--card-bg, rgba(255,255,255,0.03))', border: '1px solid var(--border, rgba(255,255,255,0.10))', borderRadius: 12, padding: 16, marginBottom: 16 },
+  input:   { width: '100%', padding: '9px 12px', border: '1px solid var(--border, rgba(255,255,255,0.15))', borderRadius: 8, fontSize: 14, boxSizing: 'border-box', background: 'var(--input-bg, rgba(255,255,255,0.05))', color: 'var(--text, #e5e7eb)' },
+  label:   { fontSize: 13, fontWeight: 600, color: 'var(--text-muted, #cbd5e1)', display: 'block', marginBottom: 4, marginTop: 10 },
   badge:   (bg) => ({ background: bg, color: '#fff', borderRadius: 999, padding: '2px 10px', fontSize: 11, fontWeight: 600 }),
   chip:    (c) => ({ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: c, marginRight: 8 }),
 }
@@ -98,10 +98,10 @@ export default function BaseComando() {
   const porProjeto = (pid) => tarefasFiltradas.filter((t) => t.projeto_id === pid)
 
   // ── Estados de acesso ─────────────────────────────────────────
-  if (autorizada === null) return <div style={s.page}><p style={{ color: '#64748b' }}>Verificando acesso…</p></div>
+  if (autorizada === null) return <div style={s.page}><p style={{ color: 'var(--text-muted, #94a3b8)' }}>Verificando acesso…</p></div>
   if (!autorizada) return (
     <div style={s.page}>
-      <div style={{ ...s.card, textAlign: 'center', color: '#94a3b8' }}>
+      <div style={{ ...s.card, textAlign: 'center', color: 'var(--text-muted, #94a3b8)' }}>
         <div style={{ fontSize: 40 }}>🔒</div>
         <p>Esta é uma área privada da Base de Comando.</p>
       </div>
@@ -129,11 +129,11 @@ export default function BaseComando() {
       </div>
 
       {carregando ? (
-        <p style={{ color: '#64748b' }}>Carregando…</p>
+        <p style={{ color: 'var(--text-muted, #94a3b8)' }}>Carregando…</p>
       ) : (
         <>
           {projetos.length === 0 && (
-            <div style={{ ...s.card, textAlign: 'center', color: '#94a3b8' }}>
+            <div style={{ ...s.card, textAlign: 'center', color: 'var(--text-muted, #94a3b8)' }}>
               Nenhum projeto ainda. Crie o primeiro em <b>+ Projeto</b>.
             </div>
           )}
@@ -146,22 +146,22 @@ export default function BaseComando() {
               <div key={p.id} style={{ ...s.card, borderLeft: `4px solid ${p.cor || '#6366f1'}` }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                   <div>
-                    <span style={{ fontSize: 17, fontWeight: 700, color: '#0f172a' }}>
+                    <span style={{ fontSize: 17, fontWeight: 700, color: 'var(--text, #f1f5f9)' }}>
                       <span style={s.chip(p.cor || '#6366f1')} />{p.nome}
                     </span>
-                    <span style={{ marginLeft: 10, ...s.badge('#e2e8f0'), color: '#475569' }}>{PROJ_STATUS[p.status]}</span>
-                    {p.prazo && <span style={{ marginLeft: 8, fontSize: 12, color: '#64748b' }}>prazo {fmtData(p.prazo)}</span>}
+                    <span style={{ marginLeft: 10, ...s.badge('#e2e8f0'), color: 'var(--text-muted, #cbd5e1)' }}>{PROJ_STATUS[p.status]}</span>
+                    {p.prazo && <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted, #94a3b8)' }}>prazo {fmtData(p.prazo)}</span>}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span style={{ fontSize: 12, color: '#64748b' }}>{feitas}/{total} concluídas</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted, #94a3b8)' }}>{feitas}/{total} concluídas</span>
                     <button style={{ ...s.btnGhost, padding: '4px 10px', color: '#ef4444' }} onClick={() => excluirProjeto(p.id)}>excluir</button>
                   </div>
                 </div>
-                {p.descricao && <p style={{ color: '#64748b', fontSize: 13, margin: '6px 0 0 18px' }}>{p.descricao}</p>}
+                {p.descricao && <p style={{ color: 'var(--text-muted, #94a3b8)', fontSize: 13, margin: '6px 0 0 18px' }}>{p.descricao}</p>}
 
                 <div style={{ marginTop: 12 }}>
                   {ts.length === 0
-                    ? <p style={{ color: '#cbd5e1', fontSize: 13, marginLeft: 18 }}>Sem tarefas neste filtro.</p>
+                    ? <p style={{ color: 'var(--text-muted, #64748b)', fontSize: 13, marginLeft: 18 }}>Sem tarefas neste filtro.</p>
                     : ts.map((t) => <LinhaTarefa key={t.id} t={t} onToggle={toggleConcluida} onStatus={mudarStatus} onDelete={excluirTarefa} />)}
                 </div>
               </div>
@@ -169,10 +169,10 @@ export default function BaseComando() {
           })}
 
           <div style={{ ...s.card, borderLeft: '4px dashed #cbd5e1' }}>
-            <div style={{ fontSize: 17, fontWeight: 700, color: '#475569' }}>Demandas avulsas</div>
-            <p style={{ color: '#94a3b8', fontSize: 13, margin: '2px 0 10px' }}>Tarefas que não pertencem a nenhum projeto.</p>
+            <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-muted, #cbd5e1)' }}>Demandas avulsas</div>
+            <p style={{ color: 'var(--text-muted, #94a3b8)', fontSize: 13, margin: '2px 0 10px' }}>Tarefas que não pertencem a nenhum projeto.</p>
             {avulsas.length === 0
-              ? <p style={{ color: '#cbd5e1', fontSize: 13 }}>Nenhuma demanda avulsa neste filtro.</p>
+              ? <p style={{ color: 'var(--text-muted, #64748b)', fontSize: 13 }}>Nenhuma demanda avulsa neste filtro.</p>
               : avulsas.map((t) => <LinhaTarefa key={t.id} t={t} onToggle={toggleConcluida} onStatus={mudarStatus} onDelete={excluirTarefa} />)}
           </div>
         </>
@@ -188,18 +188,18 @@ export default function BaseComando() {
 function LinhaTarefa({ t, onToggle, onStatus, onDelete }) {
   const feita = t.status === 'concluida'
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: '1px solid #f1f5f9' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderTop: '1px solid var(--border, rgba(255,255,255,0.08))' }}>
       <input type="checkbox" checked={feita} onChange={() => onToggle(t)} style={{ width: 18, height: 18, cursor: 'pointer' }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14, color: feita ? '#94a3b8' : '#0f172a', textDecoration: feita ? 'line-through' : 'none' }}>{t.titulo}</div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
           <span style={s.badge(PRIO_COR[t.prioridade])}>{PRIO_LABEL[t.prioridade]}</span>
-          {t.responsavel && <span style={{ fontSize: 11, color: '#64748b' }}>👤 {t.responsavel}</span>}
-          {t.prazo && <span style={{ fontSize: 11, color: '#64748b' }}>📅 {fmtData(t.prazo)}</span>}
+          {t.responsavel && <span style={{ fontSize: 11, color: 'var(--text-muted, #94a3b8)' }}>👤 {t.responsavel}</span>}
+          {t.prazo && <span style={{ fontSize: 11, color: 'var(--text-muted, #94a3b8)' }}>📅 {fmtData(t.prazo)}</span>}
         </div>
       </div>
       <select value={t.status} onChange={(e) => onStatus(t, e.target.value)}
-        style={{ border: `1px solid ${STATUS_COR[t.status]}`, color: STATUS_COR[t.status], borderRadius: 8, padding: '4px 8px', fontSize: 12, fontWeight: 600, background: '#fff' }}>
+        style={{ border: `1px solid ${STATUS_COR[t.status]}`, color: STATUS_COR[t.status], borderRadius: 8, padding: '4px 8px', fontSize: 12, fontWeight: 600, background: 'var(--card-bg, rgba(255,255,255,0.05))' }}>
         {Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
       </select>
       <button onClick={() => onDelete(t.id)} style={{ ...s.btnGhost, padding: '4px 10px', color: '#ef4444' }}>×</button>
@@ -287,8 +287,8 @@ function ModalTarefa({ projetos, onClose, onSaved }) {
 function Overlay({ titulo, children, onClose }) {
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 24, width: 480, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
-        <h2 style={{ margin: 0, fontSize: 19, color: '#0f172a' }}>{titulo}</h2>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: 'var(--modal-bg, #1a1a2e)', borderRadius: 14, padding: 24, width: 480, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+        <h2 style={{ margin: 0, fontSize: 19, color: 'var(--text, #f1f5f9)' }}>{titulo}</h2>
         {children}
       </div>
     </div>
