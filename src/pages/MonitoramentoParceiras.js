@@ -97,7 +97,6 @@ function BotaoFormato({ label, ativo, onClick }) {
   )
 }
 
-// ── SELETOR DE DIAS COMPACTO ───────────────────────────────
 function SeletorDiasCompacto({ dias, mes, ano, dataSel, onSelect, indicadores }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 20, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 20px', marginBottom: 16, overflowX: 'auto' }}>
@@ -136,16 +135,13 @@ function SeletorDiasCompacto({ dias, mes, ano, dataSel, onSelect, indicadores })
   )
 }
 
-// ── MODAL SELETOR DE LIVRARIAS ─────────────────────────────
 function ModalSeletorLivrarias({ livrarias, selecionadas, titulo, onConfirm, onClose }) {
   const [sel, setSel] = useState(new Set(selecionadas))
-
   function toggle(id) { setSel(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n }) }
   function toggleAll() {
     if (sel.size === livrarias.length) setSel(new Set())
     else setSel(new Set(livrarias.map(l => l.id)))
   }
-
   return (
     <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{ maxWidth: 420, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
@@ -178,7 +174,6 @@ function ModalSeletorLivrarias({ livrarias, selecionadas, titulo, onConfirm, onC
   )
 }
 
-// ── MODAL EDITORA ──────────────────────────────────────────
 function ModalEditora({ editora, onSave, onClose }) {
   const [form, setForm] = useState({ nome: editora?.nome || '', contato: editora?.contato || '', instagram: editora?.instagram || '' })
   const [saving, setSaving] = useState(false)
@@ -212,7 +207,6 @@ function ModalEditora({ editora, onSave, onClose }) {
   )
 }
 
-// ── MODAL IMPORTAR ─────────────────────────────────────────
 function ModalImportar({ onClose, onImported }) {
   const fileRef = useRef()
   const [linhas, setLinhas] = useState([])
@@ -287,7 +281,6 @@ function ModalImportar({ onClose, onImported }) {
   )
 }
 
-// ── PAINEL LATERAL ─────────────────────────────────────────
 function PainelEditora({ editora, checkagemMes, ano, mes, usuario, onClose }) {
   const [obs, setObs] = useState([])
   const [loadingObs, setLoadingObs] = useState(true)
@@ -390,7 +383,6 @@ function PainelEditora({ editora, checkagemMes, ano, mes, usuario, onClose }) {
   )
 }
 
-// ── CHECKLIST LIVRARIAS DE ED. PARCEIRAS ───────────────────
 function ViewChecklistParceiras({ livrarias, checkagemMes, formato, dataKey, onMarcar, onSalvarObsFixa, obsFormato }) {
   const registrosDoDia = checkagemMes.filter(r => r.formato === formato && r.data_esperada === dataKey)
   const mapa = {}
@@ -405,12 +397,7 @@ function ViewChecklistParceiras({ livrarias, checkagemMes, formato, dataKey, onM
   return (
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: '180px 110px 110px 1fr 1fr auto', gap: 8, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
-        <span>Livraria</span>
-        <span>Instagram</span>
-        <span>Instagram 2</span>
-        <span>Observações</span>
-        <span>Notas</span>
-        <span style={{ minWidth: 220 }}>Status</span>
+        <span>Livraria</span><span>Instagram</span><span>Instagram 2</span><span>Observações</span><span>Notas</span><span style={{ minWidth: 220 }}>Status</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         {livrarias.map(livraria => {
@@ -421,68 +408,33 @@ function ViewChecklistParceiras({ livrarias, checkagemMes, formato, dataKey, onM
           const obsFixa = obsFormato?.[livraria.id] || ''
           const editandoObsFixa = obsFixaAberta === livraria.id
           const editandoNota = notaAberta === livraria.id
-
           return (
             <div key={livraria.id}>
               <div style={{ display: 'grid', gridTemplateColumns: '180px 110px 110px 1fr 1fr auto', gap: 8, alignItems: 'center', padding: '7px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: (editandoObsFixa || editandoNota) ? '8px 8px 0 0' : 8 }}>
-                {/* Livraria */}
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={livraria.nome}>
-                  {livraria.nome}
-                </div>
-                {/* Instagram */}
-                <div style={{ fontSize: 12 }}>
-                  {livraria.instagram
-                    ? <a href={`https://instagram.com/${livraria.instagram.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 3 }}><Instagram size={10}/>{livraria.instagram}</a>
-                    : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>
-                  }
-                </div>
-                {/* Instagram 2 */}
-                <div style={{ fontSize: 12 }}>
-                  {livraria.instagram2
-                    ? <a href={`https://instagram.com/${livraria.instagram2.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 3 }}><Instagram size={10}/>{livraria.instagram2}</a>
-                    : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>
-                  }
-                </div>
-                <div style={{ fontSize: 12, color: obsFixa ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                  onClick={() => { setObsFixaAberta(editandoObsFixa ? null : livraria.id); setTextoObsFixa(obsFixa); setNotaAberta(null) }}
-                  title={obsFixa || 'Clique para adicionar observação fixa'}>
-                  {obsFixa || <span style={{ fontSize: 11, fontStyle: 'italic' }}>Adicionar...</span>}
-                </div>
-                {/* Notas — do dia */}
-                <div style={{ fontSize: 12, color: nota ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                  onClick={() => { setNotaAberta(editandoNota ? null : livraria.id); setTextoNota(nota); setObsFixaAberta(null) }}
-                  title={nota || 'Clique para adicionar nota do dia'}>
-                  {nota || <span style={{ fontSize: 11, fontStyle: 'italic' }}>Adicionar...</span>}
-                </div>
-                {/* Botões */}
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={livraria.nome}>{livraria.nome}</div>
+                <div style={{ fontSize: 12 }}>{livraria.instagram ? <a href={`https://instagram.com/${livraria.instagram.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 3 }}><Instagram size={10}/>{livraria.instagram}</a> : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>}</div>
+                <div style={{ fontSize: 12 }}>{livraria.instagram2 ? <a href={`https://instagram.com/${livraria.instagram2.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 3 }}><Instagram size={10}/>{livraria.instagram2}</a> : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>}</div>
+                <div style={{ fontSize: 12, color: obsFixa ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} onClick={() => { setObsFixaAberta(editandoObsFixa ? null : livraria.id); setTextoObsFixa(obsFixa); setNotaAberta(null) }} title={obsFixa || 'Clique para adicionar observação fixa'}>{obsFixa || <span style={{ fontSize: 11, fontStyle: 'italic' }}>Adicionar...</span>}</div>
+                <div style={{ fontSize: 12, color: nota ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} onClick={() => { setNotaAberta(editandoNota ? null : livraria.id); setTextoNota(nota); setObsFixaAberta(null) }} title={nota || 'Clique para adicionar nota do dia'}>{nota || <span style={{ fontSize: 11, fontStyle: 'italic' }}>Adicionar...</span>}</div>
                 <div style={{ display: 'flex', gap: 5 }}>
                   {STATUS_PARCEIRAS.map(s => (
-                    <button key={s.value}
-                      onClick={() => onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status === s.value ? null : s.value, observacao: nota })}
-                      style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `2px solid ${s.cor}`, background: status === s.value ? s.cor : 'transparent', color: status === s.value ? '#fff' : s.cor, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
-                      {s.label}
-                    </button>
+                    <button key={s.value} onClick={() => onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status === s.value ? null : s.value, observacao: nota })}
+                      style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `2px solid ${s.cor}`, background: status === s.value ? s.cor : 'transparent', color: status === s.value ? '#fff' : s.cor, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>{s.label}</button>
                   ))}
                 </div>
               </div>
-              {/* Editor de Observação fixa */}
               {editandoObsFixa && (
                 <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px 12px', display: 'flex', gap: 8, alignItems: 'center' }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>Observação fixa:</span>
-                  <input className="form-input" style={{ flex: 1, fontSize: 12 }} value={textoObsFixa} onChange={e => setTextoObsFixa(e.target.value)}
-                    placeholder="Observação permanente da livraria..." autoFocus
-                    onKeyDown={e => { if (e.key === 'Enter') { onSalvarObsFixa(livraria.id, textoObsFixa); setObsFixaAberta(null) } if (e.key === 'Escape') setObsFixaAberta(null) }} />
+                  <input className="form-input" style={{ flex: 1, fontSize: 12 }} value={textoObsFixa} onChange={e => setTextoObsFixa(e.target.value)} placeholder="Observação permanente da livraria..." autoFocus onKeyDown={e => { if (e.key === 'Enter') { onSalvarObsFixa(livraria.id, textoObsFixa); setObsFixaAberta(null) } if (e.key === 'Escape') setObsFixaAberta(null) }} />
                   <button className="btn btn-primary btn-sm" onClick={() => { onSalvarObsFixa(livraria.id, textoObsFixa); setObsFixaAberta(null) }}>Salvar</button>
                   <button className="btn btn-ghost btn-sm" onClick={() => setObsFixaAberta(null)}>Cancelar</button>
                 </div>
               )}
-              {/* Editor de Nota do dia */}
               {editandoNota && (
                 <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px 12px', display: 'flex', gap: 8, alignItems: 'center' }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0 }}>Nota do dia:</span>
-                  <input className="form-input" style={{ flex: 1, fontSize: 12 }} value={textoNota} onChange={e => setTextoNota(e.target.value)}
-                    placeholder="O que aconteceu hoje..." autoFocus
-                    onKeyDown={e => { if (e.key === 'Enter') { onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status || 'pendente', observacao: textoNota }); setNotaAberta(null) } if (e.key === 'Escape') setNotaAberta(null) }} />
+                  <input className="form-input" style={{ flex: 1, fontSize: 12 }} value={textoNota} onChange={e => setTextoNota(e.target.value)} placeholder="O que aconteceu hoje..." autoFocus onKeyDown={e => { if (e.key === 'Enter') { onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status || 'pendente', observacao: textoNota }); setNotaAberta(null) } if (e.key === 'Escape') setNotaAberta(null) }} />
                   <button className="btn btn-primary btn-sm" onClick={() => { onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status || 'pendente', observacao: textoNota }); setNotaAberta(null) }}>Salvar</button>
                   <button className="btn btn-ghost btn-sm" onClick={() => setNotaAberta(null)}>Cancelar</button>
                 </div>
@@ -495,7 +447,6 @@ function ViewChecklistParceiras({ livrarias, checkagemMes, formato, dataKey, onM
   )
 }
 
-// ── CHECKLIST EQUIPE CEDET ─────────────────────────────────
 function ViewChecklistCriativo({ livrarias, checkagemCriativo, formato, dataKey, onMarcar, onSalvarObsFixa, obsFormato }) {
   const registrosDoDia = checkagemCriativo.filter(r => r.formato === formato && r.data_esperada === dataKey)
   const mapa = {}
@@ -510,13 +461,7 @@ function ViewChecklistCriativo({ livrarias, checkagemCriativo, formato, dataKey,
   return (
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: '180px 110px 110px 1fr 1fr 130px auto', gap: 8, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
-        <span>Livraria</span>
-        <span>Instagram</span>
-        <span>Instagram 2</span>
-        <span>Observações</span>
-        <span>Notas</span>
-        <span>Responsável</span>
-        <span style={{ minWidth: 240 }}>Status</span>
+        <span>Livraria</span><span>Instagram</span><span>Instagram 2</span><span>Observações</span><span>Notas</span><span>Responsável</span><span style={{ minWidth: 240 }}>Status</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         {livrarias.map(livraria => {
@@ -528,53 +473,30 @@ function ViewChecklistCriativo({ livrarias, checkagemCriativo, formato, dataKey,
           const obsFixa = obsFormato?.[livraria.id] || ''
           const editandoObsFixa = obsFixaAberta === livraria.id
           const editandoNota = notaAberta === livraria.id
-
           return (
             <div key={livraria.id}>
               <div style={{ display: 'grid', gridTemplateColumns: '180px 110px 110px 1fr 1fr 130px auto', gap: 8, alignItems: 'center', padding: '7px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: (editandoObsFixa || editandoNota) ? '8px 8px 0 0' : 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={livraria.nome}>{livraria.nome}</div>
-                <div style={{ fontSize: 12 }}>
-                  {livraria.instagram
-                    ? <a href={`https://instagram.com/${livraria.instagram.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 3 }}><Instagram size={10}/>{livraria.instagram}</a>
-                    : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>}
-                </div>
-                <div style={{ fontSize: 12 }}>
-                  {livraria.instagram2
-                    ? <a href={`https://instagram.com/${livraria.instagram2.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 3 }}><Instagram size={10}/>{livraria.instagram2}</a>
-                    : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>}
-                </div>
-                <div style={{ fontSize: 12, color: obsFixa ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                  onClick={() => { setObsFixaAberta(editandoObsFixa ? null : livraria.id); setTextoObsFixa(obsFixa); setNotaAberta(null) }}
-                  title={obsFixa || 'Clique para adicionar observação fixa'}>
-                  {obsFixa || <span style={{ fontSize: 11, fontStyle: 'italic' }}>Adicionar...</span>}
-                </div>
-                <div style={{ fontSize: 12, color: nota ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                  onClick={() => { setNotaAberta(editandoNota ? null : livraria.id); setTextoNota(nota); setObsFixaAberta(null) }}
-                  title={nota || 'Clique para adicionar nota do dia'}>
-                  {nota || <span style={{ fontSize: 11, fontStyle: 'italic' }}>Adicionar...</span>}
-                </div>
-                <select value={responsavel}
-                  onChange={e => onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status || 'pendente', responsavel: e.target.value })}
+                <div style={{ fontSize: 12 }}>{livraria.instagram ? <a href={`https://instagram.com/${livraria.instagram.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 3 }}><Instagram size={10}/>{livraria.instagram}</a> : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>}</div>
+                <div style={{ fontSize: 12 }}>{livraria.instagram2 ? <a href={`https://instagram.com/${livraria.instagram2.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 3 }}><Instagram size={10}/>{livraria.instagram2}</a> : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>}</div>
+                <div style={{ fontSize: 12, color: obsFixa ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} onClick={() => { setObsFixaAberta(editandoObsFixa ? null : livraria.id); setTextoObsFixa(obsFixa); setNotaAberta(null) }} title={obsFixa || 'Clique para adicionar observação fixa'}>{obsFixa || <span style={{ fontSize: 11, fontStyle: 'italic' }}>Adicionar...</span>}</div>
+                <div style={{ fontSize: 12, color: nota ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} onClick={() => { setNotaAberta(editandoNota ? null : livraria.id); setTextoNota(nota); setObsFixaAberta(null) }} title={nota || 'Clique para adicionar nota do dia'}>{nota || <span style={{ fontSize: 11, fontStyle: 'italic' }}>Adicionar...</span>}</div>
+                <select value={responsavel} onChange={e => onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status || 'pendente', responsavel: e.target.value })}
                   style={{ padding: '4px 8px', borderRadius: 8, fontSize: 12, border: '1px solid var(--border)', background: responsavel ? 'var(--accent-glow)' : 'var(--surface-2)', color: responsavel ? 'var(--accent)' : 'var(--text-muted)', fontWeight: responsavel ? 700 : 400, cursor: 'pointer' }}>
                   <option value="">Responsável...</option>
                   {EQUIPE.map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
                 <div style={{ display: 'flex', gap: 5 }}>
                   {STATUS_CRIATIVO.map(s => (
-                    <button key={s.value}
-                      onClick={() => onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status === s.value ? null : s.value, responsavel })}
-                      style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `2px solid ${s.cor}`, background: status === s.value ? s.cor : 'transparent', color: status === s.value ? '#fff' : s.cor, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
-                      {s.label}
-                    </button>
+                    <button key={s.value} onClick={() => onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status === s.value ? null : s.value, responsavel })}
+                      style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `2px solid ${s.cor}`, background: status === s.value ? s.cor : 'transparent', color: status === s.value ? '#fff' : s.cor, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>{s.label}</button>
                   ))}
                 </div>
               </div>
               {editandoObsFixa && (
                 <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px 12px', display: 'flex', gap: 8, alignItems: 'center' }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>Observação fixa:</span>
-                  <input className="form-input" style={{ flex: 1, fontSize: 12 }} value={textoObsFixa} onChange={e => setTextoObsFixa(e.target.value)}
-                    placeholder="Observação permanente da livraria..." autoFocus
-                    onKeyDown={e => { if (e.key === 'Enter') { onSalvarObsFixa(livraria.id, textoObsFixa); setObsFixaAberta(null) } if (e.key === 'Escape') setObsFixaAberta(null) }} />
+                  <input className="form-input" style={{ flex: 1, fontSize: 12 }} value={textoObsFixa} onChange={e => setTextoObsFixa(e.target.value)} placeholder="Observação permanente da livraria..." autoFocus onKeyDown={e => { if (e.key === 'Enter') { onSalvarObsFixa(livraria.id, textoObsFixa); setObsFixaAberta(null) } if (e.key === 'Escape') setObsFixaAberta(null) }} />
                   <button className="btn btn-primary btn-sm" onClick={() => { onSalvarObsFixa(livraria.id, textoObsFixa); setObsFixaAberta(null) }}>Salvar</button>
                   <button className="btn btn-ghost btn-sm" onClick={() => setObsFixaAberta(null)}>Cancelar</button>
                 </div>
@@ -582,9 +504,7 @@ function ViewChecklistCriativo({ livrarias, checkagemCriativo, formato, dataKey,
               {editandoNota && (
                 <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '8px 12px', display: 'flex', gap: 8, alignItems: 'center' }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0 }}>Nota do dia:</span>
-                  <input className="form-input" style={{ flex: 1, fontSize: 12 }} value={textoNota} onChange={e => setTextoNota(e.target.value)}
-                    placeholder="O que aconteceu hoje..." autoFocus
-                    onKeyDown={e => { if (e.key === 'Enter') { onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status || 'pendente', responsavel, observacao: textoNota }); setNotaAberta(null) } if (e.key === 'Escape') setNotaAberta(null) }} />
+                  <input className="form-input" style={{ flex: 1, fontSize: 12 }} value={textoNota} onChange={e => setTextoNota(e.target.value)} placeholder="O que aconteceu hoje..." autoFocus onKeyDown={e => { if (e.key === 'Enter') { onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status || 'pendente', responsavel, observacao: textoNota }); setNotaAberta(null) } if (e.key === 'Escape') setNotaAberta(null) }} />
                   <button className="btn btn-primary btn-sm" onClick={() => { onMarcar({ editora: { id: chaveId }, formato, dataKey, status: status || 'pendente', responsavel, observacao: textoNota }); setNotaAberta(null) }}>Salvar</button>
                   <button className="btn btn-ghost btn-sm" onClick={() => setNotaAberta(null)}>Cancelar</button>
                 </div>
@@ -597,45 +517,30 @@ function ViewChecklistCriativo({ livrarias, checkagemCriativo, formato, dataKey,
   )
 }
 
-
-// ── EMAIL REVENDAS — LINHA ÚNICA ───────────────────────────
-function ViewEmailRevenda({ dataKey, onMarcarRevenda }) {
+function ViewEmailRevenda({ dataKey }) {
   const storageKey = `email_revenda_${dataKey}`
-  const [status, setStatus] = useState(() => {
-    try { const s = localStorage.getItem(storageKey); return s ? JSON.parse(s).status : null } catch { return null }
-  })
-  const [responsavel, setResponsavel] = useState(() => {
-    try { const s = localStorage.getItem(storageKey); return s ? JSON.parse(s).responsavel : '' } catch { return '' }
-  })
-
+  const [status, setStatus] = useState(() => { try { const s = localStorage.getItem(storageKey); return s ? JSON.parse(s).status : null } catch { return null } })
+  const [responsavel, setResponsavel] = useState(() => { try { const s = localStorage.getItem(storageKey); return s ? JSON.parse(s).responsavel : '' } catch { return '' } })
   function salvar(novoStatus, novoResponsavel) {
     try { localStorage.setItem(storageKey, JSON.stringify({ status: novoStatus, responsavel: novoResponsavel })) } catch {}
-    setStatus(novoStatus)
-    setResponsavel(novoResponsavel)
+    setStatus(novoStatus); setResponsavel(novoResponsavel)
   }
-
   return (
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px auto', gap: 8, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
-        <span>Destino</span>
-        <span>Responsável</span>
-        <span style={{ minWidth: 240 }}>Status</span>
+        <span>Destino</span><span>Responsável</span><span style={{ minWidth: 240 }}>Status</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px auto', gap: 8, alignItems: 'center', padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>E-mail Revendas</div>
-        <select value={responsavel}
-          onChange={e => salvar(status, e.target.value)}
+        <select value={responsavel} onChange={e => salvar(status, e.target.value)}
           style={{ padding: '4px 8px', borderRadius: 8, fontSize: 12, border: '1px solid var(--border)', background: responsavel ? 'var(--accent-glow)' : 'var(--surface-2)', color: responsavel ? 'var(--accent)' : 'var(--text-muted)', fontWeight: responsavel ? 700 : 400, cursor: 'pointer' }}>
           <option value="">Responsável...</option>
           {EQUIPE.map(n => <option key={n} value={n}>{n}</option>)}
         </select>
         <div style={{ display: 'flex', gap: 5 }}>
           {STATUS_CRIATIVO.map(s => (
-            <button key={s.value}
-              onClick={() => salvar(status === s.value ? null : s.value, responsavel)}
-              style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `2px solid ${s.cor}`, background: status === s.value ? s.cor : 'transparent', color: status === s.value ? '#fff' : s.cor, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
-              {s.label}
-            </button>
+            <button key={s.value} onClick={() => salvar(status === s.value ? null : s.value, responsavel)}
+              style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `2px solid ${s.cor}`, background: status === s.value ? s.cor : 'transparent', color: status === s.value ? '#fff' : s.cor, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>{s.label}</button>
           ))}
         </div>
       </div>
@@ -643,7 +548,6 @@ function ViewEmailRevenda({ dataKey, onMarcarRevenda }) {
   )
 }
 
-// ── DASHBOARD ──────────────────────────────────────────────
 function ViewDashboard({ livrarias, checkagemMes }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
@@ -686,30 +590,20 @@ function ViewDashboard({ livrarias, checkagemMes }) {
   )
 }
 
-// ── PÁGINA PRINCIPAL ───────────────────────────────────────
 export default function MonitoramentoParceiras() {
   const { usuario } = useAuth()
   const isAdmin = usuario?.perfil === 'administrador' || usuario?.perfil === 'gerente' || usuario?.perfil === 'supervisor_parceiras'
 
   const agora = new Date()
-  const [ano, setAno] = useState(() => {
-    try { const s = localStorage.getItem('monitor_nav'); const v = s ? JSON.parse(s).ano : null; return (v && !isNaN(v)) ? Number(v) : agora.getFullYear() } catch { return agora.getFullYear() }
-  })
-  const [mes, setMes] = useState(() => {
-    try { const s = localStorage.getItem('monitor_nav'); const v = s ? JSON.parse(s).mes : null; return (v && !isNaN(v)) ? Number(v) : agora.getMonth() + 1 } catch { return agora.getMonth() + 1 }
-  })
-  const [abaMonitor, setAbaMonitor] = useState(() => {
-    try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).aba || 'parceiras' : 'parceiras' } catch { return 'parceiras' }
-  })
-  const [abaView, setAbaView] = useState(() => {
-    try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).view || 'checklist' : 'checklist' } catch { return 'checklist' }
-  })
+  const [ano, setAno] = useState(() => { try { const s = localStorage.getItem('monitor_nav'); const v = s ? JSON.parse(s).ano : null; return (v && !isNaN(v)) ? Number(v) : agora.getFullYear() } catch { return agora.getFullYear() } })
+  const [mes, setMes] = useState(() => { try { const s = localStorage.getItem('monitor_nav'); const v = s ? JSON.parse(s).mes : null; return (v && !isNaN(v)) ? Number(v) : agora.getMonth() + 1 } catch { return agora.getMonth() + 1 } })
+  const [abaMonitor, setAbaMonitor] = useState(() => { try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).aba || 'parceiras' : 'parceiras' } catch { return 'parceiras' } })
+  const [abaView, setAbaView] = useState(() => { try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).view || 'checklist' : 'checklist' } catch { return 'checklist' } })
 
   function salvarNav(patch) {
     try {
       const atual = JSON.parse(localStorage.getItem('monitor_nav') || '{}')
       const novo = { ...atual, ...patch }
-      // Garantir que ano e mes são números válidos
       if (novo.ano) novo.ano = Number(novo.ano)
       if (novo.mes) novo.mes = Number(novo.mes)
       localStorage.setItem('monitor_nav', JSON.stringify(novo))
@@ -723,20 +617,33 @@ export default function MonitoramentoParceiras() {
 
   const [editoras, setEditoras] = useState([])
   const [todasLivrarias, setTodasLivrarias] = useState([])
-
-  // Seleção por formato salva no banco (global para equipe)
-  // { story: [ids], feed: [ids], reels: [ids], email_mkt: [ids] }
   const [selParceiras, setSelParceiras] = useState({})
   const [selCriativo, setSelCriativo] = useState({})
   const [showSeletorLiv, setShowSeletorLiv] = useState(false)
+  const [obsFormatoParceiras, setObsFormatoParceiras] = useState({})
+  const [obsFormatoCriativo, setObsFormatoCriativo] = useState({})
+  const [checkagemMes, setCheckagemMes] = useState([])
+  const [formatoSel, setFormatoSelRaw] = useState(() => { try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).formatoSel || 'story' : 'story' } catch { return 'story' } })
+  const [dataSel, setDataSelRaw] = useState(() => { try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).dataSel || hojeKey() : hojeKey() } catch { return hojeKey() } })
+  const [formatoCriativoSel, setFormatoCriativoSelRaw] = useState(() => { try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).formatoCriativo || 'story' : 'story' } catch { return 'story' } })
+  const [dataCriativoSel, setDataCriativoSelRaw] = useState(() => { try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).dataCriativo || hojeKey() : hojeKey() } catch { return hojeKey() } })
 
-  function getSelecionadasParceiras(formato) {
-    return selParceiras[formato] ?? null
-  }
+  function setFormatoSel(v) { setFormatoSelRaw(v); salvarNav({ formatoSel: v }) }
+  function setDataSel(v) { setDataSelRaw(v); salvarNav({ dataSel: v }) }
+  function setFormatoCriativoSel(v) { setFormatoCriativoSelRaw(v); salvarNav({ formatoCriativo: v }) }
+  function setDataCriativoSel(v) { setDataCriativoSelRaw(v); salvarNav({ dataCriativo: v }) }
 
-  function getSelecionadasCriativo(formato) {
-    return selCriativo[formato] ?? null
-  }
+  const [checkagemCriativo, setCheckagemCriativo] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [painelEditora, setPainelEditora] = useState(null)
+  const [modalEditora, setModalEditora] = useState(null)
+  const [showImportar, setShowImportar] = useState(false)
+  const [toast, showToast] = useToast()
+
+  const dias = diasDoMes(ano, mes)
+
+  function getSelecionadasParceiras(formato) { return selParceiras[formato] ?? null }
+  function getSelecionadasCriativo(formato) { return selCriativo[formato] ?? null }
 
   async function salvarSelParceiras(formato, ids) {
     const novo = { ...selParceiras, [formato]: ids }
@@ -750,83 +657,32 @@ export default function MonitoramentoParceiras() {
     try { await setConfigEquipe('sel_criativo', novo) } catch (e) { console.error(e) }
   }
 
-  const [obsFormatoParceiras, setObsFormatoParceiras] = useState({}) // { livraria_id: observacao }
-  const [obsFormatoCriativo, setObsFormatoCriativo] = useState({})
-
-  const [checkagemMes, setCheckagemMes] = useState([])
-  const [formatoSel, setFormatoSelRaw] = useState(() => {
-    try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).formatoSel || 'story' : 'story' } catch { return 'story' }
-  })
-  const [dataSel, setDataSelRaw] = useState(() => {
-    try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).dataSel || hojeKey() : hojeKey() } catch { return hojeKey() }
-  })
-
-  const [formatoCriativoSel, setFormatoCriativoSelRaw] = useState(() => {
-    try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).formatoCriativo || 'story' : 'story' } catch { return 'story' }
-  })
-  const [dataCriativoSel, setDataCriativoSelRaw] = useState(() => {
-    try { const s = localStorage.getItem('monitor_nav'); return s ? JSON.parse(s).dataCriativo || hojeKey() : hojeKey() } catch { return hojeKey() }
-  })
-
-  function setFormatoSel(v) { setFormatoSelRaw(v); salvarNav({ formatoSel: v }) }
-  function setDataSel(v) { setDataSelRaw(v); salvarNav({ dataSel: v }) }
-  function setFormatoCriativoSel(v) { setFormatoCriativoSelRaw(v); salvarNav({ formatoCriativo: v }) }
-  function setDataCriativoSel(v) { setDataCriativoSelRaw(v); salvarNav({ dataCriativo: v }) }
-
-  const [checkagemCriativo, setCheckagemCriativo] = useState([])
-
-  const [loading, setLoading] = useState(true)
-  const [painelEditora, setPainelEditora] = useState(null)
-  const [modalEditora, setModalEditora] = useState(null)
-  const [showImportar, setShowImportar] = useState(false)
-  const [toast, showToast] = useToast()
-
-  const dias = diasDoMes(ano, mes)
-
-  // Livrarias do formato atual filtradas pela seleção
   const selAtualParceiras = getSelecionadasParceiras(formatoSel)
-  const livrarias = selAtualParceiras === null
-    ? todasLivrarias
-    : todasLivrarias.filter(l => selAtualParceiras.includes(l.id))
+  const livrarias = selAtualParceiras === null ? todasLivrarias : todasLivrarias.filter(l => selAtualParceiras.includes(l.id))
 
-  // Mapeamento de formato criativo → formato parceiras correspondente
-  const MAPA_FORMATO_PARCEIRAS = {
-    'story': 'story',
-    'feed': 'feed',
-    'reels_roteiro': 'reels',
-    'reels_edicao': 'reels',
-  }
-
+  const MAPA_FORMATO_PARCEIRAS = { 'story': 'story', 'feed': 'feed', 'reels_roteiro': 'reels', 'reels_edicao': 'reels' }
   const isFormatoCompartilhado = FORMATOS_CRIATIVO_COMPARTILHADOS.includes(formatoCriativoSel)
   const formatoParceirasCorrespondente = MAPA_FORMATO_PARCEIRAS[formatoCriativoSel]
 
-  const selAtualCriativo = getSelecionadasCriativo(formatoCriativoSel)
-  // Formatos compartilhados usam a seleção do formato parceiras correspondente
   const livrariasCriativo = isFormatoCompartilhado
-    ? (() => {
-        const sel = getSelecionadasParceiras(formatoParceirasCorrespondente)
-        return sel === null ? todasLivrarias : todasLivrarias.filter(l => sel.includes(l.id))
-      })()
-    : formatoCriativoSel === 'email_revenda'
-      ? []
-      : selAtualCriativo === null ? todasLivrarias : todasLivrarias.filter(l => selAtualCriativo.includes(l.id))
+    ? (() => { const sel = getSelecionadasParceiras(formatoParceirasCorrespondente); return sel === null ? todasLivrarias : todasLivrarias.filter(l => sel.includes(l.id)) })()
+    : formatoCriativoSel === 'email_revenda' ? []
+    : (() => { const sel = getSelecionadasCriativo(formatoCriativoSel); return sel === null ? todasLivrarias : todasLivrarias.filter(l => sel.includes(l.id)) })()
 
   useEffect(() => { carregarDados() }, [])
   useEffect(() => { carregarCheckagemMes() }, [ano, mes])
   useEffect(() => { carregarCheckagemCriativo() }, [ano, mes])
   useEffect(() => { getObsFormatoLote(formatoSel).then(setObsFormatoParceiras).catch(console.error) }, [formatoSel])
   useEffect(() => {
-    const fmt = FORMATOS_CRIATIVO_COMPARTILHADOS.includes(formatoCriativoSel)
-      ? MAPA_FORMATO_PARCEIRAS[formatoCriativoSel]
-      : formatoCriativoSel
+    const fmt = FORMATOS_CRIATIVO_COMPARTILHADOS.includes(formatoCriativoSel) ? MAPA_FORMATO_PARCEIRAS[formatoCriativoSel] : formatoCriativoSel
     getObsFormatoLote(fmt).then(setObsFormatoCriativo).catch(console.error)
   }, [formatoCriativoSel])
 
-  // Atualização automática a cada 30 segundos
+  // ── ATUALIZAÇÃO AUTOMÁTICA SILENCIOSA (sem spinner) ──────
   useEffect(() => {
     const intervalo = setInterval(() => {
-      carregarCheckagemMes()
-      carregarCheckagemCriativo()
+      atualizarCheckagemMesSilencioso()
+      atualizarCheckagemCriativoSilencioso()
     }, 30000)
     return () => clearInterval(intervalo)
   }, [ano, mes])
@@ -834,44 +690,19 @@ export default function MonitoramentoParceiras() {
   async function carregarDados() {
     try {
       const [eds, livs, confParceiras, confCriativo] = await Promise.all([
-        getEditorasParceiras(),
-        getLivrarias(),
-        getConfigEquipe('sel_parceiras'),
-        getConfigEquipe('sel_criativo'),
+        getEditorasParceiras(), getLivrarias(),
+        getConfigEquipe('sel_parceiras'), getConfigEquipe('sel_criativo'),
       ])
       setEditoras(eds)
       setTodasLivrarias(livs.filter(l => l.editora_id))
-
-      // Se já tem config no banco, usa ela
-      if (confParceiras) {
-        setSelParceiras(confParceiras)
-      } else {
-        // Migra do localStorage para o banco (primeira vez)
-        try {
-          const local = localStorage.getItem('monitor_selParceiras')
-          if (local) {
-            const parsed = JSON.parse(local)
-            setSelParceiras(parsed)
-            await setConfigEquipe('sel_parceiras', parsed)
-          }
-        } catch {}
-      }
-
-      if (confCriativo) {
-        setSelCriativo(confCriativo)
-      } else {
-        try {
-          const local = localStorage.getItem('monitor_selCriativo')
-          if (local) {
-            const parsed = JSON.parse(local)
-            setSelCriativo(parsed)
-            await setConfigEquipe('sel_criativo', parsed)
-          }
-        } catch {}
-      }
+      if (confParceiras) { setSelParceiras(confParceiras) }
+      else { try { const local = localStorage.getItem('monitor_selParceiras'); if (local) { const parsed = JSON.parse(local); setSelParceiras(parsed); await setConfigEquipe('sel_parceiras', parsed) } } catch {} }
+      if (confCriativo) { setSelCriativo(confCriativo) }
+      else { try { const local = localStorage.getItem('monitor_selCriativo'); if (local) { const parsed = JSON.parse(local); setSelCriativo(parsed); await setConfigEquipe('sel_criativo', parsed) } } catch {} }
     } catch (e) { console.error(e) }
   }
 
+  // Carrega com spinner (só na troca de mês/ano)
   async function carregarCheckagemMes() {
     setLoading(true)
     try { setCheckagemMes(await getCheckagemMes({ ano, mes })) }
@@ -879,6 +710,17 @@ export default function MonitoramentoParceiras() {
   }
 
   async function carregarCheckagemCriativo() {
+    try { setCheckagemCriativo(await getCheckagemCriativoMes({ ano, mes })) }
+    catch (e) { console.error(e) }
+  }
+
+  // Atualiza silenciosamente (sem spinner, usado pelo setInterval)
+  async function atualizarCheckagemMesSilencioso() {
+    try { setCheckagemMes(await getCheckagemMes({ ano, mes })) }
+    catch (e) { console.error(e) }
+  }
+
+  async function atualizarCheckagemCriativoSilencioso() {
     try { setCheckagemCriativo(await getCheckagemCriativoMes({ ano, mes })) }
     catch (e) { console.error(e) }
   }
@@ -911,7 +753,6 @@ export default function MonitoramentoParceiras() {
   async function handleMarcarParceira({ editora, formato, dataKey, status, observacao }) {
     try {
       if (status === null) {
-        // Destick — remove o registro
         await deleteCheckagemDia({ editora_id: editora.id, formato, data_esperada: dataKey })
         setCheckagemMes(prev => prev.filter(r => !(r.editora_id === editora.id && r.formato === formato && r.data_esperada === dataKey)))
         return
@@ -925,28 +766,11 @@ export default function MonitoramentoParceiras() {
     } catch (e) { console.error(e); showToast('Erro ao salvar', 'error') }
   }
 
-  async function handleGerarDia() {
-    try {
-      const editorasParaGerar = livrarias.map(l => ({ id: l.editora_id || l.id }))
-      const novos = await gerarChecklistDia({ editoras: editorasParaGerar, formato: formatoSel, data_esperada: dataSel })
-      setCheckagemMes(prev => {
-        const mapa = {}
-        for (const r of prev) mapa[`${r.editora_id}-${r.formato}-${r.data_esperada}`] = r
-        for (const r of novos) mapa[`${r.editora_id}-${r.formato}-${r.data_esperada}`] = r
-        return Object.values(mapa)
-      })
-      showToast('Checklist gerado!')
-    } catch (e) { console.error(e); showToast('Erro ao gerar', 'error') }
-  }
-
   async function handleSalvarObsFixa(livrariaId, observacao, formato, aba) {
     try {
       await upsertObsFormato(livrariaId, formato, observacao)
-      if (aba === 'parceiras') {
-        setObsFormatoParceiras(prev => ({ ...prev, [livrariaId]: observacao }))
-      } else {
-        setObsFormatoCriativo(prev => ({ ...prev, [livrariaId]: observacao }))
-      }
+      if (aba === 'parceiras') setObsFormatoParceiras(prev => ({ ...prev, [livrariaId]: observacao }))
+      else setObsFormatoCriativo(prev => ({ ...prev, [livrariaId]: observacao }))
     } catch (e) { console.error(e); showToast('Erro ao salvar observação', 'error') }
   }
 
@@ -991,7 +815,6 @@ export default function MonitoramentoParceiras() {
 
   return (
     <div>
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <Eye size={22} color="var(--accent)" />
@@ -1039,63 +862,46 @@ export default function MonitoramentoParceiras() {
         </div>
       </div>
 
-      {/* Abas */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 16 }}>
-        <button style={tabStyle(abaMonitor === 'parceiras')} onClick={() => setAbaMonitorNav('parceiras')}>
-          <BookOpen size={14} /> Livrarias de ed. parceiras
-        </button>
-        <button style={tabStyle(abaMonitor === 'criativo')} onClick={() => setAbaMonitorNav('criativo')}>
-          <Users size={14} /> Equipe Cedet
-        </button>
+        <button style={tabStyle(abaMonitor === 'parceiras')} onClick={() => setAbaMonitorNav('parceiras')}><BookOpen size={14} /> Livrarias de ed. parceiras</button>
+        <button style={tabStyle(abaMonitor === 'criativo')} onClick={() => setAbaMonitorNav('criativo')}><Users size={14} /> Equipe Cedet</button>
       </div>
 
-      {/* Navegação de mês + dias integrados */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '8px 16px' }}>
         <button className="btn btn-ghost btn-icon" onClick={() => navMes(-1)} style={{ flexShrink: 0 }}><ChevronLeft size={18} /></button>
         <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text)', flexShrink: 0, minWidth: 110, textAlign: 'center' }}>{MESES[mes - 1]} {ano}</span>
         <button className="btn btn-ghost btn-icon" onClick={() => navMes(1)} style={{ flexShrink: 0 }}><ChevronRight size={18} /></button>
         <div style={{ flex: 1, overflowX: 'auto' }}>
-          <SeletorDiasCompacto
-            dias={dias} mes={mes} ano={ano}
+          <SeletorDiasCompacto dias={dias} mes={mes} ano={ano}
             dataSel={abaMonitor === 'parceiras' ? dataSel : dataCriativoSel}
             onSelect={abaMonitor === 'parceiras' ? setDataSel : setDataCriativoSel}
-            indicadores={abaMonitor === 'parceiras' ? indicadoresParceiras(formatoSel) : indicadoresCriativo(formatoCriativoSel)}
-          />
+            indicadores={abaMonitor === 'parceiras' ? indicadoresParceiras(formatoSel) : indicadoresCriativo(formatoCriativoSel)} />
         </div>
       </div>
 
-      {/* ABA: LIVRARIAS DE ED. PARCEIRAS */}
       {abaMonitor === 'parceiras' && (
         <>
           <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-            {FORMATOS_PARCEIRAS.map(fmt => (
-              <BotaoFormato key={fmt.value} label={fmt.label} ativo={formatoSel === fmt.value} onClick={() => setFormatoSel(fmt.value)} />
-            ))}
+            {FORMATOS_PARCEIRAS.map(fmt => <BotaoFormato key={fmt.value} label={fmt.label} ativo={formatoSel === fmt.value} onClick={() => setFormatoSel(fmt.value)} />)}
             <button className="btn btn-ghost btn-sm" onClick={() => setShowSeletorLiv('parceiras')} style={{ marginLeft: 'auto' }}>
               <SlidersHorizontal size={13} /> {FORMATOS_PARCEIRAS.find(f=>f.value===formatoSel)?.label} ({livrarias.length}/{todasLivrarias.length})
             </button>
           </div>
           {abaView === 'checklist' && (
-            loading ? <div className="loading"><div className="spinner" /></div> : (
-              <ViewChecklistParceiras livrarias={livrarias} checkagemMes={checkagemMes} formato={formatoSel} dataKey={dataSel} onMarcar={handleMarcarParceira} onSalvarObsFixa={(id, obs) => handleSalvarObsFixa(id, obs, formatoSel, 'parceiras')} obsFormato={obsFormatoParceiras} />
-            )
+            loading ? <div className="loading"><div className="spinner" /></div>
+            : <ViewChecklistParceiras livrarias={livrarias} checkagemMes={checkagemMes} formato={formatoSel} dataKey={dataSel} onMarcar={handleMarcarParceira} onSalvarObsFixa={(id, obs) => handleSalvarObsFixa(id, obs, formatoSel, 'parceiras')} obsFormato={obsFormatoParceiras} />
           )}
           {abaView === 'dashboard' && (
-            loading ? <div className="loading"><div className="spinner" /></div> : (
-              <ViewDashboard livrarias={livrarias} checkagemMes={checkagemMes} />
-            )
+            loading ? <div className="loading"><div className="spinner" /></div>
+            : <ViewDashboard livrarias={livrarias} checkagemMes={checkagemMes} />
           )}
         </>
       )}
 
-      {/* ABA: EQUIPE CEDET */}
       {abaMonitor === 'criativo' && (
         <div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-            {FORMATOS_CRIATIVO.map(fmt => (
-              <BotaoFormato key={fmt.value} label={fmt.label} ativo={formatoCriativoSel === fmt.value} onClick={() => setFormatoCriativoSel(fmt.value)} />
-            ))}
-            {/* Seletor só aparece para formatos com lista de livrarias */}
+            {FORMATOS_CRIATIVO.map(fmt => <BotaoFormato key={fmt.value} label={fmt.label} ativo={formatoCriativoSel === fmt.value} onClick={() => setFormatoCriativoSel(fmt.value)} />)}
             {formatoCriativoSel !== 'email_revenda' && (
               <button className="btn btn-ghost btn-sm" onClick={() => setShowSeletorLiv('criativo')} style={{ marginLeft: 'auto' }}>
                 <SlidersHorizontal size={13} /> {FORMATOS_CRIATIVO.find(f=>f.value===formatoCriativoSel)?.label} ({livrariasCriativo.length}/{todasLivrarias.length})
@@ -1104,46 +910,16 @@ export default function MonitoramentoParceiras() {
           </div>
           {formatoCriativoSel === 'email_revenda'
             ? <ViewEmailRevenda dataKey={dataCriativoSel} />
-            : <ViewChecklistCriativo
-                livrarias={livrariasCriativo}
-                checkagemCriativo={checkagemCriativo}
-                formato={formatoCriativoSel}
-                dataKey={dataCriativoSel}
-                onMarcar={handleMarcarCriativo}
+            : <ViewChecklistCriativo livrarias={livrariasCriativo} checkagemCriativo={checkagemCriativo} formato={formatoCriativoSel} dataKey={dataCriativoSel} onMarcar={handleMarcarCriativo}
                 onSalvarObsFixa={(id, obs) => handleSalvarObsFixa(id, obs, isFormatoCompartilhado ? formatoParceirasCorrespondente : formatoCriativoSel, isFormatoCompartilhado ? 'parceiras' : 'criativo')}
-                obsFormato={isFormatoCompartilhado ? obsFormatoParceiras : obsFormatoCriativo}
-              />
+                obsFormato={isFormatoCompartilhado ? obsFormatoParceiras : obsFormatoCriativo} />
           }
         </div>
       )}
 
-      {/* Modais */}
-      {showSeletorLiv === 'parceiras' && (
-        <ModalSeletorLivrarias
-          livrarias={todasLivrarias}
-          selecionadas={getSelecionadasParceiras(formatoSel) ?? todasLivrarias.map(l => l.id)}
-          titulo={`Livrarias — ${FORMATOS_PARCEIRAS.find(f=>f.value===formatoSel)?.label}`}
-          onConfirm={ids => salvarSelParceiras(formatoSel, ids)}
-          onClose={() => setShowSeletorLiv(false)} />
-      )}
-      {showSeletorLiv === 'criativo' && (
-        <ModalSeletorLivrarias
-          livrarias={todasLivrarias}
-          selecionadas={
-            isFormatoCompartilhado
-              ? (getSelecionadasParceiras(formatoCriativoSel) ?? todasLivrarias.map(l => l.id))
-              : (getSelecionadasCriativo(formatoCriativoSel) ?? todasLivrarias.map(l => l.id))
-          }
-          titulo={`Livrarias — ${FORMATOS_CRIATIVO.find(f=>f.value===formatoCriativoSel)?.label}`}
-          onConfirm={ids => isFormatoCompartilhado ? salvarSelParceiras(formatoCriativoSel, ids) : salvarSelCriativo(formatoCriativoSel, ids)}
-          onClose={() => setShowSeletorLiv(false)} />
-      )}
-      {painelEditora && (
-        <>
-          <div onClick={() => setPainelEditora(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 99 }} />
-          <PainelEditora editora={painelEditora} checkagemMes={checkagemMes} ano={ano} mes={mes} usuario={usuario} onClose={() => setPainelEditora(null)} />
-        </>
-      )}
+      {showSeletorLiv === 'parceiras' && <ModalSeletorLivrarias livrarias={todasLivrarias} selecionadas={getSelecionadasParceiras(formatoSel) ?? todasLivrarias.map(l => l.id)} titulo={`Livrarias — ${FORMATOS_PARCEIRAS.find(f=>f.value===formatoSel)?.label}`} onConfirm={ids => salvarSelParceiras(formatoSel, ids)} onClose={() => setShowSeletorLiv(false)} />}
+      {showSeletorLiv === 'criativo' && <ModalSeletorLivrarias livrarias={todasLivrarias} selecionadas={isFormatoCompartilhado ? (getSelecionadasParceiras(formatoCriativoSel) ?? todasLivrarias.map(l => l.id)) : (getSelecionadasCriativo(formatoCriativoSel) ?? todasLivrarias.map(l => l.id))} titulo={`Livrarias — ${FORMATOS_CRIATIVO.find(f=>f.value===formatoCriativoSel)?.label}`} onConfirm={ids => isFormatoCompartilhado ? salvarSelParceiras(formatoCriativoSel, ids) : salvarSelCriativo(formatoCriativoSel, ids)} onClose={() => setShowSeletorLiv(false)} />}
+      {painelEditora && <><div onClick={() => setPainelEditora(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 99 }} /><PainelEditora editora={painelEditora} checkagemMes={checkagemMes} ano={ano} mes={mes} usuario={usuario} onClose={() => setPainelEditora(null)} /></>}
       {modalEditora && <ModalEditora editora={modalEditora === 'new' ? null : modalEditora} onSave={handleSalvarEditora} onClose={() => setModalEditora(null)} />}
       {showImportar && <ModalImportar onClose={() => setShowImportar(false)} onImported={() => { carregarDados(); showToast('Editoras importadas!') }} />}
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
