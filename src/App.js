@@ -76,7 +76,7 @@ const PERFIS_PARCEIRAS = ['supervisor_parceiras', 'analista_parceiras', 'estagia
 
 // ⚠️ TROQUE pelo SEU e-mail de login (o MESMO que está em BaseComando.js).
 // Só esse e-mail vê o item "Base de Comando" no menu.
-const DONO_EMAIL = 'SEU-EMAIL@cedet.com.br'
+const DONO_EMAIL = 'vanessa@cedet.com.br'
 
 const MENU = [
   // Dashboard — cada perfil vê o seu
