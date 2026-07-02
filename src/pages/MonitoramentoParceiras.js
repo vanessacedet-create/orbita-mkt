@@ -662,8 +662,17 @@ export default function MonitoramentoParceiras() {
     try{
       const [livs,confP,confC]=await Promise.all([getLivrarias(),getConfigEquipe('sel_parceiras'),getConfigEquipe('sel_criativo')])
       setTodasLivrarias(livs.filter(l=>l.editora_id))
-      if(confP)setSelParceiras(confP)
-      if(confC)setSelCriativo(confC)
+      if(confP){
+        setSelParceiras(confP)
+      } else {
+        // Fallback: migra do localStorage para o banco
+        try{const local=localStorage.getItem('monitor_selParceiras');if(local){const parsed=JSON.parse(local);setSelParceiras(parsed);await setConfigEquipe('sel_parceiras',parsed)}}catch{}
+      }
+      if(confC){
+        setSelCriativo(confC)
+      } else {
+        try{const local=localStorage.getItem('monitor_selCriativo');if(local){const parsed=JSON.parse(local);setSelCriativo(parsed);await setConfigEquipe('sel_criativo',parsed)}}catch{}
+      }
     }catch(e){console.error(e)}
   }
 
