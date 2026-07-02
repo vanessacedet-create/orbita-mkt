@@ -140,13 +140,13 @@ const PESOS_EDITORA = {
   promocao_particular: { confirmou: 10, sem_retorno: 3, recusou: 2, nao_participou: 0 },
   campanha:            { confirmou: 10, sem_retorno: 3, recusou: 2, nao_participou: 0 },
   teve_lancamento:     5,
-  qtd_lancamentos:     2,   // por lançamento, até 10pts
+  qtd_lancamentos:     2,
   fez_reuniao:         5,
   respondeu_whatsapp:  5,
   publicou_feed:       3,
   publicou_story:      3,
   publicou_reels:      4,
-  vendas_editora:      0.1, // por unidade
+  vendas_editora:      0.1,
   responde_artes:      5,
   faz_cortesia:        5,
   cria_cupom:          3,
@@ -155,7 +155,6 @@ const PESOS_EDITORA = {
 export function calcularScoreEditora(dados) {
   let pts = 0
   const p = PESOS_EDITORA
-
   pts += p.promocao_geral[dados.promocao_geral] || 0
   pts += p.promocao_particular[dados.promocao_particular] || 0
   pts += p.campanha[dados.campanha] || 0
@@ -170,8 +169,6 @@ export function calcularScoreEditora(dados) {
   if (dados.responde_artes) pts += p.responde_artes
   if (dados.faz_cortesia) pts += p.faz_cortesia
   if (dados.cria_cupom) pts += p.cria_cupom
-
-  // Máximo teórico ~79pts → normaliza para 0-10
   const max = 79
   return Math.min(10, Math.round((pts / max) * 10 * 10) / 10)
 }
@@ -227,7 +224,6 @@ const PESOS_LIVRARIA = {
 export function calcularScoreLivraria(dados) {
   let pts = 0
   const p = PESOS_LIVRARIA
-
   pts += p.promocao_geral[dados.promocao_geral] || 0
   pts += p.promocao_particular[dados.promocao_particular] || 0
   pts += p.campanha[dados.campanha] || 0
@@ -236,7 +232,6 @@ export function calcularScoreLivraria(dados) {
   if (dados.publicou_reels) pts += p.publicou_reels
   pts += Math.min(10, (dados.vendas_livraria || 0) * p.vendas_livraria)
   if (dados.responde_artes) pts += p.responde_artes
-
   const max = 44
   return Math.min(10, Math.round((pts / max) * 10 * 10) / 10)
 }
@@ -276,9 +271,310 @@ export async function upsertScoreLivraria(livraria_id, ano, mes, dados) {
   return { ...data, score }
 }
 
+// ── CALENDÁRIO DE PROMOÇÕES ────────────────────────────────
+
+export async function getCalendarioPromocoes() {
+  const { data, error } = await supabase
+    .from('calendario_promocoes')
+    .select('*')
+    .eq('ativo', true)
+    .order('data_inicio', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function createPromocao(payload) {
+  const { data, error } = await supabase
+    .from('calendario_promocoes')
+    .insert([payload])
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+// ── SCORE TRIMESTRAL — LIVRARIAS ───────────────────────────
+
+// Faixas de vendas (35 pts)
+function pontosVendasLivraria(vendas) {
+  if (vendas >= 300) return 35
+  if (vendas >= 200) return 28
+  if (vendas >= 100) return 21
+  if (vendas >= 50)  return 14
+  if (vendas >= 1)   return 7
+  return 0
+}
+
+// Pontos de publicações (30 pts) — % de semanas que postou
+function pontosPublicacoes(semanas_previstas, semanas_postou) {
+  if (!semanas_previstas || semanas_previstas === 0) return 0
+  const pct = semanas_postou / semanas_previstas
+  if (pct >= 0.90) return 30
+  if (pct >= 0.70) return 22
+  if (pct >= 0.50) return 15
+  if (pct >= 0.30) return 8
+  return 0
+}
+
+// Pontos de promoções (20 pts)
+function pontosPromocaoTrimestral(participacao) {
+  if (participacao === 'confirmou')    return 20
+  if (participacao === 'sem_retorno')  return 8
+  if (participacao === 'recusou')      return 2
+  return 0 // nao_aplica
+}
+
+// Pontos de comunicação (15 pts)
+function pontosComunicacao(comunicacao) {
+  if (comunicacao === 'sempre')       return 15
+  if (comunicacao === 'as_vezes')     return 7
+  if (comunicacao === 'nao_responde') return 0
+  return 0 // nao_aplica
+}
+
+export function calcularScoreTrimestralLivraria(dados) {
+  let total = 0
+  let maxPossivel = 0
+
+  // Vendas
+  if (!dados.vendas_nao_aplica) {
+    total += pontosVendasLivraria(dados.vendas || 0)
+    maxPossivel += 35
+  }
+
+  // Publicações
+  if (!dados.publicacoes_nao_aplica) {
+    const postou = (dados.semanas_postou_feed || 0) + (dados.semanas_postou_story || 0)
+    const previstas = (dados.semanas_previstas || 0) * 2 // feed + story
+    total += pontosPublicacoes(previstas, postou)
+    maxPossivel += 30
+  }
+
+  // Promoções
+  if (!dados.promocoes_nao_aplica) {
+    total += pontosPromocaoTrimestral(dados.participacao_promocao)
+    maxPossivel += 20
+  }
+
+  // Comunicação
+  if (dados.comunicacao !== 'nao_aplica') {
+    total += pontosComunicacao(dados.comunicacao)
+    maxPossivel += 15
+  }
+
+  if (maxPossivel === 0) return { score: 0, classificacao: 'N/A' }
+
+  const pct = (total / maxPossivel) * 100
+  return {
+    score: Math.round(pct * 10) / 10,
+    classificacao: classificacaoPorPct(pct),
+  }
+}
+
+// Score trimestral editoras (80/10/10)
+function pontosVendasEditora(vendas, faixas) {
+  // faixas definidas futuramente — por ora retorna proporcional
+  if (!faixas) return Math.min(80, (vendas || 0) * 0.1)
+  for (const f of faixas) {
+    if (vendas >= f.min) return f.pts
+  }
+  return 0
+}
+
+export function calcularScoreTrimestralEditora(dados) {
+  let total = 0
+  let maxPossivel = 0
+
+  // Vendas
+  if (!dados.vendas_nao_aplica) {
+    total += pontosVendasEditora(dados.vendas || 0)
+    maxPossivel += 80
+  }
+
+  // Promoções
+  if (!dados.promocoes_nao_aplica) {
+    total += pontosPromocaoTrimestral(dados.participacao_promocao) * 0.5 // escala 20→10
+    maxPossivel += 10
+  }
+
+  // Comunicação
+  if (dados.comunicacao !== 'nao_aplica') {
+    total += pontosComunicacao(dados.comunicacao) * (10/15) // escala 15→10
+    maxPossivel += 10
+  }
+
+  if (maxPossivel === 0) return { score: 0, classificacao: 'N/A' }
+
+  const pct = (total / maxPossivel) * 100
+  return {
+    score: Math.round(pct * 10) / 10,
+    classificacao: classificacaoPorPct(pct),
+  }
+}
+
+export function classificacaoPorPct(pct) {
+  if (pct >= 85) return 'A'
+  if (pct >= 70) return 'B'
+  if (pct >= 55) return 'C'
+  if (pct >= 40) return 'D'
+  if (pct >= 25) return 'E'
+  return 'F'
+}
+
+export async function upsertScoreTrimestralLivraria(livraria_id, ano, trimestre, dados) {
+  const { score, classificacao } = calcularScoreTrimestralLivraria(dados)
+  const { data, error } = await supabase
+    .from('livrarias_score_trimestral')
+    .upsert(
+      { livraria_id, ano, trimestre, ...dados, score, atualizado_em: new Date().toISOString() },
+      { onConflict: 'livraria_id,ano,trimestre' }
+    )
+    .select()
+    .single()
+  if (error) throw error
+  return { ...data, score, classificacao }
+}
+
+export async function getScoreTrimestralLivrarias(ano) {
+  const { data, error } = await supabase
+    .from('livrarias_score_trimestral')
+    .select('*, livrarias(id, nome, editoras_parceiras(nome))')
+    .eq('ano', ano)
+    .order('trimestre', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function getScoreTrimestralLivraria(livraria_id) {
+  const { data, error } = await supabase
+    .from('livrarias_score_trimestral')
+    .select('*')
+    .eq('livraria_id', livraria_id)
+    .order('ano', { ascending: false })
+    .order('trimestre', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function upsertScoreTrimestralEditora(editora_id, ano, trimestre, dados) {
+  const { score, classificacao } = calcularScoreTrimestralEditora(dados)
+  const { data, error } = await supabase
+    .from('editoras_score_trimestral')
+    .upsert(
+      { editora_id, ano, trimestre, ...dados, score, classificacao, atualizado_em: new Date().toISOString() },
+      { onConflict: 'editora_id,ano,trimestre' }
+    )
+    .select()
+    .single()
+  if (error) throw error
+  return { ...data, score, classificacao }
+}
+
+export async function getScoreTrimestralEditoras(ano) {
+  const { data, error } = await supabase
+    .from('editoras_score_trimestral')
+    .select('*, editoras_parceiras(id, nome, classificacao)')
+    .eq('ano', ano)
+    .order('trimestre', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+export async function getScoreTrimestralEditora(editora_id) {
+  const { data, error } = await supabase
+    .from('editoras_score_trimestral')
+    .select('*')
+    .eq('editora_id', editora_id)
+    .order('ano', { ascending: false })
+    .order('trimestre', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+// Importação de vendas por planilha
+export async function importarVendasLivraria(rows, ano, trimestre) {
+  // rows: [{ livraria_nome, vendas }]
+  const { data: livrarias } = await supabase.from('livrarias').select('id, nome').eq('ativo', true)
+  const resultados = { importados: 0, naoEncontrados: [], erros: [] }
+
+  for (const row of rows) {
+    const livraria = (livrarias || []).find(l =>
+      l.nome.toLowerCase().trim() === String(row.livraria_nome || '').toLowerCase().trim()
+    )
+    if (!livraria) { resultados.naoEncontrados.push(row.livraria_nome); continue }
+    try {
+      const existente = await supabase
+        .from('livrarias_score_trimestral')
+        .select('*')
+        .eq('livraria_id', livraria.id)
+        .eq('ano', ano)
+        .eq('trimestre', trimestre)
+        .maybeSingle()
+
+      const dadosBase = existente.data || {}
+      await upsertScoreTrimestralLivraria(livraria.id, ano, trimestre, {
+        ...dadosBase,
+        vendas: Number(row.vendas) || 0,
+        vendas_nao_aplica: false,
+      })
+      resultados.importados++
+    } catch (e) {
+      resultados.erros.push(`${row.livraria_nome}: ${e.message}`)
+    }
+  }
+  return resultados
+}
+
+export async function importarVendasEditora(rows, ano, trimestre) {
+  const { data: editoras } = await supabase.from('editoras_parceiras').select('id, nome').eq('ativo', true)
+  const resultados = { importados: 0, naoEncontrados: [], erros: [] }
+
+  for (const row of rows) {
+    const editora = (editoras || []).find(e =>
+      e.nome.toLowerCase().trim() === String(row.editora_nome || '').toLowerCase().trim()
+    )
+    if (!editora) { resultados.naoEncontrados.push(row.editora_nome); continue }
+    try {
+      const existente = await supabase
+        .from('editoras_score_trimestral')
+        .select('*')
+        .eq('editora_id', editora.id)
+        .eq('ano', ano)
+        .eq('trimestre', trimestre)
+        .maybeSingle()
+
+      const dadosBase = existente.data || {}
+      await upsertScoreTrimestralEditora(editora.id, ano, trimestre, {
+        ...dadosBase,
+        vendas: Number(row.vendas) || 0,
+        vendas_nao_aplica: false,
+      })
+      resultados.importados++
+    } catch (e) {
+      resultados.erros.push(`${row.editora_nome}: ${e.message}`)
+    }
+  }
+  return resultados
+}
+
 // ── HELPERS ────────────────────────────────────────────────
 
 export const MESES_LABEL = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+
+export const TRIMESTRES_LABEL = {
+  1: 'T1 — Jan/Fev/Mar',
+  2: 'T2 — Abr/Mai/Jun',
+  3: 'T3 — Jul/Ago/Set',
+  4: 'T4 — Out/Nov/Dez',
+}
+
+export function trimestreAtual() {
+  const m = new Date().getMonth() + 1
+  if (m <= 3) return 1
+  if (m <= 6) return 2
+  if (m <= 9) return 3
+  return 4
+}
 
 export function mesAnoLabel(mes, ano) {
   return `${MESES_LABEL[mes - 1]}/${String(ano).slice(2)}`
@@ -294,6 +590,18 @@ export function getMesesDisponiveis(n = 12) {
   return meses
 }
 
+export function getTrimestresDisponiveis(n = 6) {
+  const trimestres = []
+  let ano = new Date().getFullYear()
+  let tri = trimestreAtual()
+  for (let i = 0; i < n; i++) {
+    trimestres.push({ trimestre: tri, ano })
+    tri--
+    if (tri < 1) { tri = 4; ano-- }
+  }
+  return trimestres
+}
+
 export function corScore(nota) {
   if (nota === null || nota === undefined) return { bg: 'transparent', cor: 'var(--text-muted)' }
   if (nota >= 8) return { bg: 'rgba(245,158,11,0.15)', cor: '#f59e0b' }
@@ -303,7 +611,14 @@ export function corScore(nota) {
   return { bg: 'transparent', cor: 'var(--text-muted)' }
 }
 
-// Contagem mensal de ativações (quantas editoras/livrarias ficaram ativas por mês)
+export function corClassificacao(cls) {
+  const mapa = {
+    A: '#22c55e', B: '#84cc16', C: '#f59e0b',
+    D: '#fb923c', E: '#ef4444', F: '#6b7280',
+  }
+  return mapa[cls] || 'var(--text-muted)'
+}
+
 export async function getAtivacoesporMes() {
   const { data, error } = await supabase
     .from('editoras_crm_status_history')
