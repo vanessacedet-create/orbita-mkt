@@ -435,9 +435,7 @@ function ViewChecklistParceiras({ livrarias, checkagemMes, formato, dataSel, dia
   function contarSemana(livrariaId) {
     const regs = regsSemana.filter(r => r.editora_id === livrariaId)
     const postou = regs.filter(r => r.status === 'postou').length
-    const naoPostou = regs.filter(r => r.status === 'nao_postou').length
-    const pendente = regs.filter(r => r.status === 'pendente').length
-    return { postou, naoPostou, pendente, total: regs.length }
+    return { postou }
   }
 
   // Status do dia selecionado para cada livraria
@@ -451,31 +449,12 @@ function ViewChecklistParceiras({ livrarias, checkagemMes, formato, dataSel, dia
     return reg?.observacao || ''
   }
 
-  // Total semanal esperado e realizado (para o cabeçalho)
   const freq = FREQ_SEMANAL[formato] || 0
-  const livrariasNaContagem = livrarias.filter(l => !isSuspensaOuPromocional(obsFormato?.[l.id]))
-  const totalEsperado = livrariasNaContagem.length * freq * diasSemana.length / 5 * (freq > 0 ? 1 : 0)
-  // Simplificado: esperado = qtd livrarias × freq
-  const esperadoSemana = livrariasNaContagem.length * freq
-  const realizadoSemana = regsSemana.filter(r => r.status === 'postou' && livrariasNaContagem.some(l => l.editora_id === r.editora_id)).length
 
   if (livrarias.length === 0) return <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '48px 0', fontSize: 13 }}>Nenhuma livraria cadastrada ainda.</div>
 
   return (
     <div>
-      {/* Contador semanal */}
-      {freq > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, padding: '10px 16px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8 }}>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Semana:</span>
-          <span style={{ fontSize: 20, fontWeight: 800, color: realizadoSemana >= esperadoSemana ? '#22c55e' : realizadoSemana > 0 ? '#f59e0b' : 'var(--text-muted)' }}>
-            {realizadoSemana}/{esperadoSemana}
-          </span>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{FORMATOS_PARCEIRAS.find(f => f.value === formato)?.label} postados</span>
-          <div style={{ flex: 1, height: 6, borderRadius: 99, background: 'var(--surface-3)', maxWidth: 200 }}>
-            <div style={{ height: '100%', width: `${Math.min(100, esperadoSemana > 0 ? (realizadoSemana / esperadoSemana) * 100 : 0)}%`, background: realizadoSemana >= esperadoSemana ? '#22c55e' : '#f59e0b', borderRadius: 99, transition: 'width 0.3s' }} />
-          </div>
-        </div>
-      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '180px 110px 110px 1fr 1fr auto', gap: 8, padding: '6px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '2px solid var(--border)', marginBottom: 4 }}>
         <span>Livraria</span><span>Instagram</span><span>Instagram 2</span><span>Observações</span><span>Nota do dia</span><span style={{ minWidth: 280 }}>Status — semana / dia selecionado</span>
@@ -484,8 +463,7 @@ function ViewChecklistParceiras({ livrarias, checkagemMes, formato, dataSel, dia
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         {livrarias.map(livraria => {
           const chaveId = livraria.editora_id
-          const suspensa = isSuspensaOuPromocional(obsFormato?.[livraria.id])
-          const { postou, naoPostou, pendente } = contarSemana(chaveId)
+          const { postou } = contarSemana(chaveId)
           const status = statusDia(chaveId)
           const nota = notaDia(chaveId)
           const obsFixa = obsFormato?.[livraria.id] || ''
@@ -493,42 +471,36 @@ function ViewChecklistParceiras({ livrarias, checkagemMes, formato, dataSel, dia
           const editandoNota = notaAberta === livraria.id
 
           return (
-            <div key={livraria.id} style={{ opacity: suspensa ? 0.55 : 1 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '180px 110px 110px 1fr 1fr auto', gap: 8, alignItems: 'center', padding: '7px 12px', background: suspensa ? 'var(--surface-2)' : 'var(--surface)', border: '1px solid var(--border)', borderRadius: (editandoObsFixa || editandoNota) ? '8px 8px 0 0' : 8 }}>
+            <div key={livraria.id}>
+              <div style={{ display: 'grid', gridTemplateColumns: '180px 110px 110px 1fr 1fr auto', gap: 8, alignItems: 'center', padding: '7px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: (editandoObsFixa || editandoNota) ? '8px 8px 0 0' : 8 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={livraria.nome}>{livraria.nome}</div>
                 <div style={{ fontSize: 12 }}>{livraria.instagram ? <a href={`https://instagram.com/${livraria.instagram.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 3 }}><Instagram size={10}/>{livraria.instagram}</a> : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>}</div>
                 <div style={{ fontSize: 12 }}>{livraria.instagram2 ? <a href={`https://instagram.com/${livraria.instagram2.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: 3 }}><Instagram size={10}/>{livraria.instagram2}</a> : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>}</div>
-                <div style={{ fontSize: 12, color: obsFixa ? (suspensa ? '#f59e0b' : 'var(--text)') : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: suspensa ? 700 : 400 }}
+                <div style={{ fontSize: 12, color: obsFixa ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                   onClick={() => { setObsFixaAberta(editandoObsFixa ? null : livraria.id); setTextoObsFixa(obsFixa); setNotaAberta(null) }}
                   title={obsFixa || 'Clique para adicionar observação fixa'}>
                   {obsFixa || <span style={{ fontSize: 11, fontStyle: 'italic' }}>Adicionar...</span>}
                 </div>
-                <div style={{ fontSize: 12, color: nota ? 'var(--text)' : 'var(--text-muted)', cursor: suspensa ? 'default' : 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                  onClick={() => { if (suspensa) return; setNotaAberta(editandoNota ? null : livraria.id); setTextoNota(nota); setObsFixaAberta(null) }}
+                <div style={{ fontSize: 12, color: nota ? 'var(--text)' : 'var(--text-muted)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  onClick={() => { setNotaAberta(editandoNota ? null : livraria.id); setTextoNota(nota); setObsFixaAberta(null) }}
                   title={nota || 'Clique para adicionar nota do dia'}>
-                  {nota || <span style={{ fontSize: 11, fontStyle: 'italic' }}>{suspensa ? '—' : 'Adicionar...'}</span>}
+                  {nota || <span style={{ fontSize: 11, fontStyle: 'italic' }}>Adicionar...</span>}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {/* Contador semanal da livraria */}
-                  {freq > 0 && !suspensa && (
+                  {freq > 0 && (
                     <span style={{ fontSize: 11, fontWeight: 700, color: postou >= freq ? '#22c55e' : 'var(--text-muted)', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap', flexShrink: 0 }}>
                       {postou}/{freq}
                     </span>
                   )}
-                  {/* Botões de status do dia */}
-                  {suspensa ? (
-                    <span style={{ fontSize: 11, color: '#f59e0b', fontStyle: 'italic' }}>Fora da contagem</span>
-                  ) : (
-                    <div style={{ display: 'flex', gap: 5 }}>
-                      {STATUS_PARCEIRAS.map(s => (
-                        <button key={s.value}
-                          onClick={() => onMarcar({ editora: { id: chaveId }, formato, dataKey: dataSel, status: status === s.value ? null : s.value, observacao: nota })}
-                          style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `2px solid ${s.cor}`, background: status === s.value ? s.cor : 'transparent', color: status === s.value ? '#fff' : s.cor, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
-                          {s.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                  <div style={{ display: 'flex', gap: 5 }}>
+                    {STATUS_PARCEIRAS.map(s => (
+                      <button key={s.value}
+                        onClick={() => onMarcar({ editora: { id: chaveId }, formato, dataKey: dataSel, status: status === s.value ? null : s.value, observacao: nota })}
+                        style={{ padding: '4px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `2px solid ${s.cor}`, background: status === s.value ? s.cor : 'transparent', color: status === s.value ? '#fff' : s.cor, transition: 'all 0.15s', whiteSpace: 'nowrap' }}>
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
               {editandoObsFixa && (
@@ -953,10 +925,19 @@ export default function MonitoramentoParceiras() {
     }
   }
 
-  // Contadores do dia selecionado para o cabeçalho
-  const totalPostou = checkagemMes.filter(r => r.status === 'postou' && r.formato === formatoSel && r.data_esperada === dataSel).length
-  const totalNao    = checkagemMes.filter(r => r.status === 'nao_postou' && r.formato === formatoSel && r.data_esperada === dataSel).length
-  const totalPend   = checkagemMes.filter(r => r.status === 'pendente' && r.formato === formatoSel && r.data_esperada === dataSel).length
+  // Contadores da SEMANA para o cabeçalho (story e feed)
+  const livrariasNaContagemHeader = livrarias.filter(l => !isSuspensaOuPromocional(obsFormatoParceiras[l.id]))
+  const freqHeader = FREQ_SEMANAL[formatoSel] || 0
+  const esperadoSemanaHeader = livrariasNaContagemHeader.length * freqHeader
+  const realizadoSemanaHeader = checkagemMes.filter(r =>
+    r.status === 'postou' &&
+    r.formato === formatoSel &&
+    diasSemanaAtual.includes(r.data_esperada)
+  ).length
+
+  const totalPostou = realizadoSemanaHeader
+  const totalNao    = checkagemMes.filter(r => r.status === 'nao_postou' && r.formato === formatoSel && diasSemanaAtual.includes(r.data_esperada)).length
+  const totalPend   = checkagemMes.filter(r => r.status === 'pendente' && r.formato === formatoSel && diasSemanaAtual.includes(r.data_esperada)).length
   const totalFinalizado = checkagemCriativo.filter(r => r.status === 'finalizado' && r.formato === formatoCriativoSel && r.data_esperada === dataCriativoSel).length
   const totalIniciado   = checkagemCriativo.filter(r => r.status === 'iniciado' && r.formato === formatoCriativoSel && r.data_esperada === dataCriativoSel).length
   const totalPendCriat  = checkagemCriativo.filter(r => r.status === 'pendente' && r.formato === formatoCriativoSel && r.data_esperada === dataCriativoSel).length
@@ -984,13 +965,28 @@ export default function MonitoramentoParceiras() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           {abaMonitor === 'parceiras' ? (
             <div style={{ display: 'flex', gap: 14 }}>
-              {[{ n: totalPostou, l: 'Postaram', c: '#22c55e' }, { n: totalNao, l: 'Não postaram', c: '#ef4444' }, { n: totalPend, l: 'Pendentes', c: '#6b7280' }].map(({ n, l, c }) => (
-                <div key={l} style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: c, lineHeight: 1 }}>{n}</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: 2 }}>{l}</div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#22c55e', lineHeight: 1 }}>{totalPostou}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: 2 }}>Postaram</div>
+                <div style={{ fontSize: 9, color: 'var(--accent)', marginTop: 1, fontWeight: 600 }}>{FORMATOS_PARCEIRAS.find(f => f.value === formatoSel)?.label}</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#ef4444', lineHeight: 1 }}>{totalNao}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: 2 }}>Não postaram</div>
+                <div style={{ fontSize: 9, color: 'var(--accent)', marginTop: 1, fontWeight: 600 }}>{FORMATOS_PARCEIRAS.find(f => f.value === formatoSel)?.label}</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#6b7280', lineHeight: 1 }}>{totalPend}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: 2 }}>Pendentes</div>
+                <div style={{ fontSize: 9, color: 'var(--accent)', marginTop: 1, fontWeight: 600 }}>{FORMATOS_PARCEIRAS.find(f => f.value === formatoSel)?.label}</div>
+              </div>
+              {freqHeader > 0 && (
+                <div style={{ textAlign: 'center', borderLeft: '1px solid var(--border)', paddingLeft: 14 }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: realizadoSemanaHeader >= esperadoSemanaHeader ? '#22c55e' : '#f59e0b', lineHeight: 1 }}>{realizadoSemanaHeader}/{esperadoSemanaHeader}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: 2 }}>Semana</div>
                   <div style={{ fontSize: 9, color: 'var(--accent)', marginTop: 1, fontWeight: 600 }}>{FORMATOS_PARCEIRAS.find(f => f.value === formatoSel)?.label}</div>
                 </div>
-              ))}
+              )}
             </div>
           ) : (
             <div style={{ display: 'flex', gap: 14 }}>
