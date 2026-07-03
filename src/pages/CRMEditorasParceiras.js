@@ -5,6 +5,9 @@ import {
   getStatusHistoryEditora, addStatusHistoryEditora,
   getEditorasParceirasAtivas, getLivrariasParceirasAtivas,
   getAllScoreEditorasMes, getAllScoreLivrariasMes,
+  getScoreEditorasMeses, getScoreLivrariasMeses,
+  deleteScoreEditoraMes, deleteScoreLivrariaMes,
+  atualizarClassificacaoMensalLivrarias,
   upsertScoreEditora, upsertScoreLivraria,
   calcularScoreEditora, calcularScoreLivraria, calcularClassificacaoMensalLivraria,
   calcularScoreTrimestralLivraria, calcularScoreTrimestralEditora,
@@ -20,7 +23,7 @@ import { getUsuarios } from '../lib/supabase'
 import * as XLSX from 'xlsx'
 import {
   Building2, Plus, X, ChevronRight, Search,
-  Trash2, BarChart2, Library, Upload, Download, FileSpreadsheet,
+  Trash2, BarChart2, Library, Upload, Download, FileSpreadsheet, RefreshCw,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -481,13 +484,14 @@ function AbaParceirosAtivos() {
 }
 
 // ── MODAIS SCORE MENSAL (preservados) ─────────────────────
-function ModalScoreEditoraMensal({ editora, score, onSave, onClose }) {
+function ModalScoreEditoraMensal({ editora, score, onSave, onDelete, onClose }) {
   const mesesOpcoes = getMesesDisponiveis(24)
   const hoje = new Date()
   const [mes, setMes] = useState(score?.mes || hoje.getMonth()+1)
   const [ano, setAno] = useState(score?.ano || hoje.getFullYear())
   const [form, setForm] = useState({ promocao_geral:score?.promocao_geral||'nao_participou', promocao_particular:score?.promocao_particular||'nao_participou', campanha:score?.campanha||'nao_participou', teve_lancamento:score?.teve_lancamento||false, qtd_lancamentos:score?.qtd_lancamentos||0, fez_reuniao:score?.fez_reuniao||false, respondeu_whatsapp:score?.respondeu_whatsapp||false, publicou_feed:score?.publicou_feed||false, publicou_story:score?.publicou_story||false, publicou_reels:score?.publicou_reels||false, vendas_editora:score?.vendas_editora||0, responde_artes:score?.responde_artes||false, faz_cortesia:score?.faz_cortesia||false, cria_cupom:score?.cria_cupom||false, observacao:score?.observacao||'' })
   const [saving, setSaving] = useState(false)
+  const [zerando, setZerando] = useState(false)
   const [erro, setErro] = useState(null)
   const preview = calcularScoreEditora(form)
   const c = corScore(preview)
@@ -495,6 +499,12 @@ function ModalScoreEditoraMensal({ editora, score, onSave, onClose }) {
   function Check({ field, label }) { return <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', padding:'6px 0' }}><input type="checkbox" checked={!!form[field]} onChange={e => setForm(f => ({ ...f, [field]:e.target.checked }))} style={{ accentColor:'var(--accent)', width:15, height:15 }} /><span style={{ fontSize:13 }}>{label}</span></label> }
   function Sel({ field, label }) { return <div className="form-group"><label className="form-label">{label}</label><select className="form-select" value={form[field]} onChange={e => setForm(f => ({ ...f, [field]:e.target.value }))}>{opcoes.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div> }
   async function salvar() { setSaving(true); setErro(null); try { await onSave(editora.id, ano, mes, { ...form, vendas_editora: Number(form.vendas_editora) || 0 }); onClose() } catch(e){ console.error(e); setErro(e.message || 'Erro ao salvar. Tente novamente.') } finally { setSaving(false) } }
+  async function zerarMes() {
+    if (!window.confirm(`Apagar todos os dados de ${mesAnoLabel(mes,ano)} para ${editora.nome}? Essa ação não pode ser desfeita.`)) return
+    setZerando(true); setErro(null)
+    try { await onDelete(editora.id, ano, mes); onClose() }
+    catch(e) { console.error(e); setErro(e.message || 'Erro ao zerar o mês.') } finally { setZerando(false) }
+  }
   return (
     <div className="modal-backdrop" onClick={e => e.target===e.currentTarget&&onClose()}>
       <div className="modal" style={{ maxWidth:560, maxHeight:'90vh', overflowY:'auto' }}>
@@ -506,13 +516,16 @@ function ModalScoreEditoraMensal({ editora, score, onSave, onClose }) {
         <div className="form-group"><label className="form-label">Observação (opcional)</label><textarea className="form-textarea" rows={2} value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao:e.target.value }))} /></div>
         <div style={{ padding:'14px 16px', background:c.bg, border:`1px solid ${c.cor}40`, borderRadius:10, display:'flex', alignItems:'center', gap:14, marginBottom:16 }}><span style={{ fontSize:36, fontWeight:900, color:c.cor }}>{preview.toFixed(1)}</span><div style={{ fontSize:13, fontWeight:700, color:c.cor }}>Score calculado</div></div>
         {erro && <div style={{ padding:'10px 14px', background:'rgba(239,68,68,0.12)', border:'1px solid rgba(239,68,68,0.4)', borderRadius:8, fontSize:12, color:'#ef4444', marginBottom:12 }}>Não foi possível salvar: {erro}</div>}
-        <div className="form-actions"><button className="btn btn-ghost" onClick={onClose}>Cancelar</button><button className="btn btn-primary" onClick={salvar} disabled={saving}>{saving?'Salvando...':'Salvar score'}</button></div>
+        <div className="form-actions" style={{ justifyContent:'space-between' }}>
+          {score ? <button className="btn btn-ghost" onClick={zerarMes} disabled={zerando} style={{ color:'#ef4444' }}>{zerando?'Zerando...':'Zerar mês'}</button> : <span />}
+          <div style={{ display:'flex', gap:8 }}><button className="btn btn-ghost" onClick={onClose}>Cancelar</button><button className="btn btn-primary" onClick={salvar} disabled={saving}>{saving?'Salvando...':'Salvar score'}</button></div>
+        </div>
       </div>
     </div>
   )
 }
 
-function ModalScoreLivrariatMensal({ livraria, score, onSave, onClose }) {
+function ModalScoreLivrariatMensal({ livraria, score, onSave, onDelete, onClose }) {
   const mesesOpcoes = getMesesDisponiveis(24)
   const hoje = new Date()
   const [mes, setMes] = useState(score?.mes || hoje.getMonth()+1)
@@ -533,6 +546,7 @@ function ModalScoreLivrariatMensal({ livraria, score, onSave, onClose }) {
     observacao: score?.observacao || '',
   })
   const [saving, setSaving] = useState(false)
+  const [zerando, setZerando] = useState(false)
   const [erro, setErro] = useState(null)
 
   useEffect(() => { getCalendarioPromocoes().then(setPromocoes).catch(console.error) }, [])
@@ -540,6 +554,13 @@ function ModalScoreLivrariatMensal({ livraria, score, onSave, onClose }) {
   const preview = calcularScoreLivraria(form)
   const c = corScore(preview)
   const classePrevia = calcularClassificacaoMensalLivraria(form)
+
+  async function zerarMes() {
+    if (!window.confirm(`Apagar todos os dados de ${mesAnoLabel(mes,ano)} para ${livraria.nome}? Essa ação não pode ser desfeita.`)) return
+    setZerando(true); setErro(null)
+    try { await onDelete(livraria.id, ano, mes); onClose() }
+    catch(e) { console.error(e); setErro(e.message || 'Erro ao zerar o mês.') } finally { setZerando(false) }
+  }
 
   const OPCOES_PARTICIPACAO = [
     { value:'confirmou', label:'Confirmou' },
@@ -676,7 +697,7 @@ function ModalScoreLivrariatMensal({ livraria, score, onSave, onClose }) {
           {classePrevia && <BadgeClasse cls={classePrevia} />}
           <div>
             <div style={{ fontSize:13, fontWeight:700, color:c.cor }}>Score calculado</div>
-            <div style={{ fontSize:11, color:'var(--text-muted)' }}>Classificação prévia — a oficial do mês só é definida ao fechar o mês</div>
+            <div style={{ fontSize:11, color:'var(--text-muted)' }}>Classificação prévia com base no que já foi preenchido aqui</div>
           </div>
         </div>
 
@@ -686,9 +707,12 @@ function ModalScoreLivrariatMensal({ livraria, score, onSave, onClose }) {
           </div>
         )}
 
-        <div className="form-actions">
-          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={salvar} disabled={saving}>{saving?'Salvando...':'Salvar score'}</button>
+        <div className="form-actions" style={{ justifyContent:'space-between' }}>
+          {score ? <button className="btn btn-ghost" onClick={zerarMes} disabled={zerando} style={{ color:'#ef4444' }}>{zerando?'Zerando...':'Zerar mês'}</button> : <span />}
+          <div style={{ display:'flex', gap:8 }}>
+            <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+            <button className="btn btn-primary" onClick={salvar} disabled={saving}>{saving?'Salvando...':'Salvar score'}</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1182,6 +1206,7 @@ function AbaClassificacao() {
   const [scoresEdTri, setScoresEdTri] = useState([])
   const [scoresLivTri, setScoresLivTri] = useState([])
   const [loading, setLoading] = useState(true)
+  const [atualizando, setAtualizando] = useState(false)
   const [search, setSearch] = useState('')
   const [modalEdMensal, setModalEdMensal] = useState(null)
   const [modalLivMensal, setModalLivMensal] = useState(null)
@@ -1193,29 +1218,34 @@ function AbaClassificacao() {
   const mes = hoje.getMonth() + 1
   const ano = hoje.getFullYear()
 
-  useEffect(() => {
+  // Mês atual primeiro (fica logo ao lado do nome), meses mais antigos depois
+  const mesesColunas = useMemo(() => getMesesDisponiveis(6), [])
+  const triColunas = useMemo(() => getTrimestresDisponiveis(4).reverse(), [])
+
+  async function carregar() {
     setLoading(true)
-    Promise.all([
-      getEditorasParceirasAtivas(), getLivrariasParceirasAtivas(),
-      getAllScoreEditorasMes(ano, mes), getAllScoreLivrariasMes(ano, mes),
-      getScoreTrimestralEditoras(ano), getScoreTrimestralLivrarias(ano),
-    ]).then(([eds, livs, sEdM, sLivM, sEdT, sLivT]) => {
+    try {
+      const [eds, livs, sEdM, sLivM, sEdT, sLivT] = await Promise.all([
+        getEditorasParceirasAtivas(), getLivrariasParceirasAtivas(),
+        getScoreEditorasMeses(mesesColunas), getScoreLivrariasMeses(mesesColunas),
+        getScoreTrimestralEditoras(ano), getScoreTrimestralLivrarias(ano),
+      ])
       setEditoras(eds); setLivrarias(livs)
       setScoresEdMensal(sEdM); setScoresLivMensal(sLivM)
       setScoresEdTri(sEdT); setScoresLivTri(sLivT)
-    }).finally(() => setLoading(false))
-  }, [ano, mes])
+    } finally { setLoading(false) }
+  }
+
+  useEffect(() => { carregar() }, []) // eslint-disable-line
 
   useEffect(() => { sessionStorage.setItem('crm_subaba', subAba) }, [subAba])
 
-  const mapEdMensal = {}; for (const s of scoresEdMensal) mapEdMensal[s.editora_id] = s
-  const mapLivMensal = {}; for (const s of scoresLivMensal) mapLivMensal[s.livraria_id] = s
+  // Mapas por mês exato — chave inclui ano e mês, não só o id
+  const mapEdMensal = {}; for (const s of scoresEdMensal) mapEdMensal[`${s.editora_id}-${s.ano}-${s.mes}`] = s
+  const mapLivMensal = {}; for (const s of scoresLivMensal) mapLivMensal[`${s.livraria_id}-${s.ano}-${s.mes}`] = s
   const triAtual = trimestreAtual()
   const mapEdTri = {}; for (const s of scoresEdTri) { if (s.trimestre === triAtual) mapEdTri[s.editora_id] = s }
   const mapLivTri = {}; for (const s of scoresLivTri) { if (s.trimestre === triAtual) mapLivTri[s.livraria_id] = s }
-
-  const mesesColunas = useMemo(() => getMesesDisponiveis(6).reverse(), [])
-  const triColunas = useMemo(() => getTrimestresDisponiveis(4).reverse(), [])
 
   function iniciarResize(e) {
     e.preventDefault()
@@ -1227,8 +1257,26 @@ function AbaClassificacao() {
     document.addEventListener('mouseup', onUp)
   }
 
-  const editorasFiltradas = editoras.filter(e => !search || e.nome.toLowerCase().includes(search.toLowerCase()))
-  const livrariasFiltradas = livrarias.filter(l => !search || l.nome.toLowerCase().includes(search.toLowerCase()))
+  // Ordena pelo score do mês atual (o mais alto primeiro); sem score fica no fim
+  const editorasFiltradas = editoras
+    .filter(e => !search || e.nome.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => (mapEdMensal[`${b.id}-${ano}-${mes}`]?.score ?? -1) - (mapEdMensal[`${a.id}-${ano}-${mes}`]?.score ?? -1))
+  const livrariasFiltradas = livrarias
+    .filter(l => !search || l.nome.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => (mapLivMensal[`${b.id}-${ano}-${mes}`]?.score ?? -1) - (mapLivMensal[`${a.id}-${ano}-${mes}`]?.score ?? -1))
+
+  async function handleAtualizarClassificacao() {
+    setAtualizando(true)
+    try {
+      const r = await atualizarClassificacaoMensalLivrarias(ano, mes)
+      let msg = `${r.atualizadas} livraria(s) atualizada(s).`
+      if (r.semDadosNovos > 0) msg += ` ${r.semDadosNovos} sem dado novo no Monitoramento/Promoções.`
+      if (r.erros.length > 0) msg += ` Erros: ${r.erros.join(' | ')}`
+      showToast(msg, r.erros.length > 0 ? 'error' : 'success')
+      await carregar()
+    } catch (e) { console.error(e); showToast('Erro ao atualizar classificação.', 'error') }
+    finally { setAtualizando(false) }
+  }
 
   function tabStyle(ativa) { return { padding:'8px 16px', fontSize:12, fontWeight:700, cursor:'pointer', border:'none', borderBottom:ativa?'2px solid var(--accent)':'2px solid transparent', background:'transparent', color:ativa?'var(--accent)':'var(--text-muted)', transition:'all 0.15s', display:'flex', alignItems:'center', gap:6 } }
 
@@ -1245,7 +1293,7 @@ function AbaClassificacao() {
         <button style={tabStyle(subAba==='editoras')} onClick={() => setSubAba('editoras')}><Building2 size={13} /> Editoras</button>
       </div>
 
-      {/* Busca + importar */}
+      {/* Busca + importar + atualizar */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16, flexWrap:'wrap', gap:10 }}>
         <div style={{ display:'flex', gap:8, alignItems:'center', flex:1, minWidth:200 }}>
           <div style={{ position:'relative', flex:1 }}>
@@ -1255,6 +1303,11 @@ function AbaClassificacao() {
           <button className="btn btn-ghost btn-sm" onClick={() => setModalImportar(subAba==='livrarias'?'livraria':'editora')} style={{ display:'flex', alignItems:'center', gap:5, flexShrink:0 }}>
             <Upload size={13} /> Importar vendas
           </button>
+          {subAba === 'livrarias' && (
+            <button className="btn btn-primary btn-sm" onClick={handleAtualizarClassificacao} disabled={atualizando} style={{ display:'flex', alignItems:'center', gap:5, flexShrink:0 }}>
+              <RefreshCw size={13} /> {atualizando ? 'Atualizando...' : `Atualizar classificação (${mesAnoLabel(mes,ano)})`}
+            </button>
+          )}
         </div>
       </div>
 
@@ -1270,19 +1323,19 @@ function AbaClassificacao() {
               </tr></thead>
               <tbody>
                 {subAba === 'editoras' && editorasFiltradas.map(e => {
-                  const s = mapEdMensal[e.id]
+                  const s = mapEdMensal[`${e.id}-${ano}-${mes}`]
                   return <tr key={e.id} style={{ borderBottom:'1px solid var(--border)' }} onMouseEnter={el => el.currentTarget.style.background='var(--surface-2)'} onMouseLeave={el => el.currentTarget.style.background='transparent'}>
                     <td style={{ padding:'10px 14px', position:'sticky', left:0, background:'var(--surface)', zIndex:1, width:larguraColunaNome, maxWidth:400 }}><div style={{ fontWeight:700, fontSize:13 }}>{e.nome}</div>{e.classificacao&&<div style={{ fontSize:11, color:'var(--text-muted)' }}>Classe {e.classificacao}</div>}</td>
                     <td style={{ padding:'10px 14px', textAlign:'center' }}><button className="btn btn-ghost btn-sm" onClick={() => setModalEdMensal({ editora:e, score:s })}><Plus size={12} /></button></td>
-                    {mesesColunas.map(({ mes:m, ano:a }) => <td key={`${a}-${m}`} style={{ padding:'10px 14px', textAlign:'center' }}><CirculoScore nota={a===ano&&m===mes?s?.score:null} size={32} /></td>)}
+                    {mesesColunas.map(({ mes:m, ano:a }) => <td key={`${a}-${m}`} style={{ padding:'10px 14px', textAlign:'center' }}><CirculoScore nota={mapEdMensal[`${e.id}-${a}-${m}`]?.score ?? null} size={32} /></td>)}
                   </tr>
                 })}
                 {subAba === 'livrarias' && livrariasFiltradas.map(l => {
-                  const s = mapLivMensal[l.id]
+                  const s = mapLivMensal[`${l.id}-${ano}-${mes}`]
                   return <tr key={l.id} style={{ borderBottom:'1px solid var(--border)' }} onMouseEnter={el => el.currentTarget.style.background='var(--surface-2)'} onMouseLeave={el => el.currentTarget.style.background='transparent'}>
-                    <td style={{ padding:'10px 14px', position:'sticky', left:0, background:'var(--surface)', zIndex:1, width:larguraColunaNome, maxWidth:400 }}><div style={{ fontWeight:700, fontSize:13 }}>{l.nome}</div>{l.editoras_parceiras?.nome&&<div style={{ fontSize:11, color:'var(--text-muted)' }}>{l.editoras_parceiras.nome}</div>}</td>
+                    <td style={{ padding:'10px 14px', position:'sticky', left:0, background:'var(--surface)', zIndex:1, width:larguraColunaNome, maxWidth:400 }}><div style={{ fontWeight:700, fontSize:13 }}>{l.nome}</div>{l.editoras_parceiras?.nome&&<div style={{ fontSize:11, color:'var(--text-muted)' }}>{l.editoras_parceiras.nome}</div>}{l.classificacao&&<div style={{ fontSize:11, color:'var(--text-muted)' }}>Classe {l.classificacao}</div>}</td>
                     <td style={{ padding:'10px 14px', textAlign:'center' }}><button className="btn btn-ghost btn-sm" onClick={() => setModalLivMensal({ livraria:l, score:s })}><Plus size={12} /></button></td>
-                    {mesesColunas.map(({ mes:m, ano:a }) => <td key={`${a}-${m}`} style={{ padding:'10px 14px', textAlign:'center' }}><CirculoScore nota={a===ano&&m===mes?s?.score:null} size={32} /></td>)}
+                    {mesesColunas.map(({ mes:m, ano:a }) => <td key={`${a}-${m}`} style={{ padding:'10px 14px', textAlign:'center' }}><CirculoScore nota={mapLivMensal[`${l.id}-${a}-${m}`]?.score ?? null} size={32} /></td>)}
                   </tr>
                 })}
               </tbody>
@@ -1330,11 +1383,17 @@ function AbaClassificacao() {
         </div>
       )}
 
-      {modalEdMensal && <ModalScoreEditoraMensal editora={modalEdMensal.editora} score={modalEdMensal.score} onSave={async (id, a, m, d) => { const upd = await upsertScoreEditora(id, a, m, d); setScoresEdMensal(prev => { const ex=prev.find(s=>s.editora_id===id&&s.ano===a&&s.mes===m); return ex?prev.map(s=>s.editora_id===id?upd:s):[...prev,upd] }) }} onClose={() => setModalEdMensal(null)} />}
-      {modalLivMensal && <ModalScoreLivrariatMensal livraria={modalLivMensal.livraria} score={modalLivMensal.score} onSave={async (id, a, m, d) => { const upd = await upsertScoreLivraria(id, a, m, d); setScoresLivMensal(prev => { const ex=prev.find(s=>s.livraria_id===id&&s.ano===a&&s.mes===m); return ex?prev.map(s=>s.livraria_id===id?upd:s):[...prev,upd] }) }} onClose={() => setModalLivMensal(null)} />}
+      {modalEdMensal && <ModalScoreEditoraMensal editora={modalEdMensal.editora} score={modalEdMensal.score}
+        onSave={async (id, a, m, d) => { await upsertScoreEditora(id, a, m, d); await carregar() }}
+        onDelete={async (id, a, m) => { await deleteScoreEditoraMes(id, a, m); await carregar() }}
+        onClose={() => setModalEdMensal(null)} />}
+      {modalLivMensal && <ModalScoreLivrariatMensal livraria={modalLivMensal.livraria} score={modalLivMensal.score}
+        onSave={async (id, a, m, d) => { await upsertScoreLivraria(id, a, m, d); await carregar() }}
+        onDelete={async (id, a, m) => { await deleteScoreLivrariaMes(id, a, m); await carregar() }}
+        onClose={() => setModalLivMensal(null)} />}
       {modalEdTri && <ModalScoreTrimestralEditora editora={modalEdTri.editora} score={modalEdTri.score} onSave={async (id, a, t, d) => { await upsertScoreTrimestralEditora(id, a, t, d); await recarregarTri() }} onClose={() => setModalEdTri(null)} />}
       {modalLivTri && <ModalScoreTrimestralLivraria livraria={modalLivTri.livraria} score={modalLivTri.score} onSave={async (id, a, t, d) => { await upsertScoreTrimestralLivraria(id, a, t, d); await recarregarTri() }} onClose={() => setModalLivTri(null)} />}
-      {modalImportar && <ModalImportarVendas tipo={modalImportar} periodo={periodoAba} onClose={() => setModalImportar(null)} onImported={periodoAba==='mensal'?async()=>{const [sEdM,sLivM]=await Promise.all([getAllScoreEditorasMes(ano,mes),getAllScoreLivrariasMes(ano,mes)]);setScoresEdMensal(sEdM);setScoresLivMensal(sLivM)}:recarregarTri} showToast={showToast} />}
+      {modalImportar && <ModalImportarVendas tipo={modalImportar} periodo={periodoAba} onClose={() => setModalImportar(null)} onImported={periodoAba==='mensal' ? carregar : recarregarTri} showToast={showToast} />}
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
     </div>
   )
