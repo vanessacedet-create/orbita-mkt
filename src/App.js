@@ -57,6 +57,7 @@ const MonitoramentoParceiras = lazy(() => import('./pages/MonitoramentoParceiras
 const CRM                    = lazy(() => import('./pages/CRM'))
 const CRMEditorasParceiras   = lazy(() => import('./pages/CRMEditorasParceiras'))
 const EditorasLivrarias      = lazy(() => import('./pages/EditorasLivrarias'))
+const PromocoesParceiras     = lazy(() => import('./pages/PromocoesParceiras'))
 const Calculadora            = lazy(() => import('./pages/Calculadora'))
 const RH                     = lazy(() => import('./pages/RH'))
 const Eventos                = lazy(() => import('./pages/Eventos'))
@@ -101,6 +102,7 @@ const MENU = [
   { path: '/tarefas-parceiras',     label: 'Tarefas Parceiras',  icon: CheckSquare,     modulo: 'tarefas_parceiras' },
   { path: '/monitoramento-parceiras', label: 'Monitoramento',    icon: Eye,             modulo: 'tarefas_parceiras', ocultarPerfis: [] },
   { path: '/editoras-livrarias',    label: 'Editoras & Livrarias', icon: Building2,     modulo: 'tarefas_parceiras' },
+  { path: '/promocoes-parceiras',   label: 'Promoções',          icon: Megaphone,       modulo: 'tarefas_parceiras' },
   { path: '/crm-editoras-parceiras', label: 'CRM Editoras',      icon: TrendingUp,      modulo: 'tarefas_parceiras' },
 
   // Módulos compartilhados
@@ -424,6 +426,7 @@ function Shell() {
                 <Route path="/crm-parceiras" element={<RequireAuth modulo="crm_parceiras"><CRM grupo="parceiras" titulo="CRM Parceiras" /></RequireAuth>} />
                 <Route path="/crm-editoras-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><CRMEditorasParceiras /></RequireAuth>} />
                 <Route path="/editoras-livrarias" element={<RequireAuth modulo="tarefas_parceiras"><EditorasLivrarias /></RequireAuth>} />
+                <Route path="/promocoes-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><PromocoesParceiras /></RequireAuth>} />
                 <Route path="/calculadora" element={<RequireAuth modulo="calculadora"><Calculadora /></RequireAuth>} />
                 <Route path="/rh" element={<RequireAuth modulo="rh"><RH /></RequireAuth>} />
                 <Route path="/eventos" element={<RequireAuth modulo="eventos"><Eventos /></RequireAuth>} />
@@ -473,6 +476,6 @@ export default function App() {
 function PublicRoute({ children }) {
   const { session, loading } = useAuth()
   if (loading) return <div className="loading"><div className="spinner" /></div>
-  if (session) return <Navigate to="/" replace />
+  if (session) return <Navigate to="/login" replace />
   return children
 }
