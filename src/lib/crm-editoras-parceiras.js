@@ -239,7 +239,10 @@ function pontosComunicacaoMensal(comunicacao) {
   return 0 // nao_aplica
 }
 
-export function calcularScoreLivraria(dados) {
+// Calcula pontos obtidos e pontos possíveis para o score mensal de
+// livraria — usado tanto pelo score numérico (0-10, exibido no modal)
+// quanto pela classificação A-F (percentual sobre os blocos ativos).
+function pontosLivrariaMensal(dados) {
   let total = 0
   let maxPossivel = 0
 
@@ -272,8 +275,24 @@ export function calcularScoreLivraria(dados) {
     maxPossivel += 15
   }
 
+  return { total, maxPossivel }
+}
+
+export function calcularScoreLivraria(dados) {
+  const { total, maxPossivel } = pontosLivrariaMensal(dados)
   if (maxPossivel === 0) return 0
   return Math.min(10, Math.round((total / maxPossivel) * 10 * 10) / 10)
+}
+
+// Classificação A-F mensal — única classificação do sistema (não há mais
+// versão trimestral). Retorna null quando nenhum bloco se aplica ainda
+// (ex.: mês recém-criado, nada preenchido) — nesse caso quem chama deve
+// manter a classificação do mês anterior em vez de sobrescrever com null.
+export function calcularClassificacaoMensalLivraria(dados) {
+  const { total, maxPossivel } = pontosLivrariaMensal(dados)
+  if (maxPossivel === 0) return null
+  const pct = (total / maxPossivel) * 100
+  return classificacaoPorPct(pct)
 }
 
 export async function getScoreMensalLivraria(livraria_id) {
@@ -299,16 +318,17 @@ export async function getAllScoreLivrariasMes(ano, mes) {
 
 export async function upsertScoreLivraria(livraria_id, ano, mes, dados) {
   const score = calcularScoreLivraria(dados)
+  const classificacao = calcularClassificacaoMensalLivraria(dados)
   const { data, error } = await supabase
     .from('livrarias_score_mensal')
     .upsert(
-      { livraria_id, ano, mes, ...dados, score, atualizado_em: new Date().toISOString() },
+      { livraria_id, ano, mes, ...dados, score, classificacao, atualizado_em: new Date().toISOString() },
       { onConflict: 'livraria_id,ano,mes' }
     )
     .select()
     .single()
   if (error) throw error
-  return { ...data, score }
+  return { ...data, score, classificacao }
 }
 
 // ── CALENDÁRIO DE PROMOÇÕES ────────────────────────────────
