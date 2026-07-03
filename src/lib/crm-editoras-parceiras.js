@@ -255,7 +255,7 @@ export function calcularScoreLivraria(dados) {
   }
 
   // Promoções (20 pts)
-  if (!dados.promocoes_nao_aplica) {
+  if (!dados.promocoes_nao_aplica && dados.promocao_geral !== 'nao_aplica') {
     total += pontosPromocaoMensal(dados.promocao_geral)
     maxPossivel += 20
   }
@@ -391,7 +391,7 @@ export function calcularScoreTrimestralLivraria(dados) {
   }
 
   // Promoções
-  if (!dados.promocoes_nao_aplica) {
+  if (!dados.promocoes_nao_aplica && dados.participacao_promocao !== 'nao_aplica') {
     total += pontosPromocaoTrimestral(dados.participacao_promocao)
     maxPossivel += 20
   }
@@ -432,7 +432,7 @@ export function calcularScoreTrimestralEditora(dados) {
   }
 
   // Promoções
-  if (!dados.promocoes_nao_aplica) {
+  if (!dados.promocoes_nao_aplica && dados.participacao_promocao !== 'nao_aplica') {
     total += pontosPromocaoTrimestral(dados.participacao_promocao) * 0.5 // escala 20→10
     maxPossivel += 10
   }
