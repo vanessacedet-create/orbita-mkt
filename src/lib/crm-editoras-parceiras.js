@@ -1,4 +1,6 @@
 import { supabase } from './client'
+import { getCheckagemMes } from './monitoramento-editoras'
+import { getParticipacoesLivrariasMes } from './promocoes-parceiras'
 
 // ── PIPELINE PADRÃO ────────────────────────────────────────
 export const PIPELINE_EDITORAS = [
@@ -194,6 +196,19 @@ export async function getAllScoreEditorasMes(ano, mes) {
   return data || []
 }
 
+// Busca o score de editoras para vários meses de uma vez (evita repetir a
+// consulta mês a mês quando a tela mostra várias colunas ao mesmo tempo)
+export async function getScoreEditorasMeses(mesesAnos) {
+  if (!mesesAnos.length) return []
+  const filtro = mesesAnos.map(({ ano, mes }) => `and(ano.eq.${ano},mes.eq.${mes})`).join(',')
+  const { data, error } = await supabase
+    .from('editoras_score_mensal')
+    .select('*, editoras_parceiras(id, nome, classificacao)')
+    .or(filtro)
+  if (error) throw error
+  return data || []
+}
+
 export async function upsertScoreEditora(editora_id, ano, mes, dados) {
   const score = calcularScoreEditora(dados)
   const { data, error } = await supabase
@@ -206,6 +221,15 @@ export async function upsertScoreEditora(editora_id, ano, mes, dados) {
     .single()
   if (error) throw error
   return { ...data, score }
+}
+
+// Apaga o registro do mês inteiro — usado para "zerar" um mês preenchido errado
+export async function deleteScoreEditoraMes(editora_id, ano, mes) {
+  const { error } = await supabase
+    .from('editoras_score_mensal')
+    .delete()
+    .eq('editora_id', editora_id).eq('ano', ano).eq('mes', mes)
+  if (error) throw error
 }
 
 // ── SCORE MENSAL — LIVRARIAS ───────────────────────────────
@@ -316,6 +340,18 @@ export async function getAllScoreLivrariasMes(ano, mes) {
   return data || []
 }
 
+// Mesma ideia, mas para livrarias
+export async function getScoreLivrariasMeses(mesesAnos) {
+  if (!mesesAnos.length) return []
+  const filtro = mesesAnos.map(({ ano, mes }) => `and(ano.eq.${ano},mes.eq.${mes})`).join(',')
+  const { data, error } = await supabase
+    .from('livrarias_score_mensal')
+    .select('*, livrarias(id, nome, editora_id, editoras_parceiras(nome))')
+    .or(filtro)
+  if (error) throw error
+  return data || []
+}
+
 export async function upsertScoreLivraria(livraria_id, ano, mes, dados) {
   const score = calcularScoreLivraria(dados)
   const classificacao = calcularClassificacaoMensalLivraria(dados)
@@ -328,7 +364,113 @@ export async function upsertScoreLivraria(livraria_id, ano, mes, dados) {
     .select()
     .single()
   if (error) throw error
+  // Espelha na livraria a classificação mais recente calculada — é o valor
+  // usado para colorir/ordenar em Editoras & Livrarias e no Monitoramento.
+  if (classificacao) {
+    await supabase.from('livrarias').update({ classificacao }).eq('id', livraria_id)
+  }
   return { ...data, score, classificacao }
+}
+
+// Apaga o registro do mês inteiro — usado para "zerar" um mês preenchido errado
+export async function deleteScoreLivrariaMes(livraria_id, ano, mes) {
+  const { error } = await supabase
+    .from('livrarias_score_mensal')
+    .delete()
+    .eq('livraria_id', livraria_id).eq('ano', ano).eq('mes', mes)
+  if (error) throw error
+}
+
+// ── ATUALIZAÇÃO AUTOMÁTICA (Monitoramento + Promoções) ─────
+
+// Uma semana (segunda-feira) para cada dia útil do mês — usada para agrupar
+// o checkagem diário do Monitoramento em contagem de semanas.
+function segundaFeiraDe(dataStr) {
+  const d = new Date(dataStr + 'T12:00:00')
+  const diaSemana = d.getDay()
+  const diffSeg = diaSemana === 0 ? -6 : 1 - diaSemana
+  const seg = new Date(d); seg.setDate(d.getDate() + diffSeg)
+  return `${seg.getFullYear()}-${String(seg.getMonth() + 1).padStart(2, '0')}-${String(seg.getDate()).padStart(2, '0')}`
+}
+
+// Lê o checkagem do Monitoramento do mês e devolve, por livraria (chave =
+// editora_id, que é o campo usado no checkagem), quantas semanas eram
+// esperadas e quantas tiveram feed/story postados pelo menos uma vez.
+async function buscarPublicacoesMes(ano, mes) {
+  const registros = await getCheckagemMes({ ano, mes })
+  const porChave = {}
+  for (const r of registros) {
+    if (r.formato !== 'feed' && r.formato !== 'story') continue
+    if (!porChave[r.editora_id]) porChave[r.editora_id] = { semanas: new Set(), feed: new Set(), story: new Set() }
+    const semana = segundaFeiraDe(r.data_esperada)
+    porChave[r.editora_id].semanas.add(semana)
+    if (r.formato === 'feed' && r.status === 'postou') porChave[r.editora_id].feed.add(semana)
+    if (r.formato === 'story' && r.status === 'postou') porChave[r.editora_id].story.add(semana)
+  }
+  const resultado = {}
+  for (const [chave, info] of Object.entries(porChave)) {
+    resultado[chave] = {
+      semanas_previstas: info.semanas.size,
+      semanas_postou_feed: info.feed.size,
+      semanas_postou_story: info.story.size,
+    }
+  }
+  return resultado
+}
+
+// Agrega participações em campanhas de Promoções por livraria: se confirmou
+// em qualquer campanha do mês, conta como confirmou; senão recusou; senão
+// sem retorno; se não teve nenhuma campanha no mês, fica de fora do mapa.
+function agregarParticipacaoPromocoes(participacoes) {
+  const porLivraria = {}
+  for (const p of participacoes) {
+    if (!porLivraria[p.livraria_id]) porLivraria[p.livraria_id] = []
+    porLivraria[p.livraria_id].push(p.status)
+  }
+  const resultado = {}
+  for (const [livraria_id, statuses] of Object.entries(porLivraria)) {
+    let geral = 'sem_retorno'
+    if (statuses.includes('confirmou')) geral = 'confirmou'
+    else if (statuses.includes('recusou')) geral = 'recusou'
+    resultado[livraria_id] = { promocao_geral: geral, qtd_promocoes: statuses.length }
+  }
+  return resultado
+}
+
+// Puxa Monitoramento (publicações) e Promoções (participação) para o mês
+// indicado e atualiza a classificação de todas as livrarias ativas. Vendas,
+// comunicação e observação — preenchidas manualmente — não são mexidas.
+// Pode ser chamada quantas vezes quiser, a qualquer momento do mês.
+export async function atualizarClassificacaoMensalLivrarias(ano, mes) {
+  const [livrarias, publicacoesPorChave, participacoes, scoresAtuais] = await Promise.all([
+    getLivrariasParceirasAtivas(),
+    buscarPublicacoesMes(ano, mes),
+    getParticipacoesLivrariasMes(ano, mes),
+    getAllScoreLivrariasMes(ano, mes),
+  ])
+  const participacaoPorLivraria = agregarParticipacaoPromocoes(participacoes)
+  const scoreExistente = {}
+  for (const s of scoresAtuais) scoreExistente[s.livraria_id] = s
+
+  const resultado = { atualizadas: 0, semDadosNovos: 0, erros: [] }
+  for (const l of livrarias) {
+    const pub = publicacoesPorChave[l.editora_id]
+    const part = participacaoPorLivraria[l.id]
+    if (!pub && !part) { resultado.semDadosNovos++; continue }
+    try {
+      const { id, livraria_id, ano: _a, mes: _m, score, classificacao, criado_em, atualizado_em, ...base } = scoreExistente[l.id] || {}
+      const dados = {
+        ...base,
+        ...(pub ? { semanas_previstas: pub.semanas_previstas, semanas_postou_feed: pub.semanas_postou_feed, semanas_postou_story: pub.semanas_postou_story, publicacoes_nao_aplica: false } : {}),
+        ...(part ? { promocao_geral: part.promocao_geral, qtd_promocoes: part.qtd_promocoes, promocoes_nao_aplica: false } : {}),
+      }
+      await upsertScoreLivraria(l.id, ano, mes, dados)
+      resultado.atualizadas++
+    } catch (e) {
+      resultado.erros.push(`${l.nome}: ${e.message}`)
+    }
+  }
+  return resultado
 }
 
 // ── CALENDÁRIO DE PROMOÇÕES ────────────────────────────────
