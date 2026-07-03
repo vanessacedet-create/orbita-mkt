@@ -381,6 +381,17 @@ export async function deleteScoreLivrariaMes(livraria_id, ano, mes) {
   if (error) throw error
 }
 
+// Apaga o score mensal de TODAS as livrarias de um mês de uma vez —
+// útil quando o mês inteiro foi preenchido errado
+export async function deleteScoreLivrariasMes(ano, mes) {
+  const { error, count } = await supabase
+    .from('livrarias_score_mensal')
+    .delete({ count: 'exact' })
+    .eq('ano', ano).eq('mes', mes)
+  if (error) throw error
+  return count || 0
+}
+
 // ── ATUALIZAÇÃO AUTOMÁTICA (Monitoramento + Promoções) ─────
 
 // Uma semana (segunda-feira) para cada dia útil do mês — usada para agrupar
