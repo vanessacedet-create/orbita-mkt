@@ -484,12 +484,25 @@ function AbaParceirosAtivos() {
 }
 
 // ── MODAIS SCORE MENSAL (preservados) ─────────────────────
-function ModalScoreEditoraMensal({ editora, score, onSave, onDelete, onClose }) {
+function ModalScoreEditoraMensal({ editora, scoresDoEditora = [], onSave, onDelete, onClose }) {
   const mesesOpcoes = getMesesDisponiveis(24)
   const hoje = new Date()
-  const [mes, setMes] = useState(score?.mes || hoje.getMonth()+1)
-  const [ano, setAno] = useState(score?.ano || hoje.getFullYear())
-  const [form, setForm] = useState({ promocao_geral:score?.promocao_geral||'nao_participou', promocao_particular:score?.promocao_particular||'nao_participou', campanha:score?.campanha||'nao_participou', teve_lancamento:score?.teve_lancamento||false, qtd_lancamentos:score?.qtd_lancamentos||0, fez_reuniao:score?.fez_reuniao||false, respondeu_whatsapp:score?.respondeu_whatsapp||false, publicou_feed:score?.publicou_feed||false, publicou_story:score?.publicou_story||false, publicou_reels:score?.publicou_reels||false, vendas_editora:score?.vendas_editora||0, responde_artes:score?.responde_artes||false, faz_cortesia:score?.faz_cortesia||false, cria_cupom:score?.cria_cupom||false, observacao:score?.observacao||'' })
+  const [mes, setMes] = useState(hoje.getMonth()+1)
+  const [ano, setAno] = useState(hoje.getFullYear())
+
+  function valoresIniciais(s) {
+    return { promocao_geral:s?.promocao_geral||'nao_participou', promocao_particular:s?.promocao_particular||'nao_participou', campanha:s?.campanha||'nao_participou', teve_lancamento:s?.teve_lancamento||false, qtd_lancamentos:s?.qtd_lancamentos||0, fez_reuniao:s?.fez_reuniao||false, respondeu_whatsapp:s?.respondeu_whatsapp||false, publicou_feed:s?.publicou_feed||false, publicou_story:s?.publicou_story||false, publicou_reels:s?.publicou_reels||false, vendas_editora:s?.vendas_editora||0, responde_artes:s?.responde_artes||false, faz_cortesia:s?.faz_cortesia||false, cria_cupom:s?.cria_cupom||false, observacao:s?.observacao||'' }
+  }
+
+  const scoreAtual = scoresDoEditora.find(s => s.ano === ano && s.mes === mes) || null
+  const [form, setForm] = useState(() => valoresIniciais(scoreAtual))
+
+  // Toda vez que o mês selecionado mudar, recarrega o formulário com os
+  // dados daquele mês (ou limpa, se não houver nada registrado ainda)
+  useEffect(() => {
+    setForm(valoresIniciais(scoresDoEditora.find(s => s.ano === ano && s.mes === mes) || null))
+  }, [ano, mes]) // eslint-disable-line
+
   const [saving, setSaving] = useState(false)
   const [zerando, setZerando] = useState(false)
   const [erro, setErro] = useState(null)
@@ -510,6 +523,7 @@ function ModalScoreEditoraMensal({ editora, score, onSave, onDelete, onClose }) 
       <div className="modal" style={{ maxWidth:560, maxHeight:'90vh', overflowY:'auto' }}>
         <div className="modal-header"><div><h2 className="modal-title">Score mensal — Editora</h2><div style={{ fontSize:12, color:'var(--text-muted)' }}>{editora.nome}</div></div><button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button></div>
         <div className="form-group"><label className="form-label">Mês de referência</label><select className="form-select" value={`${ano}-${mes}`} onChange={e => { const [a,m]=e.target.value.split('-'); setAno(Number(a)); setMes(Number(m)) }}>{mesesOpcoes.map(({ mes:m, ano:a }) => <option key={`${a}-${m}`} value={`${a}-${m}`}>{mesAnoLabel(m,a)}</option>)}</select></div>
+        {scoreAtual && <div style={{ fontSize:11, color:'var(--accent)', marginTop:-8, marginBottom:12 }}>Já existe registro para este mês — os campos abaixo mostram o que já foi salvo.</div>}
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}><Sel field="promocao_geral" label="Promoção geral" /><Sel field="promocao_particular" label="Promoção particular" /><Sel field="campanha" label="Campanha" /><div className="form-group"><label className="form-label">Vendas</label><input className="form-input" type="number" min={0} value={form.vendas_editora} onChange={e => setForm(f => ({ ...f, vendas_editora: e.target.value === '' ? '' : Number(e.target.value) }))} /></div></div>
         <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'12px 16px', marginBottom:12 }}><div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)', marginBottom:8 }}>Lançamentos</div><div style={{ display:'flex', gap:16, alignItems:'center' }}><Check field="teve_lancamento" label="Teve lançamento?" />{form.teve_lancamento&&<div style={{ display:'flex', alignItems:'center', gap:8 }}><span style={{ fontSize:12, color:'var(--text-muted)' }}>Quantos?</span><input className="form-input" type="number" min={1} value={form.qtd_lancamentos} onChange={e => setForm(f => ({ ...f, qtd_lancamentos:Number(e.target.value) }))} style={{ width:80 }} /></div>}</div></div>
         <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'12px 16px', marginBottom:12 }}><div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)', marginBottom:8 }}>Comunicação & publicações</div><div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:4 }}><Check field="fez_reuniao" label="Fez reunião" /><Check field="respondeu_whatsapp" label="Respondeu WhatsApp" /><Check field="publicou_feed" label="Publicou feed" /><Check field="publicou_story" label="Publicou story" /><Check field="publicou_reels" label="Publicou reels" /><Check field="responde_artes" label="Responde sobre artes" /><Check field="faz_cortesia" label="Faz envio de cortesia" /><Check field="cria_cupom" label="Cria cupom de venda" /></div></div>
@@ -517,7 +531,7 @@ function ModalScoreEditoraMensal({ editora, score, onSave, onDelete, onClose }) 
         <div style={{ padding:'14px 16px', background:c.bg, border:`1px solid ${c.cor}40`, borderRadius:10, display:'flex', alignItems:'center', gap:14, marginBottom:16 }}><span style={{ fontSize:36, fontWeight:900, color:c.cor }}>{preview.toFixed(1)}</span><div style={{ fontSize:13, fontWeight:700, color:c.cor }}>Score calculado</div></div>
         {erro && <div style={{ padding:'10px 14px', background:'rgba(239,68,68,0.12)', border:'1px solid rgba(239,68,68,0.4)', borderRadius:8, fontSize:12, color:'#ef4444', marginBottom:12 }}>Não foi possível salvar: {erro}</div>}
         <div className="form-actions" style={{ justifyContent:'space-between' }}>
-          {score ? <button className="btn btn-ghost" onClick={zerarMes} disabled={zerando} style={{ color:'#ef4444' }}>{zerando?'Zerando...':'Zerar mês'}</button> : <span />}
+          {scoreAtual ? <button className="btn btn-ghost" onClick={zerarMes} disabled={zerando} style={{ color:'#ef4444' }}>{zerando?'Zerando...':'Zerar mês'}</button> : <span />}
           <div style={{ display:'flex', gap:8 }}><button className="btn btn-ghost" onClick={onClose}>Cancelar</button><button className="btn btn-primary" onClick={salvar} disabled={saving}>{saving?'Salvando...':'Salvar score'}</button></div>
         </div>
       </div>
@@ -525,31 +539,43 @@ function ModalScoreEditoraMensal({ editora, score, onSave, onDelete, onClose }) 
   )
 }
 
-function ModalScoreLivrariatMensal({ livraria, score, onSave, onDelete, onClose }) {
+function ModalScoreLivrariatMensal({ livraria, scoresDoLivraria = [], onSave, onDelete, onClose }) {
   const mesesOpcoes = getMesesDisponiveis(24)
   const hoje = new Date()
-  const [mes, setMes] = useState(score?.mes || hoje.getMonth()+1)
-  const [ano, setAno] = useState(score?.ano || hoje.getFullYear())
+  const [mes, setMes] = useState(hoje.getMonth()+1)
+  const [ano, setAno] = useState(hoje.getFullYear())
   const [promocoes, setPromocoes] = useState([])
-  const [form, setForm] = useState({
-    promocao_geral: score?.promocao_geral || 'nao_aplica',
-    qtd_promocoes: score?.qtd_promocoes || 0,
-    promocoes_ids: score?.promocoes_ids || [],
-    promocoes_nao_aplica: score?.promocoes_nao_aplica || false,
-    semanas_previstas: score?.semanas_previstas || 0,
-    semanas_postou_feed: score?.semanas_postou_feed || 0,
-    semanas_postou_story: score?.semanas_postou_story || 0,
-    publicacoes_nao_aplica: score?.publicacoes_nao_aplica || false,
-    vendas_livraria: score?.vendas_livraria || 0,
-    vendas_nao_aplica: score?.vendas_nao_aplica || false,
-    comunicacao: score?.comunicacao || 'nao_aplica',
-    observacao: score?.observacao || '',
-  })
+
+  function valoresIniciais(s) {
+    return {
+      promocao_geral: s?.promocao_geral || 'nao_aplica',
+      qtd_promocoes: s?.qtd_promocoes || 0,
+      promocoes_ids: s?.promocoes_ids || [],
+      promocoes_nao_aplica: s?.promocoes_nao_aplica || false,
+      semanas_previstas: s?.semanas_previstas || 0,
+      semanas_postou_feed: s?.semanas_postou_feed || 0,
+      semanas_postou_story: s?.semanas_postou_story || 0,
+      publicacoes_nao_aplica: s?.publicacoes_nao_aplica || false,
+      vendas_livraria: s?.vendas_livraria || 0,
+      vendas_nao_aplica: s?.vendas_nao_aplica || false,
+      comunicacao: s?.comunicacao || 'nao_aplica',
+      observacao: s?.observacao || '',
+    }
+  }
+
+  const scoreAtual = scoresDoLivraria.find(s => s.ano === ano && s.mes === mes) || null
+  const [form, setForm] = useState(() => valoresIniciais(scoreAtual))
   const [saving, setSaving] = useState(false)
   const [zerando, setZerando] = useState(false)
   const [erro, setErro] = useState(null)
 
   useEffect(() => { getCalendarioPromocoes().then(setPromocoes).catch(console.error) }, [])
+
+  // Toda vez que o mês selecionado mudar, recarrega o formulário com os
+  // dados daquele mês (ou limpa, se não houver nada registrado ainda)
+  useEffect(() => {
+    setForm(valoresIniciais(scoresDoLivraria.find(s => s.ano === ano && s.mes === mes) || null))
+  }, [ano, mes]) // eslint-disable-line
 
   const preview = calcularScoreLivraria(form)
   const c = corScore(preview)
@@ -595,6 +621,7 @@ function ModalScoreLivrariatMensal({ livraria, score, onSave, onDelete, onClose 
           <select className="form-select" value={`${ano}-${mes}`} onChange={e => { const [a,m]=e.target.value.split('-'); setAno(Number(a)); setMes(Number(m)) }}>
             {mesesOpcoes.map(({ mes:m, ano:a }) => <option key={`${a}-${m}`} value={`${a}-${m}`}>{mesAnoLabel(m,a)}</option>)}
           </select>
+          {scoreAtual && <div style={{ fontSize:11, color:'var(--accent)', marginTop:6 }}>Já existe registro para este mês — os campos abaixo mostram o que já foi salvo.</div>}
         </div>
 
         {/* Vendas */}
@@ -708,7 +735,7 @@ function ModalScoreLivrariatMensal({ livraria, score, onSave, onDelete, onClose 
         )}
 
         <div className="form-actions" style={{ justifyContent:'space-between' }}>
-          {score ? <button className="btn btn-ghost" onClick={zerarMes} disabled={zerando} style={{ color:'#ef4444' }}>{zerando?'Zerando...':'Zerar mês'}</button> : <span />}
+          {scoreAtual ? <button className="btn btn-ghost" onClick={zerarMes} disabled={zerando} style={{ color:'#ef4444' }}>{zerando?'Zerando...':'Zerar mês'}</button> : <span />}
           <div style={{ display:'flex', gap:8 }}>
             <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
             <button className="btn btn-primary" onClick={salvar} disabled={saving}>{saving?'Salvando...':'Salvar score'}</button>
@@ -1326,7 +1353,7 @@ function AbaClassificacao() {
                   const s = mapEdMensal[`${e.id}-${ano}-${mes}`]
                   return <tr key={e.id} style={{ borderBottom:'1px solid var(--border)' }} onMouseEnter={el => el.currentTarget.style.background='var(--surface-2)'} onMouseLeave={el => el.currentTarget.style.background='transparent'}>
                     <td style={{ padding:'10px 14px', position:'sticky', left:0, background:'var(--surface)', zIndex:1, width:larguraColunaNome, maxWidth:400 }}><div style={{ fontWeight:700, fontSize:13 }}>{e.nome}</div>{e.classificacao&&<div style={{ fontSize:11, color:'var(--text-muted)' }}>Classe {e.classificacao}</div>}</td>
-                    <td style={{ padding:'10px 14px', textAlign:'center' }}><button className="btn btn-ghost btn-sm" onClick={() => setModalEdMensal({ editora:e, score:s })}><Plus size={12} /></button></td>
+                    <td style={{ padding:'10px 14px', textAlign:'center' }}><button className="btn btn-ghost btn-sm" onClick={() => setModalEdMensal({ editora:e })}><Plus size={12} /></button></td>
                     {mesesColunas.map(({ mes:m, ano:a }) => <td key={`${a}-${m}`} style={{ padding:'10px 14px', textAlign:'center' }}><CirculoScore nota={mapEdMensal[`${e.id}-${a}-${m}`]?.score ?? null} size={32} /></td>)}
                   </tr>
                 })}
@@ -1334,7 +1361,7 @@ function AbaClassificacao() {
                   const s = mapLivMensal[`${l.id}-${ano}-${mes}`]
                   return <tr key={l.id} style={{ borderBottom:'1px solid var(--border)' }} onMouseEnter={el => el.currentTarget.style.background='var(--surface-2)'} onMouseLeave={el => el.currentTarget.style.background='transparent'}>
                     <td style={{ padding:'10px 14px', position:'sticky', left:0, background:'var(--surface)', zIndex:1, width:larguraColunaNome, maxWidth:400 }}><div style={{ fontWeight:700, fontSize:13 }}>{l.nome}</div>{l.editoras_parceiras?.nome&&<div style={{ fontSize:11, color:'var(--text-muted)' }}>{l.editoras_parceiras.nome}</div>}{l.classificacao&&<div style={{ fontSize:11, color:'var(--text-muted)' }}>Classe {l.classificacao}</div>}</td>
-                    <td style={{ padding:'10px 14px', textAlign:'center' }}><button className="btn btn-ghost btn-sm" onClick={() => setModalLivMensal({ livraria:l, score:s })}><Plus size={12} /></button></td>
+                    <td style={{ padding:'10px 14px', textAlign:'center' }}><button className="btn btn-ghost btn-sm" onClick={() => setModalLivMensal({ livraria:l })}><Plus size={12} /></button></td>
                     {mesesColunas.map(({ mes:m, ano:a }) => <td key={`${a}-${m}`} style={{ padding:'10px 14px', textAlign:'center' }}><CirculoScore nota={mapLivMensal[`${l.id}-${a}-${m}`]?.score ?? null} size={32} /></td>)}
                   </tr>
                 })}
@@ -1383,11 +1410,11 @@ function AbaClassificacao() {
         </div>
       )}
 
-      {modalEdMensal && <ModalScoreEditoraMensal editora={modalEdMensal.editora} score={modalEdMensal.score}
+      {modalEdMensal && <ModalScoreEditoraMensal editora={modalEdMensal.editora} scoresDoEditora={scoresEdMensal.filter(s => s.editora_id === modalEdMensal.editora.id)}
         onSave={async (id, a, m, d) => { await upsertScoreEditora(id, a, m, d); await carregar() }}
         onDelete={async (id, a, m) => { await deleteScoreEditoraMes(id, a, m); await carregar() }}
         onClose={() => setModalEdMensal(null)} />}
-      {modalLivMensal && <ModalScoreLivrariatMensal livraria={modalLivMensal.livraria} score={modalLivMensal.score}
+      {modalLivMensal && <ModalScoreLivrariatMensal livraria={modalLivMensal.livraria} scoresDoLivraria={scoresLivMensal.filter(s => s.livraria_id === modalLivMensal.livraria.id)}
         onSave={async (id, a, m, d) => { await upsertScoreLivraria(id, a, m, d); await carregar() }}
         onDelete={async (id, a, m) => { await deleteScoreLivrariaMes(id, a, m); await carregar() }}
         onClose={() => setModalLivMensal(null)} />}
