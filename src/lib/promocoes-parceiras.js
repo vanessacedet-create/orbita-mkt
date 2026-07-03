@@ -1,5 +1,32 @@
 import { supabase } from './client'
 
+// Participações de livrarias em campanhas cujo período toca um determinado mês —
+// usada pelo CRM para puxar automaticamente a participação em promoções.
+export async function getParticipacoesLivrariasMes(ano, mes) {
+  const inicio = `${ano}-${String(mes).padStart(2, '0')}-01`
+  const ultimoDia = new Date(ano, mes, 0).getDate()
+  const fim = `${ano}-${String(mes).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`
+
+  const { data: campanhas, error: e1 } = await supabase
+    .from('campanhas_promocao')
+    .select('id')
+    .eq('tipo_participante', 'livraria')
+    .eq('ativo', true)
+    .lte('data_inicio', fim)
+    .gte('data_fim', inicio)
+  if (e1) throw e1
+  const campanhaIds = (campanhas || []).map(c => c.id)
+  if (!campanhaIds.length) return []
+
+  const { data: participacoes, error: e2 } = await supabase
+    .from('campanha_promocao_participantes')
+    .select('campanha_id, livraria_id, status')
+    .in('campanha_id', campanhaIds)
+    .not('livraria_id', 'is', null)
+  if (e2) throw e2
+  return participacoes || []
+}
+
 // ── PROMOÇÕES ───────────────────────────────────────────────
 
 export async function getPromocoes() {
