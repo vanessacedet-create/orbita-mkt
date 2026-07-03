@@ -3,14 +3,15 @@
 // os imports existentes continuem funcionando sem alterações.
 //
 // Estrutura nova:
-//   lib/client.js        — instância do Supabase
-//   lib/auth.js          — autenticação e usuários
-//   lib/parceiros.js     — parceiros e CRM de influencers
-//   lib/livros.js        — livros, envios e lançamentos
-//   lib/campanhas.js     — campanhas, divulgações e dashboard
-//   lib/tarefas.js       — tarefas, checklist e importações
-//   lib/monitoramento.js — monitoramento mensal
-//   lib/crm-literario.js — CRM literário, contatos e divulgadores
+//   lib/client.js         — instância do Supabase
+//   lib/auth.js           — autenticação e usuários
+//   lib/parceiros.js      — parceiros e CRM de influencers
+//   lib/livros.js         — livros, envios e lançamentos
+//   lib/campanhas.js      — campanhas, divulgações e dashboard
+//   lib/tarefas.js        — tarefas, checklist e importações
+//   lib/tarefasDiarias.js — tarefas diárias do grupo influencers
+//   lib/monitoramento.js  — monitoramento mensal
+//   lib/crm-literario.js  — CRM literário, contatos e divulgadores
 
 export { supabase } from './client'
 
@@ -18,20 +19,6 @@ export {
   signIn, resetPassword, signOut, getSession,
   getUsuarioPerfil, getUsuarios, updateUsuario, createUsuarioAdmin,
 } from './auth'
-
-// ============================================================
-// ADICIONAR AO src/lib/supabase.js
-// Na seção de imports de './parceiros', incluir as novas funções:
-// ============================================================
-
-// Localizar a linha que importa de './parceiros' e ADICIONAR:
-//
-//   TIERS, TIER_ORDER, SITUACOES,
-//   getParceirosComTier, verificarPromocao, progressoTier,
-//   updateTier, updateSituacao, updatePerformance,
-//   getTierHistory, ativarParceiroBronze,
-//
-// Exemplo de como ficaria o import completo:
 
 export {
   saveParceiroCPF, getParceiroCPF,
@@ -79,6 +66,17 @@ export {
   gerarProximaOcorrencia, calcularProximoPrazo,
   setResponsaveisTarefa, toggleParteResponsavel, concluirTodasAsPartes,
 } from './tarefas'
+
+// ── TAREFAS DIÁRIAS (grupo influencers) ──
+export {
+  TIPOS_TAREFA, OBJETIVOS_TAREFA, DIAS_SEMANA, objetivosPorTipo,
+  hojeISO, semanaDeISO, addDiasISO, diaSemanaDeISO,
+  getMetasSemanais, salvarMetasSemanais,
+  gerarVagasDoDia, gerarVagasDaSemana,
+  getTarefasDoDia, getTarefasDaSemana, getTarefasPorPeriodo,
+  getResponsavelDoParceiro, preencherVaga, atualizarTarefa,
+  concluirTarefa, reabrirTarefa, esvaziarVaga, deletarTarefa,
+} from './tarefasDiarias'
 
 export {
   getRegistrosMonitoramento, createRegistroMonitoramento,
