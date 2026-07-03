@@ -531,6 +531,124 @@ export async function getScoreTrimestralEditora(editora_id) {
   return data || []
 }
 
+// ── IMPORTAÇÃO COM CONFERÊNCIA ─────────────────────────────
+
+// Normaliza nomes para matching tolerante: minúsculas, sem acentos,
+// pontuação vira espaço, espaços duplicados colapsados
+export function normalizarNome(nome) {
+  return String(nome || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+// Similaridade simples entre nomes já normalizados (0 a 1)
+function similaridadeNomes(a, b) {
+  if (!a || !b) return 0
+  if (a === b) return 1
+  if (a.includes(b) || b.includes(a)) return 0.9
+  const ta = a.split(' ').filter(Boolean)
+  const tb = new Set(b.split(' ').filter(Boolean))
+  let comum = 0
+  for (const t of ta) if (tb.has(t)) comum++
+  return comum / Math.max(ta.length, tb.size)
+}
+
+// Confere a planilha contra o banco SEM salvar nada.
+// rows: [{ nome, vendas }] | tipo: 'livraria' ou 'editora'
+// Retorna { encontradas, parecidas, ignoradas }
+export async function conferirVendas(rows, tipo) {
+  const tabela = tipo === 'livraria' ? 'livrarias' : 'editoras_parceiras'
+  const { data, error } = await supabase.from(tabela).select('id, nome').eq('ativo', true)
+  if (error) throw error
+  const registros = data || []
+  const porNorm = new Map()
+  for (const r of registros) {
+    const n = normalizarNome(r.nome)
+    if (!porNorm.has(n)) porNorm.set(n, r)
+  }
+
+  const encontradas = [], parecidas = [], ignoradas = []
+  for (const row of rows) {
+    const nomePlanilha = String(row.nome || '').trim()
+    if (!nomePlanilha) continue
+    const vendas = Number(row.vendas) || 0
+    const norm = normalizarNome(nomePlanilha)
+    const exato = porNorm.get(norm)
+    if (exato) { encontradas.push({ nomePlanilha, vendas, alvo: exato }); continue }
+    const sugestoes = registros
+      .map(r => ({ r, sim: similaridadeNomes(norm, normalizarNome(r.nome)) }))
+      .filter(x => x.sim >= 0.6)
+      .sort((a, b) => b.sim - a.sim)
+      .slice(0, 3)
+      .map(x => x.r)
+    if (sugestoes.length > 0) parecidas.push({ nomePlanilha, vendas, sugestoes })
+    else ignoradas.push({ nomePlanilha, vendas })
+  }
+  return { encontradas, parecidas, ignoradas }
+}
+
+// Salva apenas os itens confirmados pela usuária.
+// confirmadas: [{ nomePlanilha, vendas, alvo: { id, nome } }]
+// periodo: { mes } para mensal OU { trimestre } para trimestral
+export async function salvarVendasConfirmadas(confirmadas, tipo, ano, periodo) {
+  const resultados = { importados: 0, erros: [] }
+  const eMensal = !!periodo.mes
+
+  for (const item of confirmadas) {
+    try {
+      const vendas = Number(item.vendas) || 0
+      if (tipo === 'livraria') {
+        if (eMensal) {
+          const existente = await supabase
+            .from('livrarias_score_mensal').select('*')
+            .eq('livraria_id', item.alvo.id).eq('ano', ano).eq('mes', periodo.mes)
+            .maybeSingle()
+          const { id, livraria_id, ano: _a, mes: _m, score, criado_em, atualizado_em, ...dadosBase } = existente.data || {}
+          await upsertScoreLivraria(item.alvo.id, ano, periodo.mes, {
+            ...dadosBase, vendas_livraria: vendas, vendas_nao_aplica: false,
+          })
+        } else {
+          const existente = await supabase
+            .from('livrarias_score_trimestral').select('*')
+            .eq('livraria_id', item.alvo.id).eq('ano', ano).eq('trimestre', periodo.trimestre)
+            .maybeSingle()
+          const { id, livraria_id, ano: _a, trimestre: _t, score, classificacao, criado_em, atualizado_em, ...dadosBase } = existente.data || {}
+          await upsertScoreTrimestralLivraria(item.alvo.id, ano, periodo.trimestre, {
+            ...dadosBase, vendas, vendas_nao_aplica: false,
+          })
+        }
+      } else {
+        if (eMensal) {
+          const existente = await supabase
+            .from('editoras_score_mensal').select('*')
+            .eq('editora_id', item.alvo.id).eq('ano', ano).eq('mes', periodo.mes)
+            .maybeSingle()
+          const { id, editora_id, ano: _a, mes: _m, score, criado_em, atualizado_em, ...dadosBase } = existente.data || {}
+          await upsertScoreEditora(item.alvo.id, ano, periodo.mes, {
+            ...dadosBase, vendas_editora: vendas,
+          })
+        } else {
+          const existente = await supabase
+            .from('editoras_score_trimestral').select('*')
+            .eq('editora_id', item.alvo.id).eq('ano', ano).eq('trimestre', periodo.trimestre)
+            .maybeSingle()
+          const { id, editora_id, ano: _a, trimestre: _t, score, classificacao, criado_em, atualizado_em, ...dadosBase } = existente.data || {}
+          await upsertScoreTrimestralEditora(item.alvo.id, ano, periodo.trimestre, {
+            ...dadosBase, vendas, vendas_nao_aplica: false,
+          })
+        }
+      }
+      resultados.importados++
+    } catch (e) {
+      resultados.erros.push(`${item.nomePlanilha}: ${e.message}`)
+    }
+  }
+  return resultados
+}
+
 // Importação de vendas por planilha
 export async function importarVendasLivraria(rows, ano, trimestre) {
   // rows: [{ livraria_nome, vendas }]
