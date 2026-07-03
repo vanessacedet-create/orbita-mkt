@@ -10,7 +10,7 @@ import {
   calcularScoreTrimestralLivraria, calcularScoreTrimestralEditora,
   upsertScoreTrimestralLivraria, upsertScoreTrimestralEditora,
   getScoreTrimestralLivrarias, getScoreTrimestralEditoras,
-  importarVendasLivraria, importarVendasEditora,
+  conferirVendas, salvarVendasConfirmadas,
   getCalendarioPromocoes,
   PIPELINE_EDITORAS, TIPOS_CONTATO, ORIGENS_EDITORAS,
   pipelineInfo, mesAnoLabel, getMesesDisponiveis, corScore, MESES_LABEL,
@@ -488,22 +488,24 @@ function ModalScoreEditoraMensal({ editora, score, onSave, onClose }) {
   const [ano, setAno] = useState(score?.ano || hoje.getFullYear())
   const [form, setForm] = useState({ promocao_geral:score?.promocao_geral||'nao_participou', promocao_particular:score?.promocao_particular||'nao_participou', campanha:score?.campanha||'nao_participou', teve_lancamento:score?.teve_lancamento||false, qtd_lancamentos:score?.qtd_lancamentos||0, fez_reuniao:score?.fez_reuniao||false, respondeu_whatsapp:score?.respondeu_whatsapp||false, publicou_feed:score?.publicou_feed||false, publicou_story:score?.publicou_story||false, publicou_reels:score?.publicou_reels||false, vendas_editora:score?.vendas_editora||0, responde_artes:score?.responde_artes||false, faz_cortesia:score?.faz_cortesia||false, cria_cupom:score?.cria_cupom||false, observacao:score?.observacao||'' })
   const [saving, setSaving] = useState(false)
+  const [erro, setErro] = useState(null)
   const preview = calcularScoreEditora(form)
   const c = corScore(preview)
   const opcoes = [{ value:'confirmou', label:'Confirmou' },{ value:'sem_retorno', label:'Sem retorno' },{ value:'recusou', label:'Recusou' },{ value:'nao_participou', label:'Não participou' }]
   function Check({ field, label }) { return <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer', padding:'6px 0' }}><input type="checkbox" checked={!!form[field]} onChange={e => setForm(f => ({ ...f, [field]:e.target.checked }))} style={{ accentColor:'var(--accent)', width:15, height:15 }} /><span style={{ fontSize:13 }}>{label}</span></label> }
   function Sel({ field, label }) { return <div className="form-group"><label className="form-label">{label}</label><select className="form-select" value={form[field]} onChange={e => setForm(f => ({ ...f, [field]:e.target.value }))}>{opcoes.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div> }
-  async function salvar() { setSaving(true); try { await onSave(editora.id, ano, mes, form); onClose() } catch(e){ console.error(e) } finally { setSaving(false) } }
+  async function salvar() { setSaving(true); setErro(null); try { await onSave(editora.id, ano, mes, { ...form, vendas_editora: Number(form.vendas_editora) || 0 }); onClose() } catch(e){ console.error(e); setErro(e.message || 'Erro ao salvar. Tente novamente.') } finally { setSaving(false) } }
   return (
     <div className="modal-backdrop" onClick={e => e.target===e.currentTarget&&onClose()}>
       <div className="modal" style={{ maxWidth:560, maxHeight:'90vh', overflowY:'auto' }}>
         <div className="modal-header"><div><h2 className="modal-title">Score mensal — Editora</h2><div style={{ fontSize:12, color:'var(--text-muted)' }}>{editora.nome}</div></div><button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button></div>
         <div className="form-group"><label className="form-label">Mês de referência</label><select className="form-select" value={`${ano}-${mes}`} onChange={e => { const [a,m]=e.target.value.split('-'); setAno(Number(a)); setMes(Number(m)) }}>{mesesOpcoes.map(({ mes:m, ano:a }) => <option key={`${a}-${m}`} value={`${a}-${m}`}>{mesAnoLabel(m,a)}</option>)}</select></div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}><Sel field="promocao_geral" label="Promoção geral" /><Sel field="promocao_particular" label="Promoção particular" /><Sel field="campanha" label="Campanha" /><div className="form-group"><label className="form-label">Vendas</label><input className="form-input" type="number" min={0} value={form.vendas_editora} onChange={e => setForm(f => ({ ...f, vendas_editora:Number(e.target.value) }))} /></div></div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}><Sel field="promocao_geral" label="Promoção geral" /><Sel field="promocao_particular" label="Promoção particular" /><Sel field="campanha" label="Campanha" /><div className="form-group"><label className="form-label">Vendas</label><input className="form-input" type="number" min={0} value={form.vendas_editora} onChange={e => setForm(f => ({ ...f, vendas_editora: e.target.value === '' ? '' : Number(e.target.value) }))} /></div></div>
         <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'12px 16px', marginBottom:12 }}><div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)', marginBottom:8 }}>Lançamentos</div><div style={{ display:'flex', gap:16, alignItems:'center' }}><Check field="teve_lancamento" label="Teve lançamento?" />{form.teve_lancamento&&<div style={{ display:'flex', alignItems:'center', gap:8 }}><span style={{ fontSize:12, color:'var(--text-muted)' }}>Quantos?</span><input className="form-input" type="number" min={1} value={form.qtd_lancamentos} onChange={e => setForm(f => ({ ...f, qtd_lancamentos:Number(e.target.value) }))} style={{ width:80 }} /></div>}</div></div>
         <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'12px 16px', marginBottom:12 }}><div style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)', marginBottom:8 }}>Comunicação & publicações</div><div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:4 }}><Check field="fez_reuniao" label="Fez reunião" /><Check field="respondeu_whatsapp" label="Respondeu WhatsApp" /><Check field="publicou_feed" label="Publicou feed" /><Check field="publicou_story" label="Publicou story" /><Check field="publicou_reels" label="Publicou reels" /><Check field="responde_artes" label="Responde sobre artes" /><Check field="faz_cortesia" label="Faz envio de cortesia" /><Check field="cria_cupom" label="Cria cupom de venda" /></div></div>
         <div className="form-group"><label className="form-label">Observação (opcional)</label><textarea className="form-textarea" rows={2} value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao:e.target.value }))} /></div>
         <div style={{ padding:'14px 16px', background:c.bg, border:`1px solid ${c.cor}40`, borderRadius:10, display:'flex', alignItems:'center', gap:14, marginBottom:16 }}><span style={{ fontSize:36, fontWeight:900, color:c.cor }}>{preview.toFixed(1)}</span><div style={{ fontSize:13, fontWeight:700, color:c.cor }}>Score calculado</div></div>
+        {erro && <div style={{ padding:'10px 14px', background:'rgba(239,68,68,0.12)', border:'1px solid rgba(239,68,68,0.4)', borderRadius:8, fontSize:12, color:'#ef4444', marginBottom:12 }}>Não foi possível salvar: {erro}</div>}
         <div className="form-actions"><button className="btn btn-ghost" onClick={onClose}>Cancelar</button><button className="btn btn-primary" onClick={salvar} disabled={saving}>{saving?'Salvando...':'Salvar score'}</button></div>
       </div>
     </div>
@@ -531,6 +533,7 @@ function ModalScoreLivrariatMensal({ livraria, score, onSave, onClose }) {
     observacao: score?.observacao || '',
   })
   const [saving, setSaving] = useState(false)
+  const [erro, setErro] = useState(null)
 
   useEffect(() => { getCalendarioPromocoes().then(setPromocoes).catch(console.error) }, [])
 
@@ -554,7 +557,7 @@ function ModalScoreLivrariatMensal({ livraria, score, onSave, onClose }) {
     setForm(f => ({ ...f, promocoes_ids: f.promocoes_ids.includes(id) ? f.promocoes_ids.filter(x => x !== id) : [...f.promocoes_ids, id] }))
   }
 
-  async function salvar() { setSaving(true); try { await onSave(livraria.id, ano, mes, form); onClose() } catch(e){ console.error(e) } finally { setSaving(false) } }
+  async function salvar() { setSaving(true); setErro(null); try { await onSave(livraria.id, ano, mes, { ...form, vendas_livraria: Number(form.vendas_livraria) || 0 }); onClose() } catch(e){ console.error(e); setErro(e.message || 'Erro ao salvar. Tente novamente.') } finally { setSaving(false) } }
 
   return (
     <div className="modal-backdrop" onClick={e => e.target===e.currentTarget&&onClose()}>
@@ -582,7 +585,7 @@ function ModalScoreLivrariatMensal({ livraria, score, onSave, onClose }) {
             </label>
           </div>
           {!form.vendas_nao_aplica && (
-            <input className="form-input" type="number" min={0} value={form.vendas_livraria} onChange={e => setForm(f => ({ ...f, vendas_livraria:Number(e.target.value) }))} placeholder="Unidades vendidas no mês" />
+            <input className="form-input" type="number" min={0} value={form.vendas_livraria} onChange={e => setForm(f => ({ ...f, vendas_livraria: e.target.value === '' ? '' : Number(e.target.value) }))} placeholder="Unidades vendidas no mês" />
           )}
         </div>
 
@@ -672,6 +675,12 @@ function ModalScoreLivrariatMensal({ livraria, score, onSave, onClose }) {
           <div style={{ fontSize:13, fontWeight:700, color:c.cor }}>Score calculado</div>
         </div>
 
+        {erro && (
+          <div style={{ padding:'10px 14px', background:'rgba(239,68,68,0.12)', border:'1px solid rgba(239,68,68,0.4)', borderRadius:8, fontSize:12, color:'#ef4444', marginBottom:12 }}>
+            Não foi possível salvar: {erro}
+          </div>
+        )}
+
         <div className="form-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
           <button className="btn btn-primary" onClick={salvar} disabled={saving}>{saving?'Salvando...':'Salvar score'}</button>
@@ -728,7 +737,7 @@ function ModalScoreTrimestralLivraria({ livraria, score, onSave, onClose }) {
 
   async function salvar() {
     setSaving(true)
-    try { await onSave(livraria.id, ano, trimestre, form); onClose() }
+    try { await onSave(livraria.id, ano, trimestre, { ...form, vendas: Number(form.vendas) || 0 }); onClose() }
     catch(e) { console.error(e) } finally { setSaving(false) }
   }
 
@@ -756,7 +765,7 @@ function ModalScoreTrimestralLivraria({ livraria, score, onSave, onClose }) {
           </div>
           {!form.vendas_nao_aplica && (
             <div>
-              <input className="form-input" type="number" min={0} value={form.vendas} onChange={e => setForm(f => ({ ...f, vendas:Number(e.target.value) }))} placeholder="Total de unidades vendidas no trimestre" />
+              <input className="form-input" type="number" min={0} value={form.vendas} onChange={e => setForm(f => ({ ...f, vendas: e.target.value === '' ? '' : Number(e.target.value) }))} placeholder="Total de unidades vendidas no trimestre" />
               <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:6 }}>
                 Faixas: ≥300 → 35pts · ≥200 → 28pts · ≥100 → 21pts · ≥50 → 14pts · ≥1 → 7pts · 0 → 0pts
               </div>
@@ -896,7 +905,7 @@ function ModalScoreTrimestralEditora({ editora, score, onSave, onClose }) {
   const OPCOES_COMUNICACAO = [{ value:'sempre', label:'Sempre responde' },{ value:'as_vezes', label:'Às vezes responde' },{ value:'nao_responde', label:'Não responde' },{ value:'nao_aplica', label:'Não se aplica' }]
 
   function togglePromocao(id) { setForm(f => ({ ...f, promocoes_ids: f.promocoes_ids.includes(id) ? f.promocoes_ids.filter(x => x !== id) : [...f.promocoes_ids, id] })) }
-  async function salvar() { setSaving(true); try { await onSave(editora.id, ano, trimestre, form); onClose() } catch(e){ console.error(e) } finally { setSaving(false) } }
+  async function salvar() { setSaving(true); try { await onSave(editora.id, ano, trimestre, { ...form, vendas: Number(form.vendas) || 0 }); onClose() } catch(e){ console.error(e) } finally { setSaving(false) } }
 
   return (
     <div className="modal-backdrop" onClick={e => e.target===e.currentTarget&&onClose()}>
@@ -919,7 +928,7 @@ function ModalScoreTrimestralEditora({ editora, score, onSave, onClose }) {
               Não se aplica
             </label>
           </div>
-          {!form.vendas_nao_aplica && <input className="form-input" type="number" min={0} value={form.vendas} onChange={e => setForm(f => ({ ...f, vendas:Number(e.target.value) }))} placeholder="Total de unidades vendidas no trimestre" />}
+          {!form.vendas_nao_aplica && <input className="form-input" type="number" min={0} value={form.vendas} onChange={e => setForm(f => ({ ...f, vendas: e.target.value === '' ? '' : Number(e.target.value) }))} placeholder="Total de unidades vendidas no trimestre" />}
         </div>
 
         {/* Promoções */}
@@ -972,67 +981,185 @@ function ModalImportarVendas({ tipo, periodo, onClose, onImported, showToast }) 
   const [trimestre, setTrimestre] = useState(trimestreAtual())
   const [mes, setMes] = useState(hoje.getMonth()+1)
   const [ano, setAno] = useState(hoje.getFullYear())
+  const [etapa, setEtapa] = useState('arquivo') // 'arquivo' | 'conferencia'
+  const [conferencia, setConferencia] = useState(null)
+  const [escolhas, setEscolhas] = useState({}) // índice da parecida → id do alvo ('' = não importar)
+  const [processando, setProcessando] = useState(false)
   const [importando, setImportando] = useState(false)
+  const [erro, setErro] = useState(null)
   const fileRef = useRef()
   const eMensal = periodo === 'mensal'
+  const labelTipo = tipo === 'livraria' ? 'Livrarias' : 'Editoras'
 
   function baixarTemplate() {
     const wb = XLSX.utils.book_new()
-    const col = tipo === 'livraria' ? 'livraria_nome' : 'editora_nome'
-    const ws = XLSX.utils.aoa_to_sheet([[col, 'vendas'], [tipo === 'livraria' ? 'Nome da Livraria' : 'Nome da Editora', 150]])
+    const ws = XLSX.utils.aoa_to_sheet([['Nome', 'Vendas'], [tipo === 'livraria' ? 'Nome da Livraria' : 'Nome da Editora', 150]])
     XLSX.utils.book_append_sheet(wb, ws, 'Vendas')
     XLSX.writeFile(wb, `template_vendas_${tipo}_${eMensal?'mensal':'trimestral'}.xlsx`)
   }
 
   async function processarArquivo(file) {
     if (!file) return
-    setImportando(true)
+    setProcessando(true); setErro(null)
     try {
       const data = await file.arrayBuffer()
       const wb = XLSX.read(data, { type:'array' })
       const ws = wb.Sheets[wb.SheetNames[0]]
-      const rows = XLSX.utils.sheet_to_json(ws, { defval:'' })
-      const fn = tipo === 'livraria' ? importarVendasLivraria : importarVendasEditora
-      const resultado = eMensal
-        ? await fn(rows, ano, null, mes)
-        : await fn(rows, ano, trimestre)
-      let msg = `${resultado.importados} registro(s) importado(s).`
-      if (resultado.naoEncontrados.length > 0) msg += ` Não encontrados: ${resultado.naoEncontrados.join(', ')}.`
+      const linhas = XLSX.utils.sheet_to_json(ws, { header:1, defval:'' })
+      // Coluna A = nome, coluna B = vendas. Cabeçalho pode ser qualquer texto:
+      // se a coluna B da primeira linha não for número, ela é tratada como cabeçalho e pulada.
+      const primeiraVendaRaw = String(linhas[0]?.[1] ?? '').trim().replace(',', '.')
+      const inicio = (primeiraVendaRaw === '' || isNaN(Number(primeiraVendaRaw))) ? 1 : 0
+      const rows = []
+      for (let i = inicio; i < linhas.length; i++) {
+        const nome = String(linhas[i]?.[0] ?? '').trim()
+        if (!nome) continue
+        const vendasRaw = String(linhas[i]?.[1] ?? '0').trim().replace(',', '.')
+        rows.push({ nome, vendas: Number(vendasRaw) || 0 })
+      }
+      if (rows.length === 0) { setErro('Nenhuma linha válida encontrada. Confira se os nomes estão na coluna A e as vendas na coluna B.'); return }
+      const conf = await conferirVendas(rows, tipo)
+      setConferencia(conf)
+      setEscolhas({})
+      setEtapa('conferencia')
+    } catch(e) { setErro('Erro ao ler a planilha: ' + e.message) } finally { setProcessando(false) }
+  }
+
+  const totalSelecionado = conferencia
+    ? conferencia.encontradas.length + Object.values(escolhas).filter(Boolean).length
+    : 0
+
+  async function confirmarImportacao() {
+    if (!conferencia) return
+    setImportando(true); setErro(null)
+    try {
+      const confirmadas = [
+        ...conferencia.encontradas,
+        ...conferencia.parecidas.map((p, i) => {
+          const idEscolhido = escolhas[i]
+          if (!idEscolhido) return null
+          const alvo = p.sugestoes.find(s => String(s.id) === String(idEscolhido))
+          return alvo ? { nomePlanilha: p.nomePlanilha, vendas: p.vendas, alvo } : null
+        }).filter(Boolean),
+      ]
+      if (confirmadas.length === 0) { setErro('Nenhum registro selecionado para importar.'); return }
+      const resultado = await salvarVendasConfirmadas(confirmadas, tipo, ano, eMensal ? { mes } : { trimestre })
+      let msg = `${resultado.importados} registro(s) importado(s) em ${eMensal ? mesAnoLabel(mes, ano) : `${TRIMESTRES_LABEL[trimestre].split(' ')[0]}/${ano}`}.`
+      if (resultado.erros.length > 0) msg += ` Erros: ${resultado.erros.join(' | ')}`
       showToast(msg, resultado.erros.length > 0 ? 'error' : 'success')
       onImported()
       onClose()
-    } catch(e) { showToast('Erro ao importar: ' + e.message, 'error') } finally { setImportando(false) }
+    } catch(e) { setErro('Erro ao importar: ' + e.message) } finally { setImportando(false) }
   }
+
+  const secaoStyle = { background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'12px 14px', marginBottom:12 }
+  const tituloSecao = (cor, texto, qtd) => (
+    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
+      <div style={{ width:9, height:9, borderRadius:'50%', background:cor, flexShrink:0 }} />
+      <span style={{ fontSize:12, fontWeight:700, color:cor }}>{texto}</span>
+      <span style={{ fontSize:11, color:'var(--text-muted)' }}>({qtd})</span>
+    </div>
+  )
 
   return (
     <div className="modal-backdrop" onClick={e => e.target===e.currentTarget&&onClose()}>
-      <div className="modal" style={{ maxWidth:480 }}>
+      <div className="modal" style={{ maxWidth: etapa==='conferencia' ? 620 : 480, maxHeight:'92vh', overflowY:'auto' }}>
         <div className="modal-header">
-          <h2 className="modal-title">Importar vendas {eMensal?'mensais':'trimestrais'} — {tipo === 'livraria' ? 'Livrarias' : 'Editoras'}</h2>
+          <h2 className="modal-title">Importar vendas {eMensal?'mensais':'trimestrais'} — {labelTipo}</h2>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
         </div>
+
         {eMensal ? (
           <div className="form-group">
             <label className="form-label">Mês de referência</label>
-            <select className="form-select" value={`${ano}-${mes}`} onChange={e => { const [a,m]=e.target.value.split('-'); setAno(Number(a)); setMes(Number(m)) }}>
+            <select className="form-select" value={`${ano}-${mes}`} onChange={e => { const [a,m]=e.target.value.split('-'); setAno(Number(a)); setMes(Number(m)) }} disabled={etapa==='conferencia'}>
               {mesesOpcoes.map(({ mes:m, ano:a }) => <option key={`${a}-${m}`} value={`${a}-${m}`}>{mesAnoLabel(m,a)}</option>)}
             </select>
           </div>
         ) : (
           <div className="form-group">
             <label className="form-label">Trimestre de referência</label>
-            <select className="form-select" value={`${ano}-${trimestre}`} onChange={e => { const [a,t]=e.target.value.split('-'); setAno(Number(a)); setTrimestre(Number(t)) }}>
+            <select className="form-select" value={`${ano}-${trimestre}`} onChange={e => { const [a,t]=e.target.value.split('-'); setAno(Number(a)); setTrimestre(Number(t)) }} disabled={etapa==='conferencia'}>
               {trimestresOpcoes.map(({ trimestre:t, ano:a }) => <option key={`${a}-${t}`} value={`${a}-${t}`}>{TRIMESTRES_LABEL[t]} / {a}</option>)}
             </select>
           </div>
         )}
-        <button onClick={baixarTemplate} className="btn btn-ghost" style={{ width:'100%', marginBottom:12, justifyContent:'center', gap:8 }}><Download size={14} /> Baixar template .xlsx</button>
-        <div onClick={() => fileRef.current?.click()} style={{ border:'2px dashed var(--border)', borderRadius:10, padding:'32px 20px', textAlign:'center', cursor:'pointer', background:'var(--surface-2)' }}>
-          <FileSpreadsheet size={28} style={{ color:'var(--text-muted)', marginBottom:8 }} />
-          <div style={{ fontSize:13, color:'var(--text-muted)' }}>{importando ? 'Importando...' : 'Clique ou arraste o arquivo .xlsx'}</div>
-          <input ref={fileRef} type="file" accept=".xlsx" style={{ display:'none' }} onChange={e => { const f=e.target.files?.[0]; if(f) processarArquivo(f); e.target.value='' }} />
-        </div>
-        <div className="form-actions"><button className="btn btn-ghost" onClick={onClose}>Cancelar</button></div>
+
+        {etapa === 'arquivo' && (
+          <>
+            <button onClick={baixarTemplate} className="btn btn-ghost" style={{ width:'100%', marginBottom:12, justifyContent:'center', gap:8 }}><Download size={14} /> Baixar template .xlsx</button>
+            <div onClick={() => fileRef.current?.click()} style={{ border:'2px dashed var(--border)', borderRadius:10, padding:'32px 20px', textAlign:'center', cursor:'pointer', background:'var(--surface-2)' }}>
+              <FileSpreadsheet size={28} style={{ color:'var(--text-muted)', marginBottom:8 }} />
+              <div style={{ fontSize:13, color:'var(--text-muted)' }}>{processando ? 'Lendo a planilha...' : 'Clique ou arraste o arquivo .xlsx'}</div>
+              <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:6 }}>Coluna A: nomes · Coluna B: vendas. O cabeçalho pode ser qualquer texto — nomes extras que não estão no Órbita serão apenas ignorados.</div>
+              <input ref={fileRef} type="file" accept=".xlsx" style={{ display:'none' }} onChange={e => { const f=e.target.files?.[0]; if(f) processarArquivo(f); e.target.value='' }} />
+            </div>
+            {erro && <div style={{ padding:'10px 14px', background:'rgba(239,68,68,0.12)', border:'1px solid rgba(239,68,68,0.4)', borderRadius:8, fontSize:12, color:'#ef4444', marginTop:12 }}>{erro}</div>}
+            <div className="form-actions"><button className="btn btn-ghost" onClick={onClose}>Cancelar</button></div>
+          </>
+        )}
+
+        {etapa === 'conferencia' && conferencia && (
+          <>
+            <div style={{ fontSize:12, color:'var(--text-muted)', marginBottom:12 }}>
+              Nada foi salvo ainda. Confira abaixo e importe apenas o que estiver correto — o restante pode ser resolvido em outra importação.
+            </div>
+
+            {/* Encontradas */}
+            <div style={secaoStyle}>
+              {tituloSecao('#22c55e', 'Encontradas — serão importadas', conferencia.encontradas.length)}
+              {conferencia.encontradas.length === 0
+                ? <div style={{ fontSize:12, color:'var(--text-muted)', fontStyle:'italic' }}>Nenhum nome bateu automaticamente.</div>
+                : <div style={{ maxHeight:150, overflowY:'auto' }}>
+                    {conferencia.encontradas.map((item, i) => (
+                      <div key={i} style={{ display:'flex', justifyContent:'space-between', gap:10, padding:'4px 0', fontSize:12, borderBottom:'1px solid var(--border)' }}>
+                        <span style={{ color:'var(--text)' }}>{item.alvo.nome}</span>
+                        <span style={{ color:'var(--text-muted)', flexShrink:0 }}>{item.vendas} vendas</span>
+                      </div>
+                    ))}
+                  </div>
+              }
+            </div>
+
+            {/* Parecidas */}
+            {conferencia.parecidas.length > 0 && (
+              <div style={secaoStyle}>
+                {tituloSecao('#f59e0b', 'Parecidas — confirme para importar', conferencia.parecidas.length)}
+                <div style={{ fontSize:11, color:'var(--text-muted)', marginBottom:8 }}>Sem confirmação, a linha não é importada (pode fazer depois).</div>
+                <div style={{ maxHeight:200, overflowY:'auto', display:'flex', flexDirection:'column', gap:8 }}>
+                  {conferencia.parecidas.map((p, i) => (
+                    <div key={i} style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                      <span style={{ fontSize:12, color:'var(--text)', flex:'1 1 160px' }}>{p.nomePlanilha} <span style={{ color:'var(--text-muted)' }}>({p.vendas})</span></span>
+                      <select className="form-select" style={{ width:'auto', fontSize:12, padding:'4px 8px', flex:'1 1 180px' }} value={escolhas[i] || ''} onChange={e => setEscolhas(prev => ({ ...prev, [i]: e.target.value }))}>
+                        <option value="">Não importar</option>
+                        {p.sugestoes.map(s => <option key={s.id} value={s.id}>É: {s.nome}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Ignoradas */}
+            {conferencia.ignoradas.length > 0 && (
+              <div style={secaoStyle}>
+                {tituloSecao('#6b7280', 'Não estão no Órbita — ignoradas', conferencia.ignoradas.length)}
+                <div style={{ maxHeight:100, overflowY:'auto', fontSize:12, color:'var(--text-muted)' }}>
+                  {conferencia.ignoradas.map((item, i) => <span key={i}>{item.nomePlanilha}{i < conferencia.ignoradas.length-1 ? ' · ' : ''}</span>)}
+                </div>
+              </div>
+            )}
+
+            {erro && <div style={{ padding:'10px 14px', background:'rgba(239,68,68,0.12)', border:'1px solid rgba(239,68,68,0.4)', borderRadius:8, fontSize:12, color:'#ef4444', marginBottom:12 }}>{erro}</div>}
+
+            <div className="form-actions">
+              <button className="btn btn-ghost" onClick={() => { setEtapa('arquivo'); setConferencia(null); setEscolhas({}); setErro(null) }}>Voltar</button>
+              <button className="btn btn-primary" onClick={confirmarImportacao} disabled={importando || totalSelecionado === 0}>
+                {importando ? 'Importando...' : `Importar ${totalSelecionado} registro(s)`}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
