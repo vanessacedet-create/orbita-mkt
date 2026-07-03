@@ -72,6 +72,7 @@ const CRMInteligencia        = lazy(() => import('./pages/CRMInteligencia'))
 const Agenda                 = lazy(() => import('./pages/Agenda'))
 const Configuracoes          = lazy(() => import('./pages/Configuracoes'))
 const BlocoNotas             = lazy(() => import('./pages/BlocoNotas'))
+const TarefasInfluencers     = lazy(() => import('./pages/TarefasInfluencers'))
 
 const PERFIS_PARCEIRAS = ['supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras']
 
@@ -84,6 +85,7 @@ const MENU = [
   { path: '/dashboard',              label: 'Dashboard',          icon: LayoutDashboard, modulo: 'dashboard',         ocultarPerfis: PERFIS_PARCEIRAS },
   { path: '/dashboard-parceiras',   label: 'Dashboard',          icon: LayoutDashboard, modulo: 'tarefas_parceiras' },
   { path: '/notas',                 label: 'Bloco de Notas',     icon: BookMarked,      modulo: 'tarefas_parceiras', sempreVisivel: true },
+  { path: '/tarefas-influencers', label: 'Tarefas Diárias', icon: CheckSquare, modulo: 'tarefas_diarias_influencers', ocultarPerfis: PERFIS_PARCEIRAS },
 
   // Área pessoal — visível somente para o DONO_EMAIL
   { path: '/base-comando',          label: 'Base de Comando',    icon: Activity,        modulo: 'base_comando',      sempreVisivel: true, soEmail: true },
