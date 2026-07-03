@@ -6,7 +6,7 @@ import {
   getEditorasParceirasAtivas, getLivrariasParceirasAtivas,
   getAllScoreEditorasMes, getAllScoreLivrariasMes,
   upsertScoreEditora, upsertScoreLivraria,
-  calcularScoreEditora, calcularScoreLivraria,
+  calcularScoreEditora, calcularScoreLivraria, calcularClassificacaoMensalLivraria,
   calcularScoreTrimestralLivraria, calcularScoreTrimestralEditora,
   upsertScoreTrimestralLivraria, upsertScoreTrimestralEditora,
   getScoreTrimestralLivrarias, getScoreTrimestralEditoras,
@@ -539,6 +539,7 @@ function ModalScoreLivrariatMensal({ livraria, score, onSave, onClose }) {
 
   const preview = calcularScoreLivraria(form)
   const c = corScore(preview)
+  const classePrevia = calcularClassificacaoMensalLivraria(form)
 
   const OPCOES_PARTICIPACAO = [
     { value:'confirmou', label:'Confirmou' },
@@ -672,7 +673,11 @@ function ModalScoreLivrariatMensal({ livraria, score, onSave, onClose }) {
 
         <div style={{ padding:'14px 16px', background:c.bg, border:`1px solid ${c.cor}40`, borderRadius:10, display:'flex', alignItems:'center', gap:14, marginBottom:16 }}>
           <span style={{ fontSize:36, fontWeight:900, color:c.cor }}>{preview.toFixed(1)}</span>
-          <div style={{ fontSize:13, fontWeight:700, color:c.cor }}>Score calculado</div>
+          {classePrevia && <BadgeClasse cls={classePrevia} />}
+          <div>
+            <div style={{ fontSize:13, fontWeight:700, color:c.cor }}>Score calculado</div>
+            <div style={{ fontSize:11, color:'var(--text-muted)' }}>Classificação prévia — a oficial do mês só é definida ao fechar o mês</div>
+          </div>
         </div>
 
         {erro && (
@@ -1337,13 +1342,12 @@ function AbaClassificacao() {
 
 // ── PÁGINA PRINCIPAL ───────────────────────────────────────
 export default function CRMEditorasParceiras() {
-  const [aba, setAba] = useState(() => sessionStorage.getItem('crm_aba') || 'prospeccao')
+  const [aba, setAba] = useState(() => sessionStorage.getItem('crm_aba') || 'classificacao')
   const [usuarios, setUsuarios] = useState([])
   const [toast, showToast] = useToast()
 
   useEffect(() => { getUsuarios().then(setUsuarios).catch(console.error) }, [])
   useEffect(() => { sessionStorage.setItem('crm_aba', aba) }, [aba])
-  useEffect(() => () => { sessionStorage.removeItem('crm_aba'); sessionStorage.removeItem('crm_subaba') }, [])
 
   function tabStyle(ativa) { return { padding:'10px 20px', background:'none', border:'none', cursor:'pointer', fontSize:13, fontWeight:700, color:ativa?'var(--accent)':'var(--text-muted)', borderBottom:`2px solid ${ativa?'var(--accent)':'transparent'}`, marginBottom:-1, transition:'all 0.15s' } }
 
@@ -1359,7 +1363,7 @@ export default function CRMEditorasParceiras() {
         </div>
       </div>
       <div style={{ display:'flex', gap:0, marginBottom:24, borderBottom:'1px solid var(--border)' }}>
-        {[{ v:'prospeccao', l:'Prospecção' },{ v:'ativos', l:'Parceiros ativos' },{ v:'desempenho', l:'Desempenho' },{ v:'classificacao', l:'Classificação' }].map(({ v, l }) => (
+        {[{ v:'classificacao', l:'Classificação' },{ v:'prospeccao', l:'Prospecção' },{ v:'ativos', l:'Parceiros ativos' },{ v:'desempenho', l:'Desempenho' }].map(({ v, l }) => (
           <button key={v} onClick={() => setAba(v)} style={tabStyle(aba===v)}>{l}</button>
         ))}
       </div>
