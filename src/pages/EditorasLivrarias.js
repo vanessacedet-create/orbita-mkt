@@ -825,11 +825,13 @@ function AbaGrupos({ editoras, livrarias }) {
 export default function EditorasLivrarias() {
   const { usuario } = useAuth()
   const isAdmin = usuario?.perfil === 'administrador' || usuario?.perfil === 'gerente' || usuario?.perfil === 'supervisor_parceiras'
-  const [aba, setAba] = useState('editoras')
+  const [aba, setAbaRaw] = useState(() => sessionStorage.getItem('editoras_livrarias_aba') || 'livrarias')
   const [editoras, setEditoras] = useState([])
   const [livrarias, setLivrarias] = useState([])
   const [loading, setLoading] = useState(true)
   const [toast, showToast] = useToast()
+
+  function setAba(v) { setAbaRaw(v); sessionStorage.setItem('editoras_livrarias_aba', v) }
 
   useEffect(() => {
     setLoading(true)
@@ -853,8 +855,8 @@ export default function EditorasLivrarias() {
         </div>
       </div>
       <div style={{ display:'flex', borderBottom:'1px solid var(--border)', marginBottom:24 }}>
-        <button style={tabStyle(aba === 'editoras')} onClick={() => setAba('editoras')}><Building2 size={14} /> Editoras</button>
         <button style={tabStyle(aba === 'livrarias')} onClick={() => setAba('livrarias')}><Library size={14} /> Livrarias</button>
+        <button style={tabStyle(aba === 'editoras')} onClick={() => setAba('editoras')}><Building2 size={14} /> Editoras</button>
         <button style={tabStyle(aba === 'grupos')} onClick={() => setAba('grupos')}><LayoutGrid size={14} /> Grupos</button>
       </div>
       {loading ? <div className="loading"><div className="spinner" /></div> : (
