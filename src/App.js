@@ -435,6 +435,7 @@ function Shell() {
                 <Route path="/lancamentos" element={<RequireAuth modulo="lancamentos"><Lancamentos /></RequireAuth>} />
                 <Route path="/tarefas" element={<RequireAuth modulo="tarefas"><Tarefas /></RequireAuth>} />
                 <Route path="/tarefas-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><TarefasParceiras grupo="parceiras" titulo="Tarefas — Editoras Parceiras" /></RequireAuth>} />
+                <Route path="/tarefas-influencers" element={<RequireAuth modulo="tarefas_diarias_influencers"><TarefasInfluencers /></RequireAuth>} />
                 <Route path="/agenda" element={<RequireAuth modulo="tarefas_parceiras"><Agenda /></RequireAuth>} />
                 <Route path="/treinamentos" element={<RequireAuth modulo="treinamentos"><Treinamentos /></RequireAuth>} />
                 <Route path="/pda" element={<RequireAuth modulo="pda"><PDA /></RequireAuth>} />
