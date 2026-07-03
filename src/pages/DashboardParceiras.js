@@ -1,316 +1,195 @@
 import { useEffect, useState } from 'react'
-import { getDashboardStatsParceiras } from '../lib/campanhas'
-import { useAuth } from '../context/AuthContext'
-import { LayoutDashboard, Building2, CheckSquare, Megaphone, ChevronDown } from 'lucide-react'
+import { useAuth, PERFIL_GRUPO } from '../context/AuthContext'
+import { getTarefas, getUsuarios } from '../lib/supabase'
+import { getAtribuicoes } from '../lib/banco-tarefas'
+import { getEditorasParceirasAtivas, getLivrariasParceirasAtivas } from '../lib/crm-editoras-parceiras'
+import { getCheckagemCriativoMes } from '../lib/monitoramento-criativo'
+import { getPromocoes, getTodasCampanhasPromocao, STATUS_PROMOCAO } from '../lib/promocoes-parceiras'
+import { LayoutDashboard, Building2, Library, CheckSquare, Users, Megaphone, Palette } from 'lucide-react'
 
-const STATUS_TAREFA_LABEL = {
-  pendente:     'Pendente',
-  em_andamento: 'Em andamento',
-  concluida:    'Concluída',
-  cancelada:    'Cancelada',
+const GRUPO_ALVO = 'parceiras'
+
+const STATUS_TAREFA_LABEL = { a_fazer: 'A fazer', em_andamento: 'Em andamento', concluido: 'Concluída' }
+const STATUS_TAREFA_COR   = { a_fazer: '#6366f1', em_andamento: '#f59e0b', concluido: '#22c55e' }
+
+const STATUS_ATRIB_LABEL = { a_fazer: 'A fazer', em_andamento: 'Em andamento', pausada: 'Pausada', concluida: 'Concluída', cancelada: 'Cancelada' }
+const STATUS_ATRIB_COR   = { a_fazer: '#6366f1', em_andamento: '#f59e0b', pausada: '#8b5cf6', concluida: '#22c55e', cancelada: '#ef4444' }
+
+const STATUS_CRIATIVO_LABEL = { pendente: 'Pendente', iniciado: 'Iniciado', finalizado: 'Finalizado' }
+const STATUS_CRIATIVO_COR   = { pendente: '#6b7280', iniciado: '#f59e0b', finalizado: '#22c55e' }
+
+function grupoDeUsuario(u) { return u?.grupo || PERFIL_GRUPO[u?.perfil] || null }
+
+// Uma tarefa não guarda o grupo direto — o grupo é descoberto pelos
+// responsáveis (mesma lógica usada na página de Tarefas). Isso evita o
+// bug antigo de "0 tarefas" quando a coluna grupo não estava confiável.
+function idsResponsaveisTarefa(t) {
+  const ids = (t.tarefa_responsaveis || []).map(r => r.usuario_id).filter(Boolean)
+  if (t.responsavel_id && !ids.includes(t.responsavel_id)) ids.push(t.responsavel_id)
+  if (ids.length === 0 && t.created_by) ids.push(t.created_by)
+  return ids
 }
 
-const STATUS_CAMPANHA_LABEL = {
-  planejamento:  'Planejada',
-  em_andamento:  'Em andamento',
-  concluida:     'Concluída',
-  cancelada:     'Cancelada',
+function idsResponsaveisAtribuicao(a) {
+  return (a.responsaveis || []).map(r => r.usuario_id).filter(Boolean)
 }
 
-const STATUS_TAREFA_COR = {
-  pendente:     '#f97316',
-  em_andamento: '#6366f1',
-  concluida:    '#22c55e',
-  cancelada:    '#ef4444',
+function contarPorGrupo(lista, idsResponsaveisFn, grupoPorUsuario, grupoAlvo) {
+  return lista.filter(item => idsResponsaveisFn(item).some(id => grupoPorUsuario[id] === grupoAlvo))
 }
 
-function FiltroDropdown({ label, valor, opcoes, onChange }) {
-  const [open, setOpen] = useState(false)
+function useToast() {
+  const [toast, setToast] = useState(null)
+  function show(msg, type = 'success') { setToast({ msg, type }); setTimeout(() => setToast(null), 4000) }
+  return [toast, show]
+}
 
-  useEffect(() => {
-    function fechar() { setOpen(false) }
-    if (open) document.addEventListener('click', fechar)
-    return () => document.removeEventListener('click', fechar)
-  }, [open])
-
+// ── CARD DE ESTATÍSTICA ─────────────────────────────────────
+function CardStat({ icone: Icone, corBorda, corIcone, titulo, valor, loading, subtitulo, breakdown }) {
+  const total = breakdown ? Object.values(breakdown.valores).reduce((a, b) => a + b, 0) : 0
   return (
-    <div style={{ position: 'relative' }}>
-      <button
-        onClick={e => { e.stopPropagation(); setOpen(p => !p) }}
-        style={{
-          display: 'flex', alignItems: 'center', gap: 4, fontSize: 11,
-          fontWeight: 600, cursor: 'pointer',
-          background: valor ? 'var(--accent-glow)' : 'var(--surface-2)',
-          border: `1px solid ${valor ? 'rgba(224,96,48,0.4)' : 'var(--border)'}`,
-          color: valor ? 'var(--accent)' : 'var(--text-muted)',
-          borderRadius: 6, padding: '4px 8px', whiteSpace: 'nowrap',
-        }}>
-        {valor ? (opcoes.find(o => o.v === valor)?.l || valor) : label}
-        <ChevronDown size={11} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
-      </button>
-      {open && (
-        <div onClick={e => e.stopPropagation()} style={{
-          position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 200,
-          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.3)', minWidth: 160, overflow: 'hidden',
-        }}>
-          <div
-            onClick={() => { onChange(''); setOpen(false) }}
-            style={{
-              padding: '8px 12px', fontSize: 12, cursor: 'pointer',
-              color: 'var(--text-muted)', borderBottom: '1px solid var(--border)',
-              background: !valor ? 'var(--surface-2)' : 'transparent',
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
-            onMouseLeave={e => e.currentTarget.style.background = !valor ? 'var(--surface-2)' : 'transparent'}>
-            Todos
+    <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderTop:`3px solid ${corBorda}`, borderRadius:10, padding:'18px 20px' }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+        <span style={{ fontSize:11, fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', color:'var(--text-muted)' }}>{titulo}</span>
+        <Icone size={16} color={corIcone} strokeWidth={1.5} />
+      </div>
+      <div style={{ fontSize:36, fontWeight:800, color:corIcone, lineHeight:1, marginBottom:8 }}>
+        {loading ? '—' : valor}
+      </div>
+      {subtitulo && <div style={{ fontSize:11, color:'var(--text-muted)', marginBottom: breakdown ? 12 : 0 }}>{subtitulo}</div>}
+      {breakdown && total > 0 && (
+        <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:8 }}>
+          <div style={{ height:6, borderRadius:99, background:'var(--surface-2)', overflow:'hidden', display:'flex' }}>
+            {Object.entries(breakdown.valores).map(([status, count]) => count > 0 && (
+              <div key={status} style={{ width:`${(count/total)*100}%`, background: breakdown.cores[status] || '#888' }} />
+            ))}
           </div>
-          {opcoes.map(o => (
-            <div key={o.v} onClick={() => { onChange(o.v); setOpen(false) }}
-              style={{
-                padding: '8px 12px', fontSize: 12, cursor: 'pointer',
-                color: valor === o.v ? 'var(--accent)' : 'var(--text)',
-                background: valor === o.v ? 'var(--accent-glow)' : 'transparent',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-              }}
-              onMouseEnter={e => { if (valor !== o.v) e.currentTarget.style.background = 'var(--surface-2)' }}
-              onMouseLeave={e => { e.currentTarget.style.background = valor === o.v ? 'var(--accent-glow)' : 'transparent' }}>
-              <span>{o.l}</span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>{o.count}</span>
-            </div>
-          ))}
+          <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+            {Object.entries(breakdown.valores).filter(([,c]) => c > 0).map(([status, count]) => (
+              <div key={status} style={{ display:'flex', alignItems:'center', gap:5, fontSize:11 }}>
+                <div style={{ width:8, height:8, borderRadius:99, background: breakdown.cores[status] || '#888', flexShrink:0 }} />
+                <span style={{ color:'var(--text-muted)' }}>{breakdown.labels[status] || status}</span>
+                <strong style={{ color: breakdown.cores[status] || 'var(--text)' }}>{count}</strong>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
   )
 }
 
+// ── PÁGINA PRINCIPAL ─────────────────────────────────────────
 export default function DashboardParceiras() {
   const { usuario } = useAuth()
-  const [stats, setStats]           = useState(null)
-  const [loading, setLoading]       = useState(true)
-  const [dataInicio, setDataInicio] = useState('')
-  const [dataFim, setDataFim]       = useState('')
-  const [filtroTarefaStatus, setFiltroTarefaStatus] = useState('')
-  const [filtroCampStatus,   setFiltroCampStatus]   = useState('')
-  const [filtroCampTipo,     setFiltroCampTipo]     = useState('')
+  const [loading, setLoading] = useState(true)
+  const [toast, showToast] = useToast()
 
-  useEffect(() => {
+  const [totalEditoras, setTotalEditoras] = useState(0)
+  const [totalLivrarias, setTotalLivrarias] = useState(0)
+
+  const [tarefasPorStatus, setTarefasPorStatus] = useState({})
+  const [atribPorStatus, setAtribPorStatus] = useState({})
+  const [criativoPorStatus, setCriativoPorStatus] = useState({})
+
+  const [promocoes, setPromocoes] = useState([])
+  const [totalCampanhasPromocao, setTotalCampanhasPromocao] = useState(0)
+
+  useEffect(() => { carregar() }, []) // eslint-disable-line
+
+  async function carregar() {
     setLoading(true)
-    getDashboardStatsParceiras({
-      dataInicio: dataInicio || undefined,
-      dataFim:    dataFim    || undefined,
-    })
-      .then(s => setStats(s))
-      .finally(() => setLoading(false))
-  }, [dataInicio, dataFim])
+    try {
+      const hoje = new Date()
+      const ano = hoje.getFullYear(), mes = hoje.getMonth() + 1
+
+      const [editoras, livrarias, tarefas, usuarios, atribuicoes, checkagemCriativo, listaPromocoes, campanhasPromocao] = await Promise.all([
+        getEditorasParceirasAtivas(),
+        getLivrariasParceirasAtivas(),
+        getTarefas(),
+        getUsuarios(),
+        getAtribuicoes().catch(() => []),
+        getCheckagemCriativoMes({ ano, mes }).catch(() => []),
+        getPromocoes(),
+        getTodasCampanhasPromocao(),
+      ])
+
+      setTotalEditoras(editoras.length)
+      setTotalLivrarias(livrarias.length)
+
+      const grupoPorUsuario = {}
+      for (const u of (usuarios || [])) grupoPorUsuario[u.id] = grupoDeUsuario(u)
+
+      const tarefasParceiras = contarPorGrupo(tarefas, idsResponsaveisTarefa, grupoPorUsuario, GRUPO_ALVO)
+      const tPorStatus = {}
+      for (const t of tarefasParceiras) tPorStatus[t.status] = (tPorStatus[t.status] || 0) + 1
+      setTarefasPorStatus(tPorStatus)
+
+      const atribParceiras = contarPorGrupo(atribuicoes, idsResponsaveisAtribuicao, grupoPorUsuario, GRUPO_ALVO)
+      const aPorStatus = {}
+      for (const a of atribParceiras) aPorStatus[a.status] = (aPorStatus[a.status] || 0) + 1
+      setAtribPorStatus(aPorStatus)
+
+      const cPorStatus = {}
+      for (const c of checkagemCriativo) {
+        const st = STATUS_CRIATIVO_LABEL[c.status] ? c.status : 'pendente'
+        cPorStatus[st] = (cPorStatus[st] || 0) + 1
+      }
+      setCriativoPorStatus(cPorStatus)
+
+      setPromocoes(listaPromocoes)
+      setTotalCampanhasPromocao(campanhasPromocao.length)
+    } catch (e) {
+      console.error(e)
+      showToast('Erro ao carregar o dashboard.', 'error')
+    } finally { setLoading(false) }
+  }
 
   const hora = new Date().getHours()
   const saudacao = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite'
 
-  const totalTarefasFiltradas = (() => {
-    if (!stats) return 0
-    if (filtroTarefaStatus) return stats.tarefasPorStatus?.[filtroTarefaStatus] ?? 0
-    return stats.totalTarefas
-  })()
+  const totalTarefas = Object.values(tarefasPorStatus).reduce((a, b) => a + b, 0)
+  const totalAtrib = Object.values(atribPorStatus).reduce((a, b) => a + b, 0)
+  const totalCriativo = Object.values(criativoPorStatus).reduce((a, b) => a + b, 0)
 
-  const totalCampanhasFiltradas = (() => {
-    if (!stats) return 0
-    if (filtroCampStatus) return stats.campanhasPorStatus?.[filtroCampStatus] ?? 0
-    if (filtroCampTipo)   return stats.campanhasPorTipo?.[filtroCampTipo]     ?? 0
-    return stats.totalCampanhas
-  })()
-
-  const opcoesTarefaStatus = Object.entries(stats?.tarefasPorStatus || {}).map(([v, count]) => ({
-    v, l: STATUS_TAREFA_LABEL[v] || v, count,
-  }))
-  const opcoesCampStatus = Object.entries(stats?.campanhasPorStatus || {}).map(([v, count]) => ({
-    v, l: STATUS_CAMPANHA_LABEL[v] || v, count,
-  }))
-  const opcoesCampTipo = Object.entries(stats?.campanhasPorTipo || {}).map(([v, count]) => ({
-    v, l: v, count,
-  }))
-
-  const totalT       = stats?.totalTarefas || 0
-  const concluidasT  = stats?.tarefasPorStatus?.concluida || 0
-  const pctConcluidas = totalT > 0 ? Math.round((concluidasT / totalT) * 100) : 0
+  const promPorStatus = {}
+  for (const p of promocoes) promPorStatus[p.status] = (promPorStatus[p.status] || 0) + 1
+  const STATUS_PROMOCAO_LABEL = {}; const STATUS_PROMOCAO_COR = {}
+  for (const s of STATUS_PROMOCAO) { STATUS_PROMOCAO_LABEL[s.value] = s.label; STATUS_PROMOCAO_COR[s.value] = s.cor }
 
   return (
     <div>
-
-      {/* Cabeçalho */}
       <div className="page-header" style={{ marginBottom: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <LayoutDashboard size={22} color="var(--accent)" />
           <div>
-            <h1 className="page-title" style={{ margin: 0 }}>
-              {saudacao}, {usuario?.nome?.split(' ')[0]} 👋
-            </h1>
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
-              Dashboard — Editoras Parceiras
-            </p>
+            <h1 className="page-title" style={{ margin: 0 }}>{saudacao}, {usuario?.nome?.split(' ')[0]} 👋</h1>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Dashboard — Editoras Parceiras</p>
           </div>
         </div>
       </div>
 
-      {/* Filtro de período */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20,
-        background: 'var(--surface)', border: '1px solid var(--border)',
-        borderRadius: 10, padding: '12px 16px', flexWrap: 'wrap',
-      }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-          📅 Período
-        </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <label style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>De</label>
-            <input
-              type="date" className="form-input"
-              style={{ padding: '5px 10px', fontSize: 12, width: 140 }}
-              value={dataInicio} onChange={e => setDataInicio(e.target.value)} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <label style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Até</label>
-            <input
-              type="date" className="form-input"
-              style={{ padding: '5px 10px', fontSize: 12, width: 140 }}
-              value={dataFim} onChange={e => setDataFim(e.target.value)} />
-          </div>
-          {(dataInicio || dataFim) && (
-            <button
-              onClick={() => { setDataInicio(''); setDataFim('') }}
-              style={{ fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
-              Limpar período
-            </button>
-          )}
-        </div>
-        {(dataInicio || dataFim) && (
-          <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>
-            {dataInicio && dataFim
-              ? `${dataInicio.split('-').reverse().join('/')} → ${dataFim.split('-').reverse().join('/')}`
-              : dataInicio
-                ? `A partir de ${dataInicio.split('-').reverse().join('/')}`
-                : `Até ${dataFim.split('-').reverse().join('/')}`}
-          </span>
-        )}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(240px, 1fr))', gap:16, marginBottom:16 }}>
+        <CardStat icone={Building2} corBorda="var(--accent)" corIcone="var(--accent)" titulo="Editoras Parceiras" valor={totalEditoras} loading={loading} subtitulo="editoras cadastradas" />
+        <CardStat icone={Library} corBorda="#22c55e" corIcone="#22c55e" titulo="Livrarias" valor={totalLivrarias} loading={loading} subtitulo="livrarias cadastradas" />
+        <CardStat icone={Megaphone} corBorda="#f97316" corIcone="#f97316" titulo="Promoções" valor={promocoes.length} loading={loading}
+          subtitulo={`${totalCampanhasPromocao} campanha${totalCampanhasPromocao !== 1 ? 's' : ''} no total`}
+          breakdown={{ valores: promPorStatus, labels: STATUS_PROMOCAO_LABEL, cores: STATUS_PROMOCAO_COR }} />
       </div>
 
-      {/* 3 Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 28 }}>
-
-        {/* EDITORAS PARCEIRAS */}
-        <div style={{
-          background: 'var(--surface)', border: '1px solid var(--border)',
-          borderTop: '3px solid var(--accent)', borderRadius: 10, padding: '18px 20px',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>
-              Editoras Parceiras
-            </span>
-            <Building2 size={16} color="var(--accent)" strokeWidth={1.5} />
-          </div>
-          <div style={{ fontSize: 36, fontWeight: 800, color: 'var(--accent)', lineHeight: 1, marginBottom: 8 }}>
-            {loading ? '—' : stats?.totalEditoras ?? 0}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            editoras cadastradas
-          </div>
-        </div>
-
-        {/* TAREFAS */}
-        <div style={{
-          background: 'var(--surface)', border: '1px solid var(--border)',
-          borderTop: '3px solid #6366f1', borderRadius: 10, padding: '18px 20px',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>
-              Tarefas
-            </span>
-            <CheckSquare size={16} color="#6366f1" strokeWidth={1.5} />
-          </div>
-          <div style={{ fontSize: 36, fontWeight: 800, color: '#6366f1', lineHeight: 1, marginBottom: 14 }}>
-            {loading ? '—' : totalTarefasFiltradas}
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <FiltroDropdown
-              label="Status"
-              valor={filtroTarefaStatus}
-              opcoes={opcoesTarefaStatus}
-              onChange={v => setFiltroTarefaStatus(v)} />
-          </div>
-          {filtroTarefaStatus && (
-            <button
-              onClick={() => setFiltroTarefaStatus('')}
-              style={{ marginTop: 8, fontSize: 10, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
-              Limpar filtro
-            </button>
-          )}
-        </div>
-
-        {/* CAMPANHAS */}
-        <div style={{
-          background: 'var(--surface)', border: '1px solid var(--border)',
-          borderTop: '3px solid #f97316', borderRadius: 10, padding: '18px 20px',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)' }}>
-              Campanhas
-            </span>
-            <Megaphone size={16} color="#f97316" strokeWidth={1.5} />
-          </div>
-          <div style={{ fontSize: 36, fontWeight: 800, color: '#f97316', lineHeight: 1, marginBottom: 14 }}>
-            {loading ? '—' : totalCampanhasFiltradas}
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <FiltroDropdown
-              label="Status"
-              valor={filtroCampStatus}
-              opcoes={opcoesCampStatus}
-              onChange={v => { setFiltroCampStatus(v); setFiltroCampTipo('') }} />
-            <FiltroDropdown
-              label="Tipo"
-              valor={filtroCampTipo}
-              opcoes={opcoesCampTipo}
-              onChange={v => { setFiltroCampTipo(v); setFiltroCampStatus('') }} />
-          </div>
-          {(filtroCampStatus || filtroCampTipo) && (
-            <button
-              onClick={() => { setFiltroCampStatus(''); setFiltroCampTipo('') }}
-              style={{ marginTop: 8, fontSize: 10, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline' }}>
-              Limpar filtro
-            </button>
-          )}
-        </div>
-
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(240px, 1fr))', gap:16 }}>
+        <CardStat icone={CheckSquare} corBorda="#6366f1" corIcone="#6366f1" titulo="Tarefas" valor={totalTarefas} loading={loading}
+          subtitulo="tarefas do dia a dia"
+          breakdown={{ valores: tarefasPorStatus, labels: STATUS_TAREFA_LABEL, cores: STATUS_TAREFA_COR }} />
+        <CardStat icone={Users} corBorda="#8b5cf6" corIcone="#8b5cf6" titulo="Atribuições" valor={totalAtrib} loading={loading}
+          subtitulo="banco de tarefas atribuídas"
+          breakdown={{ valores: atribPorStatus, labels: STATUS_ATRIB_LABEL, cores: STATUS_ATRIB_COR }} />
+        <CardStat icone={Palette} corBorda="#ec4899" corIcone="#ec4899" titulo="Criativo (Monitoramento)" valor={totalCriativo} loading={loading}
+          subtitulo="tarefas fixas do mês atual"
+          breakdown={{ valores: criativoPorStatus, labels: STATUS_CRIATIVO_LABEL, cores: STATUS_CRIATIVO_COR }} />
       </div>
 
-      {/* Barra de progresso de tarefas */}
-      {stats && stats.totalTarefas > 0 && (
-        <div className="table-card" style={{ padding: '18px 20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>
-              Progresso das Tarefas
-            </span>
-            <span style={{ fontSize: 12, color: '#22c55e', fontWeight: 700 }}>
-              {pctConcluidas}% concluídas
-            </span>
-          </div>
-          <div style={{ height: 10, borderRadius: 99, background: 'var(--surface-2)', overflow: 'hidden', marginBottom: 12 }}>
-            <div style={{ width: `${pctConcluidas}%`, height: '100%', background: '#22c55e', transition: 'width 0.5s' }} />
-          </div>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            {Object.entries(stats.tarefasPorStatus).map(([status, count]) => (
-              <div key={status} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                <div style={{ width: 10, height: 10, borderRadius: 99, background: STATUS_TAREFA_COR[status] || '#888', flexShrink: 0 }} />
-                <span style={{ color: 'var(--text-muted)' }}>{STATUS_TAREFA_LABEL[status] || status}</span>
-                <strong style={{ color: STATUS_TAREFA_COR[status] || 'var(--text)' }}>{count}</strong>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
+      {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
     </div>
   )
 }
