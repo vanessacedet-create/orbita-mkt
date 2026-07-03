@@ -83,6 +83,7 @@ const MENU = [
   // Dashboard — cada perfil vê o seu
   { path: '/dashboard',              label: 'Dashboard',          icon: LayoutDashboard, modulo: 'dashboard',         ocultarPerfis: PERFIS_PARCEIRAS },
   { path: '/dashboard-parceiras',   label: 'Dashboard',          icon: LayoutDashboard, modulo: 'tarefas_parceiras' },
+  { path: '/notas',                 label: 'Bloco de Notas',     icon: BookMarked,      modulo: 'tarefas_parceiras', sempreVisivel: true },
 
   // Área pessoal — visível somente para o DONO_EMAIL
   { path: '/base-comando',          label: 'Base de Comando',    icon: Activity,        modulo: 'base_comando',      sempreVisivel: true, soEmail: true },
@@ -91,18 +92,17 @@ const MENU = [
   { path: '/crm-influencers',       label: 'CRM Influencers',    icon: Network,         modulo: 'crm_influencers',   ocultarPerfis: PERFIS_PARCEIRAS },
   { path: '/crm-parceiras',         label: 'CRM Parceiras',      icon: Network,         modulo: 'crm_parceiras',     ocultarPerfis: PERFIS_PARCEIRAS },
   { path: '/cortesias',             label: 'Cortesias',          icon: BookOpen,        modulo: 'cortesias',         ocultarPerfis: PERFIS_PARCEIRAS },
-  { path: '/campanhas',             label: 'Campanhas',          icon: Megaphone,       modulo: 'campanhas' },
+  { path: '/promocoes-parceiras',   label: 'Promoções',          icon: Megaphone,       modulo: 'tarefas_parceiras' },
+  { path: '/campanhas',             label: 'Campanhas',          icon: Megaphone,       modulo: 'campanhas',         ocultarPerfis: PERFIS_PARCEIRAS },
   { path: '/monitoramento',         label: 'Monitoramento',      icon: Eye,             modulo: 'monitoramento',     ocultarPerfis: PERFIS_PARCEIRAS },
   { path: '/lancamentos',           label: 'Lançamentos',        icon: CalendarDays,    modulo: 'lancamentos' },
   { path: '/tarefas',              label: 'Tarefas',             icon: CheckSquare,     modulo: 'tarefas',           ocultarPerfis: PERFIS_PARCEIRAS },
 
   // Módulos exclusivos parceiras
-  { path: '/notas',                 label: 'Bloco de Notas',     icon: BookMarked,      modulo: 'tarefas_parceiras', sempreVisivel: true },
   { path: '/agenda',                label: 'Agenda',             icon: CalendarRange,   modulo: 'tarefas_parceiras' },
   { path: '/tarefas-parceiras',     label: 'Tarefas Parceiras',  icon: CheckSquare,     modulo: 'tarefas_parceiras' },
   { path: '/monitoramento-parceiras', label: 'Monitoramento',    icon: Eye,             modulo: 'tarefas_parceiras', ocultarPerfis: [] },
   { path: '/editoras-livrarias',    label: 'Editoras & Livrarias', icon: Building2,     modulo: 'tarefas_parceiras' },
-  { path: '/promocoes-parceiras',   label: 'Promoções',          icon: Megaphone,       modulo: 'tarefas_parceiras' },
   { path: '/crm-editoras-parceiras', label: 'CRM Editoras',      icon: TrendingUp,      modulo: 'tarefas_parceiras' },
 
   // Módulos compartilhados
