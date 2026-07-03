@@ -1167,8 +1167,8 @@ function ModalImportarVendas({ tipo, periodo, onClose, onImported, showToast }) 
 
 // ── ABA CLASSIFICAÇÃO ──────────────────────────────────────
 function AbaClassificacao() {
-  const [subAba, setSubAba] = useState('editoras')
-  const [periodoAba, setPeriodoAba] = useState('mensal') // 'mensal' | 'trimestral'
+  const [subAba, setSubAba] = useState(() => sessionStorage.getItem('crm_subaba') || 'livrarias')
+  const [periodoAba] = useState('mensal') // trimestral desativado por enquanto
   const [larguraColunaNome, setLarguraColunaNome] = useState(220)
   const [editoras, setEditoras] = useState([])
   const [livrarias, setLivrarias] = useState([])
@@ -1200,6 +1200,8 @@ function AbaClassificacao() {
       setScoresEdTri(sEdT); setScoresLivTri(sLivT)
     }).finally(() => setLoading(false))
   }, [ano, mes])
+
+  useEffect(() => { sessionStorage.setItem('crm_subaba', subAba) }, [subAba])
 
   const mapEdMensal = {}; for (const s of scoresEdMensal) mapEdMensal[s.editora_id] = s
   const mapLivMensal = {}; for (const s of scoresLivMensal) mapLivMensal[s.livraria_id] = s
@@ -1234,16 +1236,12 @@ function AbaClassificacao() {
     <div>
       {/* Sub-abas Editoras / Livrarias */}
       <div style={{ display:'flex', borderBottom:'1px solid var(--border)', marginBottom:16 }}>
-        <button style={tabStyle(subAba==='editoras')} onClick={() => setSubAba('editoras')}><Building2 size={13} /> Editoras</button>
         <button style={tabStyle(subAba==='livrarias')} onClick={() => setSubAba('livrarias')}><Library size={13} /> Livrarias</button>
+        <button style={tabStyle(subAba==='editoras')} onClick={() => setSubAba('editoras')}><Building2 size={13} /> Editoras</button>
       </div>
 
-      {/* Mensal / Trimestral + busca + importar */}
+      {/* Busca + importar */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16, flexWrap:'wrap', gap:10 }}>
-        <div style={{ display:'flex', background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, overflow:'hidden' }}>
-          <button onClick={() => setPeriodoAba('mensal')} style={{ padding:'6px 14px', border:'none', cursor:'pointer', fontSize:12, background:periodoAba==='mensal'?'var(--accent)':'transparent', color:periodoAba==='mensal'?'#fff':'var(--text-muted)', fontWeight:600 }}>Mensal</button>
-          <button onClick={() => setPeriodoAba('trimestral')} style={{ padding:'6px 14px', border:'none', cursor:'pointer', fontSize:12, background:periodoAba==='trimestral'?'var(--accent)':'transparent', color:periodoAba==='trimestral'?'#fff':'var(--text-muted)', fontWeight:600 }}>Trimestral</button>
-        </div>
         <div style={{ display:'flex', gap:8, alignItems:'center', flex:1, minWidth:200 }}>
           <div style={{ position:'relative', flex:1 }}>
             <Search size={14} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)' }} />
@@ -1339,11 +1337,13 @@ function AbaClassificacao() {
 
 // ── PÁGINA PRINCIPAL ───────────────────────────────────────
 export default function CRMEditorasParceiras() {
-  const [aba, setAba] = useState('prospeccao')
+  const [aba, setAba] = useState(() => sessionStorage.getItem('crm_aba') || 'prospeccao')
   const [usuarios, setUsuarios] = useState([])
   const [toast, showToast] = useToast()
 
   useEffect(() => { getUsuarios().then(setUsuarios).catch(console.error) }, [])
+  useEffect(() => { sessionStorage.setItem('crm_aba', aba) }, [aba])
+  useEffect(() => () => { sessionStorage.removeItem('crm_aba'); sessionStorage.removeItem('crm_subaba') }, [])
 
   function tabStyle(ativa) { return { padding:'10px 20px', background:'none', border:'none', cursor:'pointer', fontSize:13, fontWeight:700, color:ativa?'var(--accent)':'var(--text-muted)', borderBottom:`2px solid ${ativa?'var(--accent)':'transparent'}`, marginBottom:-1, transition:'all 0.15s' } }
 
