@@ -9,6 +9,7 @@ import {
 } from '../lib/monitoramento-editoras'
 import { getCheckagemCriativoMes, upsertCheckagemCriativoDia, deleteCheckagemCriativoDia } from '../lib/monitoramento-criativo'
 import { getLivrarias, getObsFormatoLote, upsertObsFormato, getConfigEquipe, setConfigEquipe } from '../lib/editoras-livrarias'
+import { isPageReload } from '../lib/persistencia-navegacao'
 import {
   Eye, X, ChevronLeft, ChevronRight,
   Trash2, MessageSquare, Instagram, Users, BookOpen, SlidersHorizontal,
@@ -509,14 +510,49 @@ export default function MonitoramentoParceiras() {
     try{const a=lerNav();const n={...a,...patch};if(n.ano)n.ano=Number(n.ano);if(n.mes)n.mes=Number(n.mes);localStorage.setItem('monitor_nav',JSON.stringify(n))}catch{}
   }
 
-  const nav = lerNav()
-  const [ano, setAno] = useState(()=>(nav.ano&&!isNaN(nav.ano))?Number(nav.ano):agora.getFullYear())
-  const [mes, setMes] = useState(()=>(nav.mes&&!isNaN(nav.mes))?Number(nav.mes):agora.getMonth()+1)
-  const [abaMonitor, setAbaMonitorRaw] = useState(()=>nav.aba||'parceiras')
-  const [formatoSel, setFormatoSelRaw] = useState(()=>nav.formatoSel||'story')
-  const [dataSel, setDataSelRaw] = useState(()=>nav.dataSel||hojeKey())
-  const [formatoCriativoSel, setFormatoCriativoSelRaw] = useState(()=>nav.formatoCriativo||'story')
-  const [dataCriativoSel, setDataCriativoSelRaw] = useState(()=>nav.dataCriativo||hojeKey())
+  // F5 (reload real do navegador): mantém exatamente a aba, formato, mês e dia
+  // em que a pessoa estava. Chegando aqui pelo menu lateral (navegação normal
+  // dentro do app): volta para o dia de hoje, com o formato da Equipe Cedet
+  // já ajustado automaticamente para o dia da semana atual.
+  function navInicial(){
+    const nav = lerNav()
+    const hoje = hojeKey()
+    if (isPageReload()) {
+      return {
+        ano: (nav.ano&&!isNaN(nav.ano)) ? Number(nav.ano) : agora.getFullYear(),
+        mes: (nav.mes&&!isNaN(nav.mes)) ? Number(nav.mes) : agora.getMonth()+1,
+        aba: nav.aba || 'parceiras',
+        formatoSel: nav.formatoSel || 'story',
+        dataSel: nav.dataSel || hoje,
+        formatoCriativo: nav.formatoCriativo || 'story',
+        dataCriativo: nav.dataCriativo || hoje,
+      }
+    }
+    const fmtAutoHoje = FORMATO_POR_DIA[agora.getDay()] || 'story'
+    return {
+      ano: agora.getFullYear(),
+      mes: agora.getMonth()+1,
+      aba: nav.aba || 'parceiras',
+      formatoSel: 'story',
+      dataSel: hoje,
+      formatoCriativo: fmtAutoHoje,
+      dataCriativo: hoje,
+    }
+  }
+
+  const navInit = navInicial()
+  const [ano, setAno] = useState(navInit.ano)
+  const [mes, setMes] = useState(navInit.mes)
+  const [abaMonitor, setAbaMonitorRaw] = useState(navInit.aba)
+  const [formatoSel, setFormatoSelRaw] = useState(navInit.formatoSel)
+  const [dataSel, setDataSelRaw] = useState(navInit.dataSel)
+  const [formatoCriativoSel, setFormatoCriativoSelRaw] = useState(navInit.formatoCriativo)
+  const [dataCriativoSel, setDataCriativoSelRaw] = useState(navInit.dataCriativo)
+
+  // Garante que o estado inicial calculado (inclusive quando resetado para
+  // hoje, na navegação pelo menu) já fique salvo — assim um F5 logo em
+  // seguida mantém "hoje" como referência, e não o dia antigo.
+  useEffect(() => { salvarNav(navInit) }, []) // eslint-disable-line
 
   function setFormatoSel(v){setFormatoSelRaw(v);salvarNav({formatoSel:v})}
   function setDataSel(v){setDataSelRaw(v);salvarNav({dataSel:v})}
