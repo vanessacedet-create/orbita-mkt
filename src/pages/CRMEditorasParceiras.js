@@ -6,7 +6,7 @@ import {
   getEditorasParceirasAtivas, getLivrariasParceirasAtivas,
   getAllScoreEditorasMes, getAllScoreLivrariasMes,
   getScoreEditorasMeses, getScoreLivrariasMeses,
-  deleteScoreEditoraMes, deleteScoreLivrariaMes,
+  deleteScoreEditoraMes, deleteScoreLivrariaMes, deleteScoreLivrariasMes,
   atualizarClassificacaoMensalLivrarias,
   upsertScoreEditora, upsertScoreLivraria,
   calcularScoreEditora, calcularScoreLivraria, calcularClassificacaoMensalLivraria,
@@ -1221,6 +1221,42 @@ function ModalImportarVendas({ tipo, periodo, onClose, onImported, showToast }) 
   )
 }
 
+// ── MODAL ZERAR MÊS INTEIRO ─────────────────────────────────
+function ModalZerarMesInteiro({ onConfirm, onClose }) {
+  const mesesOpcoes = getMesesDisponiveis(24)
+  const hoje = new Date()
+  const [mes, setMes] = useState(hoje.getMonth()+1)
+  const [ano, setAno] = useState(hoje.getFullYear())
+  const [zerando, setZerando] = useState(false)
+
+  async function confirmar() {
+    if (!window.confirm(`Apagar o score mensal de TODAS as livrarias em ${mesAnoLabel(mes,ano)}? Essa ação não pode ser desfeita.`)) return
+    setZerando(true)
+    try { await onConfirm(ano, mes) } finally { setZerando(false) }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={e => e.target===e.currentTarget&&onClose()}>
+      <div className="modal" style={{ maxWidth:420 }}>
+        <div className="modal-header"><h2 className="modal-title">Zerar mês inteiro</h2><button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button></div>
+        <p style={{ fontSize:13, color:'var(--text-muted)', marginBottom:14 }}>
+          Isso apaga o score mensal de <strong>todas as livrarias</strong> no mês escolhido — vendas, comunicação, promoções e publicações daquele mês. Não dá para desfazer.
+        </p>
+        <div className="form-group">
+          <label className="form-label">Mês a zerar</label>
+          <select className="form-select" value={`${ano}-${mes}`} onChange={e => { const [a,m]=e.target.value.split('-'); setAno(Number(a)); setMes(Number(m)) }}>
+            {mesesOpcoes.map(({ mes:m, ano:a }) => <option key={`${a}-${m}`} value={`${a}-${m}`}>{mesAnoLabel(m,a)}</option>)}
+          </select>
+        </div>
+        <div className="form-actions">
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-primary" onClick={confirmar} disabled={zerando} style={{ background:'#ef4444', borderColor:'#ef4444' }}>{zerando ? 'Zerando...' : 'Zerar mês inteiro'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── ABA CLASSIFICAÇÃO ──────────────────────────────────────
 function AbaClassificacao() {
   const [subAba, setSubAba] = useState(() => sessionStorage.getItem('crm_subaba') || 'livrarias')
@@ -1234,6 +1270,7 @@ function AbaClassificacao() {
   const [scoresLivTri, setScoresLivTri] = useState([])
   const [loading, setLoading] = useState(true)
   const [atualizando, setAtualizando] = useState(false)
+  const [modalZerarMes, setModalZerarMes] = useState(false)
   const [search, setSearch] = useState('')
   const [modalEdMensal, setModalEdMensal] = useState(null)
   const [modalLivMensal, setModalLivMensal] = useState(null)
@@ -1335,6 +1372,11 @@ function AbaClassificacao() {
               <RefreshCw size={13} /> {atualizando ? 'Atualizando...' : `Atualizar classificação (${mesAnoLabel(mes,ano)})`}
             </button>
           )}
+          {subAba === 'livrarias' && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setModalZerarMes(true)} style={{ display:'flex', alignItems:'center', gap:5, flexShrink:0, color:'#ef4444' }}>
+              <Trash2 size={13} /> Zerar mês inteiro
+            </button>
+          )}
         </div>
       </div>
 
@@ -1421,6 +1463,17 @@ function AbaClassificacao() {
       {modalEdTri && <ModalScoreTrimestralEditora editora={modalEdTri.editora} score={modalEdTri.score} onSave={async (id, a, t, d) => { await upsertScoreTrimestralEditora(id, a, t, d); await recarregarTri() }} onClose={() => setModalEdTri(null)} />}
       {modalLivTri && <ModalScoreTrimestralLivraria livraria={modalLivTri.livraria} score={modalLivTri.score} onSave={async (id, a, t, d) => { await upsertScoreTrimestralLivraria(id, a, t, d); await recarregarTri() }} onClose={() => setModalLivTri(null)} />}
       {modalImportar && <ModalImportarVendas tipo={modalImportar} periodo={periodoAba} onClose={() => setModalImportar(null)} onImported={periodoAba==='mensal' ? carregar : recarregarTri} showToast={showToast} />}
+      {modalZerarMes && (
+        <ModalZerarMesInteiro
+          onConfirm={async (a, m) => {
+            const qtd = await deleteScoreLivrariasMes(a, m)
+            showToast(`${qtd} registro(s) apagado(s) de ${mesAnoLabel(m, a)}.`)
+            setModalZerarMes(false)
+            await carregar()
+          }}
+          onClose={() => setModalZerarMes(false)}
+        />
+      )}
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
     </div>
   )
