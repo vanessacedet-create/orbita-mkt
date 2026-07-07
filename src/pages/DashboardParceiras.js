@@ -3,7 +3,7 @@ import { useAuth, PERFIL_GRUPO } from '../context/AuthContext'
 import { getTarefas, getUsuarios } from '../lib/supabase'
 import { getEditorasParceirasAtivas, getLivrariasParceirasAtivas } from '../lib/crm-editoras-parceiras'
 import { getCheckagemCriativoMes } from '../lib/monitoramento-criativo'
-import { getPromocoes, getTodasCampanhasPromocao, STATUS_PROMOCAO } from '../lib/promocoes-parceiras'
+import { getPromocoes, STATUS_PROMOCAO } from '../lib/promocoes-parceiras'
 import { LayoutDashboard, Building2, Library, CheckSquare, Megaphone, Palette } from 'lucide-react'
 
 const GRUPO_ALVO = 'parceiras'
@@ -84,7 +84,6 @@ export default function DashboardParceiras() {
   const [criativoPorStatus, setCriativoPorStatus] = useState({})
 
   const [promocoes, setPromocoes] = useState([])
-  const [totalCampanhasPromocao, setTotalCampanhasPromocao] = useState(0)
 
   useEffect(() => { carregar() }, []) // eslint-disable-line
 
@@ -94,14 +93,13 @@ export default function DashboardParceiras() {
       const hoje = new Date()
       const ano = hoje.getFullYear(), mes = hoje.getMonth() + 1
 
-      const [editoras, livrarias, tarefas, usuarios, checkagemCriativo, listaPromocoes, campanhasPromocao] = await Promise.all([
+      const [editoras, livrarias, tarefas, usuarios, checkagemCriativo, listaPromocoes] = await Promise.all([
         getEditorasParceirasAtivas(),
         getLivrariasParceirasAtivas(),
         getTarefas(),
         getUsuarios(),
         getCheckagemCriativoMes({ ano, mes }).catch(() => []),
         getPromocoes(),
-        getTodasCampanhasPromocao(),
       ])
 
       setTotalEditoras(editoras.length)
@@ -123,7 +121,6 @@ export default function DashboardParceiras() {
       setCriativoPorStatus(cPorStatus)
 
       setPromocoes(listaPromocoes)
-      setTotalCampanhasPromocao(campanhasPromocao.length)
     } catch (e) {
       console.error(e)
       showToast('Erro ao carregar o dashboard.', 'error')
@@ -157,7 +154,7 @@ export default function DashboardParceiras() {
         <CardStat icone={Building2} corBorda="var(--accent)" corIcone="var(--accent)" titulo="Editoras Parceiras" valor={totalEditoras} loading={loading} subtitulo="editoras cadastradas" />
         <CardStat icone={Library} corBorda="#22c55e" corIcone="#22c55e" titulo="Livrarias" valor={totalLivrarias} loading={loading} subtitulo="livrarias cadastradas" />
         <CardStat icone={Megaphone} corBorda="#f97316" corIcone="#f97316" titulo="Promoções" valor={promocoes.length} loading={loading}
-          subtitulo={`${totalCampanhasPromocao} campanha${totalCampanhasPromocao !== 1 ? 's' : ''} no total`}
+          subtitulo="promoções ativas"
           breakdown={{ valores: promPorStatus, labels: STATUS_PROMOCAO_LABEL, cores: STATUS_PROMOCAO_COR }} />
       </div>
 
