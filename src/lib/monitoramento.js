@@ -55,30 +55,6 @@ export async function marcarDivulgacaoPublicada(id, { data_publicada, link } = {
   return data
 }
 
-// Edita uma divulgação importada de LANÇAMENTO (tabela lancamento_parceiros)
-export async function updateLancamentoParceiro(id, updates) {
-  const { data, error } = await supabase
-    .from('lancamento_parceiros')
-    .update(updates)
-    .eq('id', id)
-    .select('*')
-    .single()
-  if (error) throw error
-  return data
-}
-
-// Edita uma divulgação importada de CAMPANHA (tabela campanha_divulgacoes)
-export async function updateDivulgacaoCampanha(id, updates) {
-  const { data, error } = await supabase
-    .from('campanha_divulgacoes')
-    .update(updates)
-    .eq('id', id)
-    .select('*')
-    .single()
-  if (error) throw error
-  return data
-}
-
 export async function getLancamentosMonitoramento({ ano, mes, grupo } = {}) {
   const ini = `${ano}-${String(mes).padStart(2,'0')}-01`
   const ultimoDia = new Date(ano, mes, 0).getDate()
