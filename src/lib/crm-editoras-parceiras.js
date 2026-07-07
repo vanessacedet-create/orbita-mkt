@@ -128,7 +128,7 @@ export async function getEditorasParceirasAtivas() {
 export async function getLivrariasParceirasAtivas() {
   const { data, error } = await supabase
     .from('livrarias')
-    .select('*, editoras_parceiras(id, nome, classificacao)')
+    .select('*, editoras_parceiras(id, nome, classificacao, grupo_id, macro, nicho, sub_nicho)')
     .eq('ativo', true)
     .order('nome', { ascending: true })
   if (error) throw error
