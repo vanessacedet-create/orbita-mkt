@@ -544,7 +544,6 @@ function ModalScoreLivrariatMensal({ livraria, scoresDoLivraria = [], onSave, on
   const hoje = new Date()
   const [mes, setMes] = useState(hoje.getMonth()+1)
   const [ano, setAno] = useState(hoje.getFullYear())
-  const [promocoes, setPromocoes] = useState([])
 
   function valoresIniciais(s) {
     return {
@@ -569,8 +568,6 @@ function ModalScoreLivrariatMensal({ livraria, scoresDoLivraria = [], onSave, on
   const [zerando, setZerando] = useState(false)
   const [erro, setErro] = useState(null)
 
-  useEffect(() => { getCalendarioPromocoes().then(setPromocoes).catch(console.error) }, [])
-
   // Toda vez que o mês selecionado mudar, recarrega o formulário com os
   // dados daquele mês (ou limpa, se não houver nada registrado ainda)
   useEffect(() => {
@@ -588,22 +585,12 @@ function ModalScoreLivrariatMensal({ livraria, scoresDoLivraria = [], onSave, on
     catch(e) { console.error(e); setErro(e.message || 'Erro ao zerar o mês.') } finally { setZerando(false) }
   }
 
-  const OPCOES_PARTICIPACAO = [
-    { value:'confirmou', label:'Confirmou' },
-    { value:'recusou', label:'Recusou' },
-    { value:'sem_retorno', label:'Sem retorno' },
-    { value:'nao_aplica', label:'Não se aplica' },
-  ]
   const OPCOES_COMUNICACAO = [
     { value:'sempre', label:'Sempre responde' },
     { value:'as_vezes', label:'Às vezes responde' },
     { value:'nao_responde', label:'Não responde' },
     { value:'nao_aplica', label:'Não se aplica' },
   ]
-
-  function togglePromocao(id) {
-    setForm(f => ({ ...f, promocoes_ids: f.promocoes_ids.includes(id) ? f.promocoes_ids.filter(x => x !== id) : [...f.promocoes_ids, id] }))
-  }
 
   async function salvar() { setSaving(true); setErro(null); try { await onSave(livraria.id, ano, mes, { ...form, vendas_livraria: Number(form.vendas_livraria) || 0 }); onClose() } catch(e){ console.error(e); setErro(e.message || 'Erro ao salvar. Tente novamente.') } finally { setSaving(false) } }
 
@@ -627,49 +614,17 @@ function ModalScoreLivrariatMensal({ livraria, scoresDoLivraria = [], onSave, on
         {/* Vendas */}
         <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'14px 16px', marginBottom:12 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
-            <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)' }}>Vendas</div>
+            <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)' }}>Vendas <span style={{ color:'var(--accent)', fontWeight:400 }}>(80 pts)</span></div>
             <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, cursor:'pointer' }}>
               <input type="checkbox" checked={form.vendas_nao_aplica} onChange={e => setForm(f => ({ ...f, vendas_nao_aplica:e.target.checked }))} style={{ accentColor:'var(--accent)' }} />
               Não se aplica
             </label>
           </div>
           {!form.vendas_nao_aplica && (
-            <input className="form-input" type="number" min={0} value={form.vendas_livraria} onChange={e => setForm(f => ({ ...f, vendas_livraria: e.target.value === '' ? '' : Number(e.target.value) }))} placeholder="Unidades vendidas no mês" />
-          )}
-        </div>
-
-        {/* Promoções */}
-        <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'14px 16px', marginBottom:12 }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
-            <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)' }}>Promoções</div>
-            <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, cursor:'pointer' }}>
-              <input type="checkbox" checked={form.promocoes_nao_aplica} onChange={e => setForm(f => ({ ...f, promocoes_nao_aplica:e.target.checked }))} style={{ accentColor:'var(--accent)' }} />
-              Não se aplica
-            </label>
-          </div>
-          {!form.promocoes_nao_aplica && (
-            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              <div className="form-group" style={{ marginBottom:0 }}>
-                <label className="form-label">Participação</label>
-                <select className="form-select" value={form.promocao_geral} onChange={e => setForm(f => ({ ...f, promocao_geral:e.target.value }))}>
-                  {OPCOES_PARTICIPACAO.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </div>
-              <div className="form-group" style={{ marginBottom:0 }}>
-                <label className="form-label">Quantas promoções participou?</label>
-                <input className="form-input" type="number" min={0} value={form.qtd_promocoes} onChange={e => setForm(f => ({ ...f, qtd_promocoes:Number(e.target.value) }))} />
-              </div>
-              <div className="form-group" style={{ marginBottom:0 }}>
-                <label className="form-label">Quais promoções?</label>
-                {promocoes.length === 0
-                  ? <div style={{ fontSize:12, color:'var(--text-muted)', fontStyle:'italic', padding:'8px 0' }}>Nenhuma promoção cadastrada no calendário ainda.</div>
-                  : <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:4 }}>
-                      {promocoes.map(p => {
-                        const ativo = form.promocoes_ids.includes(p.id)
-                        return <button key={p.id} type="button" onClick={() => togglePromocao(p.id)} style={{ padding:'4px 12px', borderRadius:20, fontSize:12, fontWeight:600, cursor:'pointer', border:'2px solid var(--accent)', background:ativo?'var(--accent)':'transparent', color:ativo?'#fff':'var(--accent)', transition:'all 0.15s' }}>{p.titulo}</button>
-                      })}
-                    </div>
-                }
+            <div>
+              <input className="form-input" type="number" min={0} value={form.vendas_livraria} onChange={e => setForm(f => ({ ...f, vendas_livraria: e.target.value === '' ? '' : Number(e.target.value) }))} placeholder="Unidades vendidas no mês" />
+              <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:6 }}>
+                Faixas: ≥100 → 80pts · 80-99 → 64pts · 60-79 → 48pts · 40-59 → 32pts · 20-39 → 16pts · 0-19 → 0pts
               </div>
             </div>
           )}
@@ -678,7 +633,7 @@ function ModalScoreLivrariatMensal({ livraria, scoresDoLivraria = [], onSave, on
         {/* Publicações */}
         <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'14px 16px', marginBottom:12 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
-            <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)' }}>Publicações</div>
+            <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)' }}>Publicações <span style={{ color:'var(--accent)', fontWeight:400 }}>(15 pts)</span></div>
             <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, cursor:'pointer' }}>
               <input type="checkbox" checked={form.publicacoes_nao_aplica} onChange={e => setForm(f => ({ ...f, publicacoes_nao_aplica:e.target.checked }))} style={{ accentColor:'var(--accent)' }} />
               Não se aplica
@@ -707,7 +662,7 @@ function ModalScoreLivrariatMensal({ livraria, scoresDoLivraria = [], onSave, on
 
         {/* Comunicação */}
         <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'14px 16px', marginBottom:12 }}>
-          <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)', marginBottom:10 }}>Comunicação</div>
+          <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)', marginBottom:10 }}>Comunicação <span style={{ color:'var(--accent)', fontWeight:400 }}>(5 pts)</span></div>
           <select className="form-select" value={form.comunicacao} onChange={e => setForm(f => ({ ...f, comunicacao:e.target.value }))}>
             {OPCOES_COMUNICACAO.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
@@ -1270,6 +1225,8 @@ function AbaClassificacao() {
   const [scoresLivTri, setScoresLivTri] = useState([])
   const [loading, setLoading] = useState(true)
   const [atualizando, setAtualizando] = useState(false)
+  const [mesAtualizar, setMesAtualizar] = useState(() => new Date().getMonth() + 1)
+  const [anoAtualizar, setAnoAtualizar] = useState(() => new Date().getFullYear())
   const [modalZerarMes, setModalZerarMes] = useState(false)
   const [search, setSearch] = useState('')
   const [modalEdMensal, setModalEdMensal] = useState(null)
@@ -1332,9 +1289,9 @@ function AbaClassificacao() {
   async function handleAtualizarClassificacao() {
     setAtualizando(true)
     try {
-      const r = await atualizarClassificacaoMensalLivrarias(ano, mes)
-      let msg = `${r.atualizadas} livraria(s) atualizada(s).`
-      if (r.semDadosNovos > 0) msg += ` ${r.semDadosNovos} sem dado novo no Monitoramento/Promoções.`
+      const r = await atualizarClassificacaoMensalLivrarias(anoAtualizar, mesAtualizar)
+      let msg = `${r.atualizadas} livraria(s) atualizada(s) em ${mesAnoLabel(mesAtualizar, anoAtualizar)}.`
+      if (r.semDadosNovos > 0) msg += ` ${r.semDadosNovos} sem dado novo no Monitoramento.`
       if (r.erros.length > 0) msg += ` Erros: ${r.erros.join(' | ')}`
       showToast(msg, r.erros.length > 0 ? 'error' : 'success')
       await carregar()
@@ -1368,8 +1325,13 @@ function AbaClassificacao() {
             <Upload size={13} /> Importar vendas
           </button>
           {subAba === 'livrarias' && (
+            <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 8px', flexShrink:0 }} value={`${anoAtualizar}-${mesAtualizar}`} onChange={e => { const [a,m] = e.target.value.split('-'); setAnoAtualizar(Number(a)); setMesAtualizar(Number(m)) }}>
+              {getMesesDisponiveis(24).map(({ mes:m, ano:a }) => <option key={`${a}-${m}`} value={`${a}-${m}`}>{mesAnoLabel(m,a)}</option>)}
+            </select>
+          )}
+          {subAba === 'livrarias' && (
             <button className="btn btn-primary btn-sm" onClick={handleAtualizarClassificacao} disabled={atualizando} style={{ display:'flex', alignItems:'center', gap:5, flexShrink:0 }}>
-              <RefreshCw size={13} /> {atualizando ? 'Atualizando...' : `Atualizar classificação (${mesAnoLabel(mes,ano)})`}
+              <RefreshCw size={13} /> {atualizando ? 'Atualizando...' : `Atualizar classificação`}
             </button>
           )}
           {subAba === 'livrarias' && (
@@ -1387,23 +1349,18 @@ function AbaClassificacao() {
             <table style={{ width:'100%', borderCollapse:'collapse', minWidth:400 + mesesColunas.length * 90 }}>
               <thead><tr style={{ borderBottom:'1px solid var(--border)' }}>
                 <th style={{ padding:'10px 14px', textAlign:'left', fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', position:'sticky', left:0, background:'var(--surface)', zIndex:2, width:larguraColunaNome, minWidth:120, maxWidth:400 }}><div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}><span>{subAba==='editoras'?'Editora':'Livraria'}</span><div onMouseDown={iniciarResize} style={{ width:6, height:16, cursor:'col-resize', background:'var(--border)', borderRadius:3, flexShrink:0, marginLeft:8, opacity:0.6 }} onMouseEnter={e=>e.currentTarget.style.opacity='1'} onMouseLeave={e=>e.currentTarget.style.opacity='0.6'} /></div></th>
-                <th style={{ padding:'10px 14px', textAlign:'center', fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', minWidth:80 }}>Registrar</th>
                 {mesesColunas.map(({ mes:m, ano:a }) => <th key={`${a}-${m}`} style={{ padding:'10px 14px', textAlign:'center', fontSize:11, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', minWidth:80 }}>{mesAnoLabel(m,a)}</th>)}
               </tr></thead>
               <tbody>
                 {subAba === 'editoras' && editorasFiltradas.map(e => {
-                  const s = mapEdMensal[`${e.id}-${ano}-${mes}`]
-                  return <tr key={e.id} style={{ borderBottom:'1px solid var(--border)' }} onMouseEnter={el => el.currentTarget.style.background='var(--surface-2)'} onMouseLeave={el => el.currentTarget.style.background='transparent'}>
-                    <td style={{ padding:'10px 14px', position:'sticky', left:0, background:'var(--surface)', zIndex:1, width:larguraColunaNome, maxWidth:400 }}><div style={{ fontWeight:700, fontSize:13 }}>{e.nome}</div>{e.classificacao&&<div style={{ fontSize:11, color:'var(--text-muted)' }}>Classe {e.classificacao}</div>}</td>
-                    <td style={{ padding:'10px 14px', textAlign:'center' }}><button className="btn btn-ghost btn-sm" onClick={() => setModalEdMensal({ editora:e })}><Plus size={12} /></button></td>
+                  return <tr key={e.id} style={{ borderBottom:'1px solid var(--border)', cursor:'pointer' }} onClick={() => setModalEdMensal({ editora:e })} onMouseEnter={el => el.currentTarget.style.background='var(--surface-2)'} onMouseLeave={el => el.currentTarget.style.background='transparent'}>
+                    <td style={{ padding:'10px 14px', position:'sticky', left:0, background:'var(--surface)', zIndex:1, width:larguraColunaNome, maxWidth:400 }}><div style={{ fontWeight:700, fontSize:13, color:'var(--accent)' }}>{e.nome}</div>{e.classificacao&&<div style={{ fontSize:11, color:'var(--text-muted)' }}>Classe {e.classificacao}</div>}</td>
                     {mesesColunas.map(({ mes:m, ano:a }) => <td key={`${a}-${m}`} style={{ padding:'10px 14px', textAlign:'center' }}><CirculoScore nota={mapEdMensal[`${e.id}-${a}-${m}`]?.score ?? null} size={32} /></td>)}
                   </tr>
                 })}
                 {subAba === 'livrarias' && livrariasFiltradas.map(l => {
-                  const s = mapLivMensal[`${l.id}-${ano}-${mes}`]
-                  return <tr key={l.id} style={{ borderBottom:'1px solid var(--border)' }} onMouseEnter={el => el.currentTarget.style.background='var(--surface-2)'} onMouseLeave={el => el.currentTarget.style.background='transparent'}>
-                    <td style={{ padding:'10px 14px', position:'sticky', left:0, background:'var(--surface)', zIndex:1, width:larguraColunaNome, maxWidth:400 }}><div style={{ fontWeight:700, fontSize:13 }}>{l.nome}</div>{l.editoras_parceiras?.nome&&<div style={{ fontSize:11, color:'var(--text-muted)' }}>{l.editoras_parceiras.nome}</div>}{l.classificacao&&<div style={{ fontSize:11, color:'var(--text-muted)' }}>Classe {l.classificacao}</div>}</td>
-                    <td style={{ padding:'10px 14px', textAlign:'center' }}><button className="btn btn-ghost btn-sm" onClick={() => setModalLivMensal({ livraria:l })}><Plus size={12} /></button></td>
+                  return <tr key={l.id} style={{ borderBottom:'1px solid var(--border)', cursor:'pointer' }} onClick={() => setModalLivMensal({ livraria:l })} onMouseEnter={el => el.currentTarget.style.background='var(--surface-2)'} onMouseLeave={el => el.currentTarget.style.background='transparent'}>
+                    <td style={{ padding:'10px 14px', position:'sticky', left:0, background:'var(--surface)', zIndex:1, width:larguraColunaNome, maxWidth:400 }}><div style={{ fontWeight:700, fontSize:13, color:'var(--accent)' }}>{l.nome}</div>{l.editoras_parceiras?.nome&&<div style={{ fontSize:11, color:'var(--text-muted)' }}>{l.editoras_parceiras.nome}</div>}{l.classificacao&&<div style={{ fontSize:11, color:'var(--text-muted)' }}>Classe {l.classificacao}</div>}</td>
                     {mesesColunas.map(({ mes:m, ano:a }) => <td key={`${a}-${m}`} style={{ padding:'10px 14px', textAlign:'center' }}><CirculoScore nota={mapLivMensal[`${l.id}-${a}-${m}`]?.score ?? null} size={32} /></td>)}
                   </tr>
                 })}
