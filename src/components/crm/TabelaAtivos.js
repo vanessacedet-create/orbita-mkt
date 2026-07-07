@@ -189,6 +189,7 @@ export default function TabelaAtivos({ onOpenParceiro }) {
           <option value="">Todas as situações</option>
           <option value="ativo">Ativo</option>
           <option value="pausado">Pausado</option>
+          <option value="encerrando">Encerrando</option>
           <option value="encerrado">Encerrado</option>
         </select>
         <select className="form-select" style={{ width: 'auto', fontSize: 12, padding: '6px 10px' }}
