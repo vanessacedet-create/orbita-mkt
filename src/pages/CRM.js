@@ -29,6 +29,7 @@ const PIPELINE_FALLBACK = [
   { value: 'closed',       label: 'Encerrado',         cor: '#ef4444', bg: 'rgba(239,68,68,0.12)'   },
   { value: 'sem_retorno',  label: 'Sem retorno',       cor: '#94a3b8', bg: 'rgba(148,163,184,0.12)' },
   { value: 'sem_interesse',label: 'Sem interesse',     cor: '#f43f5e', bg: 'rgba(244,63,94,0.12)'   },
+  { value: 'parceria_outro_formato', label: 'Parceria em outro formato', cor: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' },
 ]
 
 const PLATAFORMAS = ['Instagram','TikTok','YouTube','Blog','Twitter/X','Pinterest','Kwai']
@@ -203,6 +204,22 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
       onSave(parceiroAtualizado)
       showToast('Parceiro ativado! Agora aparece em Parceiros Ativos.')
     } catch(e) { showToast('Erro ao ativar parceiro', 'error') } finally { setAtivando(false) }
+  }
+
+  const [iniciandoEnc, setIniciandoEnc] = useState(false)
+
+  async function iniciarEncerramento() {
+    setIniciandoEnc(true)
+    try {
+      await updateSituacao(parceiro.id, 'encerrando')
+      await addStatusHistory(parceiro.id, 'active', motivoEncerrar.trim() ? `Encerramento iniciado: ${motivoEncerrar.trim()}` : 'Encerramento iniciado', usuario?.id)
+      const hist = await getStatusHistory(parceiro.id)
+      setHistory(hist)
+      const parceiroAtualizado = { ...parceiro, situacao: 'encerrando' }
+      setParceiro(parceiroAtualizado)
+      onSave(parceiroAtualizado)
+      showToast('Parceria marcada como Encerrando.')
+    } catch(e) { showToast('Erro ao iniciar encerramento', 'error') } finally { setIniciandoEnc(false) }
   }
 
   async function encerrarParceria() {
@@ -626,14 +643,33 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
             {/* Ação de ciclo de vida: encerrar parceria (só para parceiros ativos) */}
             {ehAtivo && (
               <div style={{borderTop:'1px solid var(--border)',marginTop:16,paddingTop:16}}>
-                <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}}>Encerrar parceria</div>
+                <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:10,fontWeight:700,textTransform:'uppercase',letterSpacing:'0.05em'}}>Encerramento da parceria</div>
+                {parceiro.situacao === 'encerrando' && (
+                  <div style={{display:'inline-flex',alignItems:'center',gap:6,background:'rgba(249,115,22,0.12)',border:'1px solid rgba(249,115,22,0.4)',borderRadius:20,padding:'3px 12px',fontSize:12,fontWeight:700,color:'#f97316',marginBottom:10}}>
+                    Encerrando — em processo de término
+                  </div>
+                )}
                 <div className="form-group">
-                  <label className="form-label">Motivo do encerramento *</label>
+                  <label className="form-label">Motivo (obrigatório para encerrar de vez)</label>
                   <textarea className="form-textarea" rows={2} value={motivoEncerrar}
                     onChange={e=>setMotivoEncerrar(e.target.value)}
                     placeholder="Descreva o motivo do encerramento da parceria..."/>
                 </div>
                 <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+                  {parceiro.situacao !== 'encerrando' && (
+                    <button
+                      onClick={iniciarEncerramento}
+                      disabled={iniciandoEnc}
+                      style={{
+                        display:'inline-flex',alignItems:'center',gap:8,
+                        background:'#f97316',color:'#fff',border:'none',borderRadius:8,
+                        padding:'10px 18px',fontSize:14,fontWeight:700,
+                        cursor: iniciandoEnc ? 'default' : 'pointer',
+                        opacity: iniciandoEnc ? 0.7 : 1,
+                      }}>
+                      {iniciandoEnc ? 'Marcando...' : 'Iniciar encerramento'}
+                    </button>
+                  )}
                   <button
                     onClick={encerrarParceria}
                     disabled={encerrando || !motivoEncerrar.trim()}
@@ -648,7 +684,8 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                     {encerrando ? 'Encerrando...' : 'Encerrar parceria'}
                   </button>
                   <span style={{fontSize:12,color:'var(--text-muted)'}}>
-                    Marca a parceria como <strong>Encerrada</strong> e registra no histórico.
+                    <strong>Iniciar encerramento</strong> = em processo de término (ainda ativo).
+                    {' '}<strong>Encerrar parceria</strong> = término definitivo.
                   </span>
                 </div>
               </div>
