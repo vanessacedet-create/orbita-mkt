@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useViewAs } from '../context/ViewAsContext'
 import { useAuth } from '../context/AuthContext'
 import { PERFIL_GRUPO } from '../context/AuthContext'
-import { getRegistrosMonitoramento, createRegistroMonitoramento, updateRegistroMonitoramento, deleteRegistroMonitoramento, getParceiros, getParceirosAtivos, getLancamentosMonitoramento, marcarDivulgacaoPublicada } from '../lib/supabase'
+import { getRegistrosMonitoramento, createRegistroMonitoramento, updateRegistroMonitoramento, deleteRegistroMonitoramento, getParceiros, getParceirosAtivos, getLancamentosMonitoramento, marcarDivulgacaoPublicada, updateLancamentoParceiro, updateDivulgacaoCampanha } from '../lib/supabase'
 import { ChevronLeft, ChevronRight, Eye, Plus, Pencil, Trash2, X, BellRing, AlertTriangle, MessageCircle, CalendarClock } from 'lucide-react'
 
 // ── UTILITÁRIOS DE DATA ────────────────────────────────────
@@ -193,8 +193,9 @@ function ModalRegistro({registro, dataInicial, parceiros, onSave, onClose}){
     status:'pendente', tipo_postagem:'', link:'',
     observacao:''
   }
+  const ehImportado = registro?._origem === 'lancamento'
   const[form,setForm]=useState(registro ? {
-    parceiro_id: registro.parceiro_id||'',
+    parceiro_id: registro.parceiro_id||registro.parceiros?.id||'',
     data: registro.data||'',
     status: registro.status||'pendente',
     tipo_postagem: registro.tipo_postagem||'',
@@ -210,7 +211,7 @@ function ModalRegistro({registro, dataInicial, parceiros, onSave, onClose}){
   const filtrados = parceiros.filter(p=>p.nome.toLowerCase().includes(search.toLowerCase()))
 
   async function salvar(){
-    if(!form.parceiro_id||!form.data)return
+    if((!ehImportado&&!form.parceiro_id)||!form.data)return
     setSaving(true)
     try{
       await onSave(form)
@@ -222,12 +223,24 @@ function ModalRegistro({registro, dataInicial, parceiros, onSave, onClose}){
     <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div className="modal" style={{maxWidth:460}}>
         <div className="modal-header">
-          <h2 className="modal-title">{registro?'Editar registro':'Novo registro'}</h2>
+          <h2 className="modal-title">{registro?(ehImportado?'Editar divulgação (campanha)':'Editar registro'):'Novo registro'}</h2>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
         </div>
 
         <div className="form-grid">
           {/* Parceiro */}
+          {ehImportado ? (
+            <div className="form-group">
+              <label className="form-label">Parceiro</label>
+              <div style={{padding:'9px 12px',background:'var(--surface-2)',border:'1px solid var(--border)',borderRadius:8,fontSize:13,color:'var(--text-muted)'}}>
+                {registro.parceiros?.nome||'—'}
+                {registro._campanha && <span style={{marginLeft:8,fontSize:11,color:'var(--accent)'}}>{registro._campanha}</span>}
+              </div>
+              <div style={{fontSize:11,color:'var(--text-muted)',marginTop:3}}>
+                Divulgação importada — o parceiro é definido na campanha/lançamento de origem.
+              </div>
+            </div>
+          ) : (
           <div className="form-group" style={{position:'relative'}}>
             <label className="form-label">Parceiro *</label>
             <input className="form-input" value={search}
@@ -249,6 +262,7 @@ function ModalRegistro({registro, dataInicial, parceiros, onSave, onClose}){
               </div>
             )}
           </div>
+          )}
 
           {/* Data */}
           <div className="form-group">
@@ -257,6 +271,7 @@ function ModalRegistro({registro, dataInicial, parceiros, onSave, onClose}){
           </div>
 
           {/* Status */}
+          {!ehImportado&&(
           <div className="form-group">
             <label className="form-label">Status</label>
             <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
@@ -270,6 +285,7 @@ function ModalRegistro({registro, dataInicial, parceiros, onSave, onClose}){
               ))}
             </div>
           </div>
+          )}
 
           {/* Tipo de postagem */}
           <div className="form-group">
@@ -290,16 +306,18 @@ function ModalRegistro({registro, dataInicial, parceiros, onSave, onClose}){
           )}
 
           {/* Observação */}
+          {!ehImportado&&(
           <div className="form-group">
             <label className="form-label">Observação</label>
             <textarea className="form-textarea" rows={2} value={form.observacao}
               onChange={e=>setForm(f=>({...f,observacao:e.target.value}))} placeholder="Notas opcionais..."/>
           </div>
+          )}
         </div>
 
         <div className="form-actions">
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={salvar} disabled={saving||!form.parceiro_id||!form.data}>
+          <button className="btn btn-primary" onClick={salvar} disabled={saving||(!ehImportado&&!form.parceiro_id)||!form.data}>
             {saving?'Salvando...':registro?'Salvar':'Registrar'}
           </button>
         </div>
@@ -344,7 +362,7 @@ function ModalDia({dataKey, registros, parceiros, hj, onAdd, onEdit, onDelete, o
                   </div>
                   <div style={{display:'flex',alignItems:'center',gap:6}}>
                     <span style={{fontSize:11,color:st.cor,fontWeight:600}}>{st.icon} {st.label}</span>
-                    {!eLanc&&<button className="btn btn-ghost btn-icon btn-sm" onClick={()=>onEdit(r)}><Pencil size={11}/></button>}
+                    <button className="btn btn-ghost btn-icon btn-sm" title="Editar" onClick={()=>onEdit(r)}><Pencil size={11}/></button>
                     {!eLanc&&<button className="btn btn-danger btn-icon btn-sm" onClick={()=>onDelete(r.id)}><Trash2 size={11}/></button>}
                   </div>
                 </div>
@@ -540,7 +558,29 @@ export default function Monitoramento(){
 
   async function handleSave(form){
     if(modalForm?.registro){
-      const upd = await updateRegistroMonitoramento(modalForm.registro.id, form)
+      const reg = modalForm.registro
+      if(reg._origem==='lancamento'){
+        // Divulgação importada: atualiza a FONTE (campanha ou lançamento)
+        if(reg._divulgacaoCampanhaId){
+          await updateDivulgacaoCampanha(reg._divulgacaoCampanhaId, {
+            data_divulgacao: form.data,
+            tipo: form.tipo_postagem||null,
+            link: form.link||null,
+          })
+        } else {
+          await updateLancamentoParceiro(reg._lancamentoId, {
+            data_combinada: form.data,
+            tipo_divulgacao: form.tipo_postagem||null,
+            link: form.link||null,
+          })
+        }
+        setLancamentos(p=>p.map(l=>l.id===reg._lancamentoId
+          ? {...l, data_combinada: form.data, tipo_divulgacao: form.tipo_postagem||null, link: form.link||null}
+          : l))
+        showToast('Divulgação atualizada!')
+        return
+      }
+      const upd = await updateRegistroMonitoramento(reg.id, form)
       setRegistros(p=>p.map(r=>r.id===upd.id?upd:r))
       showToast('Atualizado!')
     } else {
