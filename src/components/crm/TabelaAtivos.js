@@ -1,639 +1,361 @@
-import { supabase } from './client'
+// src/components/crm/TabelaAtivos.js
+// Tabela de parceiros ativos por tipo de parceria (Livraria / Book Time / Institucional)
+// Uso: <TabelaAtivos onOpenParceiro={fn} />
 
-// ── CPF — CRIPTOGRAFIA ────────────────────────────────────
-export async function saveParceiroCPF(parceiroId, cpf) {
-  const { error } = await supabase.rpc('salvar_cpf_parceiro', {
-    p_id: parceiroId,
-    p_cpf: cpf || null,
+import { useEffect, useState } from 'react'
+import { getParceirosComTier, getUsuarios, updateParceirosLote } from '../../lib/supabase'
+import { BadgeSituacao } from './BadgeTier'
+import { Search, X } from 'lucide-react'
+
+const PLATAFORMAS = ['Instagram', 'TikTok', 'YouTube', 'Blog', 'Twitter/X', 'Pinterest', 'Kwai']
+
+// ── TIPO DE PARCERIA (derivado do modelo) ──
+const TIPOS_PARCERIA = {
+  1: { label: 'Livraria',      cor: '#a855f7', bg: 'rgba(168,85,247,0.12)' },
+  2: { label: 'Book Time',     cor: '#22c55e', bg: 'rgba(34,197,94,0.12)' },
+  3: { label: 'Institucional', cor: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
+}
+function tipoParceriaInfo(model) { return TIPOS_PARCERIA[Number(model)] || null }
+
+// ── CARD DE MÉTRICA ───────────────────────────────────────
+function MetricCard({ label, value, cor }) {
+  return (
+    <div style={{
+      background: 'var(--surface-2)',
+      border: '1px solid var(--border)',
+      borderRadius: 10,
+      padding: '14px 18px',
+      minWidth: 130,
+      flex: '0 0 auto',
+    }}>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 26, fontWeight: 800, color: cor || 'var(--text)' }}>{value}</div>
+    </div>
+  )
+}
+
+// ── BADGE DE TIPO ─────────────────────────────────────────
+function BadgeTipo({ model }) {
+  const tp = tipoParceriaInfo(model)
+  if (!tp) return <span className="td-muted">—</span>
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center',
+      background: tp.bg, border: `1px solid ${tp.cor}55`,
+      borderRadius: 20, padding: '3px 12px', fontSize: 12, fontWeight: 700, color: tp.cor,
+    }}>{tp.label}</span>
+  )
+}
+
+// ── COMPONENTE PRINCIPAL ──────────────────────────────────
+export default function TabelaAtivos({ onOpenParceiro }) {
+  const [parceiros, setParceiros] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [filtroTipo, setFiltroTipo] = useState('')
+  const [filtroSituacao, setFiltroSituacao] = useState('ativo')
+  const [filtroPlat, setFiltroPlat] = useState('')
+  const [filtroResp, setFiltroResp] = useState('')
+  const [usuarios, setUsuarios] = useState([])
+  const [selecionados, setSelecionados] = useState(() => new Set())
+  const [acaoMassa, setAcaoMassa] = useState(null) // 'responsavel' | 'tipo' | null
+  const [valorMassa, setValorMassa] = useState('')
+  const [salvando, setSalvando] = useState(false)
+
+  async function carregar() {
+    setLoading(true)
+    try {
+      const data = await getParceirosComTier()
+      setParceiros(data)
+    } catch (e) {
+      console.error('Erro ao carregar parceiros ativos:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    carregar()
+    getUsuarios().then(setUsuarios).catch(console.error)
+  }, [])
+
+  // ── Filtros ──
+  const filtrados = parceiros.filter(p => {
+    const q = search.toLowerCase()
+    if (q && !(
+      (p.nome || '').toLowerCase().includes(q) ||
+      (p.username || '').toLowerCase().includes(q)
+    )) return false
+    if (filtroTipo && String(p.model) !== filtroTipo) return false
+    if (filtroSituacao && p.situacao !== filtroSituacao) return false
+    if (filtroPlat && !(p.platforms || []).includes(filtroPlat)) return false
+    if (filtroResp && p.responsavel_interno_id !== filtroResp) return false
+    return true
   })
-  if (error) throw error
-}
 
-export async function getParceiroCPF(parceiroId) {
-  const { data, error } = await supabase
-    .from('parceiros_com_cpf')
-    .select('cpf_decriptografado')
-    .eq('id', parceiroId)
-    .single()
-  if (error) throw error
-  return data?.cpf_decriptografado || ''
-}
+  const temFiltro = filtroTipo || filtroPlat || filtroResp || filtroSituacao !== 'ativo'
 
-// ── PARCEIROS ──────────────────────────────────────────────
-export async function getParceiros() {
-  const { data, error } = await supabase.from('parceiros').select('*').order('nome')
-  if (error) throw error
-  return data || []
-}
+  // ── Seleção em massa ──
+  const idsVisiveis = filtrados.map(p => p.id)
+  const todosSelecionados = idsVisiveis.length > 0 && idsVisiveis.every(id => selecionados.has(id))
+  const algunsSelecionados = idsVisiveis.some(id => selecionados.has(id))
 
-// Retorna apenas parceiros com status 'active' no CRM
-export async function getParceirosAtivos() {
-  const { data: statusAtivos, error: se } = await supabase
-    .from('parceiro_status_atual')
-    .select('partner_id')
-    .eq('status', 'active')
-  if (se) throw se
-
-  const ids = (statusAtivos || []).map(s => s.partner_id)
-  if (!ids.length) return []
-
-  const { data, error } = await supabase
-    .from('parceiros')
-    .select('*')
-    .in('id', ids)
-    .order('nome')
-  if (error) throw error
-  return data || []
-}
-
-// Retorna TODOS os parceiros independente de status (uso interno do CRM)
-export async function getTodosParceiros() {
-  const { data, error } = await supabase.from('parceiros').select('*').order('nome')
-  if (error) throw error
-  return data || []
-}
-
-// ── PONTUAÇÃO DE PARCEIROS ─────────────────────────────────
-export async function getParceirosComPontuacao() {
-  const STATUS_VALIDOS = ['publicado','nao_publicou','confirmado','recusou','sem_retorno','agendado']
-
-  const { data: parceiros, error: pe } = await supabase
-    .from('parceiros').select('*').order('nome')
-  if (pe) throw pe
-
-  const { data: cps, error: ce } = await supabase
-    .from('campanha_parceiros')
-    .select('id, parceiro_id, status, campanha_id')
-    .in('status', STATUS_VALIDOS)
-  if (ce) throw ce
-
-  const { data: lps, error: le } = await supabase
-    .from('lancamento_parceiros')
-    .select('id, parceiro_id, status, data_combinada, lancamento_livro_id')
-    .in('status', STATUS_VALIDOS)
-  if (le) throw le
-
-  const porParceiro = {}
-
-  for (const cp of (cps || [])) {
-    if (!cp.parceiro_id) continue
-    if (!porParceiro[cp.parceiro_id]) porParceiro[cp.parceiro_id] = { normais: [], lancamentos: [] }
-    porParceiro[cp.parceiro_id].normais.push(cp)
-  }
-
-  const llVisto = {}
-  for (const lp of (lps || [])) {
-    if (!lp.parceiro_id) continue
-    if (!porParceiro[lp.parceiro_id]) porParceiro[lp.parceiro_id] = { normais: [], lancamentos: [] }
-    const chave = `${lp.parceiro_id}_${lp.lancamento_livro_id}`
-    if (llVisto[chave]) continue
-    llVisto[chave] = true
-    porParceiro[lp.parceiro_id].lancamentos.push({
-      ...lp,
-      _dataRef: lp.data_combinada || null,
+  function toggleSelecionado(id) {
+    setSelecionados(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
     })
   }
-
-  return parceiros.map(p => ({
-    ...p,
-    pontuacao: calcularPontuacao(porParceiro[p.id] || { normais: [], lancamentos: [] })
-  }))
-}
-
-function mesAno(dataStr) {
-  if (!dataStr) return null
-  const d = new Date(dataStr + 'T12:00:00')
-  if (isNaN(d)) return null
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
-}
-
-function calcularPontuacao({ normais = [], lancamentos = [] }) {
-  const STATUS_VALIDOS = ['publicado','nao_publicou','confirmado','recusou','sem_retorno','agendado']
-
-  const todas = [
-    ...normais.filter(cp => STATUS_VALIDOS.includes(cp.status)).map(cp => ({
-      status: cp.status, dataRef: cp._dataRef || null,
-    })),
-    ...lancamentos.filter(lp => STATUS_VALIDOS.includes(lp.status)).map(lp => ({
-      status: lp.status, dataRef: lp._dataRef || null,
-    }))
-  ]
-
-  if (todas.length === 0) return null
-
-  const comprometidos = todas.filter(p => ['confirmado','agendado','publicado'].includes(p.status)).length
-  const publicados    = todas.filter(p => p.status === 'publicado').length
-  const confiabilidade = comprometidos > 0 ? publicados / comprometidos : 0
-
-  const comRetorno = todas.filter(p => p.status !== 'sem_retorno').length
-  const comprometimento = todas.length > 0 ? comRetorno / todas.length : 0
-
-  const mesesComPublicacao = new Set(
-    todas.filter(p => p.status === 'publicado' && mesAno(p.dataRef))
-         .map(p => mesAno(p.dataRef))
-  )
-  const todosOsMeses = new Set(
-    todas.filter(p => mesAno(p.dataRef)).map(p => mesAno(p.dataRef))
-  )
-  const recorrencia = todosOsMeses.size > 0 ? mesesComPublicacao.size / todosOsMeses.size : 0
-
-  const notaBruta = (confiabilidade * 0.5 + comprometimento * 0.3 + recorrencia * 0.2) * 10
-  const notaFinal = Math.round(notaBruta * 10) / 10
-
-  const porMes = {}
-  for (const p of todas) {
-    const m = mesAno(p.dataRef)
-    if (!m) continue
-    if (!porMes[m]) porMes[m] = []
-    porMes[m].push(p)
-  }
-  const notasMensais = {}
-  for (const [m, parts] of Object.entries(porMes)) {
-    const compMes = parts.filter(p => ['confirmado','agendado','publicado'].includes(p.status)).length
-    const pubMes  = parts.filter(p => p.status === 'publicado').length
-    const confMes = compMes > 0 ? pubMes / compMes : 0
-    const retMes  = parts.filter(p => p.status !== 'sem_retorno').length / parts.length
-    const recMes  = pubMes > 0 ? 1 : 0
-    const notaMes = (confMes * 0.5 + retMes * 0.3 + recMes * 0.2) * 10
-    notasMensais[m] = Math.round(notaMes * 10) / 10
-  }
-
-  return {
-    nota: notaFinal,
-    notasMensais,
-    totalCampanhas: todas.length,
-    totalLancamentos: lancamentos.length,
-    publicadas: publicados,
-    confiabilidade: Math.round(confiabilidade * 100),
-    comprometimento: Math.round(comprometimento * 100),
-    recorrencia: Math.round(recorrencia * 100),
-    nivel: notaFinal >= 8 ? 'ouro' : notaFinal >= 6 ? 'prata' : notaFinal >= 4 ? 'bronze' : 'atencao'
-  }
-}
-
-export async function createParceiro(p) {
-  const { cpf, ...rest } = p
-  const { data, error } = await supabase.from('parceiros').insert([rest]).select().single()
-  if (error) throw error
-  if (cpf && cpf.trim()) {
-    await supabase.rpc('salvar_cpf_parceiro', { p_id: data.id, p_cpf: cpf.trim() })
-  }
-  return data
-}
-
-export async function updateParceiro(id, updates) {
-  const { cpf, ...rest } = updates
-  const { data, error } = await supabase.from('parceiros').update(rest).eq('id', id).select().single()
-  if (error) throw error
-  if (cpf !== undefined) {
-    await supabase.rpc('salvar_cpf_parceiro', { p_id: id, p_cpf: cpf?.trim() || null })
-  }
-  return data
-}
-
-export async function deleteParceiro(id) {
-  const { error } = await supabase.from('parceiros').delete().eq('id', id)
-  if (error) throw error
-}
-
-// Atualização em massa de campos de parceiros (CRM de influencers).
-// ids: array de ids; updates: objeto com os campos a alterar
-// (ex.: { responsavel_interno_id: '...' } ou { model: 2 }).
-// Faz um único UPDATE com IN(ids) — bem mais eficiente que um loop.
-export async function updateParceirosLote(ids, updates) {
-  if (!ids || !ids.length) return []
-  const { data, error } = await supabase
-    .from('parceiros')
-    .update(updates)
-    .in('id', ids)
-    .select('id')
-  if (error) throw error
-  return data || []
-}
-
-// ── CRM DE INFLUENCERS ─────────────────────────────────────
-export async function createParceiroCRM(payload, statusInicial = 'prospected') {
-  const { data, error } = await supabase
-    .from('parceiros')
-    .insert([payload])
-    .select('*')
-    .single()
-  if (error) throw error
-  await addStatusHistory(data.id, statusInicial, 'Parceiro cadastrado via CRM')
-  return data
-}
-
-// Importação em lote de possíveis parceiros (via planilha).
-// Insere todos os parceiros e registra o status inicial de cada um no histórico.
-export async function createParceirosLote(lista, { grupo = null, statusInicial = 'prospected', changed_by = null } = {}) {
-  if (!lista || !lista.length) return []
-  const payloads = lista.map(p => ({ ...p, grupo }))
-  const { data, error } = await supabase
-    .from('parceiros')
-    .insert(payloads)
-    .select('*')
-  if (error) throw error
-
-  const histRows = (data || []).map(d => ({
-    partner_id: d.id,
-    status: statusInicial,
-    reason: 'Importado via planilha',
-    changed_by: changed_by || null,
-  }))
-  if (histRows.length) {
-    const { error: he } = await supabase.from('partner_status_history').insert(histRows)
-    if (he) throw he
-  }
-  return data || []
-}
-
-export async function getCRMParceiros() {
-  const { data, error } = await supabase
-    .from('parceiros')
-    .select('*, responsavel_interno:usuarios!responsavel_interno_id(id, nome), criador:usuarios!criado_por_id(id, nome)')
-    .order('nome')
-  if (error) throw error
-
-  const ids = (data||[]).map(p=>p.id)
-  if (!ids.length) return []
-
-  const { data: statusData } = await supabase
-    .from('parceiro_status_atual')
-    .select('partner_id, status')
-    .in('partner_id', ids)
-
-  const statusMap = {}
-  for (const s of (statusData||[])) {
-    statusMap[s.partner_id] = s.status
-  }
-
-  return (data||[]).map(p => ({
-    ...p,
-    current_status: statusMap[p.id] || null,
-    responsavel_interno_nome: p.responsavel_interno?.nome || null,
-    criado_por_nome: p.criador?.nome || null
-  }))
-}
-
-export async function updateParceiroCRM(id, updates) {
-  const { data, error } = await supabase
-    .from('parceiros')
-    .update(updates)
-    .eq('id', id)
-    .select('*')
-    .single()
-  if (error) throw error
-  return data
-}
-
-export async function getStatusHistory(parceiro_id) {
-  const { data, error } = await supabase
-    .from('partner_status_history')
-    .select('*, autor:usuarios!changed_by(id, nome)')
-    .eq('partner_id', parceiro_id)
-    .order('changed_at', { ascending: false })
-  if (error) throw error
-  return (data || []).map(h => ({
-    ...h,
-    changed_by_nome: h.autor?.nome || null,
-  }))
-}
-
-export async function addStatusHistory(parceiro_id, status, reason, changed_by) {
-  const { data, error } = await supabase
-    .from('partner_status_history')
-    .insert([{ partner_id: parceiro_id, status, reason: reason||null, changed_by: changed_by||null }])
-    .select('*')
-    .single()
-  if (error) throw error
-  return data
-}
-
-export async function vincularDivulgadorComoParceiro(divulgador) {
-  let parceiro = null
-  if (divulgador.username) {
-    const { data } = await supabase
-      .from('parceiros').select('*')
-      .ilike('username', divulgador.username).maybeSingle()
-    parceiro = data
-  }
-  if (!parceiro) {
-    const { data } = await supabase
-      .from('parceiros').select('*')
-      .ilike('nome', divulgador.nome).maybeSingle()
-    parceiro = data
-  }
-  if (!parceiro) {
-    const { data, error } = await supabase
-      .from('parceiros').insert([{
-        nome:            divulgador.nome,
-        username:        divulgador.username || null,
-        platforms:       divulgador.platforms || null,
-        followers_count: divulgador.followers_count || null,
-        engagement_rate: divulgador.engagement_rate || null,
-        profile_url:     divulgador.profile_url || null,
-        contact_value:   divulgador.contact_value || null,
-        tipo_parceria:   divulgador.tipo_parceria || null,
-        notes:           divulgador.notes || null,
-      }]).select('*').single()
-    if (error) throw error
-    parceiro = data
-  }
-  await supabase.from('divulgadores')
-    .update({ parceiro_id: parceiro.id })
-    .eq('id', divulgador.id)
-  return parceiro
-}
-
-// ============================================================
-// FUNÇÕES DE TIER — Escada de Crescimento
-// Adicionar ao final do arquivo src/lib/parceiros.js
-// ============================================================
-
-
-// ── CONSTANTES DA ESCADA ──────────────────────────────────
-
-// A Escada de Crescimento só se aplica a parceiros com modelo:
-//   2 (Book Time / cupom) e 3 (Institucional)
-// Parceiros modelo 1 (Livraria de influencer) NÃO participam da Escada.
-export const MODELOS_COM_ESCADA = [2, 3]
-
-export const TIERS = {
-  bronze: {
-    value: 'bronze',
-    label: 'Bronze',
-    cor: '#78716c',
-    bg: 'rgba(120,113,108,0.12)',
-    border: 'rgba(120,113,108,0.3)',
-    criterio: 'Acordo fechado',
-    beneficios: 'Permuta 1 livro + cupom + comissão 10%',
-    proximoTier: 'prata',
-    metaVendas: 10,        // vendas acumuladas para subir
-    metaLabel: '10 vendas acumuladas',
-  },
-  prata: {
-    value: 'prata',
-    label: 'Prata',
-    cor: '#3b82f6',
-    bg: 'rgba(59,130,246,0.12)',
-    border: 'rgba(59,130,246,0.3)',
-    criterio: '10+ vendas acumuladas',
-    beneficios: 'Tudo do Bronze + lançamentos mensais grátis + prioridade editorial',
-    proximoTier: 'ouro',
-    metaVendas: 30,        // vendas/mês para subir
-    metaLabel: '30 vendas/mês por 2 meses',
-  },
-  ouro: {
-    value: 'ouro',
-    label: 'Ouro',
-    cor: '#d97706',
-    bg: 'rgba(217,119,6,0.12)',
-    border: 'rgba(217,119,6,0.3)',
-    criterio: '30+ vendas/mês (2 meses consecutivos)',
-    beneficios: 'Tudo do Prata + acesso antecipado + briefing exclusivo + Vitrine',
-    proximoTier: null,
-    metaVendas: null,
-    metaLabel: 'Tier máximo',
-  },
-}
-
-export const TIER_ORDER = ['bronze', 'prata', 'ouro']
-
-export const SITUACOES = {
-  ativo:     { label: 'Ativo',     cor: '#22c55e', bg: 'rgba(34,197,94,0.12)' },
-  pausado:   { label: 'Pausado',   cor: '#eab308', bg: 'rgba(234,179,8,0.12)' },
-  encerrado: { label: 'Encerrado', cor: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
-}
-
-
-// ── CONSULTAS DE PARCEIROS COM TIER ───────────────────────
-
-// Retorna parceiros ativos (com tier) para a aba "Parceiros ativos"
-export async function getParceirosComTier() {
-  // A lista de "Parceiros Ativos" deve conter apenas parceiros cujo STATUS do
-  // pipeline seja active/paused/closed. Parceiros ainda em prospecção (ou em
-  // qualquer etapa pré-ativa) NÃO entram, mesmo que tenham situacao='ativo'
-  // (valor padrão da coluna). Parceiros legados, sem nenhum status de pipeline
-  // registrado, continuam aparecendo se já tiverem tier ou situação ativa.
-  const sel = '*, responsavel_interno:usuarios!responsavel_interno_id(id, nome)'
-  const STATUS_ATIVO = ['active', 'paused', 'closed']
-
-  // 1. IDs que estão num status de pipeline considerado ativo
-  const { data: ativosRows } = await supabase
-    .from('parceiro_status_atual')
-    .select('partner_id')
-    .in('status', STATUS_ATIVO)
-  const idsPipeline = (ativosRows || []).map(r => r.partner_id)
-
-  // 2. Candidatos = parceiros por status de pipeline + legados (tier/situação)
-  const mapParceiros = new Map()
-  if (idsPipeline.length) {
-    const { data } = await supabase.from('parceiros').select(sel).in('id', idsPipeline)
-    for (const p of (data || [])) mapParceiros.set(p.id, p)
-  }
-  const { data: legados, error } = await supabase
-    .from('parceiros').select(sel)
-    .or('tier.not.is.null,situacao.eq.ativo,situacao.eq.pausado,situacao.eq.encerrando,situacao.eq.encerrado')
-  if (error) throw error
-  for (const p of (legados || [])) if (!mapParceiros.has(p.id)) mapParceiros.set(p.id, p)
-
-  const candidatos = [...mapParceiros.values()]
-  const ids = candidatos.map(p => p.id)
-
-  // 3. Status REAL (qualquer) de cada candidato — para excluir os pré-ativos
-  const statusMap = {}
-  if (ids.length) {
-    const { data: statusData } = await supabase
-      .from('parceiro_status_atual').select('partner_id, status').in('partner_id', ids)
-    for (const s of (statusData || [])) statusMap[s.partner_id] = s.status
-  }
-
-  // 4. Anexa current_status e filtra: ativo de verdade OU legado sem status
-  return candidatos
-    .map(p => ({
-      ...p,
-      current_status: statusMap[p.id] || null,
-      responsavel_interno_nome: p.responsavel_interno?.nome || null,
-      pronto_para_subir: verificarPromocao(p),
-    }))
-    .filter(p => p.current_status
-      ? STATUS_ATIVO.includes(p.current_status)
-      : (!!p.tier || ['ativo', 'pausado', 'encerrando', 'encerrado'].includes(p.situacao)))
-    .sort((a, b) => (b.vendas_mes || 0) - (a.vendas_mes || 0))
-}
-
-// Verifica se o parceiro atingiu os critérios do próximo tier
-export function verificarPromocao(parceiro) {
-  const { tier, vendas_total, vendas_mes } = parceiro
-  if (!tier) return null
-
-  const tierAtual = TIERS[tier]
-  if (!tierAtual || !tierAtual.proximoTier) return null
-
-  const proximoTier = tierAtual.proximoTier
-
-  if (tier === 'bronze' && vendas_total >= 10) {
-    return { proximo: proximoTier, motivo: `${vendas_total} vendas acumuladas (meta: 10)` }
-  }
-
-  if (tier === 'prata' && vendas_mes >= 30) {
-    return { proximo: proximoTier, motivo: `${vendas_mes} vendas/mês (meta: 30)` }
-  }
-
-  return null
-}
-
-// Progresso percentual até o próximo tier (para barra de progresso)
-export function progressoTier(parceiro) {
-  const { tier, vendas_total, vendas_mes } = parceiro
-  if (!tier || !TIERS[tier] || !TIERS[tier].proximoTier) return 100 // já é Ouro
-
-  if (tier === 'bronze') {
-    return Math.min(100, Math.round((vendas_total / 10) * 100))
-  }
-  if (tier === 'prata') {
-    return Math.min(100, Math.round((vendas_mes / 30) * 100))
-  }
-  return 0
-}
-
-
-// ── ATUALIZAÇÃO DE TIER ───────────────────────────────────
-
-export async function updateTier(parceiroId, novoTier, motivo, userId) {
-  // Buscar tier atual
-  const { data: parceiro, error: fetchErr } = await supabase
-    .from('parceiros')
-    .select('tier')
-    .eq('id', parceiroId)
-    .single()
-  if (fetchErr) throw fetchErr
-
-  // Registrar no histórico
-  const { error: histErr } = await supabase
-    .from('tier_history')
-    .insert([{
-      parceiro_id: parceiroId,
-      tier_anterior: parceiro?.tier || null,
-      tier_novo: novoTier,
-      motivo: motivo || null,
-      changed_by: userId || null,
-    }])
-  if (histErr) throw histErr
-
-  // Atualizar parceiro
-  const { data, error } = await supabase
-    .from('parceiros')
-    .update({
-      tier: novoTier,
-      tier_updated_at: new Date().toISOString(),
+  function toggleTodos() {
+    setSelecionados(prev => {
+      const next = new Set(prev)
+      if (todosSelecionados) idsVisiveis.forEach(id => next.delete(id))
+      else idsVisiveis.forEach(id => next.add(id))
+      return next
     })
-    .eq('id', parceiroId)
-    .select('*')
-    .single()
-  if (error) throw error
-
-  return data
-}
-
-
-// ── ATUALIZAÇÃO DE SITUAÇÃO ───────────────────────────────
-
-export async function updateSituacao(parceiroId, novaSituacao) {
-  const { data, error } = await supabase
-    .from('parceiros')
-    .update({ situacao: novaSituacao })
-    .eq('id', parceiroId)
-    .select('*')
-    .single()
-  if (error) throw error
-  return data
-}
-
-
-// ── ATUALIZAÇÃO DE PERFORMANCE ────────────────────────────
-
-export async function updatePerformance(parceiroId, campos) {
-  // campos pode conter: vendas_total, vendas_mes, conteudos_postados, ultima_atividade
-  const allowed = ['vendas_total', 'vendas_mes', 'conteudos_postados', 'ultima_atividade']
-  const payload = {}
-  for (const key of allowed) {
-    if (campos[key] !== undefined) payload[key] = campos[key]
   }
-  if (Object.keys(payload).length === 0) return null
-
-  const { data, error } = await supabase
-    .from('parceiros')
-    .update(payload)
-    .eq('id', parceiroId)
-    .select('*')
-    .single()
-  if (error) throw error
-  return data
-}
-
-
-// ── HISTÓRICO DE TIER ─────────────────────────────────────
-
-export async function getTierHistory(parceiroId) {
-  const { data, error } = await supabase
-    .from('tier_history')
-    .select('*, usuario:usuarios!changed_by(id, nome)')
-    .eq('parceiro_id', parceiroId)
-    .order('changed_at', { ascending: false })
-  if (error) throw error
-  return (data || []).map(h => ({
-    ...h,
-    changed_by_nome: h.usuario?.nome || null,
-  }))
-}
-
-
-// ── ATIVAR PARCEIRO (Acordo fechado → Bronze) ─────────────
-
-// Chamada quando o parceiro fecha acordo no pipeline de prospecção
-// Só atribui tier para modelos 2 (Book Time) e 3 (Institucional)
-export async function ativarParceiroBronze(parceiroId, userId) {
-  // Buscar modelo do parceiro
-  const { data: parceiro, error: fetchErr } = await supabase
-    .from('parceiros')
-    .select('model')
-    .eq('id', parceiroId)
-    .single()
-  if (fetchErr) throw fetchErr
-
-  const temEscada = MODELOS_COM_ESCADA.includes(parceiro?.model)
-
-  // Definir tier (só se modelo elegível) e situacao
-  const updatePayload = {
-    situacao: 'ativo',
-    ...(temEscada ? {
-      tier: 'bronze',
-      tier_updated_at: new Date().toISOString(),
-    } : {}),
+  function limparSelecao() {
+    setSelecionados(new Set()); setAcaoMassa(null); setValorMassa('')
+  }
+  function escolherAcao(acao) {
+    setAcaoMassa(acao); setValorMassa('')
+  }
+  async function aplicarMassa() {
+    const ids = [...selecionados]
+    if (!ids.length || !acaoMassa || valorMassa === '') return
+    const updates = acaoMassa === 'responsavel'
+      ? { responsavel_interno_id: valorMassa }
+      : { model: Number(valorMassa) }
+    setSalvando(true)
+    try {
+      await updateParceirosLote(ids, updates)
+      await carregar()
+      limparSelecao()
+    } catch (e) {
+      console.error('Erro na alteração em massa:', e)
+      alert('Não foi possível aplicar a alteração em massa.')
+    } finally {
+      setSalvando(false)
+    }
   }
 
-  const { data, error } = await supabase
-    .from('parceiros')
-    .update(updatePayload)
-    .eq('id', parceiroId)
-    .select('*')
-    .single()
-  if (error) throw error
-
-  // Registrar no histórico de tier (só se entrou na Escada)
-  if (temEscada) {
-    await supabase.from('tier_history').insert([{
-      parceiro_id: parceiroId,
-      tier_anterior: null,
-      tier_novo: 'bronze',
-      motivo: 'Acordo fechado — parceiro ativado como Bronze',
-      changed_by: userId || null,
-    }])
+  // ── Métricas ──
+  const ativos = parceiros.filter(p => p.situacao === 'ativo')
+  const porTipo = {
+    1: ativos.filter(p => Number(p.model) === 1).length,
+    2: ativos.filter(p => Number(p.model) === 2).length,
+    3: ativos.filter(p => Number(p.model) === 3).length,
   }
 
-  // Registrar no histórico de status do CRM também
-  await addStatusHistory(parceiroId, 'active', 'Parceiro ativado via Escada de Crescimento', userId)
+  // ── Responsáveis únicos (para filtro) ──
+  const responsaveis = [...new Map(
+    parceiros
+      .filter(p => p.responsavel_interno_id && p.responsavel_interno_nome)
+      .map(p => [p.responsavel_interno_id, p.responsavel_interno_nome])
+  ).entries()]
 
-  return data
+  return (
+    <div>
+      {/* Métricas resumo */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+        <MetricCard label="Parceiros ativos" value={ativos.length} />
+        <MetricCard label="Livraria" value={porTipo[1]} cor={TIPOS_PARCERIA[1].cor} />
+        <MetricCard label="Book Time" value={porTipo[2]} cor={TIPOS_PARCERIA[2].cor} />
+        <MetricCard label="Institucional" value={porTipo[3]} cor={TIPOS_PARCERIA[3].cor} />
+      </div>
+
+      {/* Filtros */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <input
+            className="search-input"
+            style={{ paddingLeft: 32, width: '100%' }}
+            placeholder="Buscar por nome ou username..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+        <select className="form-select" style={{ width: 'auto', fontSize: 12, padding: '6px 10px' }}
+          value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}>
+          <option value="">Todos os tipos</option>
+          <option value="1">Livraria</option>
+          <option value="2">Book Time</option>
+          <option value="3">Institucional</option>
+        </select>
+        <select className="form-select" style={{ width: 'auto', fontSize: 12, padding: '6px 10px' }}
+          value={filtroSituacao} onChange={e => setFiltroSituacao(e.target.value)}>
+          <option value="">Todas as situações</option>
+          <option value="ativo">Ativo</option>
+          <option value="pausado">Pausado</option>
+          <option value="encerrando">Encerrando</option>
+          <option value="encerrado">Encerrado</option>
+        </select>
+        <select className="form-select" style={{ width: 'auto', fontSize: 12, padding: '6px 10px' }}
+          value={filtroPlat} onChange={e => setFiltroPlat(e.target.value)}>
+          <option value="">Todas as plataformas</option>
+          {PLATAFORMAS.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <select className="form-select" style={{ width: 'auto', fontSize: 12, padding: '6px 10px' }}
+          value={filtroResp} onChange={e => setFiltroResp(e.target.value)}>
+          <option value="">Todos os responsáveis</option>
+          {responsaveis.map(([id, nome]) => (
+            <option key={id} value={id}>{nome}</option>
+          ))}
+        </select>
+        {temFiltro && (
+          <button className="btn btn-ghost btn-sm" onClick={() => {
+            setFiltroTipo(''); setFiltroSituacao('ativo'); setFiltroPlat(''); setFiltroResp('')
+          }}>
+            <X size={12} /> Limpar
+          </button>
+        )}
+      </div>
+
+      {/* Barra de ação em massa */}
+      {selecionados.size > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          background: 'var(--surface-2)', border: '1px solid var(--brand, var(--border))',
+          borderRadius: 10, padding: '10px 14px', marginBottom: 14,
+        }}>
+          <span style={{ fontSize: 13, fontWeight: 700 }}>
+            {selecionados.size} selecionado{selecionados.size > 1 ? 's' : ''}
+          </span>
+
+          {!acaoMassa && (
+            <>
+              <button className="btn btn-sm" onClick={() => escolherAcao('responsavel')}>
+                Alterar responsável
+              </button>
+              <button className="btn btn-sm" onClick={() => escolherAcao('tipo')}>
+                Alterar tipo de parceria
+              </button>
+            </>
+          )}
+
+          {acaoMassa === 'responsavel' && (
+            <>
+              <select className="form-select" style={{ width: 'auto', fontSize: 12, padding: '6px 10px' }}
+                value={valorMassa} onChange={e => setValorMassa(e.target.value)}>
+                <option value="">Selecione o responsável…</option>
+                {usuarios.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
+              </select>
+              <button className="btn btn-primary btn-sm" disabled={!valorMassa || salvando} onClick={aplicarMassa}>
+                {salvando ? 'Aplicando…' : 'Aplicar'}
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => escolherAcao(null)}>Voltar</button>
+            </>
+          )}
+
+          {acaoMassa === 'tipo' && (
+            <>
+              <select className="form-select" style={{ width: 'auto', fontSize: 12, padding: '6px 10px' }}
+                value={valorMassa} onChange={e => setValorMassa(e.target.value)}>
+                <option value="">Selecione o tipo…</option>
+                <option value="1">Livraria</option>
+                <option value="2">Book Time</option>
+                <option value="3">Institucional</option>
+              </select>
+              <button className="btn btn-primary btn-sm" disabled={!valorMassa || salvando} onClick={aplicarMassa}>
+                {salvando ? 'Aplicando…' : 'Aplicar'}
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => escolherAcao(null)}>Voltar</button>
+            </>
+          )}
+
+          <button className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }} onClick={limparSelecao}>
+            <X size={12} /> Limpar seleção
+          </button>
+        </div>
+      )}
+
+      {/* Tabela */}
+      {loading ? (
+        <div className="loading"><div className="spinner" /></div>
+      ) : filtrados.length === 0 ? (
+        <div className="empty-state">
+          <p>Nenhum parceiro encontrado{temFiltro ? ' com esses filtros' : ''}.</p>
+        </div>
+      ) : (
+        <div className="table-card">
+          <div className="table-toolbar">
+            <span className="table-title">Parceiros ativos ({filtrados.length})</span>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: 36 }}>
+                  <input
+                    type="checkbox"
+                    checked={todosSelecionados}
+                    ref={el => { if (el) el.indeterminate = algunsSelecionados && !todosSelecionados }}
+                    onChange={toggleTodos}
+                  />
+                </th>
+                <th>Nome</th>
+                <th>Tipo de parceria</th>
+                <th>Plataformas</th>
+                <th>Responsável</th>
+                <th>Situação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtrados.map(p => (
+                <tr
+                  key={p.id}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => onOpenParceiro && onOpenParceiro(p)}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <td style={{ width: 36 }} onClick={e => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selecionados.has(p.id)}
+                      onChange={() => toggleSelecionado(p.id)}
+                    />
+                  </td>
+                  <td>
+                    <div className="td-strong">{p.nome}</div>
+                    {p.username && (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>@{p.username}</div>
+                    )}
+                  </td>
+                  <td>
+                    <BadgeTipo model={p.model} />
+                  </td>
+                  <td>
+                    {(p.platforms || []).length > 0 ? (
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        {(p.platforms || []).slice(0, 3).map(pl => (
+                          <span key={pl} style={{
+                            fontSize: 10,
+                            background: 'var(--surface-2)',
+                            border: '1px solid var(--border)',
+                            borderRadius: 4,
+                            padding: '1px 6px',
+                            color: 'var(--text-muted)',
+                          }}>{pl}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="td-muted">—</span>
+                    )}
+                  </td>
+                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    {p.responsavel_interno_nome || <span className="td-muted">—</span>}
+                  </td>
+                  <td>
+                    <BadgeSituacao situacao={p.situacao || 'ativo'} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
 }
