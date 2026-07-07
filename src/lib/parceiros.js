@@ -433,7 +433,7 @@ export async function getParceirosComTier() {
   }
   const { data: legados, error } = await supabase
     .from('parceiros').select(sel)
-    .or('tier.not.is.null,situacao.eq.ativo,situacao.eq.pausado,situacao.eq.encerrado')
+    .or('tier.not.is.null,situacao.eq.ativo,situacao.eq.pausado,situacao.eq.encerrando,situacao.eq.encerrado')
   if (error) throw error
   for (const p of (legados || [])) if (!mapParceiros.has(p.id)) mapParceiros.set(p.id, p)
 
@@ -458,7 +458,7 @@ export async function getParceirosComTier() {
     }))
     .filter(p => p.current_status
       ? STATUS_ATIVO.includes(p.current_status)
-      : (!!p.tier || ['ativo', 'pausado', 'encerrado'].includes(p.situacao)))
+      : (!!p.tier || ['ativo', 'pausado', 'encerrando', 'encerrado'].includes(p.situacao)))
     .sort((a, b) => (b.vendas_mes || 0) - (a.vendas_mes || 0))
 }
 
