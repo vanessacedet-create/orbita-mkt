@@ -1,6 +1,5 @@
 import { supabase } from './client'
 import { getCheckagemMes } from './monitoramento-editoras'
-import { getParticipacoesLivrariasMes } from './promocoes-parceiras'
 
 // ── PIPELINE PADRÃO ────────────────────────────────────────
 export const PIPELINE_EDITORAS = [
@@ -235,68 +234,64 @@ export async function deleteScoreEditoraMes(editora_id, ano, mes) {
 // ── SCORE MENSAL — LIVRARIAS ───────────────────────────────
 
 // Pontos de promoção mensal
-function pontosPromocaoMensal(participacao) {
-  if (participacao === 'confirmou')   return 20
-  if (participacao === 'sem_retorno') return 8
-  if (participacao === 'recusou')     return 2
-  return 0 // nao_aplica
-}
-
-// Pontos de publicações mensais (semanas)
+// Pontos de publicações mensais (semanas) — de 0 a 15
 function pontosPublicacoesMensal(semanas_previstas, semanas_postou_feed, semanas_postou_story) {
   if (!semanas_previstas || semanas_previstas === 0) return 0
   const total = semanas_postou_feed + semanas_postou_story
   const maxPossivel = semanas_previstas * 2
   const pct = total / maxPossivel
-  if (pct >= 0.90) return 30
-  if (pct >= 0.70) return 22
-  if (pct >= 0.50) return 15
-  if (pct >= 0.30) return 8
+  if (pct >= 0.90) return 15
+  if (pct >= 0.70) return 11
+  if (pct >= 0.50) return 8
+  if (pct >= 0.30) return 4
   return 0
 }
 
-// Pontos de comunicação mensal
+// Pontos de comunicação mensal — de 0 a 5
 function pontosComunicacaoMensal(comunicacao) {
-  if (comunicacao === 'sempre')       return 15
-  if (comunicacao === 'as_vezes')     return 7
+  if (comunicacao === 'sempre')       return 5
+  if (comunicacao === 'as_vezes')     return 2
   if (comunicacao === 'nao_responde') return 0
   return 0 // nao_aplica
+}
+
+// Pontos de vendas mensais — de 0 a 80. Faixas espelham a tabela de
+// referência de Vivi (Vendas x WhatsApp), agora convertida em pontos.
+function pontosVendasMensal(vendas) {
+  const v = vendas || 0
+  if (v >= 100) return 80
+  if (v >= 80)  return 64
+  if (v >= 60)  return 48
+  if (v >= 40)  return 32
+  if (v >= 20)  return 16
+  return 0
 }
 
 // Calcula pontos obtidos e pontos possíveis para o score mensal de
 // livraria — usado tanto pelo score numérico (0-10, exibido no modal)
 // quanto pela classificação A-F (percentual sobre os blocos ativos).
+// A partir desta versão: só Vendas, Publicações e Comunicação entram na
+// conta — Promoção saiu do cálculo (continua registrada, mas não pontua).
 function pontosLivrariaMensal(dados) {
   let total = 0
   let maxPossivel = 0
 
-  // Vendas (35 pts)
+  // Vendas (80 pts)
   if (!dados.vendas_nao_aplica) {
-    const v = dados.vendas_livraria || 0
-    if (v >= 300) total += 35
-    else if (v >= 200) total += 28
-    else if (v >= 100) total += 21
-    else if (v >= 50)  total += 14
-    else if (v >= 1)   total += 7
-    maxPossivel += 35
+    total += pontosVendasMensal(dados.vendas_livraria)
+    maxPossivel += 80
   }
 
-  // Promoções (20 pts)
-  if (!dados.promocoes_nao_aplica && dados.promocao_geral !== 'nao_aplica') {
-    total += pontosPromocaoMensal(dados.promocao_geral)
-    maxPossivel += 20
-  }
-
-  // Publicações (30 pts)
+  // Publicações (15 pts)
   if (!dados.publicacoes_nao_aplica) {
     total += pontosPublicacoesMensal(dados.semanas_previstas, dados.semanas_postou_feed, dados.semanas_postou_story)
-    maxPossivel += 30
+    maxPossivel += 15
   }
 
-  // Comunicação (15 pts)
+  // Comunicação (5 pts)
   if (dados.comunicacao !== 'nao_aplica') {
     total += pontosComunicacaoMensal(dados.comunicacao)
-    maxPossivel += 15
+    maxPossivel += 5
   }
 
   return { total, maxPossivel }
@@ -429,51 +424,33 @@ async function buscarPublicacoesMes(ano, mes) {
   return resultado
 }
 
-// Agrega participações em campanhas de Promoções por livraria: se confirmou
-// em qualquer campanha do mês, conta como confirmou; senão recusou; senão
-// sem retorno; se não teve nenhuma campanha no mês, fica de fora do mapa.
-function agregarParticipacaoPromocoes(participacoes) {
-  const porLivraria = {}
-  for (const p of participacoes) {
-    if (!porLivraria[p.livraria_id]) porLivraria[p.livraria_id] = []
-    porLivraria[p.livraria_id].push(p.status)
-  }
-  const resultado = {}
-  for (const [livraria_id, statuses] of Object.entries(porLivraria)) {
-    let geral = 'sem_retorno'
-    if (statuses.includes('confirmou')) geral = 'confirmou'
-    else if (statuses.includes('recusou')) geral = 'recusou'
-    resultado[livraria_id] = { promocao_geral: geral, qtd_promocoes: statuses.length }
-  }
-  return resultado
-}
-
-// Puxa Monitoramento (publicações) e Promoções (participação) para o mês
-// indicado e atualiza a classificação de todas as livrarias ativas. Vendas,
-// comunicação e observação — preenchidas manualmente — não são mexidas.
-// Pode ser chamada quantas vezes quiser, a qualquer momento do mês.
+// Puxa do Monitoramento (publicações) o mês indicado e atualiza a
+// classificação de todas as livrarias ativas. Vendas, comunicação e
+// observação — preenchidas manualmente — não são mexidas. Promoção não
+// entra mais no cálculo do score, então não é mais buscada aqui.
+// Pode ser chamada quantas vezes quiser, a qualquer momento, para
+// qualquer mês (ano, mes são escolhidos por quem chama, não fixos em hoje).
 export async function atualizarClassificacaoMensalLivrarias(ano, mes) {
-  const [livrarias, publicacoesPorChave, participacoes, scoresAtuais] = await Promise.all([
+  const [livrarias, publicacoesPorChave, scoresAtuais] = await Promise.all([
     getLivrariasParceirasAtivas(),
     buscarPublicacoesMes(ano, mes),
-    getParticipacoesLivrariasMes(ano, mes),
     getAllScoreLivrariasMes(ano, mes),
   ])
-  const participacaoPorLivraria = agregarParticipacaoPromocoes(participacoes)
   const scoreExistente = {}
   for (const s of scoresAtuais) scoreExistente[s.livraria_id] = s
 
   const resultado = { atualizadas: 0, semDadosNovos: 0, erros: [] }
   for (const l of livrarias) {
     const pub = publicacoesPorChave[l.editora_id]
-    const part = participacaoPorLivraria[l.id]
-    if (!pub && !part) { resultado.semDadosNovos++; continue }
+    if (!pub) { resultado.semDadosNovos++; continue }
     try {
       const { id, livraria_id, ano: _a, mes: _m, score, classificacao, criado_em, atualizado_em, ...base } = scoreExistente[l.id] || {}
       const dados = {
         ...base,
-        ...(pub ? { semanas_previstas: pub.semanas_previstas, semanas_postou_feed: pub.semanas_postou_feed, semanas_postou_story: pub.semanas_postou_story, publicacoes_nao_aplica: false } : {}),
-        ...(part ? { promocao_geral: part.promocao_geral, qtd_promocoes: part.qtd_promocoes, promocoes_nao_aplica: false } : {}),
+        semanas_previstas: pub.semanas_previstas,
+        semanas_postou_feed: pub.semanas_postou_feed,
+        semanas_postou_story: pub.semanas_postou_story,
+        publicacoes_nao_aplica: false,
       }
       await upsertScoreLivraria(l.id, ano, mes, dados)
       resultado.atualizadas++
