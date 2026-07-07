@@ -57,6 +57,7 @@ export function BadgeSituacao({ situacao }) {
   const map = {
     ativo:     { label: 'Ativo',     cor: '#22c55e', bg: 'rgba(34,197,94,0.12)' },
     pausado:   { label: 'Pausado',   cor: '#eab308', bg: 'rgba(234,179,8,0.12)' },
+    encerrando:{ label: 'Encerrando',cor: '#f97316', bg: 'rgba(249,115,22,0.12)' },
     encerrado: { label: 'Encerrado', cor: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
   }
   const s = map[situacao] || map.ativo
