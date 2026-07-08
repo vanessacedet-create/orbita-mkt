@@ -241,19 +241,16 @@ function pontosVendasPorFaixa(vendas, maxPts) {
   return Math.round(maxPts * (5 - faixaVendas(vendas)) / 5)
 }
 
-// Faixas de vendas de EDITORA — diferentes das de livraria, editora
-// costuma vender em volume bem maior. 8 faixas, 80 pts no topo.
-// Observação: o pedido tinha um vão entre 300-499 e 600-999 — assumi que
-// a faixa que falta é 500-999 (provável erro de digitação do "500").
+// Faixas de vendas de EDITORA — vieram da planilha de referência de Vivi
+// (as mesmas 6 faixas A-F usadas na tabela de critérios), convertidas em
+// pontos com o mesmo espaçamento par usado em livraria.
 function pontosVendasEditora(vendas) {
   const v = vendas || 0
-  if (v >= 1500) return 80
-  if (v >= 1000) return 75
-  if (v >= 500)  return 65
-  if (v >= 300)  return 55
-  if (v >= 100)  return 40
-  if (v >= 50)   return 25
-  if (v >= 20)   return 10
+  if (v >= 1000) return 80
+  if (v >= 700)  return 64
+  if (v >= 400)  return 48
+  if (v >= 100)  return 32
+  if (v >= 50)   return 16
   return 0
 }
 
@@ -262,10 +259,10 @@ function pontosVendasEditora(vendas) {
 // semana de story = 2 artes), e o percentual do total cai numa régua de
 // 5 degraus. Se só um dos dois formatos se aplica pra essa livraria, a
 // conta usa só aquele; se nenhum se aplica, o bloco cai fora (como vendas).
-function pontosPublicacoesLivraria(dados) {
+function pctPublicacoesLivraria(dados) {
   const feedAtivo = !dados.feed_nao_aplica
   const storyAtivo = !dados.story_nao_aplica
-  if (!feedAtivo && !storyAtivo) return { total: 0, maxPossivel: 0 }
+  if (!feedAtivo && !storyAtivo) return null
 
   let esperado = 0
   let postado = 0
@@ -277,24 +274,27 @@ function pontosPublicacoesLivraria(dados) {
     esperado += (dados.semanas_previstas_story || 0) * FREQ_SEMANAL_PUBLICACAO.story
     postado  += (dados.semanas_postou_story || 0) * FREQ_SEMANAL_PUBLICACAO.story
   }
+  if (esperado === 0) return 0
+  return (postado / esperado) * 100
+}
 
-  if (esperado === 0) return { total: 0, maxPossivel: 30 }
-
-  const pct = (postado / esperado) * 100
+function pontosPublicacoesLivraria(dados) {
+  const pct = pctPublicacoesLivraria(dados)
+  if (pct === null) return { total: 0, maxPossivel: 0 }
   let pts
   if (pct >= 80) pts = 30
   else if (pct >= 50) pts = 20
   else if (pct >= 20) pts = 10
   else if (pct >= 5) pts = 5
   else pts = 0
-
   return { total: pts, maxPossivel: 30 }
 }
 
 // ── LIVRARIA: Vendas 70% + Publicações 30% (sem comunicação) ───────
 // Calcula pontos obtidos e pontos possíveis para o score mensal de
-// livraria — usado tanto pelo score numérico (0-10, exibido no modal)
-// quanto pela classificação A-F (percentual sobre os blocos ativos).
+// livraria — usado só pelo score numérico (0-10, exibido no modal como
+// referência). A classificação A-F em si vem da tabela de critérios,
+// mais abaixo — não é mais calculada por percentual direto.
 function pontosLivrariaMensal(dados) {
   let total = 0
   let maxPossivel = 0
@@ -319,18 +319,119 @@ export function calcularScoreLivraria(dados) {
   return Math.min(10, Math.round((total / maxPossivel) * 10 * 10) / 10)
 }
 
-// Classificação A-F mensal — única classificação do sistema (não há mais
-// versão trimestral). Retorna null quando nenhum bloco se aplica ainda
-// (ex.: mês recém-criado, nada preenchido) — nesse caso quem chama deve
-// manter a classificação do mês anterior em vez de sobrescrever com null.
+// ── LETRAS POR FAIXA (usadas na tabela de critérios) ────────────
+
+export function letraVendasLivraria(vendas) {
+  const v = vendas || 0
+  if (v >= 100) return 'A'
+  if (v >= 80)  return 'B'
+  if (v >= 60)  return 'C'
+  if (v >= 40)  return 'D'
+  if (v >= 20)  return 'E'
+  return 'F'
+}
+
+// Faixas de % de artes postadas — Vivi não especificou os limites exatos
+// (só os pontos-âncora 100/80/60/40/20/10%), então usei o mesmo espaçamento
+// da régua de vendas. Ajustável na tela de Critérios se não bater.
+export function letraPostagem(pct) {
+  if (pct >= 90) return 'A'
+  if (pct >= 70) return 'B'
+  if (pct >= 50) return 'C'
+  if (pct >= 30) return 'D'
+  if (pct >= 10) return 'E'
+  return 'F'
+}
+
+export function letraVendasEditora(vendas) {
+  const v = vendas || 0
+  if (v >= 1000) return 'A'
+  if (v >= 700)  return 'B'
+  if (v >= 400)  return 'C'
+  if (v >= 100)  return 'D'
+  if (v >= 50)   return 'E'
+  return 'F'
+}
+
+export function letraLancamentos(qtd) {
+  const q = qtd || 0
+  if (q >= 11) return 'A'
+  if (q >= 6)  return 'B'
+  if (q >= 3)  return 'C'
+  if (q === 2) return 'D'
+  if (q === 1) return 'E'
+  return 'F'
+}
+
+export const COMUNICACAO_EDITORA = [
+  { value: 'reuniao_wpp',         label: 'Reunião periódica + WhatsApp', letra: 'A' },
+  { value: 'wpp',                 label: 'WhatsApp',                     letra: 'B' },
+  { value: 'reuniao_pontual',     label: 'Reunião pontual',              letra: 'C' },
+  { value: 'apenas_corresponde',  label: 'Apenas corresponde',           letra: 'D' },
+  { value: 'nao_corresponde',     label: 'Não corresponde',              letra: 'E' },
+  { value: 'nunca_contato',       label: 'Nunca fez contato',            letra: 'F' },
+  { value: 'nao_aplica',          label: 'Não se aplica',                letra: null },
+]
+export function letraComunicacaoEditora(valor) {
+  return COMUNICACAO_EDITORA.find(o => o.value === valor)?.letra || null
+}
+
+// ── TABELA DE CRITÉRIOS (editável na tela "Critérios") ──────────
+// Carregada uma vez e mantida em cache — a classificação precisa ser
+// síncrona (o modal recalcula a prévia a cada tecla digitada).
+
+let _criteriosLivraria = null
+let _criteriosEditora = null
+
+export async function carregarCriteriosClassificacao() {
+  const [liv, ed] = await Promise.all([
+    supabase.from('criterios_classificacao_livraria').select('*'),
+    supabase.from('criterios_classificacao_editora').select('*'),
+  ])
+  if (liv.error) throw liv.error
+  if (ed.error) throw ed.error
+  _criteriosLivraria = liv.data || []
+  _criteriosEditora = ed.data || []
+  return { livraria: _criteriosLivraria, editora: _criteriosEditora }
+}
+
+export function getCriteriosLivrariaCache() { return _criteriosLivraria || [] }
+export function getCriteriosEditoraCache() { return _criteriosEditora || [] }
+
+export async function atualizarCriterioLivraria(id, resultado) {
+  const { data, error } = await supabase.from('criterios_classificacao_livraria').update({ resultado }).eq('id', id).select().single()
+  if (error) throw error
+  if (_criteriosLivraria) { const i = _criteriosLivraria.findIndex(c => c.id === id); if (i >= 0) _criteriosLivraria[i] = data }
+  return data
+}
+export async function atualizarCriterioEditora(id, resultado) {
+  const { data, error } = await supabase.from('criterios_classificacao_editora').update({ resultado }).eq('id', id).select().single()
+  if (error) throw error
+  if (_criteriosEditora) { const i = _criteriosEditora.findIndex(c => c.id === id); if (i >= 0) _criteriosEditora[i] = data }
+  return data
+}
+
+// Classificação A-F mensal de livraria — cruza a letra de Vendas com a
+// letra de Publicações na tabela de critérios (editável na tela
+// "Critérios"). Se só uma das duas se aplica, usa só aquela letra direto.
+// Retorna null só quando NENHUMA das duas tem dado ainda.
 export function calcularClassificacaoMensalLivraria(dados) {
-  const { total, maxPossivel } = pontosLivrariaMensal(dados)
-  if (maxPossivel === 0) return null
-  const pct = (total / maxPossivel) * 100
-  return classificacaoPorPct(pct)
+  const vendasLetra = !dados.vendas_nao_aplica ? letraVendasLivraria(dados.vendas_livraria) : null
+  const pct = pctPublicacoesLivraria(dados)
+  const postagemLetra = pct !== null ? letraPostagem(pct) : null
+
+  if (!vendasLetra && !postagemLetra) return null
+  if (vendasLetra && postagemLetra) {
+    const regra = getCriteriosLivrariaCache().find(c => c.vendas_letra === vendasLetra && c.postagem_letra === postagemLetra)
+    return regra?.resultado || vendasLetra
+  }
+  return vendasLetra || postagemLetra
 }
 
 // ── EDITORA: Vendas 80% + Comunicação 15% + Lançamentos 5% ─────────
+// O SCORE numérico (0-10) continua sendo calculado por peso, como
+// referência visual. A CLASSIFICAÇÃO A-F em si vem da tabela de
+// critérios (3 variáveis), também editável na tela "Critérios".
 // Lançamentos é binário: teve pelo menos 1 lançamento no mês → 5 pts
 // cheios; não teve → 0. Não entra publicação (isso é só de livraria).
 function pontosEditoraMensal(dados) {
@@ -362,11 +463,15 @@ export function calcularScoreEditora(dados) {
   return Math.min(10, Math.round((total / maxPossivel) * 10 * 10) / 10)
 }
 
+// Quando vendas ou comunicação não se aplicam, usa 'C' (letra neutra, bem
+// no meio) como substituto na tabela, pra não precisar de uma tabela de
+// fallback separada pra cada combinação de "não se aplica".
 export function calcularClassificacaoMensalEditora(dados) {
-  const { total, maxPossivel } = pontosEditoraMensal(dados)
-  if (maxPossivel === 0) return null
-  const pct = (total / maxPossivel) * 100
-  return classificacaoPorPct(pct)
+  const vendasLetra = !dados.vendas_nao_aplica ? letraVendasEditora(dados.vendas_editora) : 'C'
+  const lancLetra = letraLancamentos(dados.teve_lancamento ? (dados.qtd_lancamentos || 1) : 0)
+  const comLetra = (dados.comunicacao && dados.comunicacao !== 'nao_aplica') ? letraComunicacaoEditora(dados.comunicacao) : 'C'
+  const regra = getCriteriosEditoraCache().find(c => c.vendas_letra === vendasLetra && c.lancamento_letra === lancLetra && c.comunicacao_letra === comLetra)
+  return regra?.resultado || null
 }
 
 export async function getScoreMensalLivraria(livraria_id) {
