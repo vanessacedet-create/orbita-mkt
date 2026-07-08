@@ -10,6 +10,8 @@ import {
   upsertScoreEditora, upsertScoreLivraria,
   calcularScoreEditora, calcularScoreLivraria,
   calcularClassificacaoMensalLivraria, calcularClassificacaoMensalEditora,
+  carregarCriteriosClassificacao, getCriteriosLivrariaCache, getCriteriosEditoraCache,
+  atualizarCriterioLivraria, atualizarCriterioEditora, COMUNICACAO_EDITORA,
   calcularScoreTrimestralLivraria, calcularScoreTrimestralEditora,
   conferirVendas, salvarVendasConfirmadas,
   getCalendarioPromocoes,
@@ -527,13 +529,6 @@ function ModalScoreEditoraMensal({ editora, scoresDoEditora = [], mesInicial, an
   const c = corScore(preview)
   const classePrevia = calcularClassificacaoMensalEditora(form)
 
-  const OPCOES_COMUNICACAO = [
-    { value:'sempre', label:'Sempre responde' },
-    { value:'as_vezes', label:'Às vezes responde' },
-    { value:'nao_responde', label:'Não responde' },
-    { value:'nao_aplica', label:'Não se aplica' },
-  ]
-
   async function salvar() { setSaving(true); setErro(null); try { await onSave(editora.id, ano, mes, { ...form, vendas_editora: Number(form.vendas_editora) || 0 }); onClose() } catch(e){ console.error(e); setErro(e.message || 'Erro ao salvar. Tente novamente.') } finally { setSaving(false) } }
   async function zerarMes() {
     if (!window.confirm(`Apagar todos os dados de ${mesAnoLabel(mes,ano)} para ${editora.nome}? Essa ação não pode ser desfeita.`)) return
@@ -567,7 +562,7 @@ function ModalScoreEditoraMensal({ editora, scoresDoEditora = [], mesInicial, an
             <div>
               <input className="form-input" type="number" min={0} value={form.vendas_editora} onChange={e => setForm(f => ({ ...f, vendas_editora: e.target.value === '' ? '' : Number(e.target.value) }))} placeholder="Unidades vendidas no mês" />
               <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:6 }}>
-                Faixas: ≥1500 → 80pts · 1000-1499 → 75pts · 500-999 → 65pts · 300-499 → 55pts · 100-299 → 40pts · 50-99 → 25pts · 20-49 → 10pts · 0-19 → 0pts
+                Faixas: ≥1000 → A (80pts) · 700-999 → B (64pts) · 400-699 → C (48pts) · 100-399 → D (32pts) · 50-99 → E (16pts) · 0-49 → F (0pts)
               </div>
             </div>
           )}
@@ -577,7 +572,7 @@ function ModalScoreEditoraMensal({ editora, scoresDoEditora = [], mesInicial, an
         <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'14px 16px', marginBottom:12 }}>
           <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)', marginBottom:10 }}>Comunicação <span style={{ color:'var(--accent)', fontWeight:400 }}>(15%)</span></div>
           <select className="form-select" value={form.comunicacao} onChange={e => setForm(f => ({ ...f, comunicacao:e.target.value }))}>
-            {OPCOES_COMUNICACAO.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {COMUNICACAO_EDITORA.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </div>
 
@@ -1329,6 +1324,7 @@ function AbaClassificacao() {
       const [eds, livs, sEdM, sLivM] = await Promise.all([
         getEditorasParceirasAtivas(), getLivrariasParceirasAtivas(),
         getAllScoreEditorasMes(anoSel, mesSel), getAllScoreLivrariasMes(anoSel, mesSel),
+        getCriteriosLivrariaCache().length ? Promise.resolve() : carregarCriteriosClassificacao(),
       ])
       setEditoras(eds); setLivrarias(livs)
       setScoresEdMensal(sEdM); setScoresLivMensal(sLivM)
@@ -1467,6 +1463,124 @@ function AbaClassificacao() {
 }
 
 // ── PÁGINA PRINCIPAL ───────────────────────────────────────
+// ── ABA CRITÉRIOS (tabelas de classificação editáveis) ──────
+const LETRAS_CLASSE = ['A', 'B', 'C', 'D', 'E', 'F']
+
+function CelulaCriterio({ regra, onMudar }) {
+  if (!regra) return <td />
+  const cor = corClassificacao(regra.resultado)
+  return (
+    <td style={{ padding: 5, textAlign: 'center' }}>
+      <select value={regra.resultado} onChange={e => onMudar(regra, e.target.value)}
+        style={{ width: 52, height: 40, textAlign: 'center', fontWeight: 800, fontSize: 15, border: `1px solid ${cor}`, borderRadius: 8, background: `${cor}22`, color: cor, cursor: 'pointer' }}>
+        {LETRAS_CLASSE.map(l => <option key={l} value={l}>{l}</option>)}
+      </select>
+    </td>
+  )
+}
+
+function AbaCriterios({ showToast }) {
+  const [subAba, setSubAba] = useState('livraria')
+  const [criteriosLiv, setCriteriosLiv] = useState([])
+  const [criteriosEd, setCriteriosEd] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [vendasEdSel, setVendasEdSel] = useState('A')
+
+  useEffect(() => { carregar() }, []) // eslint-disable-line
+
+  async function carregar() {
+    setLoading(true)
+    try {
+      const { livraria, editora } = await carregarCriteriosClassificacao()
+      setCriteriosLiv(livraria); setCriteriosEd(editora)
+    } catch (e) { console.error(e); showToast('Erro ao carregar critérios.', 'error') }
+    finally { setLoading(false) }
+  }
+
+  async function mudarLivraria(regra, novoResultado) {
+    try { const upd = await atualizarCriterioLivraria(regra.id, novoResultado); setCriteriosLiv(prev => prev.map(c => c.id === upd.id ? upd : c)) }
+    catch (e) { console.error(e); showToast('Erro ao salvar critério.', 'error') }
+  }
+  async function mudarEditora(regra, novoResultado) {
+    try { const upd = await atualizarCriterioEditora(regra.id, novoResultado); setCriteriosEd(prev => prev.map(c => c.id === upd.id ? upd : c)) }
+    catch (e) { console.error(e); showToast('Erro ao salvar critério.', 'error') }
+  }
+
+  function tabStyleSub(ativa) { return { padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none', borderBottom: ativa ? '2px solid var(--accent)' : '2px solid transparent', background: 'transparent', color: ativa ? 'var(--accent)' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 } }
+
+  if (loading) return <div className="loading"><div className="spinner" /></div>
+
+  const gradeLiv = {}
+  for (const c of criteriosLiv) gradeLiv[`${c.vendas_letra}-${c.postagem_letra}`] = c
+
+  const gradeEd = {}
+  for (const c of criteriosEd) if (c.vendas_letra === vendasEdSel) gradeEd[`${c.lancamento_letra}-${c.comunicacao_letra}`] = c
+
+  return (
+    <div>
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
+        <button style={tabStyleSub(subAba === 'livraria')} onClick={() => setSubAba('livraria')}><Library size={13} /> Livraria</button>
+        <button style={tabStyleSub(subAba === 'editora')} onClick={() => setSubAba('editora')}><Building2 size={13} /> Editora</button>
+      </div>
+
+      {subAba === 'livraria' && (
+        <div>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>Cruza a letra de <strong>Vendas</strong> (linha) com a letra de <strong>Publicações</strong> (coluna) pra decidir a classe final. Clique numa célula pra mudar o resultado.</p>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse' }}>
+              <thead><tr>
+                <th style={{ padding: 10 }}></th>
+                {LETRAS_CLASSE.map(l => <th key={l} style={{ padding: 10, fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Postagem {l}</th>)}
+              </tr></thead>
+              <tbody>
+                {LETRAS_CLASSE.map(v => (
+                  <tr key={v}>
+                    <td style={{ padding: 10, fontWeight: 700, fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Vendas {v}</td>
+                    {LETRAS_CLASSE.map(p => <CelulaCriterio key={p} regra={gradeLiv[`${v}-${p}`]} onMudar={mudarLivraria} />)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {subAba === 'editora' && (
+        <div>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>Cruza <strong>Lançamentos</strong> (linha) com <strong>Comunicação</strong> (coluna), separado por faixa de <strong>Vendas</strong> nas abas abaixo. Clique numa célula pra mudar o resultado.</p>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+            {LETRAS_CLASSE.map(l => (
+              <button key={l} onClick={() => setVendasEdSel(l)}
+                style={{ padding: '6px 16px', borderRadius: 8, border: `2px solid ${vendasEdSel === l ? 'var(--accent)' : 'var(--border)'}`, background: vendasEdSel === l ? 'var(--accent-glow)' : 'transparent', color: vendasEdSel === l ? 'var(--accent)' : 'var(--text-muted)', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
+                Vendas {l}
+              </button>
+            ))}
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse' }}>
+              <thead><tr>
+                <th style={{ padding: 10 }}></th>
+                {LETRAS_CLASSE.map(l => <th key={l} style={{ padding: 10, fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Comunic. {l}</th>)}
+              </tr></thead>
+              <tbody>
+                {LETRAS_CLASSE.map(l => (
+                  <tr key={l}>
+                    <td style={{ padding: 10, fontWeight: 700, fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Lançam. {l}</td>
+                    {LETRAS_CLASSE.map(c => <CelulaCriterio key={c} regra={gradeEd[`${l}-${c}`]} onMudar={mudarEditora} />)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ marginTop: 20, padding: '12px 16px', background: 'var(--surface-2)', borderRadius: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+            Essas 216 combinações foram geradas automaticamente (Vendas com prioridade, depois Lançamentos, depois Comunicação — com um "empurrão" de 1 classe quando Lançamentos e Comunicação estão ambos em A). É um ponto de partida — ajuste qualquer célula que não parecer certa pra você.
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function CRMEditorasParceiras() {
   const [aba, setAba] = useState(() => sessionStorage.getItem('crm_aba') || 'classificacao')
   const [usuarios, setUsuarios] = useState([])
@@ -1489,7 +1603,7 @@ export default function CRMEditorasParceiras() {
         </div>
       </div>
       <div style={{ display:'flex', gap:0, marginBottom:24, borderBottom:'1px solid var(--border)' }}>
-        {[{ v:'classificacao', l:'Classificação' },{ v:'prospeccao', l:'Prospecção' },{ v:'ativos', l:'Parceiros ativos' },{ v:'desempenho', l:'Desempenho' }].map(({ v, l }) => (
+        {[{ v:'classificacao', l:'Classificação' },{ v:'criterios', l:'Critérios' },{ v:'prospeccao', l:'Prospecção' },{ v:'ativos', l:'Parceiros ativos' },{ v:'desempenho', l:'Desempenho' }].map(({ v, l }) => (
           <button key={v} onClick={() => setAba(v)} style={tabStyle(aba===v)}>{l}</button>
         ))}
       </div>
@@ -1497,6 +1611,7 @@ export default function CRMEditorasParceiras() {
       {aba === 'ativos' && <AbaParceirosAtivos />}
       {aba === 'desempenho' && <div style={{ textAlign:'center', padding:'60px 0', color:'var(--text-muted)' }}><BarChart2 size={40} style={{ opacity:0.3, marginBottom:12 }} /><p style={{ fontSize:14 }}>Em desenvolvimento</p></div>}
       {aba === 'classificacao' && <AbaClassificacao />}
+      {aba === 'criterios' && <AbaCriterios showToast={showToast} />}
       {toast && <div className={`toast ${toast.type}`}>{toast.msg}</div>}
     </div>
   )
