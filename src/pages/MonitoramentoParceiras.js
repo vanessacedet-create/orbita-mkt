@@ -107,12 +107,14 @@ const STATUS_PARCEIRAS = [
   { value: 'pendente',   label: 'Pendente',   cor: '#6b7280' },
   { value: 'postou',     label: 'Postou',     cor: '#22c55e' },
   { value: 'nao_postou', label: 'Não postou', cor: '#ef4444' },
+  { value: 'sem_arte',   label: 'Sem arte',   cor: '#8b5cf6' },
 ]
 
 const STATUS_CRIATIVO = [
   { value: 'pendente',   label: 'Pendente',   cor: '#6b7280' },
   { value: 'iniciado',   label: 'Iniciado',   cor: '#f59e0b' },
   { value: 'finalizado', label: 'Finalizado', cor: '#22c55e' },
+  { value: 'sem_arte',   label: 'Sem arte',   cor: '#8b5cf6' },
 ]
 
 const EQUIPE = ['Viviane', 'Sarah', 'Vanessa', 'Gabriela']
@@ -784,6 +786,12 @@ export default function MonitoramentoParceiras() {
         if(idx>=0){const n=[...prev];n[idx]=reg;return n}
         return [...prev,reg]
       })
+      // "Sem arte" na Equipe Cedet reflete automaticamente do lado das
+      // livrarias parceiras — só faz sentido pra feed/story, que é o que
+      // existe dos dois lados (reels e e-mail não têm contraparte lá).
+      if (statusFinal === 'sem_arte' && (formato === 'feed' || formato === 'story')) {
+        await handleMarcarParceira({ editora, formato, dataKey, status: 'sem_arte', observacao: 'Arte não produzida (marcado pela Equipe Cedet)' })
+      }
     }catch(e){console.error(e);showToast('Erro ao salvar','error')}
   }
 
