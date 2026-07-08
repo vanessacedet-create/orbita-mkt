@@ -214,16 +214,15 @@ export async function deleteScoreEditorasMes(ano, mes) {
 
 // ── SCORE MENSAL — LIVRARIAS ───────────────────────────────
 
-// Pontos de publicações mensais (semanas) — de 0 a 30 (livraria)
-function pontosPublicacoesMensal(semanas_previstas, semanas_postou_feed, semanas_postou_story) {
-  if (!semanas_previstas || semanas_previstas === 0) return 0
-  const total = semanas_postou_feed + semanas_postou_story
-  const maxPossivel = semanas_previstas * 2
-  const pct = total / maxPossivel
-  if (pct >= 0.90) return 30
-  if (pct >= 0.70) return 22
-  if (pct >= 0.50) return 15
-  if (pct >= 0.30) return 8
+// Pontuação de UM formato (feed ou story) dentro da cota que ele tem
+// direito naquele mês — régua por tolerância, não é linear:
+// ≥50% das semanas postadas → cota inteira · ≥25% → metade da cota ·
+// abaixo disso (ou nenhuma semana prevista) → zero.
+function pontosFormatoMensal(semanasPrevistas, semanasPostou, cota) {
+  if (!semanasPrevistas) return 0
+  const pct = semanasPostou / semanasPrevistas
+  if (pct >= 0.5) return cota
+  if (pct >= 0.25) return Math.round(cota / 2)
   return 0
 }
 
@@ -266,6 +265,29 @@ function pontosVendasEditora(vendas) {
   return 0
 }
 
+// Publicações (30 pts no total) — feed e story são independentes. Se os
+// dois se aplicam pra essa livraria, cada um vale 15; se só um se aplica,
+// esse vale os 30 inteiros; se nenhum, o bloco cai fora da conta (igual
+// já acontece com vendas).
+function pontosPublicacoesLivraria(dados) {
+  const feedAtivo = !dados.feed_nao_aplica
+  const storyAtivo = !dados.story_nao_aplica
+  let total = 0
+  let maxPossivel = 0
+  if (feedAtivo && storyAtivo) {
+    total += pontosFormatoMensal(dados.semanas_previstas_feed, dados.semanas_postou_feed, 15)
+    total += pontosFormatoMensal(dados.semanas_previstas_story, dados.semanas_postou_story, 15)
+    maxPossivel += 30
+  } else if (feedAtivo) {
+    total += pontosFormatoMensal(dados.semanas_previstas_feed, dados.semanas_postou_feed, 30)
+    maxPossivel += 30
+  } else if (storyAtivo) {
+    total += pontosFormatoMensal(dados.semanas_previstas_story, dados.semanas_postou_story, 30)
+    maxPossivel += 30
+  }
+  return { total, maxPossivel }
+}
+
 // ── LIVRARIA: Vendas 70% + Publicações 30% (sem comunicação) ───────
 // Calcula pontos obtidos e pontos possíveis para o score mensal de
 // livraria — usado tanto pelo score numérico (0-10, exibido no modal)
@@ -280,11 +302,10 @@ function pontosLivrariaMensal(dados) {
     maxPossivel += 70
   }
 
-  // Publicações (30 pts)
-  if (!dados.publicacoes_nao_aplica) {
-    total += pontosPublicacoesMensal(dados.semanas_previstas, dados.semanas_postou_feed, dados.semanas_postou_story)
-    maxPossivel += 30
-  }
+  // Publicações (30 pts, dividido entre feed e story conforme o que se aplica)
+  const pub = pontosPublicacoesLivraria(dados)
+  total += pub.total
+  maxPossivel += pub.maxPossivel
 
   return { total, maxPossivel }
 }
@@ -438,18 +459,27 @@ async function buscarPublicacoesMes(ano, mes) {
   const porChave = {}
   for (const r of registros) {
     if (r.formato !== 'feed' && r.formato !== 'story') continue
-    if (!porChave[r.editora_id]) porChave[r.editora_id] = { semanas: new Set(), feed: new Set(), story: new Set() }
+    // Semana ainda "pendente" (ninguém conferiu, ou material nunca saiu) não
+    // conta nem a favor nem contra — só entram semanas com desfecho definido.
+    if (r.status !== 'postou' && r.status !== 'nao_postou') continue
+    if (!porChave[r.editora_id]) porChave[r.editora_id] = { feedSemanas: new Set(), feedPostou: new Set(), storySemanas: new Set(), storyPostou: new Set() }
     const semana = segundaFeiraDe(r.data_esperada)
-    porChave[r.editora_id].semanas.add(semana)
-    if (r.formato === 'feed' && r.status === 'postou') porChave[r.editora_id].feed.add(semana)
-    if (r.formato === 'story' && r.status === 'postou') porChave[r.editora_id].story.add(semana)
+    if (r.formato === 'feed') {
+      porChave[r.editora_id].feedSemanas.add(semana)
+      if (r.status === 'postou') porChave[r.editora_id].feedPostou.add(semana)
+    }
+    if (r.formato === 'story') {
+      porChave[r.editora_id].storySemanas.add(semana)
+      if (r.status === 'postou') porChave[r.editora_id].storyPostou.add(semana)
+    }
   }
   const resultado = {}
   for (const [chave, info] of Object.entries(porChave)) {
     resultado[chave] = {
-      semanas_previstas: info.semanas.size,
-      semanas_postou_feed: info.feed.size,
-      semanas_postou_story: info.story.size,
+      semanas_previstas_feed: info.feedSemanas.size,
+      semanas_postou_feed: info.feedPostou.size,
+      semanas_previstas_story: info.storySemanas.size,
+      semanas_postou_story: info.storyPostou.size,
     }
   }
   return resultado
@@ -480,15 +510,21 @@ export async function atualizarClassificacaoMensalLivrarias(ano, mes) {
   const resultado = { atualizadas: 0, semDadosNovos: 0, erros: [] }
   for (const l of livrarias) {
     const pub = publicacoesPorChave[l.editora_id]
-    if (!pub) { resultado.semDadosNovos++; continue }
+    const temFeed = pub && pub.semanas_previstas_feed > 0
+    const temStory = pub && pub.semanas_previstas_story > 0
+    if (!temFeed && !temStory) { resultado.semDadosNovos++; continue }
     try {
       const { id, livraria_id, ano: _a, mes: _m, score, classificacao, criado_em, atualizado_em, livrarias, ...base } = scoreExistente[l.id] || {}
-      const dados = {
-        ...base,
-        semanas_previstas: pub.semanas_previstas,
-        semanas_postou_feed: pub.semanas_postou_feed,
-        semanas_postou_story: pub.semanas_postou_story,
-        publicacoes_nao_aplica: false,
+      const dados = { ...base }
+      if (temFeed) {
+        dados.semanas_previstas_feed = pub.semanas_previstas_feed
+        dados.semanas_postou_feed = pub.semanas_postou_feed
+        dados.feed_nao_aplica = false
+      }
+      if (temStory) {
+        dados.semanas_previstas_story = pub.semanas_previstas_story
+        dados.semanas_postou_story = pub.semanas_postou_story
+        dados.story_nao_aplica = false
       }
       await upsertScoreLivraria(l.id, ano, mes, dados)
       resultado.atualizadas++
