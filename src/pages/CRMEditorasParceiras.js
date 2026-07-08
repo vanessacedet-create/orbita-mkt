@@ -718,7 +718,7 @@ function ModalScoreLivrariatMensal({ livraria, scoresDoLivraria = [], mesInicial
         {/* Feed */}
         <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'14px 16px', marginBottom:12 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
-            <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)' }}>Feed <span style={{ color:'var(--accent)', fontWeight:400 }}>(até 30%)</span></div>
+            <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)' }}>Feed <span style={{ color:'var(--accent)', fontWeight:400 }}>(soma com Story, 30% no total)</span></div>
             <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, cursor:'pointer' }}>
               <input type="checkbox" checked={form.feed_nao_aplica} onChange={e => setForm(f => ({ ...f, feed_nao_aplica:e.target.checked }))} style={{ accentColor:'var(--accent)' }} />
               Não se aplica
@@ -741,7 +741,7 @@ function ModalScoreLivrariatMensal({ livraria, scoresDoLivraria = [], mesInicial
         {/* Story */}
         <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'14px 16px', marginBottom:12 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
-            <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)' }}>Story <span style={{ color:'var(--accent)', fontWeight:400 }}>(até 30%)</span></div>
+            <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)' }}>Story <span style={{ color:'var(--accent)', fontWeight:400 }}>(soma com Feed, 30% no total)</span></div>
             <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, cursor:'pointer' }}>
               <input type="checkbox" checked={form.story_nao_aplica} onChange={e => setForm(f => ({ ...f, story_nao_aplica:e.target.checked }))} style={{ accentColor:'var(--accent)' }} />
               Não se aplica
@@ -767,7 +767,7 @@ function ModalScoreLivrariatMensal({ livraria, scoresDoLivraria = [], mesInicial
           </button>
         </div>
         <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:-8, marginBottom:12 }}>
-          Se só um dos dois se aplica, ele vale os 30% inteiros; se os dois se aplicam, cada um vale 15%. Régua por semana: ≥50% postadas → cota inteira · ≥25% → metade da cota · abaixo disso → zero. Semanas ainda "pendente" no Monitoramento não contam nem a favor nem contra.
+          Feed e story se somam num total único de artes esperadas (feed 1/semana, story 2/semana) e artes postadas. Régua sobre o percentual do total: ≥80% → 30pts (cheio) · 50-79% → 20pts · 20-49% → 10pts · 5-19% → 5pts · abaixo de 5% → 0pts. Semanas "pendente" ou "sem arte" no Monitoramento não contam nem a favor nem contra.
         </div>
         <div className="form-group">
           <label className="form-label">Observação (opcional)</label>
