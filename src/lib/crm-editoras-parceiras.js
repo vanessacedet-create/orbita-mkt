@@ -214,17 +214,9 @@ export async function deleteScoreEditorasMes(ano, mes) {
 
 // ── SCORE MENSAL — LIVRARIAS ───────────────────────────────
 
-// Pontuação de UM formato (feed ou story) dentro da cota que ele tem
-// direito naquele mês — régua por tolerância, não é linear:
-// ≥50% das semanas postadas → cota inteira · ≥25% → metade da cota ·
-// abaixo disso (ou nenhuma semana prevista) → zero.
-function pontosFormatoMensal(semanasPrevistas, semanasPostou, cota) {
-  if (!semanasPrevistas) return 0
-  const pct = semanasPostou / semanasPrevistas
-  if (pct >= 0.5) return cota
-  if (pct >= 0.25) return Math.round(cota / 2)
-  return 0
-}
+// Quantas peças por semana cada formato exige — mesmo valor já usado no
+// Monitoramento (FREQ_SEMANAL: feed 1x/semana, story 2x/semana).
+const FREQ_SEMANAL_PUBLICACAO = { feed: 1, story: 2 }
 
 // Pontos de comunicação mensal — de 0 a 15 (editora)
 function pontosComunicacaoEditoraMensal(comunicacao) {
@@ -265,27 +257,38 @@ function pontosVendasEditora(vendas) {
   return 0
 }
 
-// Publicações (30 pts no total) — feed e story são independentes. Se os
-// dois se aplicam pra essa livraria, cada um vale 15; se só um se aplica,
-// esse vale os 30 inteiros; se nenhum, o bloco cai fora da conta (igual
-// já acontece com vendas).
+// Publicações (30 pts no total) — feed e story se somam num único total de
+// "artes esperadas" e "artes postadas" (cada semana de feed = 1 arte, cada
+// semana de story = 2 artes), e o percentual do total cai numa régua de
+// 5 degraus. Se só um dos dois formatos se aplica pra essa livraria, a
+// conta usa só aquele; se nenhum se aplica, o bloco cai fora (como vendas).
 function pontosPublicacoesLivraria(dados) {
   const feedAtivo = !dados.feed_nao_aplica
   const storyAtivo = !dados.story_nao_aplica
-  let total = 0
-  let maxPossivel = 0
-  if (feedAtivo && storyAtivo) {
-    total += pontosFormatoMensal(dados.semanas_previstas_feed, dados.semanas_postou_feed, 15)
-    total += pontosFormatoMensal(dados.semanas_previstas_story, dados.semanas_postou_story, 15)
-    maxPossivel += 30
-  } else if (feedAtivo) {
-    total += pontosFormatoMensal(dados.semanas_previstas_feed, dados.semanas_postou_feed, 30)
-    maxPossivel += 30
-  } else if (storyAtivo) {
-    total += pontosFormatoMensal(dados.semanas_previstas_story, dados.semanas_postou_story, 30)
-    maxPossivel += 30
+  if (!feedAtivo && !storyAtivo) return { total: 0, maxPossivel: 0 }
+
+  let esperado = 0
+  let postado = 0
+  if (feedAtivo) {
+    esperado += (dados.semanas_previstas_feed || 0) * FREQ_SEMANAL_PUBLICACAO.feed
+    postado  += (dados.semanas_postou_feed || 0) * FREQ_SEMANAL_PUBLICACAO.feed
   }
-  return { total, maxPossivel }
+  if (storyAtivo) {
+    esperado += (dados.semanas_previstas_story || 0) * FREQ_SEMANAL_PUBLICACAO.story
+    postado  += (dados.semanas_postou_story || 0) * FREQ_SEMANAL_PUBLICACAO.story
+  }
+
+  if (esperado === 0) return { total: 0, maxPossivel: 30 }
+
+  const pct = (postado / esperado) * 100
+  let pts
+  if (pct >= 80) pts = 30
+  else if (pct >= 50) pts = 20
+  else if (pct >= 20) pts = 10
+  else if (pct >= 5) pts = 5
+  else pts = 0
+
+  return { total: pts, maxPossivel: 30 }
 }
 
 // ── LIVRARIA: Vendas 70% + Publicações 30% (sem comunicação) ───────
