@@ -250,6 +250,22 @@ function pontosVendasPorFaixa(vendas, maxPts) {
   return Math.round(maxPts * (5 - faixaVendas(vendas)) / 5)
 }
 
+// Faixas de vendas de EDITORA — diferentes das de livraria, editora
+// costuma vender em volume bem maior. 8 faixas, 80 pts no topo.
+// Observação: o pedido tinha um vão entre 300-499 e 600-999 — assumi que
+// a faixa que falta é 500-999 (provável erro de digitação do "500").
+function pontosVendasEditora(vendas) {
+  const v = vendas || 0
+  if (v >= 1500) return 80
+  if (v >= 1000) return 75
+  if (v >= 500)  return 65
+  if (v >= 300)  return 55
+  if (v >= 100)  return 40
+  if (v >= 50)   return 25
+  if (v >= 20)   return 10
+  return 0
+}
+
 // ── LIVRARIA: Vendas 70% + Publicações 30% (sem comunicação) ───────
 // Calcula pontos obtidos e pontos possíveis para o score mensal de
 // livraria — usado tanto pelo score numérico (0-10, exibido no modal)
@@ -299,7 +315,7 @@ function pontosEditoraMensal(dados) {
 
   // Vendas (80 pts)
   if (!dados.vendas_nao_aplica) {
-    total += pontosVendasPorFaixa(dados.vendas_editora, 80)
+    total += pontosVendasEditora(dados.vendas_editora)
     maxPossivel += 80
   }
 
@@ -584,7 +600,7 @@ export function calcularScoreTrimestralLivraria(dados) {
 }
 
 // Score trimestral editoras (80/10/10)
-function pontosVendasEditora(vendas, faixas) {
+function pontosVendasEditoraTrimestral(vendas, faixas) {
   // faixas definidas futuramente — por ora retorna proporcional
   if (!faixas) return Math.min(80, (vendas || 0) * 0.1)
   for (const f of faixas) {
@@ -599,7 +615,7 @@ export function calcularScoreTrimestralEditora(dados) {
 
   // Vendas
   if (!dados.vendas_nao_aplica) {
-    total += pontosVendasEditora(dados.vendas || 0)
+    total += pontosVendasEditoraTrimestral(dados.vendas || 0)
     maxPossivel += 80
   }
 
