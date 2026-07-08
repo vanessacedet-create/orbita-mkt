@@ -567,7 +567,7 @@ function ModalScoreEditoraMensal({ editora, scoresDoEditora = [], mesInicial, an
             <div>
               <input className="form-input" type="number" min={0} value={form.vendas_editora} onChange={e => setForm(f => ({ ...f, vendas_editora: e.target.value === '' ? '' : Number(e.target.value) }))} placeholder="Unidades vendidas no mês" />
               <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:6 }}>
-                Faixas: ≥100 → 80pts · 80-99 → 64pts · 60-79 → 48pts · 40-59 → 32pts · 20-39 → 16pts · 0-19 → 0pts
+                Faixas: ≥1500 → 80pts · 1000-1499 → 75pts · 500-999 → 65pts · 300-499 → 55pts · 100-299 → 40pts · 50-99 → 25pts · 20-49 → 10pts · 0-19 → 0pts
               </div>
             </div>
           )}
