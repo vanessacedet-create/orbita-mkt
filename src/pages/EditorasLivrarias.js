@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useAuth } from '../context/AuthContext'
+import { useAuth, PERFIL_GRUPO } from '../context/AuthContext'
 import {
   getEditorasCompletas, createEditora, updateEditora, desativarEditora, desativarEditorasLote, importarEditorasPlanilha,
   getLivrarias, createLivraria, updateLivraria, desativarLivraria, desativarLivrariaLote, importarLivrariasPlanilha,
@@ -62,6 +62,16 @@ const TODAS_COLUNAS_LIVRARIAS = [
 
 const VISIVEIS_DEFAULT_EDITORAS = ['classificacao','nome','livraria','macro','nicho','sub_nicho','posicionamento','grupo_id','status_parceria']
 const VISIVEIS_DEFAULT_LIVRARIAS = ['nome','editora','contato','site','instagram','youtube','inauguracao','observacao','status']
+
+// Largura fixa por coluna — cabeçalho e célula usam exatamente o mesmo
+// valor, pra nunca ficarem desalinhados entre si.
+function larguraColuna(key) {
+  if (key === 'classificacao' || key === 'grupo_id') return 64
+  if (key === 'nome' || key === 'livraria' || key === 'editora') return 200
+  if (key === 'observacao' || key === 'posicionamento' || key === 'email') return 220
+  if (key === 'status_parceria' || key === 'status' || key === 'tem_grupo') return 110
+  return 150
+}
 
 // ── SELETOR DE COLUNAS ─────────────────────────────────────
 function SeletorColunas({ colunas, ordem, onOrdemChange, visiveis, onVisiveisChange, onClose }) {
@@ -154,7 +164,7 @@ function FiltroExcel({ valores, selecionados, onConfirm, onClose }) {
   )
 }
 
-function ThFiltro({ label, colKey, dados, filtroAtivo, onFiltro }) {
+function ThFiltro({ label, colKey, dados, filtroAtivo, onFiltro, width }) {
   const [open, setOpen] = useState(false)
   const valores = [...new Set(dados.map(r => {
     if (colKey === 'grupo_id') return GRUPOS.find(g => g.id === r.grupo_id)?.romano || ''
@@ -166,10 +176,10 @@ function ThFiltro({ label, colKey, dados, filtroAtivo, onFiltro }) {
 
   return (
     <th onClick={() => setOpen(v => !v)}
-      style={{ padding:'8px 10px', textAlign:'left', fontWeight:700, color: ativo ? 'var(--accent)' : 'var(--text-muted)', fontSize:11, textTransform:'uppercase', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', whiteSpace:'nowrap', position:'relative', cursor:'pointer', userSelect:'none' }}>
-      <span style={{ display:'flex', alignItems:'center', gap:4 }}>
-        {label}
-        <ChevronDown size={10} style={{ opacity:0.6 }} />
+      style={{ padding:'8px 10px', textAlign:'left', fontWeight:700, color: ativo ? 'var(--accent)' : 'var(--text-muted)', fontSize:11, textTransform:'uppercase', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', width, position:'relative', cursor:'pointer', userSelect:'none' }}>
+      <span style={{ display:'flex', alignItems:'center', gap:4, overflow:'hidden' }}>
+        <span style={{ overflow:'hidden', textOverflow:'ellipsis' }}>{label}</span>
+        <ChevronDown size={10} style={{ opacity:0.6, flexShrink:0 }} />
         {ativo && <span style={{ width:6, height:6, borderRadius:'50%', background:'var(--accent)', flexShrink:0 }} />}
       </span>
       {open && (
@@ -181,10 +191,10 @@ function ThFiltro({ label, colKey, dados, filtroAtivo, onFiltro }) {
   )
 }
 
-function Celula({ children, width = 140 }) {
+function Celula({ children, width = 150 }) {
   const texto = typeof children === 'string' ? children : undefined
   return (
-    <td title={texto} style={{ padding:'7px 10px', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)', fontSize:12, color:'var(--text)', maxWidth:width, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+    <td title={texto} style={{ padding:'7px 10px', borderRight:'1px solid var(--border)', borderBottom:'1px solid var(--border)', fontSize:12, color:'var(--text)', width, maxWidth:width, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
       {children != null && children !== '' ? children : <span style={{ color:'var(--border)' }}>—</span>}
     </td>
   )
@@ -428,10 +438,10 @@ function ModalImportar({ tipo, editoras, onClose, onImported }) {
 // ── TABELA GENÉRICA ────────────────────────────────────────
 function TabelaLinhas({ colsAtivas, lista, dados, selecionados, toggleSel, renderCelula, isAdmin, onEditar, onExcluir, larguras }) {
   return (
-    <div style={{ overflowX:'auto', border:'1px solid var(--border)', borderRadius:8 }}>
-      <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
+    <div style={{ overflowX:'auto', overflowY:'auto', maxHeight:'calc(100vh - 300px)', border:'1px solid var(--border)', borderRadius:8 }}>
+      <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12, tableLayout:'fixed' }}>
         <thead>
-          <tr style={{ background:'var(--surface-2)' }}>
+          <tr style={{ background:'var(--surface-2)', position:'sticky', top:0, zIndex:2 }}>
             <th style={{ padding:'8px 10px', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', width:36 }}>
               <input type="checkbox"
                 checked={lista.length > 0 && lista.every(e => selecionados.has(e.id))}
@@ -541,13 +551,13 @@ function AbaEditoras({ editoras, livrarias, setEditoras, isAdmin, showToast }) {
       else if (c.key === 'instagram' && e.instagram) content = <a href={`https://instagram.com/${e.instagram.replace('@','')}`} target="_blank" rel="noreferrer" style={{ color:'var(--accent)' }}>{e.instagram}</a>
       else if (c.key === 'youtube' && e.youtube) content = <a href={e.youtube.startsWith('http') ? e.youtube : `https://youtube.com/${e.youtube}`} target="_blank" rel="noreferrer" style={{ color:'var(--accent)' }}>{e.youtube}</a>
       else content = e[c.key] || null
-      return <Celula key={c.key} width={c.key === 'nome' || c.key === 'livraria' ? 200 : c.key === 'grupo_id' || c.key === 'classificacao' ? 60 : 160}>{content}</Celula>
+      return <Celula key={c.key} width={larguraColuna(c.key)}>{content}</Celula>
     })
   }
 
   const cabecalhos = colDefs.map(c => c.fixo
-    ? <th key={c.key} style={{ padding:'8px 10px', textAlign:'left', fontWeight:700, color:'var(--text-muted)', fontSize:11, textTransform:'uppercase', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', whiteSpace:'nowrap' }}>{c.label}</th>
-    : <ThFiltro key={c.key} label={c.label} colKey={c.key} dados={dados} filtroAtivo={filtros[c.key]} onFiltro={(col, vals) => setFiltros(f => ({ ...f, [col]: vals }))} />
+    ? <th key={c.key} style={{ padding:'8px 10px', textAlign:'left', fontWeight:700, color:'var(--text-muted)', fontSize:11, textTransform:'uppercase', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', width:larguraColuna(c.key) }}>{c.label}</th>
+    : <ThFiltro key={c.key} label={c.label} colKey={c.key} dados={dados} filtroAtivo={filtros[c.key]} onFiltro={(col, vals) => setFiltros(f => ({ ...f, [col]: vals }))} width={larguraColuna(c.key)} />
   )
 
   return (
@@ -573,9 +583,9 @@ function AbaEditoras({ editoras, livrarias, setEditoras, isAdmin, showToast }) {
       <BarraSel selecionados={sel.size} total={lista.length}
         onTodos={() => setSel(new Set(lista.map(e => e.id)))} onLimpar={() => setSel(new Set())}
         onExcluir={excluirLote} excluindo={excluindo} />
-      <div style={{ overflowX:'auto', border:'1px solid var(--border)', borderRadius:8 }}>
-        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
-          <thead><tr style={{ background:'var(--surface-2)' }}>
+      <div style={{ overflowX:'auto', overflowY:'auto', maxHeight:'calc(100vh - 300px)', border:'1px solid var(--border)', borderRadius:8 }}>
+        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12, tableLayout:'fixed' }}>
+          <thead><tr style={{ background:'var(--surface-2)', position:'sticky', top:0, zIndex:2 }}>
             <th style={{ padding:'8px 10px', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', width:36 }}>
               <input type="checkbox" checked={lista.length > 0 && lista.every(e => sel.has(e.id))}
                 onChange={e => setSel(e.target.checked ? new Set(lista.map(x => x.id)) : new Set())}
@@ -677,13 +687,13 @@ function AbaLivrarias({ livrarias, setLivrarias, editoras, isAdmin, showToast })
       else if (c.key === 'inauguracao' && l.inauguracao) content = new Date(l.inauguracao + 'T12:00:00').toLocaleDateString('pt-BR')
       else if (c.key === 'status') { const s = getStatusSafe(l.status); content = <span style={{ fontSize:11, fontWeight:700, color:s.cor, background:s.bg, padding:'2px 8px', borderRadius:20, whiteSpace:'nowrap' }}>{s.label}</span> }
       else content = l[c.key] || null
-      return <Celula key={c.key} width={c.key === 'classificacao' ? 60 : c.key === 'nome' || c.key === 'editora' ? 180 : c.key === 'observacao' ? 160 : c.key === 'site' ? 120 : c.key === 'status' ? 100 : c.key === 'inauguracao' ? 90 : 120}>{content}</Celula>
+      return <Celula key={c.key} width={larguraColuna(c.key)}>{content}</Celula>
     })
   }
 
   const cabecalhos = colDefs.map(c => c.fixo
-    ? <th key={c.key} style={{ padding:'8px 10px', textAlign:'left', fontWeight:700, color:'var(--text-muted)', fontSize:11, textTransform:'uppercase', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', whiteSpace:'nowrap' }}>{c.label}</th>
-    : <ThFiltro key={c.key} label={c.label} colKey={c.key} dados={dados} filtroAtivo={filtros[c.key]} onFiltro={(col, vals) => setFiltros(f => ({ ...f, [col]: vals }))} />
+    ? <th key={c.key} style={{ padding:'8px 10px', textAlign:'left', fontWeight:700, color:'var(--text-muted)', fontSize:11, textTransform:'uppercase', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', width:larguraColuna(c.key) }}>{c.label}</th>
+    : <ThFiltro key={c.key} label={c.label} colKey={c.key} dados={dados} filtroAtivo={filtros[c.key]} onFiltro={(col, vals) => setFiltros(f => ({ ...f, [col]: vals }))} width={larguraColuna(c.key)} />
   )
 
   return (
@@ -709,9 +719,9 @@ function AbaLivrarias({ livrarias, setLivrarias, editoras, isAdmin, showToast })
       <BarraSel selecionados={sel.size} total={lista.length}
         onTodos={() => setSel(new Set(lista.map(l => l.id)))} onLimpar={() => setSel(new Set())}
         onExcluir={excluirLote} excluindo={excluindo} />
-      <div style={{ overflowX:'auto', border:'1px solid var(--border)', borderRadius:8 }}>
-        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12 }}>
-          <thead><tr style={{ background:'var(--surface-2)' }}>
+      <div style={{ overflowX:'auto', overflowY:'auto', maxHeight:'calc(100vh - 300px)', border:'1px solid var(--border)', borderRadius:8 }}>
+        <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12, tableLayout:'fixed' }}>
+          <thead><tr style={{ background:'var(--surface-2)', position:'sticky', top:0, zIndex:2 }}>
             <th style={{ padding:'8px 10px', borderRight:'1px solid var(--border)', borderBottom:'2px solid var(--border)', width:36 }}>
               <input type="checkbox" checked={lista.length > 0 && lista.every(l => sel.has(l.id))}
                 onChange={e => setSel(e.target.checked ? new Set(lista.map(x => x.id)) : new Set())}
@@ -826,7 +836,7 @@ function AbaGrupos({ editoras, livrarias }) {
 // ── PÁGINA PRINCIPAL ───────────────────────────────────────
 export default function EditorasLivrarias() {
   const { usuario } = useAuth()
-  const isAdmin = usuario?.perfil === 'administrador' || usuario?.perfil === 'gerente' || usuario?.perfil === 'supervisor_parceiras'
+  const isAdmin = usuario?.perfil === 'administrador' || usuario?.perfil === 'gerente' || (usuario?.grupo || PERFIL_GRUPO[usuario?.perfil]) === 'parceiras'
   const [aba, setAbaRaw] = useState(() => sessionStorage.getItem('editoras_livrarias_aba') || 'livrarias')
   const [editoras, setEditoras] = useState([])
   const [livrarias, setLivrarias] = useState([])
