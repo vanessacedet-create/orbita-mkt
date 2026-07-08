@@ -626,10 +626,12 @@ function ModalScoreLivrariatMensal({ livraria, scoresDoLivraria = [], mesInicial
 
   function valoresIniciais(s) {
     return {
-      semanas_previstas: s?.semanas_previstas || 0,
+      semanas_previstas_feed: s?.semanas_previstas_feed || 0,
       semanas_postou_feed: s?.semanas_postou_feed || 0,
+      feed_nao_aplica: s?.feed_nao_aplica ?? true,
+      semanas_previstas_story: s?.semanas_previstas_story || 0,
       semanas_postou_story: s?.semanas_postou_story || 0,
-      publicacoes_nao_aplica: s?.publicacoes_nao_aplica || false,
+      story_nao_aplica: s?.story_nao_aplica ?? true,
       vendas_livraria: s?.vendas_livraria || 0,
       vendas_nao_aplica: s?.vendas_nao_aplica || false,
       observacao: s?.observacao || '',
@@ -664,8 +666,14 @@ function ModalScoreLivrariatMensal({ livraria, scoresDoLivraria = [], mesInicial
     setPuxando(true); setErro(null)
     try {
       const pub = await getPublicacoesLivrariaMes(livraria, ano, mes)
-      if (!pub) { setErro(`Nenhum registro de Monitoramento encontrado para ${mesAnoLabel(mes,ano)}.`); return }
-      setForm(f => ({ ...f, semanas_previstas: pub.semanas_previstas, semanas_postou_feed: pub.semanas_postou_feed, semanas_postou_story: pub.semanas_postou_story, publicacoes_nao_aplica: false }))
+      const temFeed = pub && pub.semanas_previstas_feed > 0
+      const temStory = pub && pub.semanas_previstas_story > 0
+      if (!temFeed && !temStory) { setErro(`Nenhum registro de Monitoramento encontrado para ${mesAnoLabel(mes,ano)}.`); return }
+      setForm(f => ({
+        ...f,
+        ...(temFeed ? { semanas_previstas_feed: pub.semanas_previstas_feed, semanas_postou_feed: pub.semanas_postou_feed, feed_nao_aplica: false } : {}),
+        ...(temStory ? { semanas_previstas_story: pub.semanas_previstas_story, semanas_postou_story: pub.semanas_postou_story, story_nao_aplica: false } : {}),
+      }))
     } catch(e) { console.error(e); setErro('Erro ao puxar publicações.') } finally { setPuxando(false) }
   }
 
@@ -707,42 +715,60 @@ function ModalScoreLivrariatMensal({ livraria, scoresDoLivraria = [], mesInicial
           )}
         </div>
 
-        {/* Publicações */}
+        {/* Feed */}
         <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'14px 16px', marginBottom:12 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
-            <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)' }}>Publicações <span style={{ color:'var(--accent)', fontWeight:400 }}>(30%)</span></div>
-            <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={puxarPublicacoes} disabled={puxando} style={{ fontSize:11, display:'flex', alignItems:'center', gap:4 }}>
-                <RefreshCw size={11} /> {puxando ? 'Puxando...' : `Puxar de ${mesAnoLabel(mes,ano)}`}
-              </button>
-              <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, cursor:'pointer' }}>
-                <input type="checkbox" checked={form.publicacoes_nao_aplica} onChange={e => setForm(f => ({ ...f, publicacoes_nao_aplica:e.target.checked }))} style={{ accentColor:'var(--accent)' }} />
-                Não se aplica
-              </label>
-            </div>
+            <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)' }}>Feed <span style={{ color:'var(--accent)', fontWeight:400 }}>(até 30%)</span></div>
+            <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, cursor:'pointer' }}>
+              <input type="checkbox" checked={form.feed_nao_aplica} onChange={e => setForm(f => ({ ...f, feed_nao_aplica:e.target.checked }))} style={{ accentColor:'var(--accent)' }} />
+              Não se aplica
+            </label>
           </div>
-          {!form.publicacoes_nao_aplica && (
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10 }}>
+          {!form.feed_nao_aplica && (
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
               <div className="form-group" style={{ marginBottom:0 }}>
                 <label className="form-label">Semanas previstas</label>
-                <input className="form-input" type="number" min={0} value={form.semanas_previstas} onChange={e => setForm(f => ({ ...f, semanas_previstas:Number(e.target.value) }))} />
+                <input className="form-input" type="number" min={0} value={form.semanas_previstas_feed} onChange={e => setForm(f => ({ ...f, semanas_previstas_feed:Number(e.target.value) }))} />
               </div>
               <div className="form-group" style={{ marginBottom:0 }}>
-                <label className="form-label">Semanas c/ feed</label>
+                <label className="form-label">Semanas postadas</label>
                 <input className="form-input" type="number" min={0} value={form.semanas_postou_feed} onChange={e => setForm(f => ({ ...f, semanas_postou_feed:Number(e.target.value) }))} />
-              </div>
-              <div className="form-group" style={{ marginBottom:0 }}>
-                <label className="form-label">Semanas c/ story</label>
-                <input className="form-input" type="number" min={0} value={form.semanas_postou_story} onChange={e => setForm(f => ({ ...f, semanas_postou_story:Number(e.target.value) }))} />
-              </div>
-              <div style={{ gridColumn:'1/-1', fontSize:11, color:'var(--text-muted)' }}>
-                Postagem dentro da semana prevista conta como cumprida. Feed e story são avaliados separadamente. O botão "Puxar" busca no Monitoramento exatamente o mês selecionado acima.
               </div>
             </div>
           )}
         </div>
 
-        {/* Observação */}
+        {/* Story */}
+        <div style={{ background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:8, padding:'14px 16px', marginBottom:12 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
+            <div style={{ fontSize:12, fontWeight:700, textTransform:'uppercase', color:'var(--text-muted)' }}>Story <span style={{ color:'var(--accent)', fontWeight:400 }}>(até 30%)</span></div>
+            <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, cursor:'pointer' }}>
+              <input type="checkbox" checked={form.story_nao_aplica} onChange={e => setForm(f => ({ ...f, story_nao_aplica:e.target.checked }))} style={{ accentColor:'var(--accent)' }} />
+              Não se aplica
+            </label>
+          </div>
+          {!form.story_nao_aplica && (
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+              <div className="form-group" style={{ marginBottom:0 }}>
+                <label className="form-label">Semanas previstas</label>
+                <input className="form-input" type="number" min={0} value={form.semanas_previstas_story} onChange={e => setForm(f => ({ ...f, semanas_previstas_story:Number(e.target.value) }))} />
+              </div>
+              <div className="form-group" style={{ marginBottom:0 }}>
+                <label className="form-label">Semanas postadas</label>
+                <input className="form-input" type="number" min={0} value={form.semanas_postou_story} onChange={e => setForm(f => ({ ...f, semanas_postou_story:Number(e.target.value) }))} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:12, marginTop:-4 }}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={puxarPublicacoes} disabled={puxando} style={{ fontSize:11, display:'flex', alignItems:'center', gap:4 }}>
+            <RefreshCw size={11} /> {puxando ? 'Puxando...' : `Puxar feed e story de ${mesAnoLabel(mes,ano)}`}
+          </button>
+        </div>
+        <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:-8, marginBottom:12 }}>
+          Se só um dos dois se aplica, ele vale os 30% inteiros; se os dois se aplicam, cada um vale 15%. Régua por semana: ≥50% postadas → cota inteira · ≥25% → metade da cota · abaixo disso → zero. Semanas ainda "pendente" no Monitoramento não contam nem a favor nem contra.
+        </div>
         <div className="form-group">
           <label className="form-label">Observação (opcional)</label>
           <textarea className="form-textarea" rows={2} value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao:e.target.value }))} />
