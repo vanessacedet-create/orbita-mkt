@@ -128,7 +128,7 @@ function useToast() {
 
 function BotaoFormato({ label, ativo, onClick }) {
   return (
-    <button onClick={onClick} style={{ padding:'6px 16px', borderRadius:20, fontSize:13, fontWeight:600, cursor:'pointer', border:'2px solid var(--accent)', background:ativo?'var(--accent)':'transparent', color:ativo?'#fff':'var(--accent)', transition:'all 0.15s' }}>
+    <button onClick={onClick} style={{ padding:'5px 14px', borderRadius:8, fontSize:12, fontWeight:600, cursor:'pointer', border:`1px solid ${ativo?'var(--accent)':'var(--border)'}`, background:ativo?'var(--accent-glow)':'transparent', color:ativo?'var(--accent)':'var(--text-muted)', transition:'all 0.15s' }}>
       {label}
     </button>
   )
@@ -349,7 +349,7 @@ function ViewChecklistParceiras({ livrarias, checkagemMes, formato, dataSel, dia
                     {STATUS_PARCEIRAS.map(s=>(
                       <button key={s.value}
                         onClick={()=>onMarcar({editora:{id}, formato, dataKey:dataSel, status:status===s.value?null:s.value, observacao:nota})}
-                        style={{ padding:'4px 10px', borderRadius:20, fontSize:12, fontWeight:600, cursor:'pointer', border:`2px solid ${s.cor}`, background:status===s.value?s.cor:'transparent', color:status===s.value?'#fff':s.cor, transition:'all 0.15s', whiteSpace:'nowrap' }}>
+                        style={{ padding:'4px 10px', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer', border:`1px solid ${status===s.value?s.cor:'var(--border)'}`, background:status===s.value?`${s.cor}1f`:'transparent', color:status===s.value?s.cor:'var(--text-muted)', transition:'all 0.15s', whiteSpace:'nowrap' }}>
                         {s.label}
                       </button>
                     ))}
@@ -440,7 +440,7 @@ function ViewChecklistCriativo({ livrarias, checkagemCriativo, formato, dataKey,
                 <div style={{ display:'flex', gap:5 }}>
                   {STATUS_CRIATIVO.map(s=>(
                     <button key={s.value} onClick={()=>onMarcar({editora:{id}, formato, dataKey, status:status===s.value?null:s.value, responsavel})}
-                      style={{ padding:'4px 10px', borderRadius:20, fontSize:12, fontWeight:600, cursor:'pointer', border:`2px solid ${s.cor}`, background:status===s.value?s.cor:'transparent', color:status===s.value?'#fff':s.cor, transition:'all 0.15s', whiteSpace:'nowrap' }}>{s.label}</button>
+                      style={{ padding:'4px 10px', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer', border:`1px solid ${status===s.value?s.cor:'var(--border)'}`, background:status===s.value?`${s.cor}1f`:'transparent', color:status===s.value?s.cor:'var(--text-muted)', transition:'all 0.15s', whiteSpace:'nowrap' }}>{s.label}</button>
                   ))}
                 </div>
               </div>
@@ -492,7 +492,7 @@ function ViewEmailRevenda({ dataKey }) {
         <div style={{ display:'flex', gap:5 }}>
           {STATUS_CRIATIVO.map(s=>(
             <button key={s.value} onClick={()=>salvar(status===s.value?null:s.value,responsavel)}
-              style={{ padding:'4px 10px', borderRadius:20, fontSize:12, fontWeight:600, cursor:'pointer', border:`2px solid ${s.cor}`, background:status===s.value?s.cor:'transparent', color:status===s.value?'#fff':s.cor, transition:'all 0.15s', whiteSpace:'nowrap' }}>{s.label}</button>
+              style={{ padding:'4px 10px', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer', border:`1px solid ${status===s.value?s.cor:'var(--border)'}`, background:status===s.value?`${s.cor}1f`:'transparent', color:status===s.value?s.cor:'var(--text-muted)', transition:'all 0.15s', whiteSpace:'nowrap' }}>{s.label}</button>
           ))}
         </div>
       </div>
