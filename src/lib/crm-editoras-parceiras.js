@@ -482,7 +482,7 @@ export async function atualizarClassificacaoMensalLivrarias(ano, mes) {
     const pub = publicacoesPorChave[l.editora_id]
     if (!pub) { resultado.semDadosNovos++; continue }
     try {
-      const { id, livraria_id, ano: _a, mes: _m, score, classificacao, criado_em, atualizado_em, ...base } = scoreExistente[l.id] || {}
+      const { id, livraria_id, ano: _a, mes: _m, score, classificacao, criado_em, atualizado_em, livrarias, ...base } = scoreExistente[l.id] || {}
       const dados = {
         ...base,
         semanas_previstas: pub.semanas_previstas,
