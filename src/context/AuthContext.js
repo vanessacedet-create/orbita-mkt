@@ -19,10 +19,22 @@ export const MODULOS_PERMISSOES = {
   tarefas: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers', 'analista_marketplaces', 'estagiario_marketplaces'],
   tarefas_parceiras: ['administrador', 'gerente', 'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
   eventos: ['administrador', 'gerente', 'estagiario_marketplaces', 'analista_marketplaces'],
-  rh: ['administrador'],
-  pda: ['administrador'],
+
+  // ── TEMPORÁRIO: acesso da Vivi (supervisor_parceiras) aos módulos ORIGINAIS ──
+  // enquanto ela consulta o RH/PDA/Treinamentos originais como referência
+  // durante a construção das versões "Parceiras". REMOVER quando ela avisar
+  // que não precisa mais (procurar pelo comentário "TEMPORÁRIO" neste arquivo).
+  rh: ['administrador', 'supervisor_parceiras'],
+  pda: ['administrador', 'supervisor_parceiras'],
+  treinamentos: ['administrador', 'gerente', 'supervisor_proprias', 'supervisor_parceiras'],
+  // ── FIM DO BLOCO TEMPORÁRIO ──
+
+  // ── Módulos novos e independentes da equipe de parceiras ──
+  rh_parceiras: ['administrador', 'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
+  pda_parceiras: ['administrador', 'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
+  treinamentos_parceiras: ['administrador', 'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
+
   cac_ltv: ['administrador', 'gerente', 'supervisor_proprias'],
-  treinamentos: ['administrador', 'gerente', 'supervisor_proprias'],
   usuarios: ['administrador'],
   acessos_equipe: ['administrador', 'gerente', 'supervisor_parceiras'],
   guia_parcerias: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
