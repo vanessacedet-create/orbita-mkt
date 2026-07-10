@@ -60,9 +60,12 @@ const EditorasLivrarias      = lazy(() => import('./pages/EditorasLivrarias'))
 const PromocoesParceiras     = lazy(() => import('./pages/PromocoesParceiras'))
 const Calculadora            = lazy(() => import('./pages/Calculadora'))
 const RH                     = lazy(() => import('./pages/RH'))
+const RHParceiras            = lazy(() => import('./pages/RHParceiras'))
 const Eventos                = lazy(() => import('./pages/Eventos'))
 const Treinamentos           = lazy(() => import('./pages/Treinamentos'))
+const TreinamentosParceiras  = lazy(() => import('./pages/TreinamentosParceiras'))
 const PDA                    = lazy(() => import('./pages/PDA'))
+const PDAParceiras           = lazy(() => import('./pages/PDAParceiras'))
 const VitrinePublica         = lazy(() => import('./pages/VitrinePublica'))
 const VitrineAdmin           = lazy(() => import('./pages/VitrineAdmin'))
 const GuiaParcerias          = lazy(() => import('./pages/GuiaParcerias'))
@@ -104,6 +107,9 @@ const MENU = [
   { path: '/monitoramento-parceiras', label: 'Monitoramento',    icon: Eye,             modulo: 'tarefas_parceiras', ocultarPerfis: [] },
   { path: '/editoras-livrarias',    label: 'Editoras & Livrarias', icon: Building2,     modulo: 'tarefas_parceiras' },
   { path: '/crm-editoras-parceiras', label: 'CRM Editoras',      icon: TrendingUp,      modulo: 'tarefas_parceiras' },
+  { path: '/rh-parceiras',          label: 'RH',                 icon: HeartHandshake,  modulo: 'rh_parceiras' },
+  { path: '/pda-parceiras',         label: 'PDA',                icon: Target,          modulo: 'pda_parceiras' },
+  { path: '/treinamentos-parceiras', label: 'Treinamentos',      icon: GraduationCap,   modulo: 'treinamentos_parceiras' },
 
   // Módulos compartilhados
   { path: '/configuracoes',         label: 'Configurações',      icon: Settings,        modulo: 'dashboard',         sempreVisivel: true },
@@ -429,13 +435,16 @@ function Shell() {
                 <Route path="/promocoes-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><PromocoesParceiras /></RequireAuth>} />
                 <Route path="/calculadora" element={<RequireAuth modulo="calculadora"><Calculadora /></RequireAuth>} />
                 <Route path="/rh" element={<RequireAuth modulo="rh"><RH /></RequireAuth>} />
+                <Route path="/rh-parceiras" element={<RequireAuth modulo="rh_parceiras"><RHParceiras /></RequireAuth>} />
                 <Route path="/eventos" element={<RequireAuth modulo="eventos"><Eventos /></RequireAuth>} />
                 <Route path="/lancamentos" element={<RequireAuth modulo="lancamentos"><Lancamentos /></RequireAuth>} />
                 <Route path="/tarefas" element={<RequireAuth modulo="tarefas"><Tarefas /></RequireAuth>} />
                 <Route path="/tarefas-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><TarefasParceiras grupo="parceiras" titulo="Tarefas — Editoras Parceiras" /></RequireAuth>} />
                 <Route path="/agenda" element={<RequireAuth modulo="tarefas_parceiras"><Agenda /></RequireAuth>} />
                 <Route path="/treinamentos" element={<RequireAuth modulo="treinamentos"><Treinamentos /></RequireAuth>} />
+                <Route path="/treinamentos-parceiras" element={<RequireAuth modulo="treinamentos_parceiras"><TreinamentosParceiras /></RequireAuth>} />
                 <Route path="/pda" element={<RequireAuth modulo="pda"><PDA /></RequireAuth>} />
+                <Route path="/pda-parceiras" element={<RequireAuth modulo="pda_parceiras"><PDAParceiras /></RequireAuth>} />
                 <Route path="/cac-ltv" element={<RequireAuth modulo="cac_ltv"><CacLtv /></RequireAuth>} />
                 <Route path="/vitrine-admin" element={<RequireAuth modulo="parceiros"><VitrineAdmin /></RequireAuth>} />
                 <Route path="/guia-parcerias" element={<RequireAuth modulo="guia_parcerias"><GuiaParcerias /></RequireAuth>} />
