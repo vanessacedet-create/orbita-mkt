@@ -20,14 +20,9 @@ export const MODULOS_PERMISSOES = {
   tarefas_parceiras: ['administrador', 'gerente', 'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
   eventos: ['administrador', 'gerente', 'estagiario_marketplaces', 'analista_marketplaces'],
 
-  // ── TEMPORÁRIO: acesso da Vivi (supervisor_parceiras) aos módulos ORIGINAIS ──
-  // enquanto ela consulta o RH/PDA/Treinamentos originais como referência
-  // durante a construção das versões "Parceiras". REMOVER quando ela avisar
-  // que não precisa mais (procurar pelo comentário "TEMPORÁRIO" neste arquivo).
-  rh: ['administrador', 'supervisor_parceiras'],
-  pda: ['administrador', 'supervisor_parceiras'],
-  treinamentos: ['administrador', 'gerente', 'supervisor_proprias', 'supervisor_parceiras'],
-  // ── FIM DO BLOCO TEMPORÁRIO ──
+  rh: ['administrador'],
+  pda: ['administrador'],
+  treinamentos: ['administrador', 'gerente', 'supervisor_proprias'],
 
   // ── Módulos novos e independentes da equipe de parceiras ──
   rh_parceiras: ['administrador', 'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
