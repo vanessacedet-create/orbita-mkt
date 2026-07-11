@@ -701,7 +701,7 @@ function ModalDetalhes5W2H({ iniciativa, onSalvarCampo, onSalvarCampos, onAbrirS
               <strong style={rotuloStyle}>Quando (When)</strong>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 13 }}>🚀</span>
+                  <Calendar size={13} color="var(--text-muted)" />
                   <input type="date" className="form-input" style={{ fontSize: 12, padding: '4px 6px', cursor: 'pointer' }}
                     value={dataInicio}
                     onChange={e => setDataInicio(e.target.value)}
@@ -709,7 +709,7 @@ function ModalDetalhes5W2H({ iniciativa, onSalvarCampo, onSalvarCampos, onAbrirS
                     onClick={e => e.currentTarget.showPicker?.()} />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 13 }}>📅</span>
+                  <Calendar size={13} color="var(--accent)" />
                   <input type="date" className="form-input" style={{ fontSize: 12, padding: '4px 6px', color: 'var(--accent)', cursor: 'pointer' }}
                     value={prazoFinal}
                     onChange={e => setPrazoFinal(e.target.value)}
@@ -760,6 +760,9 @@ function ModalNovaIniciativa({ area, grupos, preset, onSave, onClose }) {
   const [comoFazer, setComoFazer] = useState('')
   const [dataInicio, setDataInicio] = useState('')
   const [prazoFinal, setPrazoFinal] = useState('')
+  const [metaQuantidade, setMetaQuantidade] = useState('')
+  const [metaPeriodo, setMetaPeriodo] = useState('')
+  const [metaNaoAplica, setMetaNaoAplica] = useState(false)
   const [tipo, setTipo] = useState(preset?.tipo || 'avulsa')
   const [grupoId, setGrupoId] = useState(preset?.grupoId || '')
   const [saving, setSaving] = useState(false)
@@ -768,6 +771,7 @@ function ModalNovaIniciativa({ area, grupos, preset, onSave, onClose }) {
   function limparCampos() {
     setTitulo(''); setResponsavel(''); setJustificativa('')
     setComoFazer(''); setDataInicio(''); setPrazoFinal('')
+    setMetaQuantidade(''); setMetaPeriodo(''); setMetaNaoAplica(false)
   }
 
   async function save() {
@@ -782,6 +786,9 @@ function ModalNovaIniciativa({ area, grupos, preset, onSave, onClose }) {
         como_fazer: comoFazer.trim() || null,
         data_inicio: dataInicio || null,
         prazo_final: prazoFinal || null,
+        meta_nao_aplica: metaNaoAplica,
+        meta_quantidade: metaNaoAplica ? null : (metaQuantidade !== '' ? Number(metaQuantidade) : null),
+        meta_periodo: metaNaoAplica ? null : (metaPeriodo || null),
         eh_grupo: tipo === 'grupo',
         grupo_id: tipo === 'em_grupo' ? grupoId : null,
       })
@@ -856,13 +863,35 @@ function ModalNovaIniciativa({ area, grupos, preset, onSave, onClose }) {
                 <textarea className="form-input" rows={2} value={comoFazer} onChange={e => setComoFazer(e.target.value)}
                           placeholder="Ex: 1. Alinhamento; 2. Desenvolvimento" style={{ resize: 'vertical', minHeight: 50, padding: 8 }} />
               </div>
+              <div className="form-group">
+                <label className="form-label">Quanto (quantidade prometida)</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={metaNaoAplica} onChange={e => setMetaNaoAplica(e.target.checked)}
+                      style={{ width: 14, height: 14, accentColor: 'var(--accent)', cursor: 'pointer' }} />
+                    Não se aplica
+                  </label>
+                  {!metaNaoAplica && (
+                    <>
+                      <input type="number" min="0" className="form-input" style={{ width: 72, padding: '4px 6px', fontSize: 12 }}
+                        value={metaQuantidade} onChange={e => setMetaQuantidade(e.target.value)} placeholder="Nº" />
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>por</span>
+                      <select className="form-select" style={{ fontSize: 12, padding: '4px 8px', width: 'auto' }}
+                        value={metaPeriodo} onChange={e => setMetaPeriodo(e.target.value)}>
+                        <option value="">Selecione...</option>
+                        {PERIODOS_META.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                      </select>
+                    </>
+                  )}
+                </div>
+              </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">🚀 Data de Início</label>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Calendar size={11} /> Data de Início</label>
                   <input type="date" className="form-input" value={dataInicio} onChange={e => setDataInicio(e.target.value)} onClick={e => e.currentTarget.showPicker?.()} style={{ colorScheme: 'dark', cursor: 'pointer' }} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">📅 Prazo Final de Conclusão (When)</label>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Calendar size={11} /> Prazo Final de Conclusão (When)</label>
                   <input type="date" className="form-input" value={prazoFinal} onChange={e => setPrazoFinal(e.target.value)} onClick={e => e.currentTarget.showPicker?.()} style={{ colorScheme: 'dark', cursor: 'pointer' }} />
                 </div>
               </div>
@@ -1111,7 +1140,7 @@ function VisaoMatriz({
   iniciativas, mesIdx, setMesIdx, semanaAtualIdx,
   editandoCelula, setEditandoCelula,
   editandoTitulo, setEditandoTitulo,
-  onSalvarTitulo, onSalvarCelula, onDeletarIniciativa, onNovaIniciativa, onReordenarGrupos, onVerDetalhes, area,
+  onSalvarTitulo, onSalvarCelula, onDeletarIniciativa, onNovaIniciativa, onReordenarTopo, onReordenarFilhas, onVerDetalhes, area,
   colapsarGruposPorPadrao,
   onAbrirSubtarefas,
 }) {
@@ -1119,6 +1148,7 @@ function VisaoMatriz({
   const semanasDoMes = mes.semanas
   const [gruposColapsados, setGruposColapsados] = useState(new Set())
   const [draggingId, setDraggingId] = useState(null)
+  const [draggingContexto, setDraggingContexto] = useState(null) // { tipo: 'topo' } | { tipo: 'filha', grupoId }
   const [dragOverId, setDragOverId] = useState(null)
 
   function toggleGrupo(id) {
@@ -1130,25 +1160,34 @@ function VisaoMatriz({
     })
   }
 
-  function handleDragStart(e, grupoId) {
-    setDraggingId(grupoId)
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', grupoId)
+  function contextosIguais(a, b) {
+    if (!a || !b) return false
+    if (a.tipo !== b.tipo) return false
+    return a.tipo === 'filha' ? a.grupoId === b.grupoId : true
   }
 
-  function handleDragOver(e, grupoId) {
+  function handleDragStart(e, id, contexto) {
+    setDraggingId(id)
+    setDraggingContexto(contexto)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', id)
+  }
+
+  function handleDragOver(e, id, contexto) {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
-    if (grupoId !== draggingId) setDragOverId(grupoId)
+    if (id !== draggingId && contextosIguais(contexto, draggingContexto)) setDragOverId(id)
   }
 
-  function handleDrop(e, alvoId) {
+  function handleDrop(e, alvoId, contexto) {
     e.preventDefault()
-    if (!draggingId || draggingId === alvoId) {
-      setDraggingId(null); setDragOverId(null); return
-    }
-    onReordenarGrupos(draggingId, alvoId)
-    setDraggingId(null); setDragOverId(null)
+    const arrastadoId = draggingId
+    const arrastadoContexto = draggingContexto
+    setDraggingId(null); setDraggingContexto(null); setDragOverId(null)
+    if (!arrastadoId || arrastadoId === alvoId) return
+    if (!contextosIguais(contexto, arrastadoContexto)) return
+    if (contexto.tipo === 'topo') onReordenarTopo(arrastadoId, alvoId)
+    else onReordenarFilhas(contexto.grupoId, arrastadoId, alvoId)
   }
 
   const estrutura = useMemo(() => agruparIniciativas(iniciativas), [iniciativas])
@@ -1172,24 +1211,37 @@ function VisaoMatriz({
     return (ini.pda_celulas || []).filter(celulaAtiva).length
   }
 
-  function renderLinhaIniciativa(ini, ehFilha = false) {
+  function renderLinhaIniciativa(ini, ehFilha = false, grupoIdPai = null) {
     const numCelulasAtivas = celulasAtivasCount(ini)
     const stLinha = statusDaLinha(ini)
     const corLinha = stLinha !== 'nao_iniciada' ? STATUS_INFO[stLinha === 'feita' ? 'feito' : stLinha === 'feita_atrasado' ? 'feito_atrasado' : stLinha === 'atrasada' ? 'atrasado' : stLinha === 'em_andamento' ? 'em_andamento' : stLinha === 'planejada' ? 'planejada' : 'a_fazer'] : null
+    const contextoDrag = ehFilha ? { tipo: 'filha', grupoId: grupoIdPai } : { tipo: 'topo' }
+    const estaArrastando = draggingId === ini.id
+    const estaAlvo = dragOverId === ini.id
 
     return (
-      <HoverRow key={ini.id} style={{
-        display: 'grid',
-        gridTemplateColumns: `${NOME_COL_MATRIZ}px repeat(${semanasDoMes.length}, 1fr)`,
-        borderBottom: '1px solid rgba(255,255,255,0.04)',
-        minHeight: 48,
-      }}>
+      <HoverRow key={ini.id}
+        draggable
+        onDragStart={e => handleDragStart(e, ini.id, contextoDrag)}
+        onDragOver={e => handleDragOver(e, ini.id, contextoDrag)}
+        onDrop={e => handleDrop(e, ini.id, contextoDrag)}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `${NOME_COL_MATRIZ}px repeat(${semanasDoMes.length}, 1fr)`,
+          borderBottom: '1px solid rgba(255,255,255,0.04)',
+          borderTop: estaAlvo ? '2px solid var(--accent)' : 'none',
+          minHeight: 48,
+          opacity: estaArrastando ? 0.5 : 1,
+        }}>
         <div style={{
           padding: '8px 14px',
-          paddingLeft: ehFilha ? 36 : 14,
-          display: 'flex', alignItems: 'center', gap: 8,
+          paddingLeft: ehFilha ? 30 : 8,
+          display: 'flex', alignItems: 'center', gap: 6,
           borderRight: '1px solid rgba(255,255,255,0.04)',
         }}>
+          <div style={{ cursor: 'grab', color: 'var(--text-muted)', display: 'flex', opacity: 0.3, flexShrink: 0 }}>
+            <GripVertical size={13} />
+          </div>
           {corLinha && (
             <span style={{
               width: 3, alignSelf: 'stretch', borderRadius: 2,
@@ -1265,12 +1317,12 @@ function VisaoMatriz({
                   )}
                   {ini.data_inicio && (
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                      🚀 {new Date(ini.data_inicio).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                      <Calendar size={10} /> {new Date(ini.data_inicio).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
                     </span>
                   )}
                   {ini.prazo_final && (
                     <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                      📅 {new Date(ini.prazo_final).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                      <Calendar size={10} /> {new Date(ini.prazo_final).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
                     </span>
                   )}
                   {numCelulasAtivas === 0 && !ini.responsavel && !ini.prazo_final && !ini.data_inicio && (
@@ -1336,9 +1388,9 @@ function VisaoMatriz({
     return (
       <div key={grupo.id}
         draggable
-        onDragStart={e => handleDragStart(e, grupo.id)}
-        onDragOver={e => handleDragOver(e, grupo.id)}
-        onDrop={e => handleDrop(e, grupo.id)}
+        onDragStart={e => handleDragStart(e, grupo.id, { tipo: 'topo' })}
+        onDragOver={e => handleDragOver(e, grupo.id, { tipo: 'topo' })}
+        onDrop={e => handleDrop(e, grupo.id, { tipo: 'topo' })}
         style={{
           display: 'grid',
           gridTemplateColumns: `${NOME_COL_MATRIZ}px repeat(${semanasDoMes.length}, 1fr)`,
@@ -1483,7 +1535,7 @@ function VisaoMatriz({
               return (
                 <div key={item.grupo.id}>
                   {renderCabecalhoGrupo(item.grupo, item.filhas)}
-                  {!colapsado && item.filhas.map(filha => renderLinhaIniciativa(filha, true))}
+                  {!colapsado && item.filhas.map(filha => renderLinhaIniciativa(filha, true, item.grupo.id))}
                 </div>
               )
             }
@@ -1787,9 +1839,13 @@ function VisaoStatusReport({ iniciativas, semanaSel, setSemanaSel, semanaAtualId
               {g.items.map(({ ini, celula }) => (
                 <div key={ini.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: `4px solid ${g.info.border}`, borderRadius: 8, padding: 12, marginBottom: 6 }}>
                   <div style={{ fontWeight: 600, fontSize: 13 }}>{ini.titulo}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                    👤 {ini.responsavel || 'Sem responsável'} | Situação: <span style={{ color: g.info.text, fontWeight: 600 }}>{celula.texto || g.info.label}</span>
-                    {ini.prazo_final && ` | 📅 Prazo: ${new Date(ini.prazo_final).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}`}
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                    <span>👤 {ini.responsavel || 'Sem responsável'} | Situação: <span style={{ color: g.info.text, fontWeight: 600 }}>{celula.texto || g.info.label}</span></span>
+                    {ini.prazo_final && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                        | <Calendar size={10} /> Prazo: {new Date(ini.prazo_final).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -1985,15 +2041,50 @@ export default function PDAParceiras() {
     } catch(e) { console.error(e); showToast('Erro ao excluir item.', 'error') }
   }
 
-  async function handleReordenarGrupos(idArrastado, idAlvo) {
+  async function handleReordenarTopo(idArrastado, idAlvo) {
     const estrutura = agruparIniciativas(iniciativas)
-    const idxArr = estrutura.findIndex(it => it.tipo === 'grupo' && it.grupo.id === idArrastado)
-    const idxAlvo = estrutura.findIndex(it => it.tipo === 'grupo' && it.grupo.id === idAlvo)
+    const idDoItem = (item) => item.tipo === 'grupo' ? item.grupo.id : item.iniciativa.id
+    const idxArr = estrutura.findIndex(it => idDoItem(it) === idArrastado)
+    const idxAlvo = estrutura.findIndex(it => idDoItem(it) === idAlvo)
     if (idxArr === -1 || idxAlvo === -1) return
 
     const novaEstrutura = [...estrutura]
     const [movido] = novaEstrutura.splice(idxArr, 1)
     novaEstrutura.splice(idxAlvo, 0, movido)
+
+    const updates = []
+    let ordem = 1
+    for (const item of novaEstrutura) {
+      if (item.tipo === 'grupo') {
+        updates.push({ id: item.grupo.id, ordem })
+        ordem++
+        for (const f of item.filhas) { updates.push({ id: f.id, ordem }); ordem++ }
+      } else { updates.push({ id: item.iniciativa.id, ordem }); ordem++ }
+    }
+
+    const mapOrdem = new Map(updates.map(u => [u.id, u.ordem]))
+    setIniciativas(prev => prev
+      .map(i => mapOrdem.has(i.id) ? { ...i, ordem: mapOrdem.get(i.id) } : i)
+      .sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
+    )
+
+    try { await Promise.all(updates.map(u => atualizarIniciativa(u.id, { ordem: u.ordem }))) }
+    catch (e) { console.error(e) }
+  }
+
+  async function handleReordenarFilhas(grupoId, idArrastado, idAlvo) {
+    const estrutura = agruparIniciativas(iniciativas)
+    const grupoItem = estrutura.find(it => it.tipo === 'grupo' && it.grupo.id === grupoId)
+    if (!grupoItem) return
+    const idxArr = grupoItem.filhas.findIndex(f => f.id === idArrastado)
+    const idxAlvo = grupoItem.filhas.findIndex(f => f.id === idAlvo)
+    if (idxArr === -1 || idxAlvo === -1) return
+
+    const novasFilhas = [...grupoItem.filhas]
+    const [movida] = novasFilhas.splice(idxArr, 1)
+    novasFilhas.splice(idxAlvo, 0, movida)
+
+    const novaEstrutura = estrutura.map(it => it.tipo === 'grupo' && it.grupo.id === grupoId ? { ...it, filhas: novasFilhas } : it)
 
     const updates = []
     let ordem = 1
@@ -2150,7 +2241,7 @@ export default function PDAParceiras() {
           editandoCelula={editandoCelula} setEditandoCelula={setEditandoCelula}
           editandoTitulo={editandoTitulo} setEditandoTitulo={setEditandoTitulo}
           onSalvarTitulo={handleSalvarTitulo} onSalvarCelula={handleSalvarCelula}
-          onDeletarIniciativa={handleDeletarIniciativa} onReordenarGrupos={handleReordenarGrupos}
+          onDeletarIniciativa={handleDeletarIniciativa} onReordenarTopo={handleReordenarTopo} onReordenarFilhas={handleReordenarFilhas}
           onNovaIniciativa={(preset) => setModalNovo(preset || { tipo: 'avulsa' })}
           onAbrirSubtarefas={(ini) => setSubtarefasIniId(ini.id)}
           onVerDetalhes={(ini) => setDetalheIniId(ini.id)} area={area}
