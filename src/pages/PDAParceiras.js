@@ -3,10 +3,12 @@ import {
   getSemestres, criarSemestre,
   getIniciativas, criarIniciativa, atualizarIniciativa, deletarIniciativa,
   upsertCelula,
+  criarSecao, deletarSecao, criarItem, atualizarItem, deletarItem,
 } from '../lib/pda-parceiras'
 import {
   Target, Plus, Trash2, X, Check, Clock, AlertCircle, Square,
-  Grid3x3, FileText, ChevronLeft, ChevronRight, ChevronDown, Printer, GripVertical, Info, Calendar
+  Grid3x3, FileText, ChevronLeft, ChevronRight, ChevronDown, Printer, GripVertical, Info, Calendar,
+  ListChecks
 } from 'lucide-react'
 
 const AREAS = [
@@ -617,14 +619,42 @@ function ModalDetalhes5W2H({ iniciativa, onClose }) {
               <p style={{ margin: '4px 0 0 0', fontSize: 13, color: 'var(--text-muted)' }}>Plataforma Órbita MKT</p>
             </div>
             <div>
-              <strong style={{ color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>Quando / Prazo Final (When)</strong>
-              <p style={{ margin: '4px 0 0 0', fontSize: 13, color: 'var(--accent)', fontWeight: 600 }}>
-                📅 {iniciativa.prazo_final
+              <strong style={{ color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>Quando (When)</strong>
+              <p style={{ margin: '4px 0 0 0', fontSize: 13, color: 'var(--text)', fontWeight: 600 }}>
+                🚀 Início: {iniciativa.data_inicio
+                  ? new Date(iniciativa.data_inicio).toLocaleDateString('pt-BR', {timeZone: 'UTC'})
+                  : 'não definido'}
+              </p>
+              <p style={{ margin: '2px 0 0 0', fontSize: 13, color: 'var(--accent)', fontWeight: 600 }}>
+                📅 Prazo final: {iniciativa.prazo_final
                   ? new Date(iniciativa.prazo_final).toLocaleDateString('pt-BR', {timeZone: 'UTC'})
-                  : 'Sem prazo macro definido'}
+                  : 'não definido'}
               </p>
             </div>
           </div>
+          {(iniciativa.pda_parceiras_secoes || []).length > 0 && (
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+              <strong style={{ color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <ListChecks size={13} /> Subtarefas
+              </strong>
+              <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {iniciativa.pda_parceiras_secoes.sort((a, b) => (a.ordem || 0) - (b.ordem || 0)).map(sec => {
+                  const itens = (sec.pda_parceiras_itens || []).sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
+                  return (
+                    <div key={sec.id}>
+                      <p style={{ margin: '0 0 4px', fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{sec.titulo}</p>
+                      {itens.map(it => (
+                        <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: it.concluido ? 'var(--text-muted)' : 'var(--text)', textDecoration: it.concluido ? 'line-through' : 'none', marginBottom: 2 }}>
+                          {it.concluido ? <Check size={11} color="var(--green)" /> : <Square size={11} color="var(--text-muted)" />}
+                          {it.texto}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -636,25 +666,40 @@ function ModalNovaIniciativa({ area, grupos, preset, onSave, onClose }) {
   const [responsavel, setResponsavel] = useState('')
   const [justificativa, setJustificativa] = useState('')
   const [comoFazer, setComoFazer] = useState('')
+  const [dataInicio, setDataInicio] = useState('')
   const [prazoFinal, setPrazoFinal] = useState('')
   const [tipo, setTipo] = useState(preset?.tipo || 'avulsa')
   const [grupoId, setGrupoId] = useState(preset?.grupoId || '')
   const [saving, setSaving] = useState(false)
+  const [criouAlgo, setCriouAlgo] = useState(false)
+
+  function limparCampos() {
+    setTitulo(''); setResponsavel(''); setJustificativa('')
+    setComoFazer(''); setDataInicio(''); setPrazoFinal('')
+  }
 
   async function save() {
     if (!titulo.trim()) return
     if (tipo === 'em_grupo' && !grupoId) return
     setSaving(true)
     try {
-      await onSave({
+      const nova = await onSave({
         titulo: titulo.trim(),
         responsavel: responsavel.trim() || null,
         justificativa: justificativa.trim() || null,
         como_fazer: comoFazer.trim() || null,
+        data_inicio: dataInicio || null,
         prazo_final: prazoFinal || null,
         eh_grupo: tipo === 'grupo',
         grupo_id: tipo === 'em_grupo' ? grupoId : null,
       })
+      setCriouAlgo(true)
+      limparCampos()
+      // Acabou de criar um grupo novo? Já deixa pronto pra adicionar a primeira iniciativa dentro dele.
+      if (tipo === 'grupo' && nova?.id) {
+        setTipo('em_grupo')
+        setGrupoId(nova.id)
+      }
     } finally { setSaving(false) }
   }
 
@@ -665,6 +710,11 @@ function ModalNovaIniciativa({ area, grupos, preset, onSave, onClose }) {
           <h2 className="modal-title">Nova iniciativa — {AREAS.find(a => a.value === area)?.label}</h2>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
         </div>
+        {criouAlgo && (
+          <div style={{ fontSize: 12, color: 'var(--green)', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 6, padding: '6px 10px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Check size={13} /> Salvo! Pode continuar adicionando ou fechar quando terminar.
+          </div>
+        )}
         <div className="form-grid">
           <div className="form-group">
             <label className="form-label">Tipo</label>
@@ -696,7 +746,7 @@ function ModalNovaIniciativa({ area, grupos, preset, onSave, onClose }) {
             </div>
           )}
           <div className="form-group">
-            <label className="form-label">Título da Iniciativa (What) *</label>
+            <label className="form-label">{tipo === 'grupo' ? 'Título do Grupo *' : 'Título da Iniciativa (What) *'}</label>
             <input className="form-input" autoFocus value={titulo} onChange={e => setTitulo(e.target.value)} />
           </div>
           {tipo !== 'grupo' && (
@@ -714,17 +764,23 @@ function ModalNovaIniciativa({ area, grupos, preset, onSave, onClose }) {
                 <textarea className="form-input" rows={2} value={comoFazer} onChange={e => setComoFazer(e.target.value)}
                           placeholder="Ex: 1. Alinhamento; 2. Desenvolvimento" style={{ resize: 'vertical', minHeight: 50, padding: 8 }} />
               </div>
-              <div className="form-group">
-                <label className="form-label">📅 Prazo Final de Conclusão (When)</label>
-                <input type="date" className="form-input" value={prazoFinal} onChange={e => setPrazoFinal(e.target.value)} style={{ colorScheme: 'dark' }} />
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">🚀 Data de Início</label>
+                  <input type="date" className="form-input" value={dataInicio} onChange={e => setDataInicio(e.target.value)} style={{ colorScheme: 'dark' }} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">📅 Prazo Final de Conclusão (When)</label>
+                  <input type="date" className="form-input" value={prazoFinal} onChange={e => setPrazoFinal(e.target.value)} style={{ colorScheme: 'dark' }} />
+                </div>
               </div>
             </>
           )}
         </div>
         <div className="form-actions">
-          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn btn-ghost" onClick={onClose}>{criouAlgo ? 'Concluir' : 'Cancelar'}</button>
           <button className="btn btn-primary" onClick={save} disabled={saving || !titulo.trim() || (tipo === 'em_grupo' && !grupoId)}>
-            {saving ? 'Salvando...' : 'Criar'}
+            {saving ? 'Salvando...' : (tipo === 'grupo' ? 'Criar grupo' : 'Criar e adicionar outra')}
           </button>
         </div>
       </div>
@@ -777,6 +833,112 @@ function ModalNovoSemestre({ onSave, onClose }) {
   )
 }
 
+// ── PAINEL DE SUBTAREFAS (Seções + Itens dentro de uma iniciativa) ──
+function PainelSubtarefas({ ini, ehFilha, onCriarSecao, onDeletarSecao, onCriarItem, onToggleItem, onDeletarItem }) {
+  const [addingSecao, setAddingSecao] = useState(false)
+  const [novaSecao, setNovaSecao] = useState('')
+  const [addingItem, setAddingItem] = useState({}) // { [secaoId]: bool }
+  const [novoItem, setNovoItem] = useState({}) // { [secaoId]: texto }
+
+  const secoes = (ini.pda_parceiras_secoes || []).slice().sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
+
+  function handleAddSecao() {
+    if (!novaSecao.trim()) return
+    onCriarSecao(ini.id, novaSecao.trim(), secoes.length)
+    setNovaSecao('')
+    setAddingSecao(false)
+  }
+
+  function handleAddItem(secaoId) {
+    const texto = (novoItem[secaoId] || '').trim()
+    if (!texto) return
+    const secao = secoes.find(s => s.id === secaoId)
+    const ordem = (secao?.pda_parceiras_itens || []).length
+    onCriarItem(ini.id, secaoId, texto, ordem)
+    setNovoItem(p => ({ ...p, [secaoId]: '' }))
+    setAddingItem(p => ({ ...p, [secaoId]: false }))
+  }
+
+  return (
+    <div style={{
+      paddingLeft: ehFilha ? 36 + 14 : 14 + 14,
+      paddingRight: 14, paddingTop: 8, paddingBottom: 12,
+      background: 'rgba(255,255,255,0.015)',
+      borderBottom: '1px solid rgba(255,255,255,0.04)',
+    }}>
+      {secoes.length === 0 && !addingSecao && (
+        <p style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', margin: '4px 0 8px' }}>
+          Nenhuma seção de subtarefas ainda.
+        </p>
+      )}
+      {secoes.map(sec => {
+        const itens = (sec.pda_parceiras_itens || []).slice().sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
+        const concluidos = itens.filter(i => i.concluido).length
+        return (
+          <div key={sec.id} style={{ marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{sec.titulo}</span>
+              {itens.length > 0 && (
+                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{concluidos}/{itens.length}</span>
+              )}
+              <button onClick={() => { if (window.confirm(`Excluir a seção "${sec.titulo}" e todos os seus itens?`)) onDeletarSecao(sec.id, ini.id) }}
+                title="Excluir seção"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 1, display: 'flex', opacity: 0.4 }}>
+                <Trash2 size={10} />
+              </button>
+            </div>
+            {itens.map(it => (
+              <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, paddingLeft: 4 }}>
+                <input type="checkbox" checked={!!it.concluido} onChange={() => onToggleItem(it, sec.id, ini.id)}
+                  style={{ width: 13, height: 13, accentColor: 'var(--green)', cursor: 'pointer', flexShrink: 0 }} />
+                <span style={{ fontSize: 12, flex: 1, color: it.concluido ? 'var(--text-muted)' : 'var(--text)', textDecoration: it.concluido ? 'line-through' : 'none' }}>
+                  {it.texto}
+                </span>
+                <button onClick={() => onDeletarItem(it.id, sec.id, ini.id)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', padding: 1, opacity: 0.35, display: 'flex', flexShrink: 0 }}>
+                  <Trash2 size={10} />
+                </button>
+              </div>
+            ))}
+            {addingItem[sec.id] ? (
+              <div style={{ display: 'flex', gap: 6, marginTop: 4, paddingLeft: 4 }}>
+                <input className="form-input" style={{ padding: '3px 8px', fontSize: 11, flex: 1 }}
+                  value={novoItem[sec.id] || ''}
+                  onChange={e => setNovoItem(p => ({ ...p, [sec.id]: e.target.value }))}
+                  onKeyDown={e => { if (e.key === 'Enter') handleAddItem(sec.id); if (e.key === 'Escape') setAddingItem(p => ({ ...p, [sec.id]: false })) }}
+                  placeholder="Novo item..." autoFocus />
+                <button className="btn btn-primary btn-sm" style={{ fontSize: 10, padding: '3px 8px' }} onClick={() => handleAddItem(sec.id)}>✓</button>
+                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }} onClick={() => setAddingItem(p => ({ ...p, [sec.id]: false }))}>✕</button>
+              </div>
+            ) : (
+              <button onClick={() => setAddingItem(p => ({ ...p, [sec.id]: true }))}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11, display: 'flex', alignItems: 'center', gap: 3, padding: '3px 0 0 4px' }}>
+                <Plus size={11} /> item
+              </button>
+            )}
+          </div>
+        )
+      })}
+
+      {addingSecao ? (
+        <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+          <input className="form-input" style={{ padding: '4px 8px', fontSize: 11, flex: 1 }}
+            value={novaSecao} onChange={e => setNovaSecao(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleAddSecao(); if (e.key === 'Escape') setAddingSecao(false) }}
+            placeholder='Nome da seção (ex: "Definição", "Acompanhamento")' autoFocus />
+          <button className="btn btn-primary btn-sm" style={{ fontSize: 11 }} onClick={handleAddSecao}>Salvar</button>
+          <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} onClick={() => setAddingSecao(false)}>Cancelar</button>
+        </div>
+      ) : (
+        <button onClick={() => setAddingSecao(true)}
+          style={{ background: 'none', border: '1px dashed var(--border)', borderRadius: 6, cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', marginTop: 4 }}>
+          <Plus size={11} /> Nova seção
+        </button>
+      )}
+    </div>
+  )
+}
+
 const NOME_COL_MATRIZ = 320
 const NOME_COL_GANTT = 300
 
@@ -786,12 +948,23 @@ function VisaoMatriz({
   editandoTitulo, setEditandoTitulo,
   onSalvarTitulo, onSalvarCelula, onDeletarIniciativa, onNovaIniciativa, onReordenarGrupos, onVerDetalhes, area,
   colapsarGruposPorPadrao,
+  onCriarSecao, onDeletarSecao, onCriarItem, onToggleItem, onDeletarItem,
 }) {
   const mes = MESES[mesIdx]
   const semanasDoMes = mes.semanas
   const [gruposColapsados, setGruposColapsados] = useState(new Set())
   const [draggingId, setDraggingId] = useState(null)
   const [dragOverId, setDragOverId] = useState(null)
+  const [subExpandido, setSubExpandido] = useState(new Set())
+
+  function toggleSub(id) {
+    setSubExpandido(prev => {
+      const novo = new Set(prev)
+      if (novo.has(id)) novo.delete(id)
+      else novo.add(id)
+      return novo
+    })
+  }
 
   function toggleGrupo(id) {
     setGruposColapsados(prev => {
@@ -850,7 +1023,8 @@ function VisaoMatriz({
     const corLinha = stLinha !== 'nao_iniciada' ? STATUS_INFO[stLinha === 'feita' ? 'feito' : stLinha === 'feita_atrasado' ? 'feito_atrasado' : stLinha === 'atrasada' ? 'atrasado' : stLinha === 'em_andamento' ? 'em_andamento' : stLinha === 'planejada' ? 'planejada' : 'a_fazer'] : null
 
     return (
-      <HoverRow key={ini.id} style={{
+      <div key={ini.id}>
+      <HoverRow style={{
         display: 'grid',
         gridTemplateColumns: `${NOME_COL_MATRIZ}px repeat(${semanasDoMes.length}, 1fr)`,
         borderBottom: '1px solid rgba(255,255,255,0.04)',
@@ -886,7 +1060,17 @@ function VisaoMatriz({
                 placeholder="Responsável (Who)"
                 style={{ fontSize: 11, background: 'var(--surface)', border: '1px solid var(--border)', outline: 'none', color: 'var(--text)', padding: '4px 6px', borderRadius: '4px' }}
               />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between', marginTop: 2 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between', marginTop: 2, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Início:</span>
+                  <input
+                    type="date"
+                    value={editandoTitulo.data_inicio ? editandoTitulo.data_inicio.split('T')[0] : ''}
+                    onChange={e => setEditandoTitulo(p => ({ ...p, data_inicio: e.target.value }))}
+                    onKeyDown={e => { if (e.key === 'Enter') onSalvarTitulo(); if (e.key === 'Escape') setEditandoTitulo(null) }}
+                    style={{ fontSize: 11, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none', colorScheme: 'dark', padding: '2px 4px', borderRadius: '4px' }}
+                  />
+                </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                   <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Prazo:</span>
                   <input
@@ -910,7 +1094,7 @@ function VisaoMatriz({
           ) : (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', overflow: 'hidden', gap: 6 }}>
               <div
-                onClick={() => setEditandoTitulo({ id: ini.id, titulo: ini.titulo, responsavel: ini.responsavel || '', justificativa: ini.justificativa || '', como_fazer: ini.como_fazer || '', prazo_final: ini.prazo_final || '' })}
+                onClick={() => setEditandoTitulo({ id: ini.id, titulo: ini.titulo, responsavel: ini.responsavel || '', justificativa: ini.justificativa || '', como_fazer: ini.como_fazer || '', data_inicio: ini.data_inicio || '', prazo_final: ini.prazo_final || '' })}
                 style={{ flex: 1, cursor: 'text', overflow: 'hidden' }}
                 title={`${ini.titulo}\nClique para editar`}>
                 <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500, lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
@@ -922,12 +1106,17 @@ function VisaoMatriz({
                       👤 {ini.responsavel}
                     </span>
                   )}
+                  {ini.data_inicio && (
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                      🚀 {new Date(ini.data_inicio).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                    </span>
+                  )}
                   {ini.prazo_final && (
                     <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                       📅 {new Date(ini.prazo_final).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
                     </span>
                   )}
-                  {numCelulasAtivas === 0 && !ini.responsavel && !ini.prazo_final && (
+                  {numCelulasAtivas === 0 && !ini.responsavel && !ini.prazo_final && !ini.data_inicio && (
                     <span style={{ fontSize: 10, color: 'var(--text-muted)', opacity: 0.5, fontStyle: 'italic' }}>
                       Sem atividade
                     </span>
@@ -935,6 +1124,19 @@ function VisaoMatriz({
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+                <button
+                  onClick={() => toggleSub(ini.id)}
+                  title="Subtarefas"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: subExpandido.has(ini.id) ? 'var(--accent)' : 'var(--text-muted)', padding: 4, display: 'flex', alignItems: 'center', gap: 2, opacity: subExpandido.has(ini.id) ? 1 : 0.55 }}>
+                  <ListChecks size={13} />
+                  {(ini.pda_parceiras_secoes || []).length > 0 && (
+                    <span style={{ fontSize: 9, fontWeight: 700 }}>
+                      {(ini.pda_parceiras_secoes || []).reduce((s, sec) => s + (sec.pda_parceiras_itens || []).filter(i => i.concluido).length, 0)}
+                      /
+                      {(ini.pda_parceiras_secoes || []).reduce((s, sec) => s + (sec.pda_parceiras_itens || []).length, 0)}
+                    </span>
+                  )}
+                </button>
                 <button
                   onClick={() => onVerDetalhes(ini)}
                   title="Ver Raio-X 5W2H"
@@ -965,6 +1167,14 @@ function VisaoMatriz({
           )
         })}
       </HoverRow>
+      {subExpandido.has(ini.id) && (
+        <PainelSubtarefas
+          ini={ini} ehFilha={ehFilha}
+          onCriarSecao={onCriarSecao} onDeletarSecao={onDeletarSecao}
+          onCriarItem={onCriarItem} onToggleItem={onToggleItem} onDeletarItem={onDeletarItem}
+        />
+      )}
+    </div>
     )
   }
 
@@ -1493,8 +1703,8 @@ export default function PDAParceiras() {
     const proximaOrdem = (iniciativas[iniciativas.length - 1]?.ordem || 0) + 1
     const nova = await criarIniciativa({ semestre_id: semestreId, area, ...form, ordem: proximaOrdem })
     setIniciativas(prev => [...prev, nova])
-    setModalNovo(null)
-    showToast('Iniciativa criada!')
+    showToast(form.eh_grupo ? 'Grupo criado!' : 'Iniciativa criada!')
+    return nova
   }
 
   async function handleDeletarIniciativa(id) {
@@ -1505,7 +1715,7 @@ export default function PDAParceiras() {
 
   async function handleSalvarTitulo() {
     if (!editandoTitulo) return
-    const { id, titulo, responsavel, justificativa, como_fazer, prazo_final } = editandoTitulo
+    const { id, titulo, responsavel, justificativa, como_fazer, data_inicio, prazo_final } = editandoTitulo
     const t = titulo.trim()
     if (!t) { setEditandoTitulo(null); return }
 
@@ -1515,6 +1725,7 @@ export default function PDAParceiras() {
         responsavel: responsavel?.trim() || null,
         justificativa: justificativa?.trim() || null,
         como_fazer: como_fazer?.trim() || null,
+        data_inicio: data_inicio || null,
         prazo_final: prazo_final || null
       })
       setIniciativas(prev => prev.map(i => i.id === id ? { ...i, ...upd } : i))
@@ -1525,6 +1736,61 @@ export default function PDAParceiras() {
     } finally {
       setEditandoTitulo(null)
     }
+  }
+
+  // ── SUBTAREFAS: SEÇÕES + ITENS ──────────────────────────
+  async function handleCriarSecao(iniciativaId, titulo, ordem) {
+    try {
+      const nova = await criarSecao(iniciativaId, titulo, ordem)
+      setIniciativas(prev => prev.map(i => i.id === iniciativaId
+        ? { ...i, pda_parceiras_secoes: [...(i.pda_parceiras_secoes || []), nova] }
+        : i))
+    } catch(e) { console.error(e); showToast('Erro ao criar seção.', 'error') }
+  }
+
+  async function handleDeletarSecao(secaoId, iniciativaId) {
+    try {
+      await deletarSecao(secaoId)
+      setIniciativas(prev => prev.map(i => i.id === iniciativaId
+        ? { ...i, pda_parceiras_secoes: (i.pda_parceiras_secoes || []).filter(s => s.id !== secaoId) }
+        : i))
+    } catch(e) { console.error(e); showToast('Erro ao excluir seção.', 'error') }
+  }
+
+  async function handleCriarItem(iniciativaId, secaoId, texto, ordem) {
+    try {
+      const novo = await criarItem(secaoId, texto, ordem)
+      setIniciativas(prev => prev.map(i => i.id !== iniciativaId ? i : {
+        ...i,
+        pda_parceiras_secoes: (i.pda_parceiras_secoes || []).map(s => s.id !== secaoId ? s : {
+          ...s, pda_parceiras_itens: [...(s.pda_parceiras_itens || []), novo]
+        })
+      }))
+    } catch(e) { console.error(e); showToast('Erro ao criar item.', 'error') }
+  }
+
+  async function handleToggleItem(item, secaoId, iniciativaId) {
+    try {
+      const upd = await atualizarItem(item.id, { concluido: !item.concluido })
+      setIniciativas(prev => prev.map(i => i.id !== iniciativaId ? i : {
+        ...i,
+        pda_parceiras_secoes: (i.pda_parceiras_secoes || []).map(s => s.id !== secaoId ? s : {
+          ...s, pda_parceiras_itens: (s.pda_parceiras_itens || []).map(it => it.id === upd.id ? upd : it)
+        })
+      }))
+    } catch(e) { console.error(e); showToast('Erro ao atualizar item.', 'error') }
+  }
+
+  async function handleDeletarItem(itemId, secaoId, iniciativaId) {
+    try {
+      await deletarItem(itemId)
+      setIniciativas(prev => prev.map(i => i.id !== iniciativaId ? i : {
+        ...i,
+        pda_parceiras_secoes: (i.pda_parceiras_secoes || []).map(s => s.id !== secaoId ? s : {
+          ...s, pda_parceiras_itens: (s.pda_parceiras_itens || []).filter(it => it.id !== itemId)
+        })
+      }))
+    } catch(e) { console.error(e); showToast('Erro ao excluir item.', 'error') }
   }
 
   async function handleReordenarGrupos(idArrastado, idAlvo) {
@@ -1694,6 +1960,8 @@ export default function PDAParceiras() {
           onSalvarTitulo={handleSalvarTitulo} onSalvarCelula={handleSalvarCelula}
           onDeletarIniciativa={handleDeletarIniciativa} onReordenarGrupos={handleReordenarGrupos}
           onNovaIniciativa={(preset) => setModalNovo(preset || { tipo: 'avulsa' })}
+          onCriarSecao={handleCriarSecao} onDeletarSecao={handleDeletarSecao}
+          onCriarItem={handleCriarItem} onToggleItem={handleToggleItem} onDeletarItem={handleDeletarItem}
           onVerDetalhes={(ini) => setDetalhe5W2H(ini)} area={area}
         />
       ) : visao === 'gantt' ? (
