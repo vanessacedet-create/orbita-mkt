@@ -28,7 +28,7 @@ export async function deletarSemestre(id) {
 export async function getIniciativas(semestreId, area = null) {
   let q = supabase
     .from('pda_parceiras_iniciativas')
-    .select('*, pda_parceiras_celulas(*)')
+    .select('*, pda_parceiras_celulas(*), pda_parceiras_secoes(*, pda_parceiras_itens(*))')
     .eq('semestre_id', semestreId)
     .order('ordem', { ascending: true })
   if (area) q = q.eq('area', area)
@@ -40,18 +40,18 @@ export async function getIniciativas(semestreId, area = null) {
 export async function criarIniciativa({
   semestre_id, area, titulo,
   responsavel = null, ordem = 0, grupo_id = null, eh_grupo = false,
-  justificativa = null, como_fazer = null, prazo_final = null,
+  justificativa = null, como_fazer = null, prazo_final = null, data_inicio = null,
 }) {
   const { data, error } = await supabase
     .from('pda_parceiras_iniciativas')
     .insert([{
       semestre_id, area, titulo,
       responsavel, ordem, grupo_id, eh_grupo,
-      justificativa, como_fazer, prazo_final,
+      justificativa, como_fazer, prazo_final, data_inicio,
     }])
     .select().single()
   if (error) throw error
-  return { ...data, pda_parceiras_celulas: [] }
+  return { ...data, pda_parceiras_celulas: [], pda_parceiras_secoes: [] }
 }
 
 export async function atualizarIniciativa(id, updates) {
@@ -96,5 +96,50 @@ export async function upsertCelula({ iniciativa_id, semana, texto = null, status
 
 export async function deletarCelula(id) {
   const { error } = await supabase.from('pda_parceiras_celulas').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ── SUBTAREFAS: SEÇÕES + ITENS (dentro de uma iniciativa) ──
+export async function criarSecao(iniciativa_id, titulo, ordem = 0) {
+  const { data, error } = await supabase
+    .from('pda_parceiras_secoes')
+    .insert([{ iniciativa_id, titulo, ordem }])
+    .select().single()
+  if (error) throw error
+  return { ...data, pda_parceiras_itens: [] }
+}
+
+export async function atualizarSecao(id, updates) {
+  const { data, error } = await supabase
+    .from('pda_parceiras_secoes')
+    .update(updates).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deletarSecao(id) {
+  const { error } = await supabase.from('pda_parceiras_secoes').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function criarItem(secao_id, texto, ordem = 0) {
+  const { data, error } = await supabase
+    .from('pda_parceiras_itens')
+    .insert([{ secao_id, texto, ordem }])
+    .select().single()
+  if (error) throw error
+  return data
+}
+
+export async function atualizarItem(id, updates) {
+  const { data, error } = await supabase
+    .from('pda_parceiras_itens')
+    .update(updates).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deletarItem(id) {
+  const { error } = await supabase.from('pda_parceiras_itens').delete().eq('id', id)
   if (error) throw error
 }
