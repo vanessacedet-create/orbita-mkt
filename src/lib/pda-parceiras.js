@@ -41,6 +41,7 @@ export async function criarIniciativa({
   semestre_id, area, titulo,
   responsavel = null, ordem = 0, grupo_id = null, eh_grupo = false,
   justificativa = null, como_fazer = null, prazo_final = null, data_inicio = null,
+  meta_quantidade = null, meta_periodo = null, meta_nao_aplica = false,
 }) {
   const { data, error } = await supabase
     .from('pda_parceiras_iniciativas')
@@ -48,6 +49,7 @@ export async function criarIniciativa({
       semestre_id, area, titulo,
       responsavel, ordem, grupo_id, eh_grupo,
       justificativa, como_fazer, prazo_final, data_inicio,
+      meta_quantidade, meta_periodo, meta_nao_aplica,
     }])
     .select().single()
   if (error) throw error
