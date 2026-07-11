@@ -15,6 +15,15 @@ const AREAS = [
   { value: 'geral',        label: 'Geral' },
 ]
 
+const PERIODOS_META = [
+  { value: 'dia',        label: 'Dia' },
+  { value: 'semana',     label: 'Semana' },
+  { value: 'mes',        label: 'Mês' },
+  { value: 'bimestre',   label: 'Bimestre' },
+  { value: 'trimestre',  label: 'Trimestre' },
+  { value: 'semestre',   label: 'Semestre' },
+]
+
 const STATUS_INFO = {
   a_fazer:        { label: 'A fazer',               curto: 'A fazer',        bg: 'transparent',              text: 'var(--text-muted)',  border: 'var(--border)',  icon: Square },
   planejada:      { label: 'Planejada',             curto: 'Planejada',      bg: 'rgba(59, 130, 246, 0.18)', text: '#60A5FA',            border: '#3B82F6',        icon: Calendar },
@@ -577,15 +586,29 @@ function PdaAtencao({ iniciativas, semanaAtualIdx, onVerDetalhes }) {
   )
 }
 
-function ModalDetalhes5W2H({ iniciativa, onSalvarCampo, onAbrirSubtarefas, onClose }) {
+function ModalDetalhes5W2H({ iniciativa, onSalvarCampo, onSalvarCampos, onAbrirSubtarefas, onClose }) {
   const [titulo, setTitulo] = useState(iniciativa?.titulo || '')
   const [responsavel, setResponsavel] = useState(iniciativa?.responsavel || '')
   const [justificativa, setJustificativa] = useState(iniciativa?.justificativa || '')
   const [comoFazer, setComoFazer] = useState(iniciativa?.como_fazer || '')
   const [dataInicio, setDataInicio] = useState(iniciativa?.data_inicio ? iniciativa.data_inicio.split('T')[0] : '')
   const [prazoFinal, setPrazoFinal] = useState(iniciativa?.prazo_final ? iniciativa.prazo_final.split('T')[0] : '')
+  const [metaQuantidade, setMetaQuantidade] = useState(iniciativa?.meta_quantidade ?? '')
+  const [metaPeriodo, setMetaPeriodo] = useState(iniciativa?.meta_periodo || '')
+  const [metaNaoAplica, setMetaNaoAplica] = useState(!!iniciativa?.meta_nao_aplica)
 
   if (!iniciativa) return null
+
+  function handleToggleNaoAplica(checked) {
+    setMetaNaoAplica(checked)
+    if (checked) {
+      setMetaQuantidade('')
+      setMetaPeriodo('')
+      onSalvarCampos(iniciativa.id, { meta_nao_aplica: true, meta_quantidade: null, meta_periodo: null })
+    } else {
+      onSalvarCampo(iniciativa.id, 'meta_nao_aplica', false)
+    }
+  }
 
   const rotuloStyle = { color: 'var(--text-muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }
   const campoStyle = { marginTop: 5, fontSize: 13 }
@@ -636,6 +659,38 @@ function ModalDetalhes5W2H({ iniciativa, onSalvarCampo, onAbrirSubtarefas, onClo
               onChange={e => setComoFazer(e.target.value)}
               onBlur={() => onSalvarCampo(iniciativa.id, 'como_fazer', comoFazer.trim() || null)}
               placeholder="Passo a passo detalhado..." />
+          </div>
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+            <strong style={rotuloStyle}>Quanto (quantidade prometida)</strong>
+            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={metaNaoAplica} onChange={e => handleToggleNaoAplica(e.target.checked)}
+                  style={{ width: 14, height: 14, accentColor: 'var(--accent)', cursor: 'pointer' }} />
+                Não se aplica
+              </label>
+              {!metaNaoAplica && (
+                <>
+                  <input
+                    type="number"
+                    min="0"
+                    className="form-input"
+                    style={{ width: 72, padding: '4px 6px', fontSize: 12 }}
+                    value={metaQuantidade}
+                    onChange={e => setMetaQuantidade(e.target.value)}
+                    onBlur={() => onSalvarCampo(iniciativa.id, 'meta_quantidade', metaQuantidade !== '' ? Number(metaQuantidade) : null)}
+                    placeholder="Nº" />
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>por</span>
+                  <select
+                    className="form-select"
+                    style={{ fontSize: 12, padding: '4px 8px', width: 'auto' }}
+                    value={metaPeriodo}
+                    onChange={e => { setMetaPeriodo(e.target.value); onSalvarCampo(iniciativa.id, 'meta_periodo', e.target.value || null) }}>
+                    <option value="">Selecione...</option>
+                    {PERIODOS_META.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+                  </select>
+                </>
+              )}
+            </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, borderTop: '1px solid var(--border)', paddingTop: 14 }}>
             <div>
@@ -1843,6 +1898,16 @@ export default function PDAParceiras() {
     }
   }
 
+  async function handleSalvarCamposDetalhe(iniciativaId, campos) {
+    try {
+      const upd = await atualizarIniciativa(iniciativaId, campos)
+      setIniciativas(prev => prev.map(i => i.id === iniciativaId ? { ...i, ...upd } : i))
+    } catch(e) {
+      console.error(e)
+      showToast('Erro ao atualizar.', 'error')
+    }
+  }
+
   // ── SUBTAREFAS: SEÇÕES + ITENS ──────────────────────────
   async function handleCriarSecao(iniciativaId, titulo, ordem) {
     try {
@@ -2111,6 +2176,7 @@ export default function PDAParceiras() {
           <ModalDetalhes5W2H
             iniciativa={iniDetalhe}
             onSalvarCampo={handleSalvarCampoDetalhe}
+            onSalvarCampos={handleSalvarCamposDetalhe}
             onAbrirSubtarefas={(ini) => { setDetalheIniId(null); setSubtarefasIniId(ini.id) }}
             onClose={() => setDetalheIniId(null)}
           />
