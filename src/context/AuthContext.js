@@ -21,7 +21,11 @@ export const MODULOS_PERMISSOES = {
   eventos: ['administrador', 'gerente', 'estagiario_marketplaces', 'analista_marketplaces'],
 
   rh: ['administrador'],
-  pda: ['administrador'],
+  // ── TEMPORÁRIO: acesso da Vivi (supervisor_parceiras) ao PDA ORIGINAL,
+  // pra consultar como a Vanessa preencheu o dela. REMOVER quando ela avisar
+  // que não precisa mais (procurar pelo comentário "TEMPORÁRIO" neste arquivo).
+  pda: ['administrador', 'supervisor_parceiras'],
+  // ── FIM DO BLOCO TEMPORÁRIO ──
   treinamentos: ['administrador', 'gerente', 'supervisor_proprias'],
 
   // ── Módulos novos e independentes da equipe de parceiras ──
