@@ -8,7 +8,7 @@ import {
 import {
   Target, Plus, Trash2, X, Check, Clock, AlertCircle, Square,
   Grid3x3, FileText, ChevronLeft, ChevronRight, ChevronDown, Printer, GripVertical, Info, Calendar,
-  ListChecks
+  ListChecks, Pencil
 } from 'lucide-react'
 
 const AREAS = [
@@ -767,11 +767,11 @@ function ModalNovaIniciativa({ area, grupos, preset, onSave, onClose }) {
               <div className="form-row">
                 <div className="form-group">
                   <label className="form-label">🚀 Data de Início</label>
-                  <input type="date" className="form-input" value={dataInicio} onChange={e => setDataInicio(e.target.value)} style={{ colorScheme: 'dark' }} />
+                  <input type="date" className="form-input" value={dataInicio} onChange={e => setDataInicio(e.target.value)} onClick={e => e.currentTarget.showPicker?.()} style={{ colorScheme: 'dark', cursor: 'pointer' }} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">📅 Prazo Final de Conclusão (When)</label>
-                  <input type="date" className="form-input" value={prazoFinal} onChange={e => setPrazoFinal(e.target.value)} style={{ colorScheme: 'dark' }} />
+                  <input type="date" className="form-input" value={prazoFinal} onChange={e => setPrazoFinal(e.target.value)} onClick={e => e.currentTarget.showPicker?.()} style={{ colorScheme: 'dark', cursor: 'pointer' }} />
                 </div>
               </div>
             </>
@@ -814,11 +814,11 @@ function ModalNovoSemestre({ onSave, onClose }) {
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Início *</label>
-              <input className="form-input" type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} />
+              <input className="form-input" type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} onClick={e => e.currentTarget.showPicker?.()} style={{ cursor: 'pointer' }} />
             </div>
             <div className="form-group">
               <label className="form-label">Fim *</label>
-              <input className="form-input" type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} />
+              <input className="form-input" type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} onClick={e => e.currentTarget.showPicker?.()} style={{ cursor: 'pointer' }} />
             </div>
           </div>
         </div>
@@ -909,12 +909,19 @@ function ModalSubtarefas({ iniciativa, onCriarSecao, onAtualizarSecao, onDeletar
                       onKeyDown={e => { if (e.key === 'Enter') salvarEdicaoSecao(); if (e.key === 'Escape') setEditandoSecao(null) }}
                     />
                   ) : (
-                    <span
-                      onClick={() => setEditandoSecao({ id: sec.id, titulo: sec.titulo })}
-                      title="Clique para editar"
-                      style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', cursor: 'text', flex: 1 }}>
-                      {sec.titulo}
-                    </span>
+                    <>
+                      <span
+                        onClick={() => setEditandoSecao({ id: sec.id, titulo: sec.titulo })}
+                        title="Clique para editar"
+                        style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', cursor: 'text', flex: 1 }}>
+                        {sec.titulo}
+                      </span>
+                      <button onClick={() => setEditandoSecao({ id: sec.id, titulo: sec.titulo })}
+                        title="Editar nome da seção"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', padding: 2, opacity: 0.7, display: 'flex', flexShrink: 0 }}>
+                        <Pencil size={12} />
+                      </button>
+                    </>
                   )}
                   {itens.length > 0 && (
                     <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{concluidos}/{itens.length}</span>
@@ -940,12 +947,19 @@ function ModalSubtarefas({ iniciativa, onCriarSecao, onAtualizarSecao, onDeletar
                         onKeyDown={e => { if (e.key === 'Enter') salvarEdicaoItem(); if (e.key === 'Escape') setEditandoItem(null) }}
                       />
                     ) : (
-                      <span
-                        onClick={() => setEditandoItem({ id: it.id, texto: it.texto, secaoId: sec.id })}
-                        title="Clique para editar"
-                        style={{ fontSize: 12, flex: 1, cursor: 'text', color: it.concluido ? 'var(--text-muted)' : 'var(--text)', textDecoration: it.concluido ? 'line-through' : 'none' }}>
-                        {it.texto}
-                      </span>
+                      <>
+                        <span
+                          onClick={() => setEditandoItem({ id: it.id, texto: it.texto, secaoId: sec.id })}
+                          title="Clique para editar"
+                          style={{ fontSize: 12, flex: 1, cursor: 'text', color: it.concluido ? 'var(--text-muted)' : 'var(--text)', textDecoration: it.concluido ? 'line-through' : 'none' }}>
+                          {it.texto}
+                        </span>
+                        <button onClick={() => setEditandoItem({ id: it.id, texto: it.texto, secaoId: sec.id })}
+                          title="Editar item"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', padding: 1, opacity: 0.6, display: 'flex', flexShrink: 0 }}>
+                          <Pencil size={11} />
+                        </button>
+                      </>
                     )}
                     <button onClick={() => onDeletarItem(it.id, sec.id, iniciativa.id)}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', padding: 1, opacity: 0.35, display: 'flex', flexShrink: 0 }}>
@@ -1092,7 +1106,13 @@ function VisaoMatriz({
           )}
 
           {editandoTitulo?.id === ini.id ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, background: 'var(--surface-2)', padding: '6px', borderRadius: '6px', border: '1px solid var(--accent)' }}>
+            <div
+              style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, background: 'var(--surface-2)', padding: '6px', borderRadius: '6px', border: '1px solid var(--accent)' }}
+              onBlur={(e) => {
+                // Só salva e fecha quando o foco realmente sai desta caixa (não ao pular entre os campos dela).
+                if (!e.currentTarget.contains(e.relatedTarget)) onSalvarTitulo()
+              }}
+            >
               <input
                 autoFocus
                 value={editandoTitulo.titulo}
@@ -1115,8 +1135,9 @@ function VisaoMatriz({
                     type="date"
                     value={editandoTitulo.data_inicio ? editandoTitulo.data_inicio.split('T')[0] : ''}
                     onChange={e => setEditandoTitulo(p => ({ ...p, data_inicio: e.target.value }))}
+                    onClick={e => e.currentTarget.showPicker?.()}
                     onKeyDown={e => { if (e.key === 'Enter') onSalvarTitulo(); if (e.key === 'Escape') setEditandoTitulo(null) }}
-                    style={{ fontSize: 11, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none', colorScheme: 'dark', padding: '2px 4px', borderRadius: '4px' }}
+                    style={{ fontSize: 11, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text)', outline: 'none', colorScheme: 'dark', padding: '2px 4px', borderRadius: '4px', cursor: 'pointer' }}
                   />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1125,18 +1146,14 @@ function VisaoMatriz({
                     type="date"
                     value={editandoTitulo.prazo_final ? editandoTitulo.prazo_final.split('T')[0] : ''}
                     onChange={e => setEditandoTitulo(p => ({ ...p, prazo_final: e.target.value }))}
+                    onClick={e => e.currentTarget.showPicker?.()}
                     onKeyDown={e => { if (e.key === 'Enter') onSalvarTitulo(); if (e.key === 'Escape') setEditandoTitulo(null) }}
-                    style={{ fontSize: 11, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--accent)', outline: 'none', colorScheme: 'dark', padding: '2px 4px', borderRadius: '4px' }}
+                    style={{ fontSize: 11, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--accent)', outline: 'none', colorScheme: 'dark', padding: '2px 4px', borderRadius: '4px', cursor: 'pointer' }}
                   />
                 </div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button onClick={(e) => { e.stopPropagation(); setEditandoTitulo(null); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2 }} title="Cancelar">
-                    <X size={14} />
-                  </button>
-                  <button onClick={(e) => { e.stopPropagation(); onSalvarTitulo(); }} style={{ background: 'none', border: 'none', color: 'var(--green)', cursor: 'pointer', padding: 2 }} title="Salvar">
-                    <Check size={14} />
-                  </button>
-                </div>
+                <button onClick={(e) => { e.stopPropagation(); onSalvarTitulo(); }} style={{ background: 'none', border: 'none', color: 'var(--green)', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, fontWeight: 600 }} title="Concluir">
+                  <Check size={14} /> Concluir
+                </button>
               </div>
             </div>
           ) : (
