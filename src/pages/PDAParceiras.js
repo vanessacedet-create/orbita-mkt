@@ -3,7 +3,7 @@ import {
   getSemestres, criarSemestre,
   getIniciativas, criarIniciativa, atualizarIniciativa, deletarIniciativa,
   upsertCelula,
-  criarSecao, deletarSecao, criarItem, atualizarItem, deletarItem,
+  criarSecao, atualizarSecao, deletarSecao, criarItem, atualizarItem, deletarItem,
 } from '../lib/pda-parceiras'
 import {
   Target, Plus, Trash2, X, Check, Clock, AlertCircle, Square,
@@ -833,18 +833,20 @@ function ModalNovoSemestre({ onSave, onClose }) {
   )
 }
 
-// ── PAINEL DE SUBTAREFAS (Seções + Itens dentro de uma iniciativa) ──
-function PainelSubtarefas({ ini, ehFilha, onCriarSecao, onDeletarSecao, onCriarItem, onToggleItem, onDeletarItem }) {
+// ── MODAL DE SUBTAREFAS (Seções + Itens dentro de uma iniciativa) ──
+function ModalSubtarefas({ iniciativa, onCriarSecao, onAtualizarSecao, onDeletarSecao, onCriarItem, onAtualizarItem, onToggleItem, onDeletarItem, onClose }) {
   const [addingSecao, setAddingSecao] = useState(false)
   const [novaSecao, setNovaSecao] = useState('')
   const [addingItem, setAddingItem] = useState({}) // { [secaoId]: bool }
   const [novoItem, setNovoItem] = useState({}) // { [secaoId]: texto }
+  const [editandoSecao, setEditandoSecao] = useState(null) // { id, titulo }
+  const [editandoItem, setEditandoItem] = useState(null) // { id, texto, secaoId }
 
-  const secoes = (ini.pda_parceiras_secoes || []).slice().sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
+  const secoes = (iniciativa.pda_parceiras_secoes || []).slice().sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
 
   function handleAddSecao() {
     if (!novaSecao.trim()) return
-    onCriarSecao(ini.id, novaSecao.trim(), secoes.length)
+    onCriarSecao(iniciativa.id, novaSecao.trim(), secoes.length)
     setNovaSecao('')
     setAddingSecao(false)
   }
@@ -854,87 +856,144 @@ function PainelSubtarefas({ ini, ehFilha, onCriarSecao, onDeletarSecao, onCriarI
     if (!texto) return
     const secao = secoes.find(s => s.id === secaoId)
     const ordem = (secao?.pda_parceiras_itens || []).length
-    onCriarItem(ini.id, secaoId, texto, ordem)
+    onCriarItem(iniciativa.id, secaoId, texto, ordem)
     setNovoItem(p => ({ ...p, [secaoId]: '' }))
     setAddingItem(p => ({ ...p, [secaoId]: false }))
   }
 
-  return (
-    <div style={{
-      paddingLeft: ehFilha ? 36 + 14 : 14 + 14,
-      paddingRight: 14, paddingTop: 8, paddingBottom: 12,
-      background: 'rgba(255,255,255,0.015)',
-      borderBottom: '1px solid rgba(255,255,255,0.04)',
-    }}>
-      {secoes.length === 0 && !addingSecao && (
-        <p style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', margin: '4px 0 8px' }}>
-          Nenhuma seção de subtarefas ainda.
-        </p>
-      )}
-      {secoes.map(sec => {
-        const itens = (sec.pda_parceiras_itens || []).slice().sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
-        const concluidos = itens.filter(i => i.concluido).length
-        return (
-          <div key={sec.id} style={{ marginBottom: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{sec.titulo}</span>
-              {itens.length > 0 && (
-                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{concluidos}/{itens.length}</span>
-              )}
-              <button onClick={() => { if (window.confirm(`Excluir a seção "${sec.titulo}" e todos os seus itens?`)) onDeletarSecao(sec.id, ini.id) }}
-                title="Excluir seção"
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 1, display: 'flex', opacity: 0.4 }}>
-                <Trash2 size={10} />
-              </button>
-            </div>
-            {itens.map(it => (
-              <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, paddingLeft: 4 }}>
-                <input type="checkbox" checked={!!it.concluido} onChange={() => onToggleItem(it, sec.id, ini.id)}
-                  style={{ width: 13, height: 13, accentColor: 'var(--green)', cursor: 'pointer', flexShrink: 0 }} />
-                <span style={{ fontSize: 12, flex: 1, color: it.concluido ? 'var(--text-muted)' : 'var(--text)', textDecoration: it.concluido ? 'line-through' : 'none' }}>
-                  {it.texto}
-                </span>
-                <button onClick={() => onDeletarItem(it.id, sec.id, ini.id)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', padding: 1, opacity: 0.35, display: 'flex', flexShrink: 0 }}>
-                  <Trash2 size={10} />
-                </button>
-              </div>
-            ))}
-            {addingItem[sec.id] ? (
-              <div style={{ display: 'flex', gap: 6, marginTop: 4, paddingLeft: 4 }}>
-                <input className="form-input" style={{ padding: '3px 8px', fontSize: 11, flex: 1 }}
-                  value={novoItem[sec.id] || ''}
-                  onChange={e => setNovoItem(p => ({ ...p, [sec.id]: e.target.value }))}
-                  onKeyDown={e => { if (e.key === 'Enter') handleAddItem(sec.id); if (e.key === 'Escape') setAddingItem(p => ({ ...p, [sec.id]: false })) }}
-                  placeholder="Novo item..." autoFocus />
-                <button className="btn btn-primary btn-sm" style={{ fontSize: 10, padding: '3px 8px' }} onClick={() => handleAddItem(sec.id)}>✓</button>
-                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }} onClick={() => setAddingItem(p => ({ ...p, [sec.id]: false }))}>✕</button>
-              </div>
-            ) : (
-              <button onClick={() => setAddingItem(p => ({ ...p, [sec.id]: true }))}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11, display: 'flex', alignItems: 'center', gap: 3, padding: '3px 0 0 4px' }}>
-                <Plus size={11} /> item
-              </button>
-            )}
-          </div>
-        )
-      })}
+  function salvarEdicaoSecao() {
+    if (!editandoSecao) return
+    const t = editandoSecao.titulo.trim()
+    if (t) onAtualizarSecao(editandoSecao.id, t, iniciativa.id)
+    setEditandoSecao(null)
+  }
 
-      {addingSecao ? (
-        <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-          <input className="form-input" style={{ padding: '4px 8px', fontSize: 11, flex: 1 }}
-            value={novaSecao} onChange={e => setNovaSecao(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleAddSecao(); if (e.key === 'Escape') setAddingSecao(false) }}
-            placeholder='Nome da seção (ex: "Definição", "Acompanhamento")' autoFocus />
-          <button className="btn btn-primary btn-sm" style={{ fontSize: 11 }} onClick={handleAddSecao}>Salvar</button>
-          <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} onClick={() => setAddingSecao(false)}>Cancelar</button>
+  function salvarEdicaoItem() {
+    if (!editandoItem) return
+    const t = editandoItem.texto.trim()
+    if (t) onAtualizarItem(editandoItem.id, t, editandoItem.secaoId, iniciativa.id)
+    setEditandoItem(null)
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2 className="modal-title" style={{ fontSize: 15, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <ListChecks size={16} /> Subtarefas — {iniciativa.titulo}
+          </h2>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
         </div>
-      ) : (
-        <button onClick={() => setAddingSecao(true)}
-          style={{ background: 'none', border: '1px dashed var(--border)', borderRadius: 6, cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', marginTop: 4 }}>
-          <Plus size={11} /> Nova seção
-        </button>
-      )}
+
+        {secoes.length === 0 && !addingSecao && (
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', margin: '4px 0 12px' }}>
+            Nenhuma seção de subtarefas ainda.
+          </p>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '52vh', overflowY: 'auto', paddingRight: 4 }}>
+          {secoes.map(sec => {
+            const itens = (sec.pda_parceiras_itens || []).slice().sort((a, b) => (a.ordem || 0) - (b.ordem || 0))
+            const concluidos = itens.filter(i => i.concluido).length
+            return (
+              <div key={sec.id} style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  {editandoSecao?.id === sec.id ? (
+                    <input
+                      autoFocus
+                      className="form-input"
+                      style={{ flex: 1, padding: '4px 8px', fontSize: 12, fontWeight: 700 }}
+                      value={editandoSecao.titulo}
+                      onChange={e => setEditandoSecao(p => ({ ...p, titulo: e.target.value }))}
+                      onBlur={salvarEdicaoSecao}
+                      onKeyDown={e => { if (e.key === 'Enter') salvarEdicaoSecao(); if (e.key === 'Escape') setEditandoSecao(null) }}
+                    />
+                  ) : (
+                    <span
+                      onClick={() => setEditandoSecao({ id: sec.id, titulo: sec.titulo })}
+                      title="Clique para editar"
+                      style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', cursor: 'text', flex: 1 }}>
+                      {sec.titulo}
+                    </span>
+                  )}
+                  {itens.length > 0 && (
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{concluidos}/{itens.length}</span>
+                  )}
+                  <button onClick={() => { if (window.confirm(`Excluir a seção "${sec.titulo}" e todos os seus itens?`)) onDeletarSecao(sec.id, iniciativa.id) }}
+                    title="Excluir seção"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', padding: 2, opacity: 0.5, display: 'flex' }}>
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+                {itens.map(it => (
+                  <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, paddingLeft: 2 }}>
+                    <input type="checkbox" checked={!!it.concluido} onChange={() => onToggleItem(it, sec.id, iniciativa.id)}
+                      style={{ width: 14, height: 14, accentColor: 'var(--green)', cursor: 'pointer', flexShrink: 0 }} />
+                    {editandoItem?.id === it.id ? (
+                      <input
+                        autoFocus
+                        className="form-input"
+                        style={{ flex: 1, padding: '3px 6px', fontSize: 12 }}
+                        value={editandoItem.texto}
+                        onChange={e => setEditandoItem(p => ({ ...p, texto: e.target.value }))}
+                        onBlur={salvarEdicaoItem}
+                        onKeyDown={e => { if (e.key === 'Enter') salvarEdicaoItem(); if (e.key === 'Escape') setEditandoItem(null) }}
+                      />
+                    ) : (
+                      <span
+                        onClick={() => setEditandoItem({ id: it.id, texto: it.texto, secaoId: sec.id })}
+                        title="Clique para editar"
+                        style={{ fontSize: 12, flex: 1, cursor: 'text', color: it.concluido ? 'var(--text-muted)' : 'var(--text)', textDecoration: it.concluido ? 'line-through' : 'none' }}>
+                        {it.texto}
+                      </span>
+                    )}
+                    <button onClick={() => onDeletarItem(it.id, sec.id, iniciativa.id)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', padding: 1, opacity: 0.35, display: 'flex', flexShrink: 0 }}>
+                      <Trash2 size={10} />
+                    </button>
+                  </div>
+                ))}
+                {addingItem[sec.id] ? (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6, paddingLeft: 2 }}>
+                    <input className="form-input" style={{ padding: '3px 8px', fontSize: 12, flex: 1 }}
+                      value={novoItem[sec.id] || ''}
+                      onChange={e => setNovoItem(p => ({ ...p, [sec.id]: e.target.value }))}
+                      onKeyDown={e => { if (e.key === 'Enter') handleAddItem(sec.id); if (e.key === 'Escape') setAddingItem(p => ({ ...p, [sec.id]: false })) }}
+                      placeholder="Novo item..." autoFocus />
+                    <button className="btn btn-primary btn-sm" style={{ fontSize: 11 }} onClick={() => handleAddItem(sec.id)}>✓</button>
+                    <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} onClick={() => setAddingItem(p => ({ ...p, [sec.id]: false }))}>✕</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setAddingItem(p => ({ ...p, [sec.id]: true }))}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, marginTop: 5, paddingLeft: 2 }}>
+                    <Plus size={11} /> item
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {addingSecao ? (
+          <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+            <input className="form-input" style={{ flex: 1 }}
+              value={novaSecao} onChange={e => setNovaSecao(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleAddSecao(); if (e.key === 'Escape') setAddingSecao(false) }}
+              placeholder='Nome da seção (ex: "Definição", "Acompanhamento")' autoFocus />
+            <button className="btn btn-primary btn-sm" onClick={handleAddSecao}>Salvar</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => setAddingSecao(false)}>Cancelar</button>
+          </div>
+        ) : (
+          <button onClick={() => setAddingSecao(true)}
+            style={{ width: '100%', background: 'none', border: '1px dashed var(--border)', borderRadius: 8, cursor: 'pointer', color: 'var(--text-muted)', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 0', marginTop: 12 }}>
+            <Plus size={13} /> Nova seção
+          </button>
+        )}
+
+        <div className="form-actions" style={{ marginTop: 16 }}>
+          <button className="btn btn-primary" onClick={onClose}>Fechar</button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -948,23 +1007,13 @@ function VisaoMatriz({
   editandoTitulo, setEditandoTitulo,
   onSalvarTitulo, onSalvarCelula, onDeletarIniciativa, onNovaIniciativa, onReordenarGrupos, onVerDetalhes, area,
   colapsarGruposPorPadrao,
-  onCriarSecao, onDeletarSecao, onCriarItem, onToggleItem, onDeletarItem,
+  onAbrirSubtarefas,
 }) {
   const mes = MESES[mesIdx]
   const semanasDoMes = mes.semanas
   const [gruposColapsados, setGruposColapsados] = useState(new Set())
   const [draggingId, setDraggingId] = useState(null)
   const [dragOverId, setDragOverId] = useState(null)
-  const [subExpandido, setSubExpandido] = useState(new Set())
-
-  function toggleSub(id) {
-    setSubExpandido(prev => {
-      const novo = new Set(prev)
-      if (novo.has(id)) novo.delete(id)
-      else novo.add(id)
-      return novo
-    })
-  }
 
   function toggleGrupo(id) {
     setGruposColapsados(prev => {
@@ -1023,8 +1072,7 @@ function VisaoMatriz({
     const corLinha = stLinha !== 'nao_iniciada' ? STATUS_INFO[stLinha === 'feita' ? 'feito' : stLinha === 'feita_atrasado' ? 'feito_atrasado' : stLinha === 'atrasada' ? 'atrasado' : stLinha === 'em_andamento' ? 'em_andamento' : stLinha === 'planejada' ? 'planejada' : 'a_fazer'] : null
 
     return (
-      <div key={ini.id}>
-      <HoverRow style={{
+      <HoverRow key={ini.id} style={{
         display: 'grid',
         gridTemplateColumns: `${NOME_COL_MATRIZ}px repeat(${semanasDoMes.length}, 1fr)`,
         borderBottom: '1px solid rgba(255,255,255,0.04)',
@@ -1125,9 +1173,9 @@ function VisaoMatriz({
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
                 <button
-                  onClick={() => toggleSub(ini.id)}
+                  onClick={() => onAbrirSubtarefas(ini)}
                   title="Subtarefas"
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: subExpandido.has(ini.id) ? 'var(--accent)' : 'var(--text-muted)', padding: 4, display: 'flex', alignItems: 'center', gap: 2, opacity: subExpandido.has(ini.id) ? 1 : 0.55 }}>
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, display: 'flex', alignItems: 'center', gap: 2, opacity: 0.55 }}>
                   <ListChecks size={13} />
                   {(ini.pda_parceiras_secoes || []).length > 0 && (
                     <span style={{ fontSize: 9, fontWeight: 700 }}>
@@ -1167,14 +1215,6 @@ function VisaoMatriz({
           )
         })}
       </HoverRow>
-      {subExpandido.has(ini.id) && (
-        <PainelSubtarefas
-          ini={ini} ehFilha={ehFilha}
-          onCriarSecao={onCriarSecao} onDeletarSecao={onDeletarSecao}
-          onCriarItem={onCriarItem} onToggleItem={onToggleItem} onDeletarItem={onDeletarItem}
-        />
-      )}
-    </div>
     )
   }
 
@@ -1661,6 +1701,7 @@ export default function PDAParceiras() {
   const [modalNovo, setModalNovo] = useState(null)
   const [modalSemestre, setModalSemestre] = useState(false)
   const [detalhe5W2H, setDetalhe5W2H] = useState(null)
+  const [subtarefasIniId, setSubtarefasIniId] = useState(null)
   const [editandoCelula, setEditandoCelula] = useState(null)
   const [editandoTitulo, setEditandoTitulo] = useState(null)
   const [visao, setVisao] = useState('matriz')
@@ -1748,6 +1789,16 @@ export default function PDAParceiras() {
     } catch(e) { console.error(e); showToast('Erro ao criar seção.', 'error') }
   }
 
+  async function handleAtualizarSecao(secaoId, titulo, iniciativaId) {
+    try {
+      const upd = await atualizarSecao(secaoId, { titulo })
+      setIniciativas(prev => prev.map(i => i.id !== iniciativaId ? i : {
+        ...i,
+        pda_parceiras_secoes: (i.pda_parceiras_secoes || []).map(s => s.id === secaoId ? { ...s, ...upd } : s)
+      }))
+    } catch(e) { console.error(e); showToast('Erro ao atualizar seção.', 'error') }
+  }
+
   async function handleDeletarSecao(secaoId, iniciativaId) {
     try {
       await deletarSecao(secaoId)
@@ -1767,6 +1818,18 @@ export default function PDAParceiras() {
         })
       }))
     } catch(e) { console.error(e); showToast('Erro ao criar item.', 'error') }
+  }
+
+  async function handleAtualizarTextoItem(itemId, texto, secaoId, iniciativaId) {
+    try {
+      const upd = await atualizarItem(itemId, { texto })
+      setIniciativas(prev => prev.map(i => i.id !== iniciativaId ? i : {
+        ...i,
+        pda_parceiras_secoes: (i.pda_parceiras_secoes || []).map(s => s.id !== secaoId ? s : {
+          ...s, pda_parceiras_itens: (s.pda_parceiras_itens || []).map(it => it.id === upd.id ? upd : it)
+        })
+      }))
+    } catch(e) { console.error(e); showToast('Erro ao atualizar item.', 'error') }
   }
 
   async function handleToggleItem(item, secaoId, iniciativaId) {
@@ -1960,8 +2023,7 @@ export default function PDAParceiras() {
           onSalvarTitulo={handleSalvarTitulo} onSalvarCelula={handleSalvarCelula}
           onDeletarIniciativa={handleDeletarIniciativa} onReordenarGrupos={handleReordenarGrupos}
           onNovaIniciativa={(preset) => setModalNovo(preset || { tipo: 'avulsa' })}
-          onCriarSecao={handleCriarSecao} onDeletarSecao={handleDeletarSecao}
-          onCriarItem={handleCriarItem} onToggleItem={handleToggleItem} onDeletarItem={handleDeletarItem}
+          onAbrirSubtarefas={(ini) => setSubtarefasIniId(ini.id)}
           onVerDetalhes={(ini) => setDetalhe5W2H(ini)} area={area}
         />
       ) : visao === 'gantt' ? (
@@ -1979,6 +2041,18 @@ export default function PDAParceiras() {
       {modalNovo && <ModalNovaIniciativa area={area} grupos={iniciativas.filter(i => i.eh_grupo)} preset={modalNovo} onSave={handleCriarIniciativa} onClose={() => setModalNovo(null)} />}
       {modalSemestre && <ModalNovoSemestre onSave={handleCriarSemestre} onClose={() => setModalSemestre(false)} />}
       {detalhe5W2H && <ModalDetalhes5W2H iniciativa={detalhe5W2H} onClose={() => setDetalhe5W2H(null)} />}
+      {subtarefasIniId && (() => {
+        const iniAtual = iniciativas.find(i => i.id === subtarefasIniId)
+        if (!iniAtual) return null
+        return (
+          <ModalSubtarefas
+            iniciativa={iniAtual}
+            onCriarSecao={handleCriarSecao} onAtualizarSecao={handleAtualizarSecao} onDeletarSecao={handleDeletarSecao}
+            onCriarItem={handleCriarItem} onAtualizarItem={handleAtualizarTextoItem} onToggleItem={handleToggleItem} onDeletarItem={handleDeletarItem}
+            onClose={() => setSubtarefasIniId(null)}
+          />
+        )
+      })()}
 
       {toast && (
         <div className="no-print" style={{
