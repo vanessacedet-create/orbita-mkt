@@ -11,10 +11,6 @@ import {
 
 const AREAS = [
   { value: 'geral',        label: 'Geral' },
-  { value: 'influencers',  label: 'Influencers' },
-  { value: 'proprias',     label: 'Próprias' },
-  { value: 'marketplaces', label: 'Marketplaces' },
-  { value: 'eventos',      label: 'Eventos' },
 ]
 
 const STATUS_INFO = {
@@ -1449,7 +1445,7 @@ function VisaoStatusReport({ iniciativas, semanaSel, setSemanaSel, semanaAtualId
 export default function PDAParceiras() {
   const [semestres, setSemestres] = useState([])
   const [semestreId, setSemestreId] = useState(null)
-  const [area, setArea] = useState('geral')
+  const area = 'geral'
   const [iniciativas, setIniciativas] = useState([])
   const [loading, setLoading] = useState(true)
   const [modalNovo, setModalNovo] = useState(null)
@@ -1685,21 +1681,6 @@ export default function PDAParceiras() {
             </button>
           )
         })}
-      </div>
-
-      <div className="no-print" style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid var(--border)' }}>
-        {AREAS.map(a => (
-          <button key={a.value} onClick={() => setArea(a.value)} style={{
-            background: area === a.value ? 'var(--accent)' : 'transparent',
-            color: area === a.value ? 'white' : 'var(--text)',
-            border: 'none', padding: '8px 16px',
-            borderRadius: '8px 8px 0 0',
-            fontSize: 13, fontWeight: 600, cursor: 'pointer',
-            transition: 'all 0.15s',
-          }}>
-            {a.label}
-          </button>
-        ))}
       </div>
 
       {loading ? (
