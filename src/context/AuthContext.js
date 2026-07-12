@@ -10,6 +10,7 @@ export const MODULOS_PERMISSOES = {
   inbox_influencers: ['administrador', 'gerente', 'analista_influencers', 'estagiario_influencers'],
   parceiros: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
   crm_influencers: ['administrador', 'analista_influencers', 'estagiario_influencers'],
+  calculadora_influenciadores: ['administrador', 'gerente', 'supervisor_influencers', 'analista_influencers', 'estagiario_influencers'],
   crm_parceiras: ['administrador', 'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
   calculadora: ['administrador', 'gerente', 'estagiario_proprias', 'analista_proprias', 'supervisor_proprias', 'estagiario_influencers', 'analista_influencers'],
   cortesias: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
