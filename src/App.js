@@ -59,6 +59,7 @@ const CRMEditorasParceiras   = lazy(() => import('./pages/CRMEditorasParceiras')
 const EditorasLivrarias      = lazy(() => import('./pages/EditorasLivrarias'))
 const PromocoesParceiras     = lazy(() => import('./pages/PromocoesParceiras'))
 const Calculadora            = lazy(() => import('./pages/Calculadora'))
+const CalculadoraInfluenciadores = lazy(() => import('./pages/CalculadoraInfluenciadores'))
 const RH                     = lazy(() => import('./pages/RH'))
 const RHParceiras            = lazy(() => import('./pages/RHParceiras'))
 const Eventos                = lazy(() => import('./pages/Eventos'))
@@ -93,13 +94,14 @@ const MENU = [
 
   // Módulos gerais (ocultos para parceiras)
   { path: '/crm-influencers',       label: 'CRM Influencers',    icon: Network,         modulo: 'crm_influencers',   ocultarPerfis: PERFIS_PARCEIRAS },
+  { path: '/calculadora-influenciadores', label: 'Calculadora Influencers', icon: Calculator, modulo: 'calculadora_influenciadores', ocultarPerfis: PERFIS_PARCEIRAS },
   { path: '/crm-parceiras',         label: 'CRM Parceiras',      icon: Network,         modulo: 'crm_parceiras',     ocultarPerfis: PERFIS_PARCEIRAS },
   { path: '/cortesias',             label: 'Cortesias',          icon: BookOpen,        modulo: 'cortesias',         ocultarPerfis: PERFIS_PARCEIRAS },
   { path: '/promocoes-parceiras',   label: 'Promoções',          icon: Megaphone,       modulo: 'tarefas_parceiras' },
   { path: '/campanhas',             label: 'Campanhas',          icon: Megaphone,       modulo: 'campanhas',         ocultarPerfis: PERFIS_PARCEIRAS },
   { path: '/monitoramento',         label: 'Monitoramento',      icon: Eye,             modulo: 'monitoramento',     ocultarPerfis: PERFIS_PARCEIRAS },
   { path: '/lancamentos',           label: 'Lançamentos',        icon: CalendarDays,    modulo: 'lancamentos' },
-  { path: '/tarefas',              label: 'Tarefas',             icon: CheckSquare,     modulo: 'tarefas',           ocultarPerfis: PERFIS_PARCEIRAS },
+  { path: '/tarefas',               label: 'Tarefas',            icon: CheckSquare,     modulo: 'tarefas',           ocultarPerfis: PERFIS_PARCEIRAS },
 
   // Módulos exclusivos parceiras
   { path: '/agenda',                label: 'Agenda',             icon: CalendarRange,   modulo: 'tarefas_parceiras' },
@@ -429,6 +431,7 @@ function Shell() {
                 <Route path="/monitoramento" element={<RequireAuth modulo="monitoramento"><Monitoramento /></RequireAuth>} />
                 <Route path="/monitoramento-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><MonitoramentoParceiras /></RequireAuth>} />
                 <Route path="/crm-influencers" element={<RequireAuth modulo="crm_influencers"><CRM grupo="influencers" titulo="CRM Influencers" /></RequireAuth>} />
+                <Route path="/calculadora-influenciadores" element={<RequireAuth modulo="calculadora_influenciadores"><CalculadoraInfluenciadores /></RequireAuth>} />
                 <Route path="/crm-parceiras" element={<RequireAuth modulo="crm_parceiras"><CRM grupo="parceiras" titulo="CRM Parceiras" /></RequireAuth>} />
                 <Route path="/crm-editoras-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><CRMEditorasParceiras /></RequireAuth>} />
                 <Route path="/editoras-livrarias" element={<RequireAuth modulo="tarefas_parceiras"><EditorasLivrarias /></RequireAuth>} />
