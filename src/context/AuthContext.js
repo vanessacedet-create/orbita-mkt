@@ -40,6 +40,7 @@ export const MODULOS_PERMISSOES = {
   rh_parceiras: ['administrador', 'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
   pda_parceiras: ['administrador', 'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
   treinamentos_parceiras: ['administrador', 'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
+  jornada_parceiras: ['administrador', 'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
 
   cac_ltv: ['administrador', 'gerente', 'supervisor_proprias'],
   usuarios: ['administrador'],
