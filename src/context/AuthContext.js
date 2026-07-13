@@ -10,7 +10,6 @@ export const MODULOS_PERMISSOES = {
   inbox_influencers: ['administrador', 'gerente', 'analista_influencers', 'estagiario_influencers'],
   parceiros: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
   crm_influencers: ['administrador', 'analista_influencers', 'estagiario_influencers'],
-  calculadora_influenciadores: ['administrador', 'gerente', 'supervisor_influencers', 'analista_influencers', 'estagiario_influencers'],
   crm_parceiras: ['administrador', 'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
   calculadora: ['administrador', 'gerente', 'estagiario_proprias', 'analista_proprias', 'supervisor_proprias', 'estagiario_influencers', 'analista_influencers'],
   cortesias: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
@@ -21,7 +20,11 @@ export const MODULOS_PERMISSOES = {
   tarefas_parceiras: ['administrador', 'gerente', 'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
   eventos: ['administrador', 'gerente', 'estagiario_marketplaces', 'analista_marketplaces'],
 
-  rh: ['administrador'],
+  // ── TEMPORÁRIO: acesso da Vivi (supervisor_parceiras) ao RH ORIGINAL,
+  // pra consultar como a Vanessa preencheu o dela. REMOVER quando ela avisar
+  // que não precisa mais (procurar pelo comentário "TEMPORÁRIO" neste arquivo).
+  rh: ['administrador', 'supervisor_parceiras'],
+  // ── FIM DO BLOCO TEMPORÁRIO ──
   // ── TEMPORÁRIO: acesso da Vivi (supervisor_parceiras) ao PDA ORIGINAL,
   // pra consultar como a Vanessa preencheu o dela. REMOVER quando ela avisar
   // que não precisa mais (procurar pelo comentário "TEMPORÁRIO" neste arquivo).
