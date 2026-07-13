@@ -13,7 +13,9 @@
     "xlsx": "^0.18.5"
   },
   "scripts": {
+    "prestart": "node scripts/apply-jornada-patch.js",
     "start": "react-scripts start",
+    "prebuild": "node scripts/apply-jornada-patch.js",
     "build": "react-scripts build",
     "test": "react-scripts test"
   },
