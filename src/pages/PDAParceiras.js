@@ -11,11 +11,6 @@ import {
 } from 'lucide-react'
 
 // ── CONSTANTES ─────────────────────────────────────────────
-const PRIORIDADES = [
-  { value: 'alta',   label: 'Alta',   cor: 'var(--red)' },
-  { value: 'media',  label: 'Média',  cor: '#eab308' },
-  { value: 'baixa',  label: 'Baixa',  cor: 'var(--text-muted)' },
-]
 
 const ANDAMENTOS = [
   { value: 'nao_iniciado', label: 'Não iniciado' },
@@ -25,10 +20,10 @@ const ANDAMENTOS = [
 
 const SITUACAO_INFO = {
   nao_iniciado: { label: 'Não iniciado', bg: 'var(--surface-2)',            text: 'var(--text-muted)', fill: 'var(--text-muted)' },
-  em_andamento: { label: 'Em andamento', bg: 'rgba(59,130,246,0.15)',       text: '#60A5FA',           fill: '#3B82F6' },
-  concluido:    { label: 'Concluído',    bg: 'rgba(34,197,94,0.15)',        text: '#4ADE80',           fill: 'var(--green)' },
-  replanejado:  { label: 'Replanejado',  bg: 'rgba(234,179,8,0.15)',        text: '#FACC15',           fill: '#EAB308' },
-  atrasado:     { label: 'Atrasado',     bg: 'rgba(239,68,68,0.15)',        text: '#F87171',           fill: 'var(--red)' },
+  em_andamento: { label: 'Em andamento', bg: 'rgba(74,93,83,0.15)',         text: '#5B8A8A',           fill: '#4A5D53' },
+  concluido:    { label: 'Concluído',    bg: 'rgba(138,154,91,0.15)',       text: '#8FA05E',           fill: '#8A9A5B' },
+  replanejado:  { label: 'Replanejado',  bg: 'rgba(217,164,65,0.15)',       text: '#D6A64B',           fill: '#D9A441' },
+  atrasado:     { label: 'Atrasado',     bg: 'rgba(169,67,30,0.15)',        text: '#C17A3D',           fill: '#A9431E' },
 }
 
 const STATUS_SEMANA_INFO = {
@@ -159,7 +154,6 @@ function CardIniciativa({ ini, subIniciativas, onAbrir }) {
   const situacao = situacaoIniciativa(ini)
   const info = SITUACAO_INFO[situacao]
   const isComposta = ini.tipo === 'composta'
-  const prioridadeInfo = PRIORIDADES.find(p => p.value === ini.prioridade)
 
   let progresso = null
   let legendaProgresso = null
@@ -193,8 +187,7 @@ function CardIniciativa({ ini, subIniciativas, onAbrir }) {
       </div>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 11, color: 'var(--text-muted)', marginBottom: 10, flexWrap: 'wrap' }}>
         {ini.responsavel && <span>{ini.responsavel}</span>}
-        {prioridadeInfo && <span style={{ color: prioridadeInfo.cor, fontWeight: 600 }}>● {prioridadeInfo.label}</span>}
-        {isComposta && <span><Layers size={10} style={{ verticalAlign: -1, marginRight: 3 }} />{subIniciativas.length} sub-iniciativas</span>}
+        {isComposta && <span><Layers size={10} style={{ verticalAlign: -1, marginRight: 3 }} />{subIniciativas.length} sub-planejamentos</span>}
       </div>
       {progresso != null && (
         <div style={{ height: 6, background: 'var(--surface-2)', borderRadius: 99, overflow: 'hidden', marginBottom: 6 }}>
@@ -216,7 +209,6 @@ function ModalNovaIniciativa2({ pilares, compostas, semestre, preset, onSave, on
   const [iniciativaPaiId, setIniciativaPaiId] = useState(preset?.paiId || '')
   const [titulo, setTitulo] = useState('')
   const [responsavel, setResponsavel] = useState('')
-  const [prioridade, setPrioridade] = useState('')
   const [metaAlvo, setMetaAlvo] = useState('')
   const [metaUnidade, setMetaUnidade] = useState('')
   const [dataInicio, setDataInicio] = useState('')
@@ -227,7 +219,7 @@ function ModalNovaIniciativa2({ pilares, compostas, semestre, preset, onSave, on
   const [criouAlgo, setCriouAlgo] = useState(false)
 
   function limparCampos() {
-    setTitulo(''); setResponsavel(''); setPrioridade(''); setMetaAlvo(''); setMetaUnidade('')
+    setTitulo(''); setResponsavel(''); setMetaAlvo(''); setMetaUnidade('')
     setDataInicio(''); setPrazoFinal(''); setJustificativa(''); setComoFazer('')
   }
 
@@ -243,7 +235,7 @@ function ModalNovaIniciativa2({ pilares, compostas, semestre, preset, onSave, on
         titulo: titulo.trim(),
         tipo: tipo === 'composta' ? 'composta' : 'simples',
         responsavel: responsavel.trim() || null,
-        prioridade: prioridade || null,
+        prioridade: null,
         meta_alvo: metaAlvo !== '' ? Number(metaAlvo) : null,
         meta_atual: 0,
         meta_unidade: metaUnidade.trim() || null,
@@ -265,9 +257,9 @@ function ModalNovaIniciativa2({ pilares, compostas, semestre, preset, onSave, on
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: 520, maxHeight: '88vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h2 className="modal-title">Nova iniciativa</h2>
+          <h2 className="modal-title">Novo planejamento</h2>
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
         </div>
         {criouAlgo && (
@@ -316,18 +308,9 @@ function ModalNovaIniciativa2({ pilares, compostas, semestre, preset, onSave, on
           </div>
           {tipo !== 'composta' && (
             <>
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Responsável</label>
-                  <input className="form-input" value={responsavel} onChange={e => setResponsavel(e.target.value)} placeholder="Ex: Vanessa, Sarah..." />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Prioridade</label>
-                  <select className="form-select" value={prioridade} onChange={e => setPrioridade(e.target.value)}>
-                    <option value="">Sem prioridade</option>
-                    {PRIORIDADES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                  </select>
-                </div>
+              <div className="form-group">
+                <label className="form-label">Responsável</label>
+                <input className="form-input" value={responsavel} onChange={e => setResponsavel(e.target.value)} placeholder="Ex: Vanessa, Sarah..." />
               </div>
               <div className="form-group">
                 <label className="form-label">Meta numérica (opcional)</label>
@@ -633,7 +616,6 @@ function ModalDetalheIniciativa2({
 
   const [titulo, setTitulo] = useState(iniciativa.titulo || '')
   const [responsavel, setResponsavel] = useState(iniciativa.responsavel || '')
-  const [prioridade, setPrioridade] = useState(iniciativa.prioridade || '')
   const [metaAlvo, setMetaAlvo] = useState(iniciativa.meta_alvo ?? '')
   const [metaAtual, setMetaAtual] = useState(iniciativa.meta_atual ?? '')
   const [metaUnidade, setMetaUnidade] = useState(iniciativa.meta_unidade || '')
@@ -654,7 +636,7 @@ function ModalDetalheIniciativa2({
     { k: 'detalhe', l: 'Detalhe' },
     { k: 'semana', l: 'Semana a semana' },
     { k: 'subtarefas', l: 'Subtarefas' },
-    ...(isComposta ? [{ k: 'subs', l: 'Sub-iniciativas' }] : []),
+    ...(isComposta ? [{ k: 'subs', l: 'Sub-planejamentos' }] : []),
   ]
 
   return (
@@ -666,7 +648,7 @@ function ModalDetalheIniciativa2({
             <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: info.bg, color: info.text }}>{info.label}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <button className="btn btn-ghost btn-icon" title="Excluir iniciativa"
+            <button className="btn btn-ghost btn-icon" title="Excluir planejamento"
               onClick={() => { if (window.confirm(`Excluir "${iniciativa.titulo}"?\n\nEsta ação não pode ser desfeita.`)) onDeletar(iniciativa.id) }}
               style={{ color: 'var(--red)' }}>
               <Trash2 size={15} />
@@ -716,18 +698,9 @@ function ModalDetalheIniciativa2({
             </div>
             {!isComposta && (
               <>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Responsável</label>
-                    <input className="form-input" value={responsavel} onChange={e => setResponsavel(e.target.value)} onBlur={() => salvar('responsavel', responsavel.trim() || null)} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Prioridade</label>
-                    <select className="form-select" value={prioridade} onChange={e => { setPrioridade(e.target.value); salvar('prioridade', e.target.value || null) }}>
-                      <option value="">Sem prioridade</option>
-                      {PRIORIDADES.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                    </select>
-                  </div>
+                <div className="form-group">
+                  <label className="form-label">Responsável</label>
+                  <input className="form-input" value={responsavel} onChange={e => setResponsavel(e.target.value)} onBlur={() => salvar('responsavel', responsavel.trim() || null)} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Meta numérica</label>
@@ -778,7 +751,7 @@ function ModalDetalheIniciativa2({
 
         {aba === 'subs' && isComposta && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {subIniciativas.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Nenhuma sub-iniciativa ainda.</p>}
+            {subIniciativas.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Nenhum sub-planejamento ainda.</p>}
             {subIniciativas.map(sub => {
               const subInfo = SITUACAO_INFO[situacaoIniciativa(sub)]
               return (
@@ -793,7 +766,7 @@ function ModalDetalheIniciativa2({
               )
             })}
             <button className="btn btn-ghost btn-sm" onClick={() => onCriarSubDireto(iniciativa.id)} style={{ alignSelf: 'flex-start', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <Plus size={12} /> Nova sub-iniciativa
+              <Plus size={12} /> Novo sub-planejamento
             </button>
           </div>
         )}
@@ -929,14 +902,14 @@ function VisaoStatusReport2({ iniciativasTodas, semanaSel, setSemanaSel, semanaA
 
 // ── EXPORTAÇÃO CSV ───────────────────────────────────────────
 function exportarCSV(iniciativas, pilares, semestre) {
-  const cabecalho = ['Pilar', 'Iniciativa', 'Tipo', 'Responsável', 'Prioridade', 'Meta atual', 'Meta alvo', 'Unidade', 'Início', 'Prazo final', 'Andamento', 'Situação']
+  const cabecalho = ['Pilar', 'Planejamento', 'Tipo', 'Responsável', 'Meta atual', 'Meta alvo', 'Unidade', 'Início', 'Prazo final', 'Andamento', 'Situação']
   const linhas = [cabecalho]
   for (const ini of iniciativas) {
     const pilar = pilares.find(p => p.id === ini.pilar_id)
     const situacao = SITUACAO_INFO[situacaoIniciativa(ini)]?.label || ''
     linhas.push([
       pilar?.nome || '', ini.titulo, ini.tipo === 'composta' ? 'Composta' : (ini.iniciativa_pai_id ? 'Sub-iniciativa' : 'Simples'),
-      ini.responsavel || '', PRIORIDADES.find(p => p.value === ini.prioridade)?.label || '',
+      ini.responsavel || '',
       ini.meta_atual ?? '', ini.meta_alvo ?? '', ini.meta_unidade || '',
       fmtDataBR(ini.data_inicio) || '', fmtDataBR(ini.prazo_final) || '',
       ANDAMENTOS.find(a => a.value === ini.andamento)?.label || '', situacao,
@@ -1012,7 +985,7 @@ export default function PDAParceiras() {
     } catch (e) { console.error(e); showToast('Erro ao salvar.', 'error') }
   }
   async function handleDeletarIniciativa(id) {
-    if (!window.confirm('Excluir esta iniciativa? Isso não pode ser desfeito.')) return
+    if (!window.confirm('Excluir este planejamento? Isso não pode ser desfeito.')) return
     await deletarIniciativa(id)
     setIniciativas(prev => prev.filter(i => i.id !== id && i.iniciativa_pai_id !== id))
     setDetalheId(null)
@@ -1101,7 +1074,7 @@ export default function PDAParceiras() {
       <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 16, cursor: 'pointer' }}
         onClick={() => setResumoAberto(o => !o)}>
         <span style={{ fontSize: 13, color: 'var(--text)' }}>
-          <strong>{resumo.pct}%</strong> concluído · <span style={{ color: 'var(--red)' }}>{resumo.atrasadas} atrasadas</span> · <span style={{ color: 'var(--accent)' }}>{resumo.andamento} em andamento</span> · {resumo.total} iniciativas
+          <strong>{resumo.pct}%</strong> concluído · <span style={{ color: 'var(--red)' }}>{resumo.atrasadas} atrasadas</span> · <span style={{ color: 'var(--accent)' }}>{resumo.andamento} em andamento</span> · {resumo.total} planejados
         </span>
         <ChevronDown size={14} color="var(--text-muted)" style={{ transform: resumoAberto ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
       </div>
@@ -1156,7 +1129,7 @@ export default function PDAParceiras() {
           {iniciativasTopo.length === 0 && (
             <div style={{ background: 'var(--surface)', borderRadius: 14, padding: 48, textAlign: 'center', border: '1px dashed var(--border)' }}>
               <Target size={32} color="var(--text-muted)" style={{ opacity: 0.3, marginBottom: 12 }} />
-              <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>Nenhuma iniciativa cadastrada neste semestre.</p>
+              <p style={{ fontSize: 14, color: 'var(--text-muted)' }}>Nenhum planejamento cadastrado neste semestre.</p>
             </div>
           )}
         </div>
