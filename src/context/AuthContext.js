@@ -30,7 +30,11 @@ export const MODULOS_PERMISSOES = {
   // que não precisa mais (procurar pelo comentário "TEMPORÁRIO" neste arquivo).
   pda: ['administrador', 'supervisor_parceiras'],
   // ── FIM DO BLOCO TEMPORÁRIO ──
-  treinamentos: ['administrador', 'gerente', 'supervisor_proprias'],
+  // ── TEMPORÁRIO: acesso da Vivi (supervisor_parceiras) aos Treinamentos ORIGINAIS,
+  // pra consultar como a Vanessa preencheu o dela. REMOVER quando ela avisar
+  // que não precisa mais (procurar pelo comentário "TEMPORÁRIO" neste arquivo).
+  treinamentos: ['administrador', 'gerente', 'supervisor_proprias', 'supervisor_parceiras'],
+  // ── FIM DO BLOCO TEMPORÁRIO ──
 
   // ── Módulos novos e independentes da equipe de parceiras ──
   rh_parceiras: ['administrador', 'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
