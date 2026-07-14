@@ -97,7 +97,13 @@ async function saveColaborador(c) {
   const p = {nome:c.nome,cargo:c.cargo,grupo_id:c.grupo_id||null,data_entrada:c.data_entrada,
     tipo_contrato:c.tipo_contrato,status:c.status,email:c.email||null,telefone:c.telefone||null,
     data_nascimento:c.data_nascimento||null,endereco:c.endereco||null,
-    gestor_direto:c.gestor_direto||null,observacoes:c.observacoes||null,supervisor_id:c.supervisor_id||null}
+    gestor_direto:c.gestor_direto||null,observacoes:c.observacoes||null,supervisor_id:c.supervisor_id||null,
+    jornada_horas:c.jornada_horas!==''&&c.jornada_horas!=null?Number(c.jornada_horas):8,
+    entrada_padrao:c.entrada_padrao||null,saida_padrao:c.saida_padrao||null,
+    almoco_inicio_padrao:c.almoco_inicio_padrao||null,almoco_fim_padrao:c.almoco_fim_padrao||null,
+    intervalo_remunerado_min:c.intervalo_remunerado_min!==''&&c.intervalo_remunerado_min!=null?Number(c.intervalo_remunerado_min):null,
+    saldo_inicial_minutos:c.saldo_inicial_horas?Math.round(Number(c.saldo_inicial_horas)*60):0,
+    saldo_inicial_data:c.saldo_inicial_data||null}
   if (c.id) return (await supabase.from('rh_parceiras_colaboradores').update(p).eq('id',c.id).select('*,rh_parceiras_grupos(id,nome),supervisor:supervisor_id(id,nome)').single()).data
   return (await supabase.from('rh_parceiras_colaboradores').insert([p]).select('*,rh_parceiras_grupos(id,nome),supervisor:supervisor_id(id,nome)').single()).data
 }
@@ -417,7 +423,13 @@ function ModalColaborador({ colab, grupos, colaboradores, onSave, onClose }) {
     telefone:colab.telefone||'',data_nascimento:colab.data_nascimento||'',endereco:colab.endereco||'',
     gestor_direto:colab.gestor_direto||'',observacoes:colab.observacoes||'',
     supervisor_id:colab.supervisor_id||'',
-  } : {nome:'',cargo:'',grupo_id:'',data_entrada:hoje,tipo_contrato:'CLT',status:'ativo',email:'',telefone:'',data_nascimento:'',endereco:'',gestor_direto:'',observacoes:'',supervisor_id:''})
+    jornada_horas:colab.jornada_horas??8,entrada_padrao:colab.entrada_padrao||'',saida_padrao:colab.saida_padrao||'',
+    almoco_inicio_padrao:colab.almoco_inicio_padrao||'',almoco_fim_padrao:colab.almoco_fim_padrao||'',
+    intervalo_remunerado_min:colab.intervalo_remunerado_min??'',
+    saldo_inicial_horas:colab.saldo_inicial_minutos?(colab.saldo_inicial_minutos/60).toFixed(2).replace(/\.00$/,''):'',
+    saldo_inicial_data:colab.saldo_inicial_data||'',
+  } : {nome:'',cargo:'',grupo_id:'',data_entrada:hoje,tipo_contrato:'CLT',status:'ativo',email:'',telefone:'',data_nascimento:'',endereco:'',gestor_direto:'',observacoes:'',supervisor_id:'',
+    jornada_horas:8,entrada_padrao:'',saida_padrao:'',almoco_inicio_padrao:'',almoco_fim_padrao:'',intervalo_remunerado_min:'',saldo_inicial_horas:'',saldo_inicial_data:''})
   const [saving, setSaving] = useState(false)
   const [aba, setAba] = useState('basico')
   async function save() { if(!form.nome.trim()||!form.cargo.trim())return; setSaving(true); try{await onSave({...form,id:colab?.id})}finally{setSaving(false)} }
@@ -429,7 +441,7 @@ function ModalColaborador({ colab, grupos, colaboradores, onSave, onClose }) {
           <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
         </div>
         <div style={{display:'flex',borderBottom:'1px solid var(--border)',marginBottom:16}}>
-          {[{k:'basico',l:'Dados básicos'},{k:'contato',l:'Contato'},{k:'extra',l:'Adicional'}].map(({k,l})=>(
+          {[{k:'basico',l:'Dados básicos'},{k:'contato',l:'Contato'},{k:'jornada',l:'Jornada'},{k:'extra',l:'Adicional'}].map(({k,l})=>(
             <button key={k} onClick={()=>setAba(k)} style={{padding:'8px 16px',fontSize:12,fontWeight:aba===k?700:400,cursor:'pointer',background:'none',border:'none',borderBottom:aba===k?'2px solid var(--accent)':'2px solid transparent',color:aba===k?'var(--accent)':'var(--text-muted)'}}>{l}</button>
           ))}
         </div>
@@ -449,6 +461,25 @@ function ModalColaborador({ colab, grupos, colaboradores, onSave, onClose }) {
           <div className="form-group"><label className="form-label">E-mail</label><input className="form-input" type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))}/></div>
           <div className="form-group"><label className="form-label">Telefone</label><input className="form-input" value={form.telefone} onChange={e=>setForm(f=>({...f,telefone:e.target.value}))}/></div>
           <div className="form-group"><label className="form-label">Endereço</label><input className="form-input" value={form.endereco} onChange={e=>setForm(f=>({...f,endereco:e.target.value}))}/></div>
+        </div>}
+        {aba==='jornada'&&<div className="form-grid">
+          <p style={{fontSize:11,color:'var(--text-muted)',margin:'0 0 4px'}}>Usado pelo Controle de Jornada — deixe em branco o que não se aplicar (ex: intervalo remunerado, se não tiver direito).</p>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Jornada diária (horas)</label><input type="number" min="0" step="0.5" className="form-input" value={form.jornada_horas} onChange={e=>setForm(f=>({...f,jornada_horas:e.target.value}))}/></div>
+            <div className="form-group"><label className="form-label">Intervalo remunerado (min)</label><input type="number" min="0" className="form-input" value={form.intervalo_remunerado_min} onChange={e=>setForm(f=>({...f,intervalo_remunerado_min:e.target.value}))} placeholder="Ex: 15"/></div>
+          </div>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Entrada padrão</label><input type="time" className="form-input" value={form.entrada_padrao} onChange={e=>setForm(f=>({...f,entrada_padrao:e.target.value}))}/></div>
+            <div className="form-group"><label className="form-label">Saída padrão</label><input type="time" className="form-input" value={form.saida_padrao} onChange={e=>setForm(f=>({...f,saida_padrao:e.target.value}))}/></div>
+          </div>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Almoço início padrão</label><input type="time" className="form-input" value={form.almoco_inicio_padrao} onChange={e=>setForm(f=>({...f,almoco_inicio_padrao:e.target.value}))}/></div>
+            <div className="form-group"><label className="form-label">Almoço fim padrão</label><input type="time" className="form-input" value={form.almoco_fim_padrao} onChange={e=>setForm(f=>({...f,almoco_fim_padrao:e.target.value}))}/></div>
+          </div>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Saldo inicial (horas)</label><input type="number" step="0.25" className="form-input" value={form.saldo_inicial_horas} onChange={e=>setForm(f=>({...f,saldo_inicial_horas:e.target.value}))} placeholder="0" title="Use negativo se for saldo devedor"/></div>
+            <div className="form-group"><label className="form-label">Data de referência do saldo</label><input type="date" className="form-input" value={form.saldo_inicial_data} onChange={e=>setForm(f=>({...f,saldo_inicial_data:e.target.value}))}/></div>
+          </div>
         </div>}
         {aba==='extra'&&<div className="form-grid">
           <div className="form-group"><label className="form-label">Data de nascimento</label><input className="form-input" type="date" value={form.data_nascimento} onChange={e=>setForm(f=>({...f,data_nascimento:e.target.value}))}/></div>
