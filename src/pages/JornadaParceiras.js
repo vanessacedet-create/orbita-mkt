@@ -1,13 +1,13 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import {
-  getMembros, criarMembro, atualizarMembro, deletarMembro,
+  getMembros, criarMembro, atualizarMembro, getColaboradoresRH,
   getFeriados, getDiasInativos, criarDiaInativo, deletarDiaInativo,
   getRegistros, upsertRegistro,
 } from '../lib/jornada-parceiras'
 import {
   Clock, ChevronLeft, ChevronRight, Users, Plus, Trash2, Pencil,
-  X, Check, Settings, Ban, Info
+  X, Ban, Info
 } from 'lucide-react'
 
 // ── CONSTANTES ─────────────────────────────────────────────
@@ -226,7 +226,6 @@ function CartaoDia({ data, membro, registro, bloqueio, editavel, onSalvarCampo, 
       clearTimeout(timer)
       if (!jaSalvou) salvamentosPendentes = Math.max(0, salvamentosPendentes - 1)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entrada, saidaAlmoco, retornoAlmoco, saidaFinal, intervaloInicio, intervaloFim, situacao, observacoes, horasCasa, horasEvento])
 
   const diaSemanaIdx = dataISOparaObj(data).getDay()
@@ -468,103 +467,6 @@ function TabelaJornada({ membro, registros, registrosAcumulado, feriados, diasIn
   )
 }
 
-// ── PAINEL: JORNADA PADRÃO DE CADA MEMBRO (só supervisora) ─
-function PainelJornadaPadrao({ membros, onAtualizar, showToast }) {
-  const [editando, setEditando] = useState(null) // membro.id
-
-  return (
-    <div className="table-card" style={{ padding: '16px 20px', marginBottom: 16 }}>
-      <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <Settings size={14} /> Jornada padrão de cada integrante
-      </h3>
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
-          <thead>
-            <tr style={{ background: 'var(--surface-2)' }}>
-              {['Nome', 'Tipo', 'Jornada (h)', 'Entrada', 'Saída', 'Almoço início', 'Almoço fim', 'Intervalo remun. (min)', 'Saldo inicial (h)', 'Data ref.', ''].map((h, i) => (
-                <th key={i} style={{ padding: '7px 8px', fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {membros.map(m => {
-              const emEdicao = editando === m.id
-              return (
-                <LinhaJornadaPadrao key={m.id} membro={m} emEdicao={emEdicao}
-                  onEditar={() => setEditando(m.id)}
-                  onSalvar={async (campos) => { await onAtualizar(m.id, campos); setEditando(null); showToast('Jornada padrão atualizada!') }}
-                  onCancelar={() => setEditando(null)} />
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
-
-function LinhaJornadaPadrao({ membro, emEdicao, onEditar, onSalvar, onCancelar }) {
-  const [form, setForm] = useState({
-    jornada_horas: membro.jornada_horas, entrada_padrao: membro.entrada_padrao || '',
-    saida_padrao: membro.saida_padrao || '', almoco_inicio_padrao: membro.almoco_inicio_padrao || '',
-    almoco_fim_padrao: membro.almoco_fim_padrao || '', intervalo_remunerado_min: membro.intervalo_remunerado_min ?? '',
-    saldo_inicial_horas: membro.saldo_inicial_minutos ? (membro.saldo_inicial_minutos / 60).toFixed(2).replace(/\.00$/, '') : '',
-    saldo_inicial_data: membro.saldo_inicial_data || '',
-  })
-
-  if (!emEdicao) {
-    return (
-      <tr>
-        <td style={{ padding: '7px 8px', fontSize: 12, color: 'var(--text)', fontWeight: 600 }}>{membro.nome}</td>
-        <td style={{ padding: '7px 8px', fontSize: 12, color: 'var(--text-muted)' }}>{TIPO_LABEL[membro.tipo] || membro.tipo}</td>
-        <td style={{ padding: '7px 8px', fontSize: 12, textAlign: 'center' }}>{membro.jornada_horas}h</td>
-        <td style={{ padding: '7px 8px', fontSize: 12, textAlign: 'center' }}>{membro.entrada_padrao || '—'}</td>
-        <td style={{ padding: '7px 8px', fontSize: 12, textAlign: 'center' }}>{membro.saida_padrao || '—'}</td>
-        <td style={{ padding: '7px 8px', fontSize: 12, textAlign: 'center' }}>{membro.almoco_inicio_padrao || '—'}</td>
-        <td style={{ padding: '7px 8px', fontSize: 12, textAlign: 'center' }}>{membro.almoco_fim_padrao || '—'}</td>
-        <td style={{ padding: '7px 8px', fontSize: 12, textAlign: 'center' }}>{membro.intervalo_remunerado_min ?? '—'}</td>
-        <td style={{ padding: '7px 8px', fontSize: 12, textAlign: 'center', color: corSaldo(membro.saldo_inicial_minutos) }}>
-          {membro.saldo_inicial_minutos ? formatarSaldo(membro.saldo_inicial_minutos) : '—'}
-        </td>
-        <td style={{ padding: '7px 8px', fontSize: 12, textAlign: 'center' }}>{membro.saldo_inicial_data ? fmtDataBR(membro.saldo_inicial_data) : '—'}</td>
-        <td style={{ padding: '7px 8px', textAlign: 'center' }}>
-          <button onClick={onEditar} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', display: 'inline-flex' }}>
-            <Pencil size={12} />
-          </button>
-        </td>
-      </tr>
-    )
-  }
-
-  return (
-    <tr style={{ background: 'var(--surface-2)' }}>
-      <td style={{ padding: '5px 8px', fontSize: 12, fontWeight: 600 }}>{membro.nome}</td>
-      <td style={{ padding: '5px 8px', fontSize: 12, color: 'var(--text-muted)' }}>{TIPO_LABEL[membro.tipo] || membro.tipo}</td>
-      <td style={{ padding: '5px 4px' }}><input type="number" min="0" step="0.5" className="form-input" style={{ width: 56, padding: '3px 5px', fontSize: 12 }} value={form.jornada_horas} onChange={e => setForm(f => ({ ...f, jornada_horas: e.target.value }))} /></td>
-      <td style={{ padding: '5px 4px' }}><input type="time" className="form-input" style={{ width: 74, padding: '3px 5px', fontSize: 12 }} value={form.entrada_padrao} onChange={e => setForm(f => ({ ...f, entrada_padrao: e.target.value }))} /></td>
-      <td style={{ padding: '5px 4px' }}><input type="time" className="form-input" style={{ width: 74, padding: '3px 5px', fontSize: 12 }} value={form.saida_padrao} onChange={e => setForm(f => ({ ...f, saida_padrao: e.target.value }))} /></td>
-      <td style={{ padding: '5px 4px' }}><input type="time" className="form-input" style={{ width: 74, padding: '3px 5px', fontSize: 12 }} value={form.almoco_inicio_padrao} onChange={e => setForm(f => ({ ...f, almoco_inicio_padrao: e.target.value }))} /></td>
-      <td style={{ padding: '5px 4px' }}><input type="time" className="form-input" style={{ width: 74, padding: '3px 5px', fontSize: 12 }} value={form.almoco_fim_padrao} onChange={e => setForm(f => ({ ...f, almoco_fim_padrao: e.target.value }))} /></td>
-      <td style={{ padding: '5px 4px' }}><input type="number" min="0" className="form-input" style={{ width: 56, padding: '3px 5px', fontSize: 12 }} value={form.intervalo_remunerado_min} onChange={e => setForm(f => ({ ...f, intervalo_remunerado_min: e.target.value }))} /></td>
-      <td style={{ padding: '5px 4px' }}><input type="number" step="0.25" className="form-input" style={{ width: 62, padding: '3px 5px', fontSize: 12 }} value={form.saldo_inicial_horas} onChange={e => setForm(f => ({ ...f, saldo_inicial_horas: e.target.value }))} placeholder="0" title="Horas (use negativo se for saldo devedor)" /></td>
-      <td style={{ padding: '5px 4px' }}><input type="date" className="form-input" style={{ width: 116, padding: '3px 5px', fontSize: 12 }} value={form.saldo_inicial_data} onChange={e => setForm(f => ({ ...f, saldo_inicial_data: e.target.value }))} onClick={e => e.currentTarget.showPicker?.()} /></td>
-      <td style={{ padding: '5px 4px', whiteSpace: 'nowrap' }}>
-        <button onClick={() => onSalvar({
-          jornada_horas: Number(form.jornada_horas) || 0,
-          entrada_padrao: form.entrada_padrao || null,
-          saida_padrao: form.saida_padrao || null,
-          almoco_inicio_padrao: form.almoco_inicio_padrao || null,
-          almoco_fim_padrao: form.almoco_fim_padrao || null,
-          intervalo_remunerado_min: form.intervalo_remunerado_min !== '' ? Number(form.intervalo_remunerado_min) : null,
-          saldo_inicial_minutos: form.saldo_inicial_horas !== '' ? Math.round(Number(form.saldo_inicial_horas) * 60) : 0,
-          saldo_inicial_data: form.saldo_inicial_data || null,
-        })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--green)', display: 'inline-flex' }}><Check size={13} /></button>
-        <button onClick={onCancelar} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'inline-flex' }}><X size={13} /></button>
-      </td>
-    </tr>
-  )
-}
-
 // ── PAINEL: DIAS INATIVOS (só supervisora) ─────────────────
 function PainelDiasInativos({ membros, diasInativos, onCriar, onDeletar, showToast }) {
   const [data, setData] = useState('')
@@ -633,115 +535,11 @@ function PainelDiasInativos({ membros, diasInativos, onCriar, onDeletar, showToa
   )
 }
 
-// ── PAINEL: EQUIPE (adicionar/editar/remover membros) ─────
-function PainelEquipe({ membros, onCriar, onAtualizar, onDeletar, showToast }) {
-  const [modal, setModal] = useState(false)
-  const [editando, setEditando] = useState(null)
-
-  return (
-    <div className="table-card" style={{ padding: '16px 20px', marginBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
-          <Users size={14} /> Equipe
-        </h3>
-        <button className="btn btn-primary btn-sm" onClick={() => { setEditando(null); setModal(true) }}>
-          <Plus size={12} /> Nova integrante
-        </button>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {membros.map(m => (
-          <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, background: 'var(--surface-2)', borderRadius: 6, padding: '7px 10px' }}>
-            <span style={{ fontWeight: 700, color: 'var(--text)', minWidth: 100 }}>{m.nome}</span>
-            <span style={{ color: 'var(--text-muted)' }}>{m.cargo || TIPO_LABEL[m.tipo]}</span>
-            <span style={{ color: m.email ? 'var(--text-muted)' : 'var(--red)', fontSize: 11 }}>{m.email || 'sem e-mail cadastrado'}</span>
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-              <button onClick={() => { setEditando(m); setModal(true) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', display: 'flex' }}><Pencil size={12} /></button>
-              <button onClick={() => { if (window.confirm(`Remover ${m.nome} da equipe?`)) onDeletar(m.id) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', display: 'flex', opacity: 0.6 }}><Trash2 size={12} /></button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {modal && (
-        <ModalMembro membro={editando}
-          onSave={async (dados) => {
-            if (editando) await onAtualizar(editando.id, dados)
-            else await onCriar(dados)
-            setModal(false); setEditando(null)
-            showToast(editando ? 'Integrante atualizada!' : 'Integrante adicionada!')
-          }}
-          onClose={() => { setModal(false); setEditando(null) }} />
-      )}
-    </div>
-  )
-}
-
-function ModalMembro({ membro, onSave, onClose }) {
-  const [form, setForm] = useState({
-    nome: membro?.nome || '', email: membro?.email || '', cargo: membro?.cargo || '',
-    tipo: membro?.tipo || 'efetiva', jornada_horas: membro?.jornada_horas ?? 8,
-  })
-  const [saving, setSaving] = useState(false)
-
-  async function save() {
-    if (!form.nome.trim()) return
-    setSaving(true)
-    try {
-      await onSave({
-        nome: form.nome.trim(), email: form.email.trim() || null, cargo: form.cargo.trim() || null,
-        tipo: form.tipo, jornada_horas: Number(form.jornada_horas) || 8,
-      })
-    } finally { setSaving(false) }
-  }
-
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2 className="modal-title">{membro ? 'Editar integrante' : 'Nova integrante'}</h2>
-          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
-        </div>
-        <div className="form-grid">
-          <div className="form-group">
-            <label className="form-label">Nome *</label>
-            <input className="form-input" autoFocus value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">E-mail (usado para login)</label>
-            <input className="form-input" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="nome@cedet.com.br" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Cargo</label>
-            <input className="form-input" value={form.cargo} onChange={e => setForm(f => ({ ...f, cargo: e.target.value }))} placeholder="Ex: Analista Júnior de Editoras Parceiras" />
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Tipo</label>
-              <select className="form-select" value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value }))}>
-                <option value="efetiva">Efetiva</option>
-                <option value="estagiaria">Estagiária</option>
-                <option value="supervisora">Supervisora</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Jornada (horas/dia)</label>
-              <input type="number" min="0" step="0.5" className="form-input" value={form.jornada_horas} onChange={e => setForm(f => ({ ...f, jornada_horas: e.target.value }))} />
-            </div>
-          </div>
-        </div>
-        <div className="form-actions">
-          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-primary" onClick={save} disabled={saving || !form.nome.trim()}>{saving ? 'Salvando...' : 'Salvar'}</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ── PÁGINA PRINCIPAL ────────────────────────────────────────
 export default function JornadaParceiras() {
   const { session, usuario } = useAuth()
   const [membros, setMembros] = useState([])
+  const [colaboradoresRH, setColaboradoresRH] = useState([])
   const [feriados, setFeriados] = useState([])
   const [diasInativos, setDiasInativos] = useState([])
   const [registros, setRegistros] = useState([])
@@ -773,8 +571,8 @@ export default function JornadaParceiras() {
   }, [])
 
   async function carregarBase() {
-    const [ms, fs, dis] = await Promise.all([getMembros(), getFeriados(), getDiasInativos()])
-    setMembros(ms); setFeriados(fs); setDiasInativos(dis)
+    const [ms, fs, dis, cols] = await Promise.all([getMembros(), getFeriados(), getDiasInativos(), getColaboradoresRH()])
+    setMembros(ms); setFeriados(fs); setDiasInativos(dis); setColaboradoresRH(cols)
   }
   useEffect(() => { carregarBase().finally(() => setLoading(false)) }, [])
 
@@ -782,22 +580,54 @@ export default function JornadaParceiras() {
     () => membros.find(m => m.email && m.email.toLowerCase() === emailLogado),
     [membros, emailLogado]
   )
-  const souSupervisora = meuMembro?.tipo === 'supervisora'
+  const souSupervisora = usuario?.perfil === 'supervisor_parceiras'
 
-  // Auto-cadastro: quem chega nessa página já passou pelo controle de acesso do
-  // sistema (só perfil de parceiras entra aqui), então não precisa de e-mail
-  // digitado por ninguém — se ainda não existe um registro pra esse e-mail,
-  // criamos um na hora, com jornada padrão em branco pra ela completar depois.
-  const criandoMembroRef = useRef(false)
+  // Sincronização com o RH: a ficha do colaborador no RH Parceiras é a fonte da
+  // verdade (cargo, tipo de contrato, jornada padrão, saldo inicial). Aqui a gente
+  // cria (se for a primeira vez) ou atualiza o registro correspondente na Jornada,
+  // pareando por e-mail — sem precisar de nenhum cadastro manual nesta página.
+  const sincronizandoRef = useRef(false)
   useEffect(() => {
-    if (loading || !emailLogado || meuMembro || criandoMembroRef.current) return
-    criandoMembroRef.current = true
-    const nomeSugerido = usuario?.nome || emailLogado.split('@')[0].split(/[._]/).map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ')
-    criarMembro({ email: emailLogado, nome: nomeSugerido, tipo: 'efetiva', jornada_horas: 8 })
-      .then(novo => setMembros(prev => prev.some(m => m.email?.toLowerCase() === emailLogado) ? prev : [...prev, novo]))
-      .catch(e => console.error(e))
-      .finally(() => { criandoMembroRef.current = false })
-  }, [loading, emailLogado, meuMembro, usuario])
+    if (loading || sincronizandoRef.current || colaboradoresRH.length === 0) return
+    sincronizandoRef.current = true
+    ;(async () => {
+      const atualizacoes = []
+      for (const col of colaboradoresRH) {
+        if (!col.email) continue
+        const emailCol = col.email.toLowerCase()
+        const camposRH = {
+          nome: col.nome,
+          cargo: col.cargo,
+          tipo: col.tipo_contrato === 'Estágio' ? 'estagiaria' : 'efetiva',
+          jornada_horas: col.jornada_horas ?? 8,
+          entrada_padrao: col.entrada_padrao || null,
+          saida_padrao: col.saida_padrao || null,
+          almoco_inicio_padrao: col.almoco_inicio_padrao || null,
+          almoco_fim_padrao: col.almoco_fim_padrao || null,
+          intervalo_remunerado_min: col.intervalo_remunerado_min ?? null,
+          saldo_inicial_minutos: col.saldo_inicial_minutos ?? 0,
+          saldo_inicial_data: col.saldo_inicial_data || null,
+        }
+        const existente = membros.find(m => m.email && m.email.toLowerCase() === emailCol)
+        try {
+          if (!existente) {
+            atualizacoes.push(await criarMembro({ email: col.email, ...camposRH }))
+          } else {
+            const mudou = Object.keys(camposRH).some(k => String(existente[k] ?? '') !== String(camposRH[k] ?? ''))
+            if (mudou) atualizacoes.push(await atualizarMembro(existente.id, camposRH))
+          }
+        } catch (e) { console.error(e) }
+      }
+      if (atualizacoes.length > 0) {
+        setMembros(prev => {
+          const mapa = new Map(prev.map(m => [m.id, m]))
+          atualizacoes.forEach(m => mapa.set(m.id, m))
+          return Array.from(mapa.values())
+        })
+      }
+      sincronizandoRef.current = false
+    })()
+  }, [loading, colaboradoresRH])
 
   useEffect(() => {
     if (souSupervisora && membros.length > 0 && !membroSelecionadoId) {
@@ -833,19 +663,6 @@ export default function JornadaParceiras() {
     } catch (e) { console.error(e); showToast('Erro ao salvar registro.', 'error') }
   }
 
-  async function handleCriarMembro(dados) {
-    const novo = await criarMembro(dados)
-    setMembros(prev => [...prev, novo])
-  }
-  async function handleAtualizarMembro(id, dados) {
-    const upd = await atualizarMembro(id, dados)
-    setMembros(prev => prev.map(m => m.id === id ? upd : m))
-  }
-  async function handleDeletarMembro(id) {
-    await deletarMembro(id)
-    setMembros(prev => prev.filter(m => m.id !== id))
-    if (membroSelecionadoId === id) setMembroSelecionadoId('')
-  }
   async function handleCriarDiaInativo(dados) {
     const novo = await criarDiaInativo(dados)
     setDiasInativos(prev => [...prev, novo])
@@ -877,7 +694,10 @@ export default function JornadaParceiras() {
           <h1 className="page-title" style={{ margin: 0 }}>Controle de Jornada — Parceiras</h1>
         </div>
         <div className="table-card" style={{ padding: 20 }}>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Preparando seu acesso...</p>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+            Sua ficha ainda não foi encontrada no RH com o e-mail <strong style={{ color: 'var(--text)' }}>{session?.user?.email || '—'}</strong>.
+            Peça para sua supervisora conferir sua ficha em RH → Colaboradores.
+          </p>
         </div>
       </div>
     )
@@ -912,8 +732,28 @@ export default function JornadaParceiras() {
 
       {aba === 'equipe' && souSupervisora && (
         <>
-          <PainelEquipe membros={membros} onCriar={handleCriarMembro} onAtualizar={handleAtualizarMembro} onDeletar={handleDeletarMembro} showToast={showToast} />
-          <PainelJornadaPadrao membros={membros} onAtualizar={handleAtualizarMembro} showToast={showToast} />
+          <div className="table-card" style={{ padding: '16px 20px', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
+                <Users size={14} /> Equipe (sincronizada com o RH)
+              </h3>
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
+              Cargo, e-mail, tipo de contrato e jornada padrão de cada pessoa vêm direto da ficha dela em <strong>RH → Colaboradores</strong> (aba "Jornada" da ficha). Mudou algo lá — muda aqui sozinho.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {membros.map(m => (
+                <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, background: 'var(--surface-2)', borderRadius: 6, padding: '7px 10px', flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 700, color: 'var(--text)', minWidth: 100 }}>{m.nome}</span>
+                  <span style={{ color: 'var(--text-muted)' }}>{m.cargo || '—'}</span>
+                  <span style={{ color: 'var(--text-muted)' }}>{TIPO_LABEL[m.tipo] || m.tipo}</span>
+                  <span style={{ color: 'var(--text-muted)' }}>{m.jornada_horas}h/dia</span>
+                  <span style={{ color: m.email ? 'var(--text-muted)' : 'var(--red)', fontSize: 11, marginLeft: 'auto' }}>{m.email || 'sem e-mail no RH'}</span>
+                </div>
+              ))}
+              {membros.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Nenhum colaborador ativo encontrado no RH ainda.</p>}
+            </div>
+          </div>
           <PainelDiasInativos membros={membros} diasInativos={diasInativos} onCriar={handleCriarDiaInativo} onDeletar={handleDeletarDiaInativo} showToast={showToast} />
 
           <div className="table-card" style={{ padding: '14px 18px', marginBottom: 16 }}>
