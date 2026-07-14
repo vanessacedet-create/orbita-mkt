@@ -52,17 +52,34 @@ const TIPOS_PARCERIA = {
 }
 function tipoParceriaInfo(model) { return TIPOS_PARCERIA[Number(model)] || null }
 
-// ── Extrai o username do Instagram a partir da URL do perfil ──
+// ── Extrai o username a partir da URL do perfil ──
 function extrairUsername(profileUrl, usernameFallback) {
   let user = ''
   try {
-    const url = profileUrl || ''
-    if (url.includes('instagram')) {
-      user = new URL(url.startsWith('http') ? url : 'https://' + url).pathname.replace(/\//g, '')
+    const raw = (profileUrl || '').trim()
+    if (raw) {
+      const url = new URL(raw.startsWith('http') ? raw : `https://${raw}`)
+      const partes = url.pathname.split('/').filter(Boolean)
+      user = (partes[0] || '').replace('@', '')
     }
   } catch {}
-  if (!user) user = (usernameFallback || '').replace('@', '')
+  if (!user) user = (usernameFallback || '').replace('@', '').trim()
   return user
+}
+
+function getSocialCatUrl({ profileUrl, username, platforms = [] }) {
+  const perfil = (profileUrl || '').toLowerCase()
+  const ehTikTok = platforms.includes('TikTok') || perfil.includes('tiktok.com')
+  const ehInstagram = platforms.includes('Instagram') || perfil.includes('instagram.com')
+  const base = ehTikTok
+    ? 'https://thesocialcat.com/tools/tiktok-engagement-rate-calculator'
+    : 'https://thesocialcat.com/tools/instagram-engagement-rate-calculator'
+  const user = extrairUsername(profileUrl, username)
+  return {
+    url: user ? `${base}?username=${encodeURIComponent(user)}` : base,
+    plataformaSuportada: ehTikTok || ehInstagram,
+    plataforma: ehTikTok ? 'TikTok' : 'Instagram',
+  }
 }
 
 function useToast() {
@@ -112,6 +129,26 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
   const [ativando, setAtivando] = useState(false)
   const [encerrando, setEncerrando] = useState(false)
   const [motivoEncerrar, setMotivoEncerrar] = useState('')
+  const [alteracoesPendentes, setAlteracoesPendentes] = useState(false)
+
+  useEffect(() => {
+    const original = {
+      nome: inicial.nome||'', username: inicial.username||'', platforms: inicial.platforms||[],
+      followers: inicial.followers_count || {}, engagement_rate: inicial.engagement_rate||'',
+      profile_url: inicial.profile_url||'', contact_value: inicial.contact_value||'',
+      source: inicial.source||'', referred_by: inicial.referred_by||'', library_url: inicial.library_url||'',
+      coupon_code: inicial.coupon_code||'', model: inicial.model||'',
+      responsavel_interno_id: inicial.responsavel_interno_id||'',
+      editoras_sugeridas: inicial.editoras_sugeridas ? String(inicial.editoras_sugeridas).split(',').map(e=>e.trim()).filter(Boolean) : [],
+    }
+    const livrosOriginais = (inicial.livros_propostos||[]).map(lp=>({id:lp.livro_id, titulo:lp.livro, autor:''}))
+    setAlteracoesPendentes(JSON.stringify(form) !== JSON.stringify(original) || JSON.stringify(livrosConvidados) !== JSON.stringify(livrosOriginais))
+  }, [form, livrosConvidados, inicial])
+
+  function fecharModal() {
+    if (alteracoesPendentes && !window.confirm('Há alterações não salvas. Deseja fechar mesmo assim?')) return
+    onClose()
+  }
 
   useEffect(() => {
     getStatusHistory(parceiro.id).then(setHistory).catch(console.error)
@@ -168,8 +205,12 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
       const upd = await updateParceiroCRM(parceiro.id, payload)
       setParceiro({...upd, nome: payload.nome||upd.nome, livros_propostos: payload.livros_propostos||[]})
       onSave({...upd, nome: payload.nome||upd.nome, livros_propostos: payload.livros_propostos||[]})
+      setAlteracoesPendentes(false)
       showToast('Perfil atualizado!')
-    } catch(e) { showToast('Erro ao salvar','error') } finally { setSaving(false) }
+    } catch(e) {
+      console.error('Erro ao salvar perfil CRM:', e)
+      showToast(`Erro ao salvar: ${e?.message || 'verifique os dados informados'}`, 'error')
+    } finally { setSaving(false) }
   }
 
   async function avancarStatus() {
@@ -279,7 +320,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
               </span>
             )}
           </div>
-          <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16}/></button>
+          <button className="btn btn-ghost btn-icon" onClick={fecharModal}><X size={16}/></button>
         </div>
 
         {/* Abas */}
@@ -288,7 +329,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
             {v:'perfil',l:'Perfil CRM'},
             ...(ehAtivo ? [{v:'parceria',l:'Parceria'}] : []),
             {v:'pipeline',l:'Pipeline'},
-            {v:'livros_propostos',l:`Livros propostos (${(parceiro.livros_propostos||[]).length})`},
+            {v:'livros_propostos',l:`Livros propostos (${livrosConvidados.length})`},
             {v:'historico',l:`Histórico (${history.length})`},
           ].map(({v,l})=>(
             <button key={v} onClick={()=>setAba(v)}
@@ -369,22 +410,19 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
                     onChange={e=>setForm(f=>({...f,engagement_rate:e.target.value}))} placeholder="3.75"/>
                   <button type="button" className="btn btn-ghost btn-sm" title="Calcular engajamento no Social Cat"
                     onClick={()=>{
-                      const user = extrairUsername(form.profile_url, form.username)
-                      const dest = user
-                        ? `https://thesocialcat.com/tools/instagram-engagement-rate-calculator?username=${encodeURIComponent(user)}`
-                        : 'https://thesocialcat.com/tools/instagram-engagement-rate-calculator'
-                      window.open(dest, '_blank')
-                    }}
+          const socialCat = getSocialCatUrl({ profileUrl: form.profile_url, username: form.username, platforms: form.platforms })
+          window.open(socialCat.url, '_blank', 'noopener,noreferrer')
+        }}
                     style={{whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:4,padding:'6px 10px',flexShrink:0}}>
                     <ExternalLink size={12}/>
                     Calcular
                   </button>
                 </div>
-                {!(form.profile_url || '').includes('instagram') && !form.engagement_rate && (
-                  <div style={{fontSize:10,color:'var(--text-muted)',marginTop:3}}>
-                    Preencha o link do Instagram acima para calcular automaticamente
-                  </div>
-                )}
+                {!form.engagement_rate && (
+        <div style={{fontSize:10,color:'var(--text-muted)',marginTop:3}}>
+          O botão abre o The Social Cat na calculadora de Instagram ou TikTok conforme o perfil selecionado.
+        </div>
+      )}
               </div>
               <div className="form-group">
                 <label className="form-label">Modelo de parceria</label>
@@ -1046,22 +1084,19 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo, parceirosExistent
                   onChange={e=>setForm(f=>({...f,engagement_rate:e.target.value}))} placeholder="3.75"/>
                 <button type="button" className="btn btn-ghost btn-sm" title="Calcular engajamento no Social Cat"
                   onClick={()=>{
-                    const user = extrairUsername(form.profile_url, form.username)
-                    const dest = user
-                      ? `https://thesocialcat.com/tools/instagram-engagement-rate-calculator?username=${encodeURIComponent(user)}`
-                      : 'https://thesocialcat.com/tools/instagram-engagement-rate-calculator'
-                    window.open(dest, '_blank')
-                  }}
+          const socialCat = getSocialCatUrl({ profileUrl: form.profile_url, username: form.username, platforms: form.platforms })
+          window.open(socialCat.url, '_blank', 'noopener,noreferrer')
+        }}
                   style={{whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:4,padding:'6px 10px',flexShrink:0}}>
                   <ExternalLink size={12}/>
                   Calcular
                 </button>
               </div>
-              {!(form.profile_url || '').includes('instagram') && !form.engagement_rate && (
-                <div style={{fontSize:10,color:'var(--text-muted)',marginTop:3}}>
-                  Preencha o link do Instagram acima para calcular automaticamente
-                </div>
-              )}
+              {!form.engagement_rate && (
+        <div style={{fontSize:10,color:'var(--text-muted)',marginTop:3}}>
+          O botão abre o The Social Cat na calculadora de Instagram ou TikTok conforme o perfil selecionado.
+        </div>
+      )}
             </div>
             <div className="form-group">
               <label className="form-label">Responsável interno</label>

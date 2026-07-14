@@ -48,7 +48,15 @@ function Card({ title, value, description, recommended, commission, children }) 
 }
 
 export default function CalculadoraInfluenciadores() {
-  const [form, setForm] = useState(initial)
+  const params = new URLSearchParams(window.location.search)
+  const [form, setForm] = useState(() => ({
+    ...initial,
+    nome: params.get('nome') || '',
+    arroba: params.get('arroba') || '',
+    plataforma: params.get('plataforma') || 'Instagram',
+    seguidores: params.get('seguidores') || '',
+    engajamento_socialcat: params.get('engajamento') || '',
+  }))
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
   const set = (key, value) => setForm(current => ({ ...current, [key]: value }))
