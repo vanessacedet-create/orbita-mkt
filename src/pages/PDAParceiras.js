@@ -6,7 +6,7 @@ import {
 } from '../lib/pda2-parceiras'
 import {
   Target, Plus, Trash2, X, Check, Clock, AlertCircle, Square, Calendar,
-  ChevronLeft, ChevronRight, ChevronDown, Pencil, History,
+  ChevronLeft, ChevronRight, ChevronDown, Pencil, History, ListChecks,
   LayoutGrid, BarChart2, FileText, Download, Layers,
 } from 'lucide-react'
 
@@ -458,7 +458,7 @@ function AbaSemanaASemana({ iniciativa, onSalvarSemana }) {
 }
 
 // ── ABA: SUBTAREFAS ──────────────────────────────────────────
-function AbaSubtarefas({ iniciativa, onCriarSecao, onAtualizarSecao, onDeletarSecao, onCriarItem, onAtualizarItem, onToggleItem, onDeletarItem }) {
+function AbaSubtarefas({ iniciativa, onCriarSecao, onAtualizarSecao, onDeletarSecao, onCriarItem, onAtualizarItem, onToggleItem, onDeletarItem, onConverterEmSubPlanejamento }) {
   const [addingSecao, setAddingSecao] = useState(false)
   const [novaSecao, setNovaSecao] = useState('')
   const [addingItem, setAddingItem] = useState({})
@@ -531,6 +531,8 @@ function AbaSubtarefas({ iniciativa, onCriarSecao, onAtualizarSecao, onDeletarSe
                   {editandoItem?.id !== it.id && (
                     <button onClick={() => setEditandoItem({ id: it.id, texto: it.texto, secaoId: sec.id })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', padding: 1, opacity: 0.6, display: 'flex' }}><Pencil size={11} /></button>
                   )}
+                  <button onClick={() => onConverterEmSubPlanejamento(it, sec.id)} title="Converter em sub-planejamento (dá responsável, meta e prazo próprios)"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', padding: 1, opacity: 0.5, display: 'flex' }}><Layers size={11} /></button>
                   <button onClick={() => onDeletarItem(it.id, sec.id, iniciativa.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', padding: 1, opacity: 0.35, display: 'flex' }}><Trash2 size={10} /></button>
                 </div>
               ))}
@@ -617,6 +619,7 @@ function ModalDetalheIniciativa2({
   iniciativa, pilares, subIniciativas, historico,
   onSalvarCampo, onReplanejar, onAbrirSub, onCriarSubDireto, onDeletar,
   onCriarSecao, onAtualizarSecao, onDeletarSecao, onCriarItem, onAtualizarItem, onToggleItem, onDeletarItem,
+  onConverterEmSubPlanejamento, onConverterEmSubtarefa,
   onSalvarSemana, onClose,
 }) {
   const [aba, setAba] = useState('detalhe')
@@ -753,7 +756,8 @@ function ModalDetalheIniciativa2({
         {aba === 'subtarefas' && (
           <AbaSubtarefas iniciativa={iniciativa}
             onCriarSecao={onCriarSecao} onAtualizarSecao={onAtualizarSecao} onDeletarSecao={onDeletarSecao}
-            onCriarItem={onCriarItem} onAtualizarItem={onAtualizarItem} onToggleItem={onToggleItem} onDeletarItem={onDeletarItem} />
+            onCriarItem={onCriarItem} onAtualizarItem={onAtualizarItem} onToggleItem={onToggleItem} onDeletarItem={onDeletarItem}
+            onConverterEmSubPlanejamento={(item, secaoId) => onConverterEmSubPlanejamento(item, secaoId, iniciativa)} />
         )}
 
         {aba === 'subs' && isComposta && (
@@ -769,6 +773,11 @@ function ModalDetalheIniciativa2({
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{sub.responsavel || '—'}</div>
                   </div>
                   <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: subInfo.bg, color: subInfo.text, whiteSpace: 'nowrap' }}>{subInfo.label}</span>
+                  <button onClick={() => { if (window.confirm(`Converter "${sub.titulo}" em subtarefa simples?\n\nEla perde responsável, meta e prazo próprios — vira só um item de checklist.`)) onConverterEmSubtarefa(sub, iniciativa) }}
+                    title="Converter em subtarefa simples (perde responsável, meta e prazo próprios)"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 3, opacity: 0.6, display: 'flex', flexShrink: 0 }}>
+                    <ListChecks size={13} />
+                  </button>
                   <button onClick={() => onAbrirSub(sub)} title="Editar sub-planejamento"
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', padding: 3, opacity: 0.8, display: 'flex', flexShrink: 0 }}>
                     <Pencil size={13} />
@@ -1059,6 +1068,48 @@ export default function PDAParceiras() {
     setIniciativas(prev => prev.map(i => i.id !== iniciativaId ? i : { ...i, pda2_parceiras_secoes: (i.pda2_parceiras_secoes || []).map(s => s.id !== secaoId ? s : { ...s, pda2_parceiras_itens: (s.pda2_parceiras_itens || []).filter(it => it.id !== itemId) }) }))
   }
 
+  // ── CONVERSÃO: subtarefa ⇄ sub-planejamento (sem perder o texto) ──
+  async function handleConverterEmSubPlanejamento(item, secaoId, iniciativaMae) {
+    try {
+      const novo = await criarIniciativa({
+        pilar_id: iniciativaMae.pilar_id,
+        iniciativa_pai_id: iniciativaMae.id,
+        semestre: iniciativaMae.semestre,
+        titulo: item.texto,
+        tipo: 'simples',
+        andamento: item.concluido ? 'concluido' : 'nao_iniciado',
+        ordem: (iniciativas.filter(i => i.iniciativa_pai_id === iniciativaMae.id).length),
+      })
+      await deletarItem(item.id)
+      setIniciativas(prev => [
+        ...prev.map(i => i.id !== iniciativaMae.id ? i : { ...i, pda2_parceiras_secoes: (i.pda2_parceiras_secoes || []).map(s => s.id !== secaoId ? s : { ...s, pda2_parceiras_itens: (s.pda2_parceiras_itens || []).filter(it => it.id !== item.id) }) }),
+        novo,
+      ])
+      showToast('Virou sub-planejamento — abra pra completar responsável, meta e prazo.')
+    } catch (e) { console.error(e); showToast('Erro ao converter.', 'error') }
+  }
+
+  async function handleConverterEmSubtarefa(sub, iniciativaMae) {
+    try {
+      let secaoAlvo = (iniciativaMae.pda2_parceiras_secoes || [])[0]
+      if (!secaoAlvo) {
+        secaoAlvo = await criarSecao(iniciativaMae.id, 'Subtarefas', 0)
+        setIniciativas(prev => prev.map(i => i.id === iniciativaMae.id ? { ...i, pda2_parceiras_secoes: [...(i.pda2_parceiras_secoes || []), secaoAlvo] } : i))
+      }
+      const novoItem = await criarItem(secaoAlvo.id, sub.titulo, (secaoAlvo.pda2_parceiras_itens || []).length)
+      if (sub.andamento === 'concluido') await atualizarItem(novoItem.id, { concluido: true })
+      await deletarIniciativa(sub.id)
+      setIniciativas(prev => prev
+        .filter(i => i.id !== sub.id)
+        .map(i => i.id !== iniciativaMae.id ? i : {
+          ...i,
+          pda2_parceiras_secoes: (i.pda2_parceiras_secoes || []).map(s => s.id !== secaoAlvo.id ? s : { ...s, pda2_parceiras_itens: [...(s.pda2_parceiras_itens || []), { ...novoItem, concluido: sub.andamento === 'concluido' }] })
+        })
+      )
+      showToast('Virou subtarefa.')
+    } catch (e) { console.error(e); showToast('Erro ao converter.', 'error') }
+  }
+
   if (loading) return <div className="loading"><div className="spinner" /></div>
 
   return (
@@ -1164,6 +1215,8 @@ export default function PDAParceiras() {
           onAbrirSub={sub => setDetalheId(sub.id)}
           onCriarSubDireto={paiId => { setDetalheId(null); setModalNovo({ tipo: 'sub', paiId }) }}
           onDeletar={handleDeletarIniciativa}
+          onConverterEmSubPlanejamento={handleConverterEmSubPlanejamento}
+          onConverterEmSubtarefa={handleConverterEmSubtarefa}
           onCriarSecao={handleCriarSecao} onAtualizarSecao={handleAtualizarSecao} onDeletarSecao={handleDeletarSecao}
           onCriarItem={handleCriarItem} onAtualizarItem={handleAtualizarItem} onToggleItem={handleToggleItem} onDeletarItem={handleDeletarItem}
           onSalvarSemana={handleSalvarSemana}
