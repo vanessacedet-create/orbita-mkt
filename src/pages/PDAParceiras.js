@@ -292,6 +292,13 @@ function ModalNovaIniciativa2({ pilares, compostas, semestre, preset, onSave, on
                   }}>{opt.label}</button>
               ))}
             </div>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.4 }}>
+              {tipo === 'sub'
+                ? 'Cria um item completo, com responsável, meta e prazo próprios — pra algo simples de marcar como feito, use "Subtarefas" dentro do planejamento já existente.'
+                : tipo === 'composta'
+                ? 'Vira um planejamento "guarda-chuva", que pode ter sub-planejamentos dentro dele.'
+                : ''}
+            </p>
           </div>
           {tipo === 'sub' && (
             <div className="form-group">
@@ -755,13 +762,17 @@ function ModalDetalheIniciativa2({
             {subIniciativas.map(sub => {
               const subInfo = SITUACAO_INFO[situacaoIniciativa(sub)]
               return (
-                <div key={sub.id} onClick={() => onAbrirSub(sub)}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', cursor: 'pointer' }}>
-                  <div>
+                <div key={sub.id}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px' }}>
+                  <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => onAbrirSub(sub)}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{sub.titulo}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{sub.responsavel || '—'}</div>
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: subInfo.bg, color: subInfo.text }}>{subInfo.label}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: subInfo.bg, color: subInfo.text, whiteSpace: 'nowrap' }}>{subInfo.label}</span>
+                  <button onClick={() => onAbrirSub(sub)} title="Editar sub-planejamento"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', padding: 3, opacity: 0.8, display: 'flex', flexShrink: 0 }}>
+                    <Pencil size={13} />
+                  </button>
                 </div>
               )
             })}
