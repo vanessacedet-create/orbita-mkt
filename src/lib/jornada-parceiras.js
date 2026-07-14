@@ -1,5 +1,16 @@
 import { supabase } from './client'
 
+// ── COLABORADORES DO RH PARCEIRAS (fonte da verdade de cargo/tipo/jornada) ──
+export async function getColaboradoresRH() {
+  const { data, error } = await supabase
+    .from('rh_parceiras_colaboradores')
+    .select('*')
+    .eq('status', 'ativo')
+    .order('nome')
+  if (error) throw error
+  return data || []
+}
+
 // ── MEMBROS (equipe + jornada padrão) ─────────────────────
 export async function getMembros() {
   const { data, error } = await supabase
