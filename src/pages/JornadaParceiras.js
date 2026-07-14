@@ -59,6 +59,12 @@ function dataISOparaObj(iso) {
   return new Date(a, m - 1, d)
 }
 
+function proximoDiaISO(iso) {
+  const d = dataISOparaObj(iso)
+  const p = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)
+  return `${p.getFullYear()}-${String(p.getMonth() + 1).padStart(2, '0')}-${String(p.getDate()).padStart(2, '0')}`
+}
+
 function ehFimDeSemana(dataISO) {
   const d = dataISOparaObj(dataISO).getDay()
   return d === 0 || d === 6
@@ -92,7 +98,8 @@ function primeiroEUltimoDiaDoMes(anoMes) {
 // ── CÁLCULO DE HORAS TRABALHADAS E SALDO ──────────────────
 function calcularHorasTrabalhadas(reg, membro) {
   if (!reg) return null
-  if (['falta', 'atestado', 'ferias', 'folga'].includes(reg.situacao)) return null
+  if (['falta', 'ferias', 'folga'].includes(reg.situacao)) return null
+  if (reg.situacao === 'atestado' && (reg.atestado_horas == null || reg.atestado_horas === '')) return null
   if (!reg.entrada || !reg.saida_final) return null
 
   const entrada = horaParaMinutos(reg.entrada)
@@ -115,7 +122,13 @@ function calcularHorasTrabalhadas(reg, membro) {
 
 function calcularSaldoDiario(reg, membro) {
   if (!membro) return null
-  if (reg && ['atestado', 'ferias', 'folga'].includes(reg.situacao)) return 0
+  if (reg && reg.situacao === 'atestado') {
+    if (reg.atestado_horas == null || reg.atestado_horas === '') return 0 // dia inteiro
+    const trabalhadas = calcularHorasTrabalhadas(reg, membro) || 0
+    const alvoReduzido = (membro.jornada_horas * 60) - (Number(reg.atestado_horas) * 60)
+    return trabalhadas - alvoReduzido
+  }
+  if (reg && ['ferias', 'folga'].includes(reg.situacao)) return 0
   if (reg && reg.situacao === 'falta') return -(membro.jornada_horas * 60)
   const trabalhadas = calcularHorasTrabalhadas(reg, membro)
   if (trabalhadas == null) return null
@@ -174,6 +187,8 @@ function CartaoDia({ data, membro, registro, bloqueio, editavel, onSalvarCampo, 
   const [intervaloInicio, setIntervaloInicio] = useState(registro?.intervalo_inicio || '')
   const [intervaloFim, setIntervaloFim] = useState(registro?.intervalo_fim || '')
   const [situacao, setSituacao] = useState(registro?.situacao || 'normal')
+  const [atestadoDiaInteiro, setAtestadoDiaInteiro] = useState(registro?.atestado_horas == null)
+  const [atestadoHoras, setAtestadoHoras] = useState(registro?.atestado_horas ?? '')
   const [observacoes, setObservacoes] = useState(registro?.observacoes || '')
   const [horasCasa, setHorasCasa] = useState(registro?.horas_casa_min ?? '')
   const [horasEvento, setHorasEvento] = useState(registro?.horas_evento_min ?? '')
@@ -183,6 +198,7 @@ function CartaoDia({ data, membro, registro, bloqueio, editavel, onSalvarCampo, 
     entrada, saida_almoco: saidaAlmoco, retorno_almoco: retornoAlmoco, saida_final: saidaFinal,
     intervalo_inicio: intervaloInicio, intervalo_fim: intervaloFim, situacao, observacoes,
     horas_casa_min: horasCasa, horas_evento_min: horasEvento,
+    atestado_horas: (situacao === 'atestado' && !atestadoDiaInteiro && atestadoHoras !== '') ? Number(atestadoHoras) : null,
   }
   const horasTrabalhadas = calcularHorasTrabalhadas(regAtual, membro)
   const saldo = calcularSaldoDiario(regAtual, membro)
@@ -202,6 +218,7 @@ function CartaoDia({ data, membro, registro, bloqueio, editavel, onSalvarCampo, 
     intervalo_inicio: intervaloInicio || null,
     intervalo_fim: intervaloFim || null,
     situacao,
+    atestado_horas: (situacao === 'atestado' && !atestadoDiaInteiro && atestadoHoras !== '') ? Number(atestadoHoras) : null,
     observacoes: observacoes.trim() || null,
     horas_casa_min: horasCasa !== '' ? Number(horasCasa) : null,
     horas_evento_min: horasEvento !== '' ? Number(horasEvento) : null,
@@ -226,7 +243,7 @@ function CartaoDia({ data, membro, registro, bloqueio, editavel, onSalvarCampo, 
       clearTimeout(timer)
       if (!jaSalvou) salvamentosPendentes = Math.max(0, salvamentosPendentes - 1)
     }
-  }, [entrada, saidaAlmoco, retornoAlmoco, saidaFinal, intervaloInicio, intervaloFim, situacao, observacoes, horasCasa, horasEvento])
+  }, [entrada, saidaAlmoco, retornoAlmoco, saidaFinal, intervaloInicio, intervaloFim, situacao, atestadoDiaInteiro, atestadoHoras, observacoes, horasCasa, horasEvento])
 
   const diaSemanaIdx = dataISOparaObj(data).getDay()
   const situacaoInfo = SITUACOES.find(s => s.value === situacao) || SITUACOES[0]
@@ -287,6 +304,31 @@ function CartaoDia({ data, membro, registro, bloqueio, editavel, onSalvarCampo, 
           </button>
         </div>
       </div>
+
+      {situacao === 'atestado' && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, padding: '8px 10px', background: 'rgba(249,115,22,0.06)', borderRadius: 6 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-muted)', cursor: editavel ? 'pointer' : 'default' }}>
+            <input type="checkbox" checked={atestadoDiaInteiro} disabled={!editavel}
+              onChange={e => {
+                const diaInteiro = e.target.checked
+                setAtestadoDiaInteiro(diaInteiro)
+                salvar('atestado_horas', diaInteiro ? null : (atestadoHoras !== '' ? Number(atestadoHoras) : null))
+              }}
+              style={{ width: 13, height: 13, accentColor: 'var(--accent)', cursor: 'pointer' }} />
+            Atestado de dia inteiro
+          </label>
+          {!atestadoDiaInteiro && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Quantas horas?</span>
+              <input type="number" min="0" step="0.5" className="form-input" style={{ width: 60, padding: '3px 6px', fontSize: 12 }}
+                value={atestadoHoras} disabled={!editavel}
+                onChange={e => setAtestadoHoras(e.target.value)}
+                onBlur={() => salvar('atestado_horas', atestadoHoras !== '' ? Number(atestadoHoras) : null)}
+                placeholder="Ex: 3" />
+            </div>
+          )}
+        </div>
+      )}
 
       {obsAberta && (
         <div style={{ marginBottom: 10 }}>
@@ -417,7 +459,9 @@ function TabelaJornada({ membro, registros, registrosAcumulado, feriados, diasIn
   const saldoAcumulado = useMemo(() => {
     if (!membro?.saldo_inicial_data) return null
     let total = Number(membro.saldo_inicial_minutos) || 0
-    const datasAcum = listarDatasDoPeriodo(membro.saldo_inicial_data, dataFim)
+    const inicioAcum = proximoDiaISO(membro.saldo_inicial_data)
+    if (inicioAcum > dataFim) return total
+    const datasAcum = listarDatasDoPeriodo(inicioAcum, dataFim)
     const mapAcum = {}
     ;(registrosAcumulado || []).forEach(r => { mapAcum[r.data] = r })
     for (const data of datasAcum) {
@@ -735,12 +779,9 @@ export default function JornadaParceiras() {
           <div className="table-card" style={{ padding: '16px 20px', marginBottom: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <h3 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
-                <Users size={14} /> Equipe (sincronizada com o RH)
+                <Users size={14} /> Equipe
               </h3>
             </div>
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
-              Cargo, e-mail, tipo de contrato e jornada padrão de cada pessoa vêm direto da ficha dela em <strong>RH → Colaboradores</strong> (aba "Jornada" da ficha). Mudou algo lá — muda aqui sozinho.
-            </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {membros.map(m => (
                 <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, background: 'var(--surface-2)', borderRadius: 6, padding: '7px 10px', flexWrap: 'wrap' }}>
@@ -748,6 +789,9 @@ export default function JornadaParceiras() {
                   <span style={{ color: 'var(--text-muted)' }}>{m.cargo || '—'}</span>
                   <span style={{ color: 'var(--text-muted)' }}>{TIPO_LABEL[m.tipo] || m.tipo}</span>
                   <span style={{ color: 'var(--text-muted)' }}>{m.jornada_horas}h/dia</span>
+                  <span style={{ color: m.saldo_inicial_data ? corSaldo(m.saldo_inicial_minutos) : 'var(--text-muted)' }}>
+                    {m.saldo_inicial_data ? `Saldo inicial: ${formatarSaldo(m.saldo_inicial_minutos)} (desde ${fmtDataBR(m.saldo_inicial_data)})` : 'sem saldo inicial definido'}
+                  </span>
                   <span style={{ color: m.email ? 'var(--text-muted)' : 'var(--red)', fontSize: 11, marginLeft: 'auto' }}>{m.email || 'sem e-mail no RH'}</span>
                 </div>
               ))}
