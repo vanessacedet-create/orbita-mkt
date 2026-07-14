@@ -342,18 +342,18 @@ function CartaoDia({ data, membro, registro, bloqueio, editavel, onSalvarCampo, 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start', marginBottom: 10 }}>
         <div>
           <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Entrada</label>
-          <input type="time" className="form-input" style={timeInputStyle} value={entrada} disabled={!editavel}
+          <input type="time" className="form-input" style={timeInputStyle} value={entrada} disabled={!editavel} onClick={e => e.currentTarget.showPicker?.()}
             onChange={e => setEntrada(e.target.value)} onBlur={() => salvar('entrada', entrada || null)} />
           {avisoTolerancia() && <div style={{ fontSize: 9, color: '#eab308', marginTop: 3, maxWidth: 90 }}>{avisoTolerancia()}</div>}
         </div>
         <div>
           <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Saída almoço</label>
-          <input type="time" className="form-input" style={timeInputStyle} value={saidaAlmoco} disabled={!editavel}
+          <input type="time" className="form-input" style={timeInputStyle} value={saidaAlmoco} disabled={!editavel} onClick={e => e.currentTarget.showPicker?.()}
             onChange={e => setSaidaAlmoco(e.target.value)} onBlur={() => salvar('saida_almoco', saidaAlmoco || null)} />
         </div>
         <div>
           <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Retorno almoço</label>
-          <input type="time" className="form-input" style={timeInputStyle} value={retornoAlmoco} disabled={!editavel}
+          <input type="time" className="form-input" style={timeInputStyle} value={retornoAlmoco} disabled={!editavel} onClick={e => e.currentTarget.showPicker?.()}
             onChange={e => setRetornoAlmoco(e.target.value)} onBlur={() => salvar('retorno_almoco', retornoAlmoco || null)} />
           {durAlmoco != null && (
             <div style={{ fontSize: 9, marginTop: 3, maxWidth: 110, color: durAlmoco > durAlmocoEsperada ? 'var(--red)' : 'var(--text-muted)' }}>
@@ -363,16 +363,16 @@ function CartaoDia({ data, membro, registro, bloqueio, editavel, onSalvarCampo, 
         </div>
         <div>
           <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Saída final</label>
-          <input type="time" className="form-input" style={timeInputStyle} value={saidaFinal} disabled={!editavel}
+          <input type="time" className="form-input" style={timeInputStyle} value={saidaFinal} disabled={!editavel} onClick={e => e.currentTarget.showPicker?.()}
             onChange={e => setSaidaFinal(e.target.value)} onBlur={() => salvar('saida_final', saidaFinal || null)} />
         </div>
         <div>
           <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Café (início–fim)</label>
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-            <input type="time" className="form-input" style={{ ...timeInputStyle, width: 74 }} value={intervaloInicio} disabled={!editavel}
+            <input type="time" className="form-input" style={{ ...timeInputStyle, width: 74 }} value={intervaloInicio} disabled={!editavel} onClick={e => e.currentTarget.showPicker?.()}
               onChange={e => setIntervaloInicio(e.target.value)} onBlur={() => salvar('intervalo_inicio', intervaloInicio || null)} />
             <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>–</span>
-            <input type="time" className="form-input" style={{ ...timeInputStyle, width: 74 }} value={intervaloFim} disabled={!editavel}
+            <input type="time" className="form-input" style={{ ...timeInputStyle, width: 74 }} value={intervaloFim} disabled={!editavel} onClick={e => e.currentTarget.showPicker?.()}
               onChange={e => setIntervaloFim(e.target.value)} onBlur={() => salvar('intervalo_fim', intervaloFim || null)} />
           </div>
           {durIntervalo != null && (
@@ -588,6 +588,7 @@ export default function JornadaParceiras() {
   const [diasInativos, setDiasInativos] = useState([])
   const [registros, setRegistros] = useState([])
   const [registrosAcumulado, setRegistrosAcumulado] = useState([])
+  const [carregandoRegistros, setCarregandoRegistros] = useState(true)
   const [loading, setLoading] = useState(true)
   const [aba, setAba] = useState('minha') // 'minha' | 'equipe'
   const [membroSelecionadoId, setMembroSelecionadoId] = useState('')
@@ -684,8 +685,11 @@ export default function JornadaParceiras() {
     : meuMembro
 
   useEffect(() => {
-    if (!membroVisivel) { setRegistros([]); return }
-    getRegistros(membroVisivel.id, dataInicio, dataFim).then(setRegistros).catch(console.error)
+    if (!membroVisivel) { setRegistros([]); setCarregandoRegistros(false); return }
+    setCarregandoRegistros(true)
+    getRegistros(membroVisivel.id, dataInicio, dataFim)
+      .then(r => { setRegistros(r); setCarregandoRegistros(false) })
+      .catch(e => { console.error(e); setCarregandoRegistros(false) })
   }, [membroVisivel?.id, dataInicio, dataFim])
 
   useEffect(() => {
@@ -824,17 +828,23 @@ export default function JornadaParceiras() {
       </div>
 
       {membroVisivel ? (
-        <TabelaJornada
-          membro={membroVisivel}
-          registros={registros}
-          registrosAcumulado={registrosAcumulado}
-          feriados={feriados}
-          diasInativos={diasInativos}
-          dataInicio={dataInicio}
-          dataFim={dataFim}
-          editavel={true}
-          onSalvarCampo={handleSalvarCampo}
-        />
+        carregandoRegistros ? (
+          <div className="table-card" style={{ padding: 32, textAlign: 'center' }}>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Carregando os registros...</p>
+          </div>
+        ) : (
+          <TabelaJornada
+            membro={membroVisivel}
+            registros={registros}
+            registrosAcumulado={registrosAcumulado}
+            feriados={feriados}
+            diasInativos={diasInativos}
+            dataInicio={dataInicio}
+            dataFim={dataFim}
+            editavel={true}
+            onSalvarCampo={handleSalvarCampo}
+          />
+        )
       ) : (
         <div className="table-card" style={{ padding: 20 }}>
           <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Selecione uma integrante para ver a jornada.</p>
