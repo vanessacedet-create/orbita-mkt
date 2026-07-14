@@ -537,8 +537,9 @@ function AbaSubtarefas({ iniciativa, onCriarSecao, onAtualizarSecao, onDeletarSe
                   <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} onClick={() => setAddingItem(p => ({ ...p, [sec.id]: false }))}>✕</button>
                 </div>
               ) : (
-                <button onClick={() => setAddingItem(p => ({ ...p, [sec.id]: true }))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, marginTop: 5 }}>
-                  <Plus size={11} /> item
+                <button onClick={() => setAddingItem(p => ({ ...p, [sec.id]: true }))}
+                  style={{ background: 'var(--surface)', border: '1px dashed var(--border)', borderRadius: 6, cursor: 'pointer', color: 'var(--accent)', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5, marginTop: 7, padding: '5px 10px' }}>
+                  <Plus size={12} /> Adicionar item
                 </button>
               )}
             </div>
@@ -696,48 +697,47 @@ function ModalDetalheIniciativa2({
                 </select>
               </div>
             </div>
-            {!isComposta && (
-              <>
-                <div className="form-group">
-                  <label className="form-label">Responsável</label>
-                  <input className="form-input" value={responsavel} onChange={e => setResponsavel(e.target.value)} onBlur={() => salvar('responsavel', responsavel.trim() || null)} />
+            <>
+              <div className="form-group">
+                <label className="form-label">Responsável</label>
+                <input className="form-input" value={responsavel} onChange={e => setResponsavel(e.target.value)} onBlur={() => salvar('responsavel', responsavel.trim() || null)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Meta numérica</label>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input type="number" className="form-input" style={{ width: 80 }} value={metaAtual} onChange={e => setMetaAtual(e.target.value)} onBlur={() => salvar('meta_atual', metaAtual !== '' ? Number(metaAtual) : null)} placeholder="Atual" />
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>de</span>
+                  <input type="number" className="form-input" style={{ width: 80 }} value={metaAlvo} onChange={e => setMetaAlvo(e.target.value)} onBlur={() => salvar('meta_alvo', metaAlvo !== '' ? Number(metaAlvo) : null)} placeholder="Alvo" />
+                  <input className="form-input" style={{ flex: 1 }} value={metaUnidade} onChange={e => setMetaUnidade(e.target.value)} onBlur={() => salvar('meta_unidade', metaUnidade.trim() || null)} placeholder="Unidade" />
                 </div>
+              </div>
+              <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">Meta numérica</label>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input type="number" className="form-input" style={{ width: 80 }} value={metaAtual} onChange={e => setMetaAtual(e.target.value)} onBlur={() => salvar('meta_atual', metaAtual !== '' ? Number(metaAtual) : null)} placeholder="Atual" />
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>de</span>
-                    <input type="number" className="form-input" style={{ width: 80 }} value={metaAlvo} onChange={e => setMetaAlvo(e.target.value)} onBlur={() => salvar('meta_alvo', metaAlvo !== '' ? Number(metaAlvo) : null)} placeholder="Alvo" />
-                    <input className="form-input" style={{ flex: 1 }} value={metaUnidade} onChange={e => setMetaUnidade(e.target.value)} onBlur={() => salvar('meta_unidade', metaUnidade.trim() || null)} placeholder="Unidade" />
-                  </div>
-                </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Calendar size={11} /> Data de início</label>
-                    <input type="date" className="form-input" value={dataInicio} onChange={e => setDataInicio(e.target.value)} onBlur={() => salvar('data_inicio', dataInicio || null)} onClick={e => e.currentTarget.showPicker?.()} style={{ cursor: 'pointer' }} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Calendar size={11} /> Prazo final</label>
-                    {!iniciativa.prazo_final ? (
-                      <input type="date" className="form-input" value={prazoFinal} onChange={e => setPrazoFinal(e.target.value)} onBlur={() => salvar('prazo_final', prazoFinal || null)} onClick={e => e.currentTarget.showPicker?.()} style={{ cursor: 'pointer' }} />
-                    ) : (
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <input type="date" className="form-input" value={prazoFinal} disabled style={{ opacity: 0.7 }} />
-                        <button className="btn btn-ghost btn-sm" onClick={() => setModalReplanejar(true)} style={{ whiteSpace: 'nowrap', fontSize: 11 }}>Replanejar</button>
-                      </div>
-                    )}
-                  </div>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Calendar size={11} /> Data de início</label>
+                  <input type="date" className="form-input" value={dataInicio} onChange={e => setDataInicio(e.target.value)} onBlur={() => salvar('data_inicio', dataInicio || null)} onClick={e => e.currentTarget.showPicker?.()} style={{ cursor: 'pointer' }} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Justificativa</label>
-                  <input className="form-input" value={justificativa} onChange={e => setJustificativa(e.target.value)} onBlur={() => salvar('justificativa', justificativa.trim() || null)} />
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Calendar size={11} /> Prazo final</label>
+                  {!iniciativa.prazo_final ? (
+                    <input type="date" className="form-input" value={prazoFinal} onChange={e => setPrazoFinal(e.target.value)} onBlur={() => salvar('prazo_final', prazoFinal || null)} onClick={e => e.currentTarget.showPicker?.()} style={{ cursor: 'pointer' }} />
+                  ) : (
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input type="date" className="form-input" value={prazoFinal} disabled style={{ opacity: 0.7 }} />
+                      <button className="btn btn-ghost btn-sm" onClick={() => setModalReplanejar(true)} style={{ whiteSpace: 'nowrap', fontSize: 11 }}>Replanejar</button>
+                    </div>
+                  )}
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Como fazer</label>
-                  <textarea className="form-input" rows={3} value={comoFazer} onChange={e => setComoFazer(e.target.value)} onBlur={() => salvar('como_fazer', comoFazer.trim() || null)} style={{ resize: 'vertical' }} />
-                </div>
-              </>
-            )}
+              </div>
+              <div className="form-group">
+                <label className="form-label">Justificativa</label>
+                <input className="form-input" value={justificativa} onChange={e => setJustificativa(e.target.value)} onBlur={() => salvar('justificativa', justificativa.trim() || null)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Como fazer</label>
+                <textarea className="form-input" rows={3} value={comoFazer} onChange={e => setComoFazer(e.target.value)} onBlur={() => salvar('como_fazer', comoFazer.trim() || null)} style={{ resize: 'vertical' }} />
+              </div>
+            </>
+
           </div>
         )}
 
