@@ -3,7 +3,7 @@ import {
   getTarefas, createTarefa, updateTarefa, deleteTarefa,
   addChecklistItem, updateChecklistItem, deleteChecklistItem,
   addComentario, getUsuarios,
-  addLivroTarefa, removeLivroTarefa, getLivros,
+  addLivroTarefa, removeLivroTarefa, getLivros, getParceiros,
   importarTarefasLote, buscarLivroPorISBN,
   setResponsaveisTarefa, toggleParteResponsavel, concluirTodasAsPartes,
   gerarProximaOcorrencia
@@ -12,7 +12,7 @@ import {
   getBancoTarefas, createBancoTarefa, updateBancoTarefa, desativarBancoTarefa,
   getCategorias, createCategoria, updateCategoria, deleteCategoria,
   reordenarCards, reordenarCategorias,
-  setResponsaveisBanco,
+  setResponsaveisBanco, setChecklistPadrao,
   getAtribuicoes, getMinhasAtribuicoes, atribuirTarefa, updateAtribuicao, deleteAtribuicao,
   addChecklistAtribuicao, toggleChecklistAtribuicao, deleteChecklistAtribuicao,
   calcularTempoExecucao, formatarTempo,
@@ -559,6 +559,9 @@ function ViewBancoTarefas({ usuarios, usuario, grupo = 'influencers' }) {
   const [editandoBanco, setEditandoBanco] = useState(null)
   const [tarefaPaiModal, setTarefaPaiModal] = useState(null)
   const [formBanco, setFormBanco] = useState({ nome: '', descricao: '', periodicidade: 'avulsa', responsaveis_ids: [], tempo_medio_minutos: '', tempo_modo: 'manual', categoria_id: '', dia_tipo: '', dia_semana_ideal: '', dia_mes_ideal: '' })
+  const [checklistPadraoForm, setChecklistPadraoForm] = useState([])
+  const [novoItemPadrao, setNovoItemPadrao] = useState('')
+  const [parceiros, setParceiros] = useState([])
 
   // Modal detalhe
   const [modalDetalhe, setModalDetalhe] = useState(null)
@@ -598,6 +601,7 @@ function ViewBancoTarefas({ usuarios, usuario, grupo = 'influencers' }) {
         getBancoTarefas(grupo),
         getCategorias(grupo),
         isAdmin ? getAtribuicoes({ grupo }) : getMinhasAtribuicoes(usuario.id, grupo),
+        getParceiros().then(ps => setParceiros((ps || []).filter(pp => (pp.grupo || '') === grupo))).catch(() => {}),
       ])
       setBanco(bancoData)
       setCategorias(catData)
@@ -751,6 +755,8 @@ function ViewBancoTarefas({ usuarios, usuario, grupo = 'influencers' }) {
         }
       : { nome: '', descricao: '', periodicidade: 'avulsa', responsaveis_ids: [], tempo_medio_minutos: '', tempo_modo: 'sem', categoria_id: '', dia_tipo: '', dia_semana_ideal: '', dia_mes_ideal: '' }
     )
+    setChecklistPadraoForm(tarefa ? (tarefa.checklist_padrao || []).sort((a,b)=>(a.ordem||0)-(b.ordem||0)).map(c => c.texto) : [])
+    setNovoItemPadrao('')
     setModalBanco(true)
   }
 
@@ -773,6 +779,8 @@ function ViewBancoTarefas({ usuarios, usuario, grupo = 'influencers' }) {
       else { tarefa = await createBancoTarefa({ ...payload, grupo }) }
       // Salvar responsáveis
       await setResponsaveisBanco(tarefa.id, formBanco.responsaveis_ids)
+      // Salvar checklist padrão (template do tipo)
+      await setChecklistPadrao(tarefa.id, checklistPadraoForm)
       setModalBanco(false)
       carregarDados()
     } catch (e) { alert('Erro ao salvar: ' + e.message) }
@@ -787,27 +795,42 @@ function ViewBancoTarefas({ usuarios, usuario, grupo = 'influencers' }) {
   // ── Atribuir ──
   function abrirAtribuir(tarefa) {
     setTarefaSelecionada(tarefa)
-    setFormAtribuir({ responsavel_ids: tarefa.responsavel_id ? [tarefa.responsavel_id] : [], data_prazo: '', especificidade: '' })
-    setChecklistAtribuir([])
+    setFormAtribuir({ responsavel_ids: tarefa.responsavel_id ? [tarefa.responsavel_id] : [], data_prazo: '', especificidade: '', parceiros_ids: [] })
+    setChecklistAtribuir((tarefa.checklist_padrao || []).sort((a,b)=>(a.ordem||0)-(b.ordem||0)).map(c => c.texto))
     setNovoItemAtribuir('')
     setModalAtribuir(true)
   }
 
   async function confirmarAtribuicao() {
     if (formAtribuir.responsavel_ids.length === 0) return alert('Selecione ao menos um responsável.')
+    if ((formAtribuir.parceiros_ids || []).length === 0) return alert('Selecione ao menos um parceiro.')
     try {
-      const nova = await atribuirTarefa({
-        grupo,
-        bancoTarefaId: tarefaSelecionada.id,
-        responsavelIds: formAtribuir.responsavel_ids,
-        dataPrazo: formAtribuir.data_prazo || null,
-        especificidade: formAtribuir.especificidade || null,
-        atribuidaPor: usuario.id,
-        checklist: checklistAtribuir,
-      })
-      setAtribuicoes(a => [nova, ...a])
+      const novas = []
+      for (const parceiroId of formAtribuir.parceiros_ids) {
+        const nova = await atribuirTarefa({
+          grupo,
+          bancoTarefaId: tarefaSelecionada.id,
+          responsavelIds: formAtribuir.responsavel_ids,
+          dataPrazo: formAtribuir.data_prazo || null,
+          especificidade: formAtribuir.especificidade || null,
+          atribuidaPor: usuario.id,
+          checklist: checklistAtribuir,
+          parceiroId,
+        })
+        novas.push(nova)
+      }
+      setAtribuicoes(a => [...novas, ...a])
       setModalAtribuir(false)
     } catch (e) { alert('Erro ao atribuir: ' + e.message) }
+  }
+
+  function toggleParceiroAtribuir(id) {
+    setFormAtribuir(f => ({
+      ...f,
+      parceiros_ids: (f.parceiros_ids || []).includes(id)
+        ? f.parceiros_ids.filter(x => x !== id)
+        : [...(f.parceiros_ids || []), id]
+    }))
   }
 
   function toggleResponsavel(id) {
@@ -991,6 +1014,7 @@ function ViewBancoTarefas({ usuarios, usuario, grupo = 'influencers' }) {
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8 }}>
           <div style={{ flex:1 }}>
             <span style={{ fontWeight:600, fontSize:14, color:'var(--text)', marginRight:8 }}>{a.banco_tarefa?.nome}</span>
+            {a.parceiro?.nome && <span style={{ fontSize:11, fontWeight:700, background:'rgba(34,197,94,0.12)', border:'1px solid rgba(34,197,94,0.4)', color:'#22c55e', borderRadius:99, padding:'2px 10px', marginRight:8 }}>{a.parceiro.nome}</span>}
             <span style={{ display:'inline-block', padding:'2px 10px', borderRadius:99, fontSize:11, fontWeight:600, color:'#fff', background: statusInfo.cor, marginRight:6 }}>{statusInfo.label}</span>
             {a.banco_tarefa?.categoria && (
               <span style={{ padding:'2px 8px', borderRadius:99, fontSize:11, fontWeight:600, background: (a.banco_tarefa.categoria.cor || '#6366f1') + '22', color: a.banco_tarefa.categoria.cor || '#6366f1' }}>{a.banco_tarefa.categoria.nome}</span>
@@ -1424,6 +1448,32 @@ function ViewBancoTarefas({ usuarios, usuario, grupo = 'influencers' }) {
                 )}
               </div>
             </div>
+            <div className="form-group">
+              <label className="form-label">Checklist padrão deste tipo (opcional)</label>
+              <div style={{ fontSize:11, color:'var(--text-muted)', marginBottom:6 }}>
+                Estes itens já vêm preenchidos toda vez que esta tarefa for atribuída (dá pra ajustar na atribuição).
+              </div>
+              {checklistPadraoForm.map((item, i) => (
+                <div key={i} style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
+                  <span style={{ fontSize:12, color:'var(--text-muted)', width:18, textAlign:'right' }}>{i+1}.</span>
+                  <input className="form-input" value={item} style={{ flex:1, fontSize:13 }}
+                    onChange={e => setChecklistPadraoForm(prev => prev.map((x, xi) => xi === i ? e.target.value : x))}/>
+                  <button type="button" className="btn btn-ghost btn-icon btn-sm"
+                    onClick={() => setChecklistPadraoForm(prev => prev.filter((_, xi) => xi !== i))}><Trash2 size={12}/></button>
+                </div>
+              ))}
+              <div style={{ display:'flex', gap:6 }}>
+                <input className="form-input" value={novoItemPadrao} placeholder="Novo item do checklist..."
+                  style={{ flex:1, fontSize:13 }}
+                  onChange={e => setNovoItemPadrao(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && novoItemPadrao.trim()) { setChecklistPadraoForm(prev => [...prev, novoItemPadrao.trim()]); setNovoItemPadrao('') } }}/>
+                <button type="button" className="btn btn-ghost"
+                  onClick={() => { if (novoItemPadrao.trim()) { setChecklistPadraoForm(prev => [...prev, novoItemPadrao.trim()]); setNovoItemPadrao('') } }}>
+                  <Plus size={13}/> Adicionar
+                </button>
+              </div>
+            </div>
+
             <div className="form-actions"><button className="btn btn-ghost" onClick={() => setModalBanco(false)}>Cancelar</button><button className="btn btn-primary" onClick={salvarBanco} disabled={!formBanco.nome.trim()}>Salvar</button></div>
           </div>
         </div>
@@ -1447,6 +1497,25 @@ function ViewBancoTarefas({ usuarios, usuario, grupo = 'influencers' }) {
                       </button>
                     )
                   })}
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Parceiro(s) *</label>
+                {(formAtribuir.parceiros_ids || []).length > 1 && (
+                  <div style={{ fontSize:11, color:'var(--text-muted)', marginBottom:6 }}>
+                    Será criada uma tarefa para cada parceiro selecionado ({formAtribuir.parceiros_ids.length}).
+                  </div>
+                )}
+                <div style={{ display:'flex', flexWrap:'wrap', gap:6, maxHeight:150, overflowY:'auto' }}>
+                  {parceiros.map(pp => {
+                    const ativo = (formAtribuir.parceiros_ids || []).includes(pp.id)
+                    return (
+                      <button key={pp.id} type="button" onClick={() => toggleParceiroAtribuir(pp.id)} style={{ padding:'4px 12px', borderRadius:20, fontSize:12, fontWeight:600, cursor:'pointer', border:'2px solid', borderColor: ativo ? '#22c55e' : 'var(--border)', background: ativo ? 'rgba(34,197,94,0.12)' : 'transparent', color: ativo ? '#22c55e' : 'var(--text-muted)', transition:'all 0.15s' }}>
+                        {pp.nome}
+                      </button>
+                    )
+                  })}
+                  {parceiros.length === 0 && <span style={{ fontSize:12, color:'var(--text-muted)' }}>Nenhum parceiro do grupo encontrado no CRM.</span>}
                 </div>
               </div>
               <div className="form-group"><label className="form-label">Prazo (opcional)</label><input className="form-input" type='date' value={formAtribuir.data_prazo} onChange={e => setFormAtribuir(f => ({ ...f, data_prazo: e.target.value }))}/></div>
