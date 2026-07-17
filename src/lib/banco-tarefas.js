@@ -150,7 +150,7 @@ export async function getMinhasAtribuicoes(userId, grupo = null) {
   return data || []
 }
 
-export async function atribuirTarefa({ bancoTarefaId, responsavelIds, dataPrazo, especificidade, atribuidaPor, checklist, grupo, parceiroId }) {
+export async function atribuirTarefa({ bancoTarefaId, responsavelIds, dataPrazo, especificidade, atribuidaPor, checklist, grupo, parceiroId, quantidade }) {
   const responsavelPrincipal = Array.isArray(responsavelIds) ? responsavelIds[0] : responsavelIds
 
   const { data, error } = await supabase
@@ -164,6 +164,8 @@ export async function atribuirTarefa({ bancoTarefaId, responsavelIds, dataPrazo,
       status:          'a_fazer',
       grupo:           grupo || 'parceiras',
       parceiro_id:     parceiroId || null,
+      parceiros_ids:   parceiroId ? [parceiroId] : [],
+      quantidade:      Math.max(1, Number(quantidade) || 1),
     }])
     .select('id')
     .single()
