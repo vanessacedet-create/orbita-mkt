@@ -600,7 +600,7 @@ function ViewBancoTarefas({ usuarios, usuario, grupo = 'influencers' }) {
       const [bancoData, catData, atribData] = await Promise.all([
         getBancoTarefas(grupo),
         getCategorias(grupo),
-        isAdmin ? getAtribuicoes({ grupo }) : getMinhasAtribuicoes(usuario.id, grupo),
+        getAtribuicoes({ grupo }),
         getParceiros().then(ps => setParceiros((ps || []).filter(pp => (pp.grupo || '') === grupo))).catch(() => {}),
       ])
       setBanco(bancoData)
@@ -795,7 +795,7 @@ function ViewBancoTarefas({ usuarios, usuario, grupo = 'influencers' }) {
   // ── Atribuir ──
   function abrirAtribuir(tarefa) {
     setTarefaSelecionada(tarefa)
-    setFormAtribuir({ responsavel_ids: tarefa.responsavel_id ? [tarefa.responsavel_id] : [], data_prazo: '', especificidade: '', parceiros_ids: [] })
+    setFormAtribuir({ responsavel_ids: tarefa.responsavel_id ? [tarefa.responsavel_id] : [], data_prazo: '', especificidade: '', parceiros_ids: [], quantidade: 1 })
     setChecklistAtribuir((tarefa.checklist_padrao || []).sort((a,b)=>(a.ordem||0)-(b.ordem||0)).map(c => c.texto))
     setNovoItemAtribuir('')
     setModalAtribuir(true)
@@ -803,10 +803,10 @@ function ViewBancoTarefas({ usuarios, usuario, grupo = 'influencers' }) {
 
   async function confirmarAtribuicao() {
     if (formAtribuir.responsavel_ids.length === 0) return alert('Selecione ao menos um responsável.')
-    if ((formAtribuir.parceiros_ids || []).length === 0) return alert('Selecione ao menos um parceiro.')
     try {
       const novas = []
-      for (const parceiroId of formAtribuir.parceiros_ids) {
+      const alvos = (formAtribuir.parceiros_ids || []).length > 0 ? formAtribuir.parceiros_ids : [null]
+      for (const parceiroId of alvos) {
         const nova = await atribuirTarefa({
           grupo,
           bancoTarefaId: tarefaSelecionada.id,
@@ -816,6 +816,7 @@ function ViewBancoTarefas({ usuarios, usuario, grupo = 'influencers' }) {
           atribuidaPor: usuario.id,
           checklist: checklistAtribuir,
           parceiroId,
+          quantidade: formAtribuir.quantidade,
         })
         novas.push(nova)
       }
@@ -840,6 +841,35 @@ function ViewBancoTarefas({ usuarios, usuario, grupo = 'influencers' }) {
         ? f.responsavel_ids.filter(x => x !== id)
         : [...f.responsavel_ids, id]
     }))
+  }
+
+  async function addParceiroCard(atrib, parceiroId) {
+    if (!parceiroId) return
+    const atuais = atrib.parceiros_ids || []
+    if (atuais.includes(parceiroId)) return
+    if (atuais.length >= Math.max(1, atrib.quantidade || 1)) return alert('Todas as vagas desta demanda já têm parceiro.')
+    try {
+      const atualizada = await updateAtribuicao(atrib.id, { parceiros_ids: [...atuais, parceiroId] })
+      setAtribuicoes(a => a.map(x => x.id === atualizada.id ? atualizada : x))
+    } catch (e) { alert('Erro: ' + e.message) }
+  }
+
+  async function removeParceiroCard(atrib, parceiroId) {
+    try {
+      const atualizada = await updateAtribuicao(atrib.id, { parceiros_ids: (atrib.parceiros_ids || []).filter(x => x !== parceiroId) })
+      setAtribuicoes(a => a.map(x => x.id === atualizada.id ? atualizada : x))
+    } catch (e) { alert('Erro: ' + e.message) }
+  }
+
+  async function darBaixa(atrib, delta) {
+    const total = Math.max(1, atrib.quantidade || 1)
+    const feita = Math.min(total, Math.max(0, (atrib.quantidade_feita || 0) + delta))
+    if (feita === (atrib.quantidade_feita || 0)) return
+    const novoStatus = feita >= total ? 'concluida' : (feita > 0 ? 'em_andamento' : 'a_fazer')
+    try {
+      const atualizada = await updateAtribuicao(atrib.id, { quantidade_feita: feita, status: novoStatus, _statusAnterior: atrib.status })
+      setAtribuicoes(a => a.map(x => x.id === atualizada.id ? atualizada : x))
+    } catch (e) { alert('Erro: ' + e.message) }
   }
 
   async function mudarStatus(atrib, novoStatus) {
@@ -1014,7 +1044,32 @@ function ViewBancoTarefas({ usuarios, usuario, grupo = 'influencers' }) {
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8 }}>
           <div style={{ flex:1 }}>
             <span style={{ fontWeight:600, fontSize:14, color:'var(--text)', marginRight:8 }}>{a.banco_tarefa?.nome}</span>
-            {a.parceiro?.nome && <span style={{ fontSize:11, fontWeight:700, background:'rgba(34,197,94,0.12)', border:'1px solid rgba(34,197,94,0.4)', color:'#22c55e', borderRadius:99, padding:'2px 10px', marginRight:8 }}>{a.parceiro.nome}</span>}
+            {(a.parceiros_ids || (a.parceiro ? [a.parceiro.id] : [])).map(pid => {
+              const pp = parceiros.find(x => x.id === pid) || (a.parceiro?.id === pid ? a.parceiro : null)
+              if (!pp) return null
+              return (
+                <span key={pid} style={{ display:'inline-flex', alignItems:'center', gap:4, fontSize:11, fontWeight:700, background:'rgba(34,197,94,0.12)', border:'1px solid rgba(34,197,94,0.4)', color:'#22c55e', borderRadius:99, padding:'2px 10px', marginRight:6 }}>
+                  {pp.nome}
+                  {isAdmin && <button type="button" onClick={() => removeParceiroCard(a, pid)} style={{ background:'none', border:'none', cursor:'pointer', color:'#22c55e', padding:0, lineHeight:1 }}>×</button>}
+                </span>
+              )
+            })}
+            {isAdmin && (a.parceiros_ids || []).length < Math.max(1, a.quantidade || 1) && (
+              <select value="" onChange={e => addParceiroCard(a, e.target.value)}
+                style={{ fontSize:11, padding:'2px 6px', borderRadius:99, border:'1px dashed var(--border)', background:'transparent', color:'var(--text-muted)', marginRight:8, cursor:'pointer', maxWidth:130 }}>
+                <option value="">+ Parceiro</option>
+                {parceiros.filter(pp => !(a.parceiros_ids || []).includes(pp.id)).map(pp => (
+                  <option key={pp.id} value={pp.id}>{pp.nome}</option>
+                ))}
+              </select>
+            )}
+            {(a.quantidade || 1) > 1 && (
+              <span style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:11, fontWeight:700, background:'var(--surface-2)', border:'1px solid var(--border)', borderRadius:99, padding:'2px 8px', marginRight:8 }}>
+                <button type="button" onClick={() => darBaixa(a, -1)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', padding:0, fontSize:13, lineHeight:1 }}>−</button>
+                <span style={{ color: (a.quantidade_feita||0) >= (a.quantidade||1) ? '#22c55e' : 'var(--text)' }}>{a.quantidade_feita || 0}/{a.quantidade}</span>
+                <button type="button" onClick={() => darBaixa(a, 1)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--accent)', padding:0, fontSize:13, lineHeight:1 }}>+</button>
+              </span>
+            )}
             <span style={{ display:'inline-block', padding:'2px 10px', borderRadius:99, fontSize:11, fontWeight:600, color:'#fff', background: statusInfo.cor, marginRight:6 }}>{statusInfo.label}</span>
             {a.banco_tarefa?.categoria && (
               <span style={{ padding:'2px 8px', borderRadius:99, fontSize:11, fontWeight:600, background: (a.banco_tarefa.categoria.cor || '#6366f1') + '22', color: a.banco_tarefa.categoria.cor || '#6366f1' }}>{a.banco_tarefa.categoria.nome}</span>
@@ -1518,7 +1573,10 @@ function ViewBancoTarefas({ usuarios, usuario, grupo = 'influencers' }) {
                   {parceiros.length === 0 && <span style={{ fontSize:12, color:'var(--text-muted)' }}>Nenhum parceiro do grupo encontrado no CRM.</span>}
                 </div>
               </div>
-              <div className="form-group"><label className="form-label">Prazo (opcional)</label><input className="form-input" type='date' value={formAtribuir.data_prazo} onChange={e => setFormAtribuir(f => ({ ...f, data_prazo: e.target.value }))}/></div>
+              <div className="form-row">
+                <div className="form-group"><label className="form-label">Prazo (opcional)</label><input className="form-input" type='date' value={formAtribuir.data_prazo} onChange={e => setFormAtribuir(f => ({ ...f, data_prazo: e.target.value }))}/></div>
+                <div className="form-group"><label className="form-label">Quantidade</label><input className="form-input" type='number' min='1' value={formAtribuir.quantidade} onChange={e => setFormAtribuir(f => ({ ...f, quantidade: Math.max(1, Number(e.target.value) || 1) }))}/></div>
+              </div>
               <div className="form-group"><label className="form-label">Observação (opcional)</label><textarea className="form-textarea" rows={2} value={formAtribuir.especificidade} onChange={e => setFormAtribuir(f => ({ ...f, especificidade: e.target.value }))} placeholder="Algo específico desta ocorrência..."/></div>
               <div className="form-group">
                 <label className="form-label">Subtarefas (opcional)</label>
