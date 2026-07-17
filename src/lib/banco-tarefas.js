@@ -29,10 +29,11 @@ const ATRIBUIDA_SELECT = `
 
 // ── CATEGORIAS ────────────────────────────────────────────────────────────────
 
-export async function getCategorias() {
+export async function getCategorias(grupo = 'parceiras') {
   const { data, error } = await supabase
     .from('banco_categorias')
     .select('*')
+    .eq('grupo', grupo)
     .eq('ativo', true)
     .order('ordem', { ascending: true })
     .order('nome')
@@ -71,10 +72,11 @@ export async function deleteCategoria(id) {
 
 // ── BANCO DE TAREFAS ──────────────────────────────────────────────────────────
 
-export async function getBancoTarefas() {
+export async function getBancoTarefas(grupo = 'parceiras') {
   const { data, error } = await supabase
     .from('banco_tarefas')
     .select(BANCO_SELECT)
+    .eq('grupo', grupo)
     .eq('ativo', true)
     .is('tarefa_pai_id', null)
     .order('ordem', { ascending: true })
@@ -114,11 +116,12 @@ export async function desativarBancoTarefa(id) {
 
 // ── ATRIBUIÇÕES ───────────────────────────────────────────────────────────────
 
-export async function getAtribuicoes({ responsavelId, status } = {}) {
+export async function getAtribuicoes({ responsavelId, status, grupo } = {}) {
   let query = supabase
     .from('tarefas_atribuidas')
     .select(ATRIBUIDA_SELECT)
     .order('data_atribuicao', { ascending: false })
+  if (grupo) query = query.eq('grupo', grupo)
   if (responsavelId) query = query.eq('responsavel_id', responsavelId)
   if (status) query = query.eq('status', status)
   const { data, error } = await query
@@ -126,7 +129,7 @@ export async function getAtribuicoes({ responsavelId, status } = {}) {
   return data || []
 }
 
-export async function getMinhasAtribuicoes(userId) {
+export async function getMinhasAtribuicoes(userId, grupo = null) {
   const { data: atribIds } = await supabase
     .from('atribuicao_responsaveis')
     .select('atribuicao_id')
@@ -134,16 +137,18 @@ export async function getMinhasAtribuicoes(userId) {
 
   const ids = (atribIds || []).map(a => a.atribuicao_id)
 
-  const { data, error } = await supabase
+  let q = supabase
     .from('tarefas_atribuidas')
     .select(ATRIBUIDA_SELECT)
     .or(`responsavel_id.eq.${userId}${ids.length > 0 ? `,id.in.(${ids.join(',')})` : ''}`)
     .order('data_atribuicao', { ascending: false })
+  if (grupo) q = q.eq('grupo', grupo)
+  const { data, error } = await q
   if (error) throw error
   return data || []
 }
 
-export async function atribuirTarefa({ bancoTarefaId, responsavelIds, dataPrazo, especificidade, atribuidaPor, checklist }) {
+export async function atribuirTarefa({ bancoTarefaId, responsavelIds, dataPrazo, especificidade, atribuidaPor, checklist, grupo }) {
   const responsavelPrincipal = Array.isArray(responsavelIds) ? responsavelIds[0] : responsavelIds
 
   const { data, error } = await supabase
@@ -155,6 +160,7 @@ export async function atribuirTarefa({ bancoTarefaId, responsavelIds, dataPrazo,
       especificidade:  especificidade || null,
       atribuida_por:   atribuidaPor,
       status:          'a_fazer',
+      grupo:           grupo || 'parceiras',
     }])
     .select('id')
     .single()
