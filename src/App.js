@@ -43,6 +43,7 @@ import ResetPassword from './pages/ResetPassword'
 
 const Dashboard              = lazy(() => import('./pages/Dashboard'))
 const TarefasParceiras       = lazy(() => import('./pages/TarefasParceiras'))
+const TarefasInfluencers2     = lazy(() => import('./pages/TarefasInfluencers'))
 const DashboardParceiras     = lazy(() => import('./pages/DashboardParceiras'))
 const BemVindo               = lazy(() => import('./pages/BemVindo'))
 const AcessosEquipe          = lazy(() => import('./pages/AcessosEquipe'))
@@ -104,6 +105,7 @@ const MENU = [
   { path: '/monitoramento',         label: 'Monitoramento',      icon: Eye,             modulo: 'monitoramento',     ocultarPerfis: PERFIS_PARCEIRAS },
   { path: '/lancamentos',           label: 'Lançamentos',        icon: CalendarDays,    modulo: 'lancamentos' },
   { path: '/tarefas',              label: 'Tarefas',             icon: CheckSquare,     modulo: 'tarefas',           ocultarPerfis: PERFIS_PARCEIRAS },
+  { path: '/tarefas-influencers',  label: 'Tarefas Influencers', icon: CheckSquare,     modulo: 'tarefas_influencers', ocultarPerfis: PERFIS_PARCEIRAS },
 
   // Módulos exclusivos parceiras
   { path: '/agenda',                label: 'Agenda',             icon: CalendarRange,   modulo: 'tarefas_parceiras' },
@@ -446,6 +448,7 @@ function Shell() {
                 <Route path="/lancamentos" element={<RequireAuth modulo="lancamentos"><Lancamentos /></RequireAuth>} />
                 <Route path="/tarefas" element={<RequireAuth modulo="tarefas"><Tarefas /></RequireAuth>} />
                 <Route path="/tarefas-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><TarefasParceiras grupo="parceiras" titulo="Tarefas — Editoras Parceiras" /></RequireAuth>} />
+                <Route path="/tarefas-influencers" element={<RequireAuth modulo="tarefas_influencers"><TarefasInfluencers2 /></RequireAuth>} />
                 <Route path="/agenda" element={<RequireAuth modulo="tarefas_parceiras"><Agenda /></RequireAuth>} />
                 <Route path="/treinamentos" element={<RequireAuth modulo="treinamentos"><Treinamentos /></RequireAuth>} />
                 <Route path="/treinamentos-parceiras" element={<RequireAuth modulo="treinamentos_parceiras"><TreinamentosParceiras /></RequireAuth>} />
