@@ -6,6 +6,7 @@ const BANCO_SELECT = `
   responsavel:responsavel_id(id, nome),
   categoria:categoria_id(id, nome, cor),
   responsaveis_padrao:banco_tarefa_responsaveis(id, usuario_id, usuario:usuario_id(id, nome)),
+  checklist_padrao:banco_tarefa_checklist(id, texto, ordem),
   subtarefas:banco_tarefas!tarefa_pai_id(
     id, nome, descricao, periodicidade, tempo_medio_minutos, tarefa_pai_id, ativo, categoria_id,
     dia_semana_ideal, dia_mes_ideal,
@@ -21,6 +22,7 @@ const ATRIBUIDA_SELECT = `
     categoria:categoria_id(id, nome, cor)
   ),
   responsavel:responsavel_id(id, nome),
+  parceiro:parceiro_id(id, nome),
   atribuida_por:atribuida_por(id, nome),
   registros_tempo:tarefas_registro_tempo(id, evento, registrado_em),
   checklist:atribuicao_checklist(id, texto, concluido, ordem),
@@ -148,7 +150,7 @@ export async function getMinhasAtribuicoes(userId, grupo = null) {
   return data || []
 }
 
-export async function atribuirTarefa({ bancoTarefaId, responsavelIds, dataPrazo, especificidade, atribuidaPor, checklist, grupo }) {
+export async function atribuirTarefa({ bancoTarefaId, responsavelIds, dataPrazo, especificidade, atribuidaPor, checklist, grupo, parceiroId }) {
   const responsavelPrincipal = Array.isArray(responsavelIds) ? responsavelIds[0] : responsavelIds
 
   const { data, error } = await supabase
@@ -161,6 +163,7 @@ export async function atribuirTarefa({ bancoTarefaId, responsavelIds, dataPrazo,
       atribuida_por:   atribuidaPor,
       status:          'a_fazer',
       grupo:           grupo || 'parceiras',
+      parceiro_id:     parceiroId || null,
     }])
     .select('id')
     .single()
@@ -318,4 +321,16 @@ export function formatarTempo(minutos) {
   const h = Math.floor(minutos / 60)
   const m = minutos % 60
   return m > 0 ? `${h}h ${m}min` : `${h}h`
+}
+
+// ── CHECKLIST PADRÃO DO TIPO (template) ─────────────────────────────────────
+export async function setChecklistPadrao(bancoTarefaId, itens) {
+  await supabase.from('banco_tarefa_checklist').delete().eq('banco_tarefa_id', bancoTarefaId)
+  const textos = (itens || []).map(t => String(t).trim()).filter(Boolean)
+  if (textos.length > 0) {
+    const { error } = await supabase.from('banco_tarefa_checklist').insert(
+      textos.map((texto, i) => ({ banco_tarefa_id: bancoTarefaId, texto, ordem: i }))
+    )
+    if (error) throw error
+  }
 }
