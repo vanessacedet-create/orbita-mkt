@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Pencil, Trash2, X, CheckSquare, Users, Clock } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, CheckSquare, Users, Clock, GripVertical } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { getUsuarios } from '../lib/supabase'
 import {
@@ -40,6 +40,8 @@ export default function ModelosTarefasInfluencers() {
   const [form, setForm] = useState(FORM_VAZIO)
   const [novoItem, setNovoItem] = useState('')
   const [salvando, setSalvando] = useState(false)
+  const [itemArrastado, setItemArrastado] = useState(null)
+  const [itemSobre, setItemSobre] = useState(null)
 
   async function carregar() {
     setLoading(true)
@@ -58,6 +60,8 @@ export default function ModelosTarefasInfluencers() {
     setEditando(null)
     setForm(FORM_VAZIO)
     setNovoItem('')
+    setItemArrastado(null)
+    setItemSobre(null)
     setModal(true)
   }
 
@@ -72,6 +76,8 @@ export default function ModelosTarefasInfluencers() {
       checklist: (modelo.checklist_padrao || []).sort((a,b)=>(a.ordem||0)-(b.ordem||0)).map(c => c.texto),
     })
     setNovoItem('')
+    setItemArrastado(null)
+    setItemSobre(null)
     setModal(true)
   }
 
@@ -89,6 +95,42 @@ export default function ModelosTarefasInfluencers() {
     if (!texto) return
     setForm(f => ({ ...f, checklist: [...f.checklist, texto] }))
     setNovoItem('')
+  }
+
+  function iniciarArrasteChecklist(e, indice) {
+    setItemArrastado(indice)
+    setItemSobre(indice)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', String(indice))
+  }
+
+  function passarSobreChecklist(e, indice) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setItemSobre(indice)
+  }
+
+  function soltarChecklist(e, indiceDestino) {
+    e.preventDefault()
+    if (itemArrastado === null || itemArrastado === indiceDestino) {
+      setItemArrastado(null)
+      setItemSobre(null)
+      return
+    }
+
+    setForm(f => {
+      const checklist = [...f.checklist]
+      const [movido] = checklist.splice(itemArrastado, 1)
+      checklist.splice(indiceDestino, 0, movido)
+      return { ...f, checklist }
+    })
+    setItemArrastado(null)
+    setItemSobre(null)
+  }
+
+  function encerrarArrasteChecklist() {
+    setItemArrastado(null)
+    setItemSobre(null)
   }
 
   async function salvar() {
@@ -221,9 +263,37 @@ export default function ModelosTarefasInfluencers() {
 
               <div className="form-group">
                 <label className="form-label">Checklist padrão</label>
+                {form.checklist.length > 1 && <div style={{ fontSize:11, color:'var(--text-muted)', marginBottom:7 }}>Arraste pelo ícone à esquerda para alterar a ordem das etapas.</div>}
                 {form.checklist.map((item, i) => (
-                  <div key={`${item}-${i}`} style={{ display:'flex', gap:7, alignItems:'center', marginBottom:6 }}>
-                    <span style={{ width:20, textAlign:'right', fontSize:11, color:'var(--text-muted)' }}>{i+1}.</span>
+                  <div
+                    key={`${item}-${i}`}
+                    onDragOver={e => passarSobreChecklist(e, i)}
+                    onDrop={e => soltarChecklist(e, i)}
+                    style={{
+                      display:'flex', gap:7, alignItems:'center', marginBottom:6,
+                      padding:'5px 6px', borderRadius:8,
+                      border:`1px solid ${itemSobre === i && itemArrastado !== i ? 'var(--accent)' : 'transparent'}`,
+                      background:itemArrastado === i ? 'var(--surface-2)' : 'transparent',
+                      opacity:itemArrastado === i ? 0.55 : 1,
+                      transition:'border-color .12s, background .12s, opacity .12s',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      draggable
+                      onDragStart={e => iniciarArrasteChecklist(e, i)}
+                      onDragEnd={encerrarArrasteChecklist}
+                      title="Arrastar para reordenar"
+                      aria-label={`Mover etapa ${i + 1}`}
+                      style={{
+                        width:26, height:34, display:'flex', alignItems:'center', justifyContent:'center',
+                        background:'transparent', border:'none', color:'var(--text-muted)', cursor:'grab',
+                        padding:0, flexShrink:0,
+                      }}
+                    >
+                      <GripVertical size={16}/>
+                    </button>
+                    <span style={{ width:20, textAlign:'right', fontSize:11, color:'var(--text-muted)', flexShrink:0 }}>{i+1}.</span>
                     <input className="form-input" value={item} onChange={e => setForm(f => ({ ...f, checklist:f.checklist.map((x,idx) => idx === i ? e.target.value : x) }))}/>
                     <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setForm(f => ({ ...f, checklist:f.checklist.filter((_,idx) => idx !== i) }))}><Trash2 size={12}/></button>
                   </div>
