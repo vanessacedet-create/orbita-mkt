@@ -361,9 +361,9 @@ export default function TarefasInfluencersOrganizadas() {
     if (responsavelFiltro && !responsaveisDa(t).some(r => r.id === responsavelFiltro)) return false
     if (filtro === 'hoje') return isHoje(t.data_prazo) && !['concluida','cancelada'].includes(t.status)
     if (filtro === 'atrasadas') return isAtrasada(t)
-    if (filtro === 'semana') return isSemanaAtual(t.data_prazo)
+    if (filtro === 'semana') return isSemanaAtual(t.data_prazo) && !['concluida','cancelada'].includes(t.status)
     if (filtro === 'concluidas') return t.status === 'concluida'
-    return t.status !== 'cancelada'
+    return !['concluida','cancelada'].includes(t.status)
   }), [base, filtro, responsavelFiltro])
 
   const resumo = {
@@ -409,7 +409,7 @@ export default function TarefasInfluencersOrganizadas() {
 
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:10, marginBottom:18 }}><ResumoCard icon={AlertTriangle} label="Atrasadas" value={resumo.atrasadas} tone="#ef4444"/><ResumoCard icon={CalendarDays} label="Para hoje" value={resumo.hoje} tone="#f59e0b"/><ResumoCard icon={Clock} label="Em andamento" value={resumo.andamento} tone="#6366f1"/><ResumoCard icon={CheckCircle2} label="Concluídas na semana" value={resumo.concluidas} tone="#10b981"/></div>
 
-      <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:16 }}>{['todas','hoje','atrasadas','semana','concluidas'].map(v => <button key={v} className={filtro === v ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm'} onClick={() => setFiltro(v)}>{({ todas:'Todas', hoje:'Hoje', atrasadas:'Atrasadas', semana:'Esta semana', concluidas:'Concluídas' })[v]}</button>)}{aba === 'equipe' && <select className="form-select" style={{ width:'auto', marginLeft:'auto' }} value={responsavelFiltro} onChange={e => setResponsavelFiltro(e.target.value)}><option value="">Toda a equipe</option>{usuarios.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}</select>}</div>
+      <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:16 }}>{['todas','hoje','atrasadas','semana','concluidas'].map(v => <button key={v} className={filtro === v ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm'} onClick={() => setFiltro(v)}>{({ todas:'Todas', hoje:'Hoje', atrasadas:'Atrasadas', semana:'Esta semana', concluidas:'Concluídos' })[v]}</button>)}{aba === 'equipe' && <select className="form-select" style={{ width:'auto', marginLeft:'auto' }} value={responsavelFiltro} onChange={e => setResponsavelFiltro(e.target.value)}><option value="">Toda a equipe</option>{usuarios.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}</select>}</div>
 
       {loading ? <div className="loading"><div className="spinner"/></div> : filtradas.length === 0 ? <div className="empty-state"><p>Nenhuma tarefa encontrada neste filtro.</p></div> : <div style={{ display:'grid', gap:10 }}>{filtradas.map(t => <TaskCard key={t.id} tarefa={t} onStatus={mudarStatus} onEdit={setTarefaEditando} onDelete={excluir} podeGerenciar={isAdmin}/>)}</div>}
 
