@@ -1,5 +1,12 @@
 import { supabase } from './client'
 
+// Usuários desligados permanecem no banco para preservar tarefas,
+// comentários e demais registros históricos, mas não aparecem em
+// seletores de responsáveis nem nas listagens operacionais.
+const EMAILS_INATIVOS = new Set([
+  'anny.passos@cedet.com.br',
+])
+
 export async function signIn(email, password) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) throw error
@@ -34,7 +41,11 @@ export async function getUsuarioPerfil(userId) {
 export async function getUsuarios() {
   const { data, error } = await supabase.from('usuarios').select('*').order('nome')
   if (error) throw error
-  return data
+
+  return (data || []).filter((usuario) => {
+    const email = (usuario.email || '').trim().toLowerCase()
+    return !EMAILS_INATIVOS.has(email)
+  })
 }
 
 export async function updateUsuario(id, updates) {
