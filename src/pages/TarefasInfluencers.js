@@ -124,6 +124,10 @@ export default function ModelosTarefasInfluencers() {
     setModelos(prev => prev.filter(m => m.id !== id))
   }
 
+  const idsUsuariosVisiveis = new Set(usuarios.map(u => u.id))
+  const responsaveisInativos = (editando?.responsaveis_padrao || [])
+    .filter(r => form.responsaveis_ids.includes(r.usuario_id) && !idsUsuariosVisiveis.has(r.usuario_id))
+
   return (
     <div>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, marginBottom:18, flexWrap:'wrap' }}>
@@ -202,11 +206,17 @@ export default function ModelosTarefasInfluencers() {
               <div className="form-group">
                 <label className="form-label">Responsável padrão</label>
                 <div style={{ display:'flex', flexWrap:'wrap', gap:7 }}>
+                  {responsaveisInativos.map(r => (
+                    <button key={r.usuario_id} type="button" onClick={() => toggleResponsavel(r.usuario_id)} title="Clique para remover este vínculo antigo" style={{ padding:'5px 12px', borderRadius:20, border:'1px solid #ef4444', background:'rgba(239,68,68,.12)', color:'#ef4444', cursor:'pointer', fontSize:12, fontWeight:700 }}>
+                      {r.usuario?.nome?.split(' ')[0] || 'Usuário inativo'} · remover
+                    </button>
+                  ))}
                   {usuarios.map(u => {
                     const ativo = form.responsaveis_ids.includes(u.id)
                     return <button key={u.id} type="button" onClick={() => toggleResponsavel(u.id)} style={{ padding:'5px 12px', borderRadius:20, border:`1px solid ${ativo ? 'var(--accent)' : 'var(--border)'}`, background:ativo ? 'var(--accent-glow)' : 'transparent', color:ativo ? 'var(--accent)' : 'var(--text-muted)', cursor:'pointer', fontSize:12, fontWeight:600 }}>{u.nome.split(' ')[0]}</button>
                   })}
                 </div>
+                {responsaveisInativos.length > 0 && <div style={{ marginTop:7, fontSize:11, color:'var(--text-muted)' }}>O nome em vermelho é um vínculo antigo. Clique nele para remover e deixe apenas Yasmin selecionada.</div>}
               </div>
 
               <div className="form-group">
