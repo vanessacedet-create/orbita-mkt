@@ -104,7 +104,6 @@ const MENU = [
   { path: '/campanhas',             label: 'Campanhas',          icon: Megaphone,       modulo: 'campanhas',         ocultarPerfis: PERFIS_PARCEIRAS },
   { path: '/monitoramento',         label: 'Monitoramento',      icon: Eye,             modulo: 'monitoramento',     ocultarPerfis: PERFIS_PARCEIRAS },
   { path: '/lancamentos',           label: 'Lançamentos',        icon: CalendarDays,    modulo: 'lancamentos' },
-  { path: '/tarefas',              label: 'Tarefas',             icon: CheckSquare,     modulo: 'tarefas',           ocultarPerfis: PERFIS_PARCEIRAS },
   { path: '/tarefas-influencers',  label: 'Tarefas Influencers', icon: CheckSquare,     modulo: 'tarefas_influencers', ocultarPerfis: PERFIS_PARCEIRAS },
 
   // Módulos exclusivos parceiras
