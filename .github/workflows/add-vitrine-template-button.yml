@@ -1,0 +1,114 @@
+name: Add Vitrine spreadsheet template button
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/add-vitrine-template-button.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-build:
+    if: ${{ !contains(github.event.head_commit.message, '[vitrine-template-done]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Add template download button
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('src/pages/VitrineAdmin.js')
+          text = path.read_text(encoding='utf-8')
+
+          function_code = r'''
+  // ── Baixar modelo de planilha para importação ──
+  function baixarModeloPlanilha() {
+    const dados = [
+      {
+        'Id': '',
+        'Nome produto': 'Exemplo de título',
+        'Autor(es)': 'Nome do autor',
+        'Fabricante': 'Nome da editora',
+        'Preço de capa': 59.9,
+        'Descrição': 'Descrição do livro',
+        'Link Imagem': 'https://exemplo.com/capa.jpg',
+        'EAN': '9780000000000',
+        'Encadernação': 'Brochura',
+        'Data de lançamento': '2026-08-04',
+      },
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(dados, {
+      header: [
+        'Id',
+        'Nome produto',
+        'Autor(es)',
+        'Fabricante',
+        'Preço de capa',
+        'Descrição',
+        'Link Imagem',
+        'EAN',
+        'Encadernação',
+        'Data de lançamento',
+      ],
+    });
+
+    ws['!cols'] = [
+      { wch: 12 }, { wch: 35 }, { wch: 28 }, { wch: 24 }, { wch: 16 },
+      { wch: 50 }, { wch: 45 }, { wch: 18 }, { wch: 18 }, { wch: 22 },
+    ];
+    ws['H2'].t = 's';
+    ws['H2'].z = '@';
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Livros');
+    XLSX.writeFile(wb, 'modelo-importacao-vitrine-orbita.xlsx');
+  }
+
+'''
+
+          if 'function baixarModeloPlanilha()' not in text:
+              marker = '  // ── Importar planilha ──\n'
+              if marker not in text:
+                  raise SystemExit('Marcador da função de importação não encontrado')
+              text = text.replace(marker, function_code + marker, 1)
+
+          if 'Baixar modelo' not in text:
+              pattern = re.compile(r'(\s*<label[^>]*>\s*<input[\s\S]*?Importar planilha\s*</label>)')
+              match = pattern.search(text)
+              if not match:
+                  raise SystemExit('Botão Importar planilha não encontrado')
+              indent_match = re.match(r'\s*', match.group(1))
+              indent = indent_match.group(0).split('\n')[-1]
+              button = f'''\n{indent}<button\n{indent}  type="button"\n{indent}  className="btn btn-secondary"\n{indent}  onClick={{baixarModeloPlanilha}}\n{indent}  title="Baixar planilha modelo para importação de livros"\n{indent}>\n{indent}  <Download size={{16}} />\n{indent}  Baixar modelo\n{indent}</button>'''
+              text = text[:match.start()] + button + text[match.start():]
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate production build
+        run: npm run build
+
+      - name: Commit production change
+        run: |
+          rm .github/workflows/add-vitrine-template-button.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/VitrineAdmin.js .github/workflows/add-vitrine-template-button.yml
+          git commit -m "Adiciona modelo de planilha na Vitrine [vitrine-template-done]"
+          git push origin main
