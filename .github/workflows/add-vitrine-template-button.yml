@@ -112,3 +112,5 @@ jobs:
           git add src/pages/VitrineAdmin.js .github/workflows/add-vitrine-template-button.yml
           git commit -m "Adiciona modelo de planilha na Vitrine [vitrine-template-done]"
           git push origin main
+
+# Trigger atualizado em 2026-08-04
