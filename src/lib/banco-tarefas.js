@@ -165,7 +165,6 @@ export async function atribuirTarefa({ bancoTarefaId, responsavelIds, dataPrazo,
       grupo:           grupo || 'parceiras',
       parceiro_id:     parceiroId || null,
       parceiros_ids:   parceiroId ? [parceiroId] : [],
-      quantidade:      Math.max(1, Number(quantidade) || 1),
     }])
     .select('id')
     .single()
