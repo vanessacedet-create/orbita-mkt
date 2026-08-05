@@ -1,0 +1,233 @@
+name: Aplicar livraria e remover Anny
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/aplica-livraria-e-remove-anny.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Aplicar alterações
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          # ── CRM: habilitar edição do nome da livraria ─────────────────────
+          crm_path = Path('src/pages/CRM.js')
+          crm = crm_path.read_text(encoding='utf-8')
+
+          crm = crm.replace(
+              "    nome:         inicial.nome||'',\n    username:     inicial.username||'',",
+              "    nome:         inicial.nome||'',\n    livraria:     inicial.livraria||'',\n    username:     inicial.username||'',",
+              1,
+          )
+          crm = crm.replace(
+              "      nome: inicial.nome||'', username: inicial.username||'', platforms: inicial.platforms||[],",
+              "      nome: inicial.nome||'', livraria: inicial.livraria||'', username: inicial.username||'', platforms: inicial.platforms||[],",
+              1,
+          )
+          crm = crm.replace(
+              "        nome:            form.nome.trim()||inicial.nome,",
+              "        nome:            form.nome.trim()||inicial.nome,\n        livraria:        form.livraria.trim()||null,",
+              1,
+          )
+
+          # Insere o campo antes dos blocos de URL/cupom no modal de edição e no modal de criação.
+          pattern = re.compile(r"(?P<indent>\s*)<div className=\"form-row\">\n(?P=indent)  \{\(form\.model==='1'\|\|!form\.model\) && \(")
+          def add_livraria(match):
+              indent = match.group('indent')
+              field = (
+                  f'{indent}<div className="form-group">\n'
+                  f'{indent}  <label className="form-label">Nome da livraria</label>\n'
+                  f'{indent}  <input className="form-input" value={{form.livraria || \'\'}}\n'
+                  f'{indent}    onChange={{e=>setForm(f=>({{...f,livraria:e.target.value}}))}} placeholder="Ex.: Livraria Deia Camargos"/>\n'
+                  f'{indent}</div>\n'
+              )
+              return field + match.group(0)
+
+          crm, added = pattern.subn(add_livraria, crm)
+          if added < 2:
+              raise SystemExit(f'Esperados 2 campos de livraria, encontrados {added}')
+          crm_path.write_text(crm, encoding='utf-8')
+
+          # ── Banco de tarefas: trazer livraria e limpar Anny ───────────────
+          banco_path = Path('src/lib/banco-tarefas.js')
+          banco = banco_path.read_text(encoding='utf-8')
+          banco = banco.replace(
+              "  parceiro:parceiro_id(id, nome),",
+              "  parceiro:parceiro_id(id, nome, livraria),",
+              1,
+          )
+
+          cleanup_fn = r'''
+
+// Remove um responsável pelo nome apenas de tarefas abertas.
+// A função é idempotente e preserva o histórico das tarefas concluídas/canceladas.
+export async function removerResponsavelAbertoPorNome(nomePrefixo = 'Anny') {
+  const { data: pessoas, error: pessoasError } = await supabase
+    .from('usuarios')
+    .select('id, nome')
+    .ilike('nome', `${nomePrefixo}%`)
+  if (pessoasError) throw pessoasError
+
+  const usuarioIds = (pessoas || []).map(p => p.id).filter(Boolean)
+  if (!usuarioIds.length) return { novas: 0, antigas: 0 }
+
+  let removidasNovas = 0
+  let removidasAntigas = 0
+
+  const { data: novas, error: novasError } = await supabase
+    .from('tarefas_atribuidas')
+    .select('id, responsavel_id, status')
+    .eq('grupo', 'influencers')
+    .in('status', ['a_fazer', 'em_andamento', 'pausada'])
+  if (novasError) throw novasError
+
+  const novasIds = (novas || []).map(t => t.id)
+  if (novasIds.length) {
+    const { data: relacoes, error: relacoesError } = await supabase
+      .from('atribuicao_responsaveis')
+      .select('id, atribuicao_id, usuario_id')
+      .in('atribuicao_id', novasIds)
+    if (relacoesError) throw relacoesError
+
+    const remover = (relacoes || []).filter(r => usuarioIds.includes(r.usuario_id))
+    if (remover.length) {
+      const { error } = await supabase
+        .from('atribuicao_responsaveis')
+        .delete()
+        .in('id', remover.map(r => r.id))
+      if (error) throw error
+      removidasNovas = remover.length
+    }
+
+    for (const tarefa of (novas || []).filter(t => usuarioIds.includes(t.responsavel_id))) {
+      const substituto = (relacoes || []).find(r => r.atribuicao_id === tarefa.id && !usuarioIds.includes(r.usuario_id))
+      const { error } = await supabase
+        .from('tarefas_atribuidas')
+        .update({ responsavel_id: substituto?.usuario_id || null })
+        .eq('id', tarefa.id)
+      if (error) throw error
+    }
+  }
+
+  const { data: antigas, error: antigasError } = await supabase
+    .from('tarefas')
+    .select('id, responsavel_id, status')
+    .in('status', ['pendente', 'a_fazer', 'em_andamento', 'pausada'])
+  if (antigasError) throw antigasError
+
+  const antigasIds = (antigas || []).map(t => t.id)
+  if (antigasIds.length) {
+    const { data: relacoes, error: relacoesError } = await supabase
+      .from('tarefa_responsaveis')
+      .select('id, tarefa_id, usuario_id')
+      .in('tarefa_id', antigasIds)
+    if (relacoesError) throw relacoesError
+
+    const remover = (relacoes || []).filter(r => usuarioIds.includes(r.usuario_id))
+    if (remover.length) {
+      const { error } = await supabase
+        .from('tarefa_responsaveis')
+        .delete()
+        .in('id', remover.map(r => r.id))
+      if (error) throw error
+      removidasAntigas = remover.length
+    }
+
+    for (const tarefa of (antigas || []).filter(t => usuarioIds.includes(t.responsavel_id))) {
+      const substituto = (relacoes || []).find(r => r.tarefa_id === tarefa.id && !usuarioIds.includes(r.usuario_id))
+      const { error } = await supabase
+        .from('tarefas')
+        .update({ responsavel_id: substituto?.usuario_id || null })
+        .eq('id', tarefa.id)
+      if (error) throw error
+    }
+  }
+
+  return { novas: removidasNovas, antigas: removidasAntigas }
+}
+'''
+          if 'export async function removerResponsavelAbertoPorNome' not in banco:
+              marker = '// ── CHECKLIST ─────────────────────────────────────────────────────────────────'
+              if marker not in banco:
+                  raise SystemExit('Marcador para inserir limpeza não encontrado')
+              banco = banco.replace(marker, cleanup_fn + '\n' + marker, 1)
+          banco_path.write_text(banco, encoding='utf-8')
+
+          # ── Tela de tarefas ───────────────────────────────────────────────
+          page_path = Path('src/pages/TarefasInfluencersOrganizadas.js')
+          page = page_path.read_text(encoding='utf-8')
+
+          page = page.replace(
+              "  updateAtribuicao, deleteAtribuicao,",
+              "  updateAtribuicao, deleteAtribuicao, removerResponsavelAbertoPorNome,",
+              1,
+          )
+
+          old_partner = "function parceiroDa(tarefa) {\n  if (tarefa.parceiro?.nome) return tarefa.parceiro.nome\n  return tarefa._origem === 'antiga' ? 'Tarefa anterior à migração' : 'Sem parceiro vinculado'\n}"
+          new_partner = "function nomeParceiro(parceiro) {\n  if (!parceiro) return ''\n  const nome = String(parceiro.nome || '').trim()\n  const livraria = String(parceiro.livraria || '').trim()\n  if (livraria && nome && livraria.toLowerCase() !== nome.toLowerCase()) return `${livraria} — ${nome}`\n  return livraria || nome\n}\nfunction parceiroDa(tarefa) {\n  const nome = nomeParceiro(tarefa.parceiro)\n  if (nome) return nome\n  return tarefa._origem === 'antiga' ? 'Tarefa anterior à migração' : 'Sem parceiro vinculado'\n}"
+          if old_partner not in page:
+              raise SystemExit('Função parceiroDa não encontrada')
+          page = page.replace(old_partner, new_partner, 1)
+
+          page = page.replace(
+              "function normalizarTarefaAntiga(tarefa) {",
+              "function normalizarTarefaAntiga(tarefa, parceirosPorId = {}) {",
+              1,
+          )
+          page = page.replace(
+              "    especificidade:tarefa.descricao || '',\n    _livrosAntigos:",
+              "    especificidade:tarefa.descricao || '',\n    parceiro:tarefa.parceiro || parceirosPorId[tarefa.parceiro_id] || null,\n    _livrosAntigos:",
+              1,
+          )
+
+          # Executa a limpeza uma vez por sessão para perfis de gestão.
+          load_marker = "    try {\n      const [novas, antigas, todosUsuarios, modelosData, parceirosData, livrosRes] = await Promise.all("
+          load_replacement = "    try {\n      if (isAdmin && !sessionStorage.getItem('orbita_cleanup_anny_v1')) {\n        try {\n          await removerResponsavelAbertoPorNome('Anny')\n          sessionStorage.setItem('orbita_cleanup_anny_v1', '1')\n        } catch (e) {\n          console.error('Erro ao remover Anny das tarefas abertas:', e)\n        }\n      }\n      const [novas, antigas, todosUsuarios, modelosData, parceirosData, livrosRes] = await Promise.all("
+          if load_marker not in page:
+              raise SystemExit('Trecho de carregamento não encontrado')
+          page = page.replace(load_marker, load_replacement, 1)
+
+          old_map = "      const equipe = (todosUsuarios || []).filter(x => INFLUENCER_PERFIS.includes(x.perfil))\n      const idsEquipe = new Set(equipe.map(x => x.id))\n      const antigasDoGrupo = (antigas || []).filter(t => [...(t.tarefa_responsaveis || []).map(r => r.usuario_id), t.responsavel?.id, t.responsavel_id].filter(Boolean).some(id => idsEquipe.has(id))).map(normalizarTarefaAntiga)"
+          new_map = "      const equipe = (todosUsuarios || []).filter(x => INFLUENCER_PERFIS.includes(x.perfil))\n      const idsEquipe = new Set(equipe.map(x => x.id))\n      const parceirosPorId = Object.fromEntries((parceirosData || []).map(p => [p.id, p]))\n      const antigasDoGrupo = (antigas || []).filter(t => [...(t.tarefa_responsaveis || []).map(r => r.usuario_id), t.responsavel?.id, t.responsavel_id].filter(Boolean).some(id => idsEquipe.has(id))).map(t => normalizarTarefaAntiga(t, parceirosPorId))"
+          if old_map not in page:
+              raise SystemExit('Mapeamento de tarefas antigas não encontrado')
+          page = page.replace(old_map, new_map, 1)
+
+          page = page.replace(
+              "{parceiros.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}",
+              "{parceiros.map(p => <option key={p.id} value={p.id}>{nomeParceiro(p)}</option>)}",
+          )
+          page_path.write_text(page, encoding='utf-8')
+          PY
+
+      - name: Instalar dependências
+        run: npm install --no-audit --no-fund
+
+      - name: Validar build
+        run: npm run build
+
+      - name: Publicar
+        run: |
+          rm .github/workflows/aplica-livraria-e-remove-anny.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/CRM.js src/pages/TarefasInfluencersOrganizadas.js src/lib/banco-tarefas.js .github/workflows/aplica-livraria-e-remove-anny.yml
+          git commit -m "Centraliza nome da livraria e remove Anny das tarefas abertas"
+          git push origin main
