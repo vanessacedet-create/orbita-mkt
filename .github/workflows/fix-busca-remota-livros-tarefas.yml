@@ -1,0 +1,60 @@
+name: Corrige busca remota de livros nas tarefas
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-busca-remota-livros-tarefas.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Aplicar busca remota
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/pages/TarefasInfluencersOrganizadas.js')
+          text = path.read_text(encoding='utf-8')
+
+          old = """  const [buscaLivro, setBuscaLivro] = useState('')\n  const [form, setForm] = useState({ modelo_id:'', parceiro_id:'', livro_id:'', responsavel_ids:[], data_prazo:'', observacao:'' })\n  const modelo = modelos.find(m => m.id === form.modelo_id)\n  const livro = livros.find(l => l.id === form.livro_id)\n  const livrosFiltrados = useMemo(() => {\n    const termo = buscaLivro.trim().toLowerCase()\n    if (!termo) return livros\n    return livros.filter(l => `${l.titulo || ''} ${l.autor || ''} ${l.isbn || ''}`.toLowerCase().includes(termo))\n  }, [livros, buscaLivro])\n"""
+          new = """  const [buscaLivro, setBuscaLivro] = useState('')\n  const [resultadosLivro, setResultadosLivro] = useState([])\n  const [buscandoLivro, setBuscandoLivro] = useState(false)\n  const [form, setForm] = useState({ modelo_id:'', parceiro_id:'', livro_id:'', responsavel_ids:[], data_prazo:'', observacao:'' })\n  const modelo = modelos.find(m => m.id === form.modelo_id)\n  const livro = [...livros, ...resultadosLivro].find(l => l.id === form.livro_id)\n  useEffect(() => {\n    const termo = buscaLivro.trim()\n    if (!termo || form.livro_id) { setResultadosLivro([]); return }\n    let ativo = true\n    const timer = setTimeout(async () => {\n      setBuscandoLivro(true)\n      try {\n        const res = await getLivros({ page:0, pageSize:30, search:termo })\n        if (ativo) setResultadosLivro(res?.data || [])\n      } catch (e) {\n        console.error('Erro ao buscar livros:', e)\n        if (ativo) setResultadosLivro([])\n      } finally { if (ativo) setBuscandoLivro(false) }\n    }, 250)\n    return () => { ativo = false; clearTimeout(timer) }\n  }, [buscaLivro, form.livro_id])\n"""
+          if old not in text:
+              raise SystemExit('Bloco da nova tarefa não encontrado')
+          text = text.replace(old, new, 1)
+          text = text.replace('livrosFiltrados.slice(0,30).map', 'resultadosLivro.map', 1)
+          text = text.replace("{livrosFiltrados.length === 0 && <div", "{buscandoLivro && <div style={{ padding:10, fontSize:12, color:'var(--text-muted)' }}>Buscando livros...</div>}{!buscandoLivro && resultadosLivro.length === 0 && <div", 1)
+
+          # Na edição, usar também busca remota
+          old2 = """  const [buscaLivro, setBuscaLivro] = useState('')\n  const [form, setForm] = useState({ titulo:tarefa.banco_tarefa?.nome || tarefa.titulo || '', parceiro_id:tarefa.parceiro?.id || '', livro_id:livroAtual?.id || '', responsavel_ids:responsaveisDa(tarefa).map(r => r.id), data_prazo:tarefa.data_prazo || '', status:tarefa.status || 'a_fazer', observacao:detalhes.observacao || '' })\n  const livrosFiltrados = useMemo(() => {\n    const termo = buscaLivro.trim().toLowerCase()\n    if (!termo) return livros\n    return livros.filter(l => `${l.titulo || ''} ${l.autor || ''} ${l.isbn || ''}`.toLowerCase().includes(termo))\n  }, [livros, buscaLivro])\n"""
+          new2 = """  const [buscaLivro, setBuscaLivro] = useState('')\n  const [resultadosLivro, setResultadosLivro] = useState([])\n  const [buscandoLivro, setBuscandoLivro] = useState(false)\n  const [form, setForm] = useState({ titulo:tarefa.banco_tarefa?.nome || tarefa.titulo || '', parceiro_id:tarefa.parceiro?.id || '', livro_id:livroAtual?.id || '', responsavel_ids:responsaveisDa(tarefa).map(r => r.id), data_prazo:tarefa.data_prazo || '', status:tarefa.status || 'a_fazer', observacao:detalhes.observacao || '' })\n  useEffect(() => {\n    const termo = buscaLivro.trim()\n    if (!termo || form.livro_id) { setResultadosLivro([]); return }\n    let ativo = true\n    const timer = setTimeout(async () => {\n      setBuscandoLivro(true)\n      try {\n        const res = await getLivros({ page:0, pageSize:30, search:termo })\n        if (ativo) setResultadosLivro(res?.data || [])\n      } catch (e) {\n        console.error('Erro ao buscar livros:', e)\n        if (ativo) setResultadosLivro([])\n      } finally { if (ativo) setBuscandoLivro(false) }\n    }, 250)\n    return () => { ativo = false; clearTimeout(timer) }\n  }, [buscaLivro, form.livro_id])\n"""
+          if old2 not in text:
+              raise SystemExit('Bloco da edição não encontrado')
+          text = text.replace(old2, new2, 1)
+          text = text.replace('livrosFiltrados.slice(0,30).map', 'resultadosLivro.map', 1)
+          text = text.replace("{livrosFiltrados.length === 0 && <div", "{buscandoLivro && <div style={{ padding:10, fontSize:12, color:'var(--text-muted)' }}>Buscando livros...</div>}{!buscandoLivro && resultadosLivro.length === 0 && <div", 1)
+          text = text.replace("const livro = livros.find(l => l.id === form.livro_id)", "const livro = [...livros, ...resultadosLivro].find(l => l.id === form.livro_id)", 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+      - name: Instalar dependências
+        run: npm install --no-audit --no-fund
+      - name: Validar build
+        run: npm run build
+      - name: Publicar
+        run: |
+          rm .github/workflows/fix-busca-remota-livros-tarefas.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/TarefasInfluencersOrganizadas.js .github/workflows/fix-busca-remota-livros-tarefas.yml
+          git commit -m "Corrige busca remota de livros nas tarefas"
+          git push origin main
