@@ -98,6 +98,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
   const [aba, setAba]           = useState('perfil') // perfil | pipeline | historico
   const [form, setForm]         = useState({
     nome:         inicial.nome||'',
+    livraria:     inicial.livraria||'',
     username:     inicial.username||'',
     platforms:    inicial.platforms||[],
     followers:    inicial.followers_count || {},
@@ -133,7 +134,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
 
   useEffect(() => {
     const original = {
-      nome: inicial.nome||'', username: inicial.username||'', platforms: inicial.platforms||[],
+      nome: inicial.nome||'', livraria: inicial.livraria||'', username: inicial.username||'', platforms: inicial.platforms||[],
       followers: inicial.followers_count || {}, engagement_rate: inicial.engagement_rate||'',
       profile_url: inicial.profile_url||'', contact_value: inicial.contact_value||'',
       source: inicial.source||'', referred_by: inicial.referred_by||'', library_url: inicial.library_url||'',
@@ -181,6 +182,7 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
         : null
       const payload = {
         nome:            form.nome.trim()||inicial.nome,
+        livraria:        form.livraria.trim()||null,
         username:        form.username||null,
         platforms:       form.platforms,
         followers_count: followers_count,
@@ -474,6 +476,11 @@ function ModalParceiroCRM({ parceiro: inicial, todos, onSave, onClose, pipeline 
 
 
 
+            <div className="form-group">
+              <label className="form-label">Nome da livraria</label>
+              <input className="form-input" value={form.livraria || ''}
+                onChange={e=>setForm(f=>({...f,livraria:e.target.value}))} placeholder="Ex.: Livraria Deia Camargos"/>
+            </div>
             <div className="form-row">
               {(form.model==='1'||!form.model) && (
                 <div className="form-group">
@@ -1122,6 +1129,11 @@ function ModalNovoParceiro({ onSave, onClose, pipeline, grupo, parceirosExistent
           </div>
 
           {/* URL da livraria / Cupom conforme o modelo */}
+          <div className="form-group">
+            <label className="form-label">Nome da livraria</label>
+            <input className="form-input" value={form.livraria || ''}
+              onChange={e=>setForm(f=>({...f,livraria:e.target.value}))} placeholder="Ex.: Livraria Deia Camargos"/>
+          </div>
           <div className="form-row">
             {(form.model==='1'||!form.model) && (
               <div className="form-group">

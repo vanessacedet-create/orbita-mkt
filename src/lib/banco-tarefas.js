@@ -22,7 +22,7 @@ const ATRIBUIDA_SELECT = `
     categoria:categoria_id(id, nome, cor)
   ),
   responsavel:responsavel_id(id, nome),
-  parceiro:parceiro_id(id, nome),
+  parceiro:parceiro_id(id, nome, livraria),
   atribuida_por:atribuida_por(id, nome),
   registros_tempo:tarefas_registro_tempo(id, evento, registrado_em),
   checklist:atribuicao_checklist(id, texto, concluido, ordem),
@@ -237,6 +237,95 @@ export async function updateAtribuicao(id, updates) {
 export async function deleteAtribuicao(id) {
   const { error } = await supabase.from('tarefas_atribuidas').delete().eq('id', id)
   if (error) throw error
+}
+
+
+
+// Remove um responsável pelo nome apenas de tarefas abertas.
+// A função é idempotente e preserva o histórico das tarefas concluídas/canceladas.
+export async function removerResponsavelAbertoPorNome(nomePrefixo = 'Anny') {
+  const { data: pessoas, error: pessoasError } = await supabase
+    .from('usuarios')
+    .select('id, nome')
+    .ilike('nome', `${nomePrefixo}%`)
+  if (pessoasError) throw pessoasError
+
+  const usuarioIds = (pessoas || []).map(p => p.id).filter(Boolean)
+  if (!usuarioIds.length) return { novas: 0, antigas: 0 }
+
+  let removidasNovas = 0
+  let removidasAntigas = 0
+
+  const { data: novas, error: novasError } = await supabase
+    .from('tarefas_atribuidas')
+    .select('id, responsavel_id, status')
+    .eq('grupo', 'influencers')
+    .in('status', ['a_fazer', 'em_andamento', 'pausada'])
+  if (novasError) throw novasError
+
+  const novasIds = (novas || []).map(t => t.id)
+  if (novasIds.length) {
+    const { data: relacoes, error: relacoesError } = await supabase
+      .from('atribuicao_responsaveis')
+      .select('id, atribuicao_id, usuario_id')
+      .in('atribuicao_id', novasIds)
+    if (relacoesError) throw relacoesError
+
+    const remover = (relacoes || []).filter(r => usuarioIds.includes(r.usuario_id))
+    if (remover.length) {
+      const { error } = await supabase
+        .from('atribuicao_responsaveis')
+        .delete()
+        .in('id', remover.map(r => r.id))
+      if (error) throw error
+      removidasNovas = remover.length
+    }
+
+    for (const tarefa of (novas || []).filter(t => usuarioIds.includes(t.responsavel_id))) {
+      const substituto = (relacoes || []).find(r => r.atribuicao_id === tarefa.id && !usuarioIds.includes(r.usuario_id))
+      const { error } = await supabase
+        .from('tarefas_atribuidas')
+        .update({ responsavel_id: substituto?.usuario_id || null })
+        .eq('id', tarefa.id)
+      if (error) throw error
+    }
+  }
+
+  const { data: antigas, error: antigasError } = await supabase
+    .from('tarefas')
+    .select('id, responsavel_id, status')
+    .in('status', ['pendente', 'a_fazer', 'em_andamento', 'pausada'])
+  if (antigasError) throw antigasError
+
+  const antigasIds = (antigas || []).map(t => t.id)
+  if (antigasIds.length) {
+    const { data: relacoes, error: relacoesError } = await supabase
+      .from('tarefa_responsaveis')
+      .select('id, tarefa_id, usuario_id')
+      .in('tarefa_id', antigasIds)
+    if (relacoesError) throw relacoesError
+
+    const remover = (relacoes || []).filter(r => usuarioIds.includes(r.usuario_id))
+    if (remover.length) {
+      const { error } = await supabase
+        .from('tarefa_responsaveis')
+        .delete()
+        .in('id', remover.map(r => r.id))
+      if (error) throw error
+      removidasAntigas = remover.length
+    }
+
+    for (const tarefa of (antigas || []).filter(t => usuarioIds.includes(t.responsavel_id))) {
+      const substituto = (relacoes || []).find(r => r.tarefa_id === tarefa.id && !usuarioIds.includes(r.usuario_id))
+      const { error } = await supabase
+        .from('tarefas')
+        .update({ responsavel_id: substituto?.usuario_id || null })
+        .eq('id', tarefa.id)
+      if (error) throw error
+    }
+  }
+
+  return { novas: removidasNovas, antigas: removidasAntigas }
 }
 
 // ── CHECKLIST ─────────────────────────────────────────────────────────────────
