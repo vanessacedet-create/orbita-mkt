@@ -3,13 +3,13 @@ import { Plus, Pencil, Trash2, X, CheckSquare, Users, Clock, GripVertical } from
 import { useAuth } from '../context/AuthContext'
 import { getUsuarios } from '../lib/supabase'
 import {
-  getBancoTarefas,
-  createBancoTarefa,
-  updateBancoTarefa,
-  desativarBancoTarefa,
-  setResponsaveisBanco,
-  setChecklistPadrao,
-} from '../lib/banco-tarefas'
+  getBancoTarefasInf,
+  createBancoTarefaInf,
+  updateBancoTarefaInf,
+  desativarBancoTarefaInf,
+  setResponsaveisBancoInf,
+  setChecklistPadraoInf,
+} from '../lib/tarefas-influencers'
 
 const PERFIS_INFLUENCERS = ['supervisor_influencers', 'analista_influencers', 'estagiario_influencers']
 const PERIODICIDADES = [
@@ -46,7 +46,7 @@ export default function ModelosTarefasInfluencers() {
   async function carregar() {
     setLoading(true)
     try {
-      const [m, u] = await Promise.all([getBancoTarefas('influencers'), getUsuarios()])
+      const [m, u] = await Promise.all([getBancoTarefasInf(), getUsuarios()])
       setModelos(m || [])
       setUsuarios((u || []).filter(x => PERFIS_INFLUENCERS.includes(x.perfil)))
     } finally {
@@ -146,11 +146,11 @@ export default function ModelosTarefasInfluencers() {
         created_by: usuario.id,
       }
       const salvo = editando
-        ? await updateBancoTarefa(editando.id, payload)
-        : await createBancoTarefa({ ...payload, grupo:'influencers' })
+        ? await updateBancoTarefaInf(editando.id, payload)
+        : await createBancoTarefaInf(payload)
 
-      await setResponsaveisBanco(salvo.id, form.responsaveis_ids)
-      await setChecklistPadrao(salvo.id, form.checklist)
+      await setResponsaveisBancoInf(salvo.id, form.responsaveis_ids)
+      await setChecklistPadraoInf(salvo.id, form.checklist)
       setModal(false)
       await carregar()
     } catch (e) {
@@ -162,7 +162,7 @@ export default function ModelosTarefasInfluencers() {
 
   async function remover(id) {
     if (!window.confirm('Desativar este modelo? As tarefas já criadas continuarão existindo.')) return
-    await desativarBancoTarefa(id)
+    await desativarBancoTarefaInf(id)
     setModelos(prev => prev.filter(m => m.id !== id))
   }
 

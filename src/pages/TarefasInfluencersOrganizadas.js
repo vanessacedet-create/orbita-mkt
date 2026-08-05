@@ -10,9 +10,12 @@ import {
   updateTarefa, deleteTarefa,
 } from '../lib/supabase'
 import {
-  getAtribuicoes, getBancoTarefas, atribuirTarefa,
-  updateAtribuicao, deleteAtribuicao, removerResponsavelAbertoPorNome,
-} from '../lib/banco-tarefas'
+  getAtribuicoesInf, getBancoTarefasInf, atribuirTarefaInf,
+  updateAtribuicaoInf, deleteAtribuicaoInf,
+} from '../lib/tarefas-influencers'
+// Fio solto: funcao de limpeza pontual que ainda toca as tabelas legadas
+// compartilhadas (tarefas / tarefa_responsaveis). Nao portada de proposito.
+import { removerResponsavelAbertoPorNome } from '../lib/banco-tarefas'
 import ModelosTarefasInfluencers from './TarefasInfluencers'
 
 const STATUS = {
@@ -90,6 +93,13 @@ function calcularData(prazo, dias) {
   return d
 }
 function formatarData(d) { return d ? d.toLocaleDateString('pt-BR') : '' }
+
+function isoLocal(d) {
+  if (!d) return null
+  const mes = String(d.getMonth() + 1).padStart(2, '0')
+  const dia = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mes}-${dia}`
+}
 function textoEtapaComData(item, prazo) {
   const etapa = decodificarEtapa(item.texto ?? item)
   const data = calcularData(prazo, etapa.dias_antes)
@@ -181,9 +191,16 @@ function ModalNovaTarefa({ modelos, parceiros, livros, usuarios, usuario, onClos
     setSalvando(true)
     try {
       const identificacao = livro ? `${livro.titulo}${livro.autor ? ` — ${livro.autor}` : ''}${livro.isbn ? ` · ISBN ${livro.isbn}` : ''}` : ''
-      const checklist = (modelo.checklist_padrao || []).sort((a,b)=>(a.ordem||0)-(b.ordem||0)).map(c => textoEtapaComData(c, form.data_prazo))
-      const nova = await atribuirTarefa({
-        grupo:'influencers', bancoTarefaId:modelo.id, responsavelIds:form.responsavel_ids,
+      const checklist = (modelo.checklist_padrao || []).sort((a,b)=>(a.ordem||0)-(b.ordem||0)).map(c => {
+        const etapa = decodificarEtapa(c.texto)
+        const dias = Number(c.dias_antes ?? etapa.dias_antes) || 0
+        return {
+          texto: textoEtapaComData(c, form.data_prazo),
+          data_prazo: form.data_prazo ? isoLocal(calcularData(form.data_prazo, dias)) : null,
+        }
+      })
+      const nova = await atribuirTarefaInf({
+        bancoTarefaId:modelo.id, responsavelIds:form.responsavel_ids,
         dataPrazo:form.data_prazo || null,
         especificidade:[identificacao ? `Livro: ${identificacao}` : '', form.observacao.trim()].filter(Boolean).join('\n'),
         atribuidaPor:usuario.id, checklist, parceiroId:form.parceiro_id || null, quantidade:1,
@@ -232,7 +249,7 @@ function ModalEditarTarefa({ tarefa, parceiros, livros, usuarios, onClose, onSav
       } else {
         const livro = livroSel
         const identificacao = livro ? `${livro.titulo}${livro.autor ? ` — ${livro.autor}` : ''}${livro.isbn ? ` · ISBN ${livro.isbn}` : ''}` : ''
-        const atualizada = await updateAtribuicao(tarefa.id, { parceiro_id:form.parceiro_id || null, parceiros_ids:form.parceiro_id ? [form.parceiro_id] : [], data_prazo:form.data_prazo || null, status:form.status, _statusAnterior:tarefa.status, especificidade:[identificacao ? `Livro: ${identificacao}` : '', form.observacao.trim()].filter(Boolean).join('\n'), _responsaveisIds:form.responsavel_ids })
+        const atualizada = await updateAtribuicaoInf(tarefa.id, { parceiro_id:form.parceiro_id || null, parceiros_ids:form.parceiro_id ? [form.parceiro_id] : [], data_prazo:form.data_prazo || null, status:form.status, _statusAnterior:tarefa.status, especificidade:[identificacao ? `Livro: ${identificacao}` : '', form.observacao.trim()].filter(Boolean).join('\n'), _responsaveisIds:form.responsavel_ids })
         onSaved({ ...atualizada, _origem:'nova' })
       }
       onClose()
@@ -268,7 +285,7 @@ export default function TarefasInfluencersOrganizadas() {
           console.error('Erro ao remover Anny das tarefas abertas:', e)
         }
       }
-      const [novas, antigas, todosUsuarios, modelosData, parceirosData, livrosRes] = await Promise.all([getAtribuicoes({ grupo:'influencers' }), getTarefas(), getUsuarios(), getBancoTarefas('influencers'), getParceiros(), getLivros({ page:0, pageSize:500 })])
+      const [novas, antigas, todosUsuarios, modelosData, parceirosData, livrosRes] = await Promise.all([getAtribuicoesInf(), getTarefas(), getUsuarios(), getBancoTarefasInf(), getParceiros(), getLivros({ page:0, pageSize:500 })])
       const equipe = (todosUsuarios || []).filter(x => INFLUENCER_PERFIS.includes(x.perfil))
       const idsEquipe = new Set(equipe.map(x => x.id))
       const parceirosPorId = Object.fromEntries((parceirosData || []).map(p => [p.id, p]))
@@ -290,12 +307,12 @@ export default function TarefasInfluencersOrganizadas() {
   const resumo = { atrasadas:base.filter(isAtrasada).length, hoje:base.filter(t => isHoje(t.data_prazo) && !['concluida','cancelada'].includes(t.status)).length, andamento:base.filter(t => t.status === 'em_andamento').length, concluidas:base.filter(t => t.status === 'concluida' && isSemanaAtual((t.concluida_em || t.updated_at || '').slice(0,10) || t.data_prazo)).length }
   async function mudarStatus(tarefa, status) {
     if (tarefa._origem === 'antiga') { const atualizada=await updateTarefa(tarefa._idOriginal,{ status:status === 'concluida' ? 'concluido' : status }); setTarefas(prev => prev.map(x => x.id === tarefa.id ? normalizarTarefaAntiga(atualizada) : x)); return }
-    const atualizada=await updateAtribuicao(tarefa.id,{ status, _statusAnterior:tarefa.status }); setTarefas(prev => prev.map(x => x.id === tarefa.id ? { ...atualizada, _origem:'nova' } : x))
+    const atualizada=await updateAtribuicaoInf(tarefa.id,{ status, _statusAnterior:tarefa.status }); setTarefas(prev => prev.map(x => x.id === tarefa.id ? { ...atualizada, _origem:'nova' } : x))
   }
   async function excluir(tarefa) {
     const nome=tarefa.banco_tarefa?.nome || tarefa.titulo || 'esta tarefa'
     if (!window.confirm(`Excluir definitivamente "${nome}"? Esta ação não pode ser desfeita.`)) return
-    try { if (tarefa._origem === 'antiga') await deleteTarefa(tarefa._idOriginal); else await deleteAtribuicao(tarefa.id); setTarefas(prev => prev.filter(x => x.id !== tarefa.id)) } catch (e) { alert('Erro ao excluir tarefa: ' + (e.message || 'erro desconhecido')) }
+    try { if (tarefa._origem === 'antiga') await deleteTarefa(tarefa._idOriginal); else await deleteAtribuicaoInf(tarefa.id); setTarefas(prev => prev.filter(x => x.id !== tarefa.id)) } catch (e) { alert('Erro ao excluir tarefa: ' + (e.message || 'erro desconhecido')) }
   }
   if (modelosAberto) return <div style={{ padding:'24px 28px 40px', maxWidth:1600, margin:'0 auto' }}><div style={{ display:'flex', justifyContent:'space-between', marginBottom:16 }}><div><h1 className="page-title" style={{ margin:0 }}>Modelos de tarefa</h1><p style={{ margin:'5px 0 0', fontSize:12, color:'var(--text-muted)' }}>Cadastre tipos de atividade, instruções e checklists reutilizáveis.</p></div><button className="btn btn-ghost" onClick={() => { setModelosAberto(false); carregar() }}>Voltar às tarefas</button></div><ModelosTarefasInfluencers /></div>
   return <div style={{ padding:'24px 28px 40px', maxWidth:1500, margin:'0 auto' }}><div style={{ display:'flex', justifyContent:'space-between', gap:16, marginBottom:20, flexWrap:'wrap' }}><div><h1 className="page-title" style={{ margin:0 }}>Tarefas Influencers</h1><p style={{ margin:'5px 0 0', color:'var(--text-muted)', fontSize:12 }}>Tarefas antigas e novas reunidas em uma única visão.</p></div><div style={{ display:'flex', gap:8, flexWrap:'wrap' }}><button className="btn btn-ghost" onClick={carregar}><RefreshCw size={14}/> Atualizar</button>{isAdmin && <button className="btn btn-ghost" onClick={() => setModelosAberto(true)}><Settings size={14}/> Configurar modelos</button>}{podeCriar && <button className="btn btn-primary" onClick={() => setModalNova(true)}><Plus size={14}/> Nova tarefa</button>}</div></div><div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:10, marginBottom:18 }}><ResumoCard icon={AlertTriangle} label="Atrasadas" value={resumo.atrasadas} tone="#ef4444"/><ResumoCard icon={CalendarDays} label="Para hoje" value={resumo.hoje} tone="#f59e0b"/><ResumoCard icon={Clock} label="Em andamento" value={resumo.andamento} tone="#6366f1"/><ResumoCard icon={CheckCircle2} label="Concluídas na semana" value={resumo.concluidas} tone="#10b981"/></div><div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:16 }}>{['todas','hoje','atrasadas','semana','concluidas'].map(v => <button key={v} className={filtro === v ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm'} onClick={() => setFiltro(v)}>{({ todas:'Todas', hoje:'Hoje', atrasadas:'Atrasadas', semana:'Esta semana', concluidas:'Concluídos' })[v]}</button>)}{isAdmin && <select className="form-select" style={{ width:'auto', marginLeft:'auto' }} value={responsavelFiltro} onChange={e => setResponsavelFiltro(e.target.value)}><option value="">Toda a equipe</option>{usuarios.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}</select>}</div>{loading ? <div className="loading"><div className="spinner"/></div> : filtradas.length === 0 ? <div className="empty-state"><p>Nenhuma tarefa encontrada neste filtro.</p></div> : <div style={{ display:'grid', gap:10 }}>{filtradas.map(t => <TaskCard key={t.id} tarefa={t} onStatus={mudarStatus} onEdit={setTarefaEditando} onDelete={excluir} podeGerenciar={isAdmin}/>)}</div>}{modalNova && <ModalNovaTarefa modelos={modelos} parceiros={parceiros} livros={livros} usuarios={usuarios} usuario={usuario} onClose={() => setModalNova(false)} onCreated={nova => setTarefas(prev => [nova, ...prev])}/>} {tarefaEditando && <ModalEditarTarefa tarefa={tarefaEditando} parceiros={parceiros} livros={livros} usuarios={usuarios} onClose={() => setTarefaEditando(null)} onSaved={salva => setTarefas(prev => prev.map(x => x.id === tarefaEditando.id ? salva : x))}/>}</div>
