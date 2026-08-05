@@ -1,0 +1,50 @@
+name: Force redeploy tarefas influencers
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/force-redeploy-tarefas-influencers.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  redeploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Confirm optional book validation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/pages/TarefasInfluencersOrganizadas.js')
+          text = path.read_text(encoding='utf-8')
+          forbidden = "if (!form.livro_id) return alert('Selecione o livro relacionado.')"
+          if forbidden in text:
+              text = text.replace(forbidden, "")
+          if 'Livro relacionado *' in text:
+              text = text.replace('Livro relacionado *', 'Livro relacionado (opcional)')
+          marker = '// deploy-forcado-livro-opcional-2026-08-05'
+          if marker not in text:
+              text += '\n' + marker + '\n'
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit source change
+        run: |
+          rm .github/workflows/force-redeploy-tarefas-influencers.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/TarefasInfluencersOrganizadas.js .github/workflows/force-redeploy-tarefas-influencers.yml
+          git commit -m "Força publicação do livro opcional nas tarefas de influencers"
+          git push origin main
