@@ -1,0 +1,50 @@
+name: Remove quantidade de tarefas
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/remove-quantidade-tarefas.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Remove campo inexistente
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/lib/banco-tarefas.js')
+          text = path.read_text(encoding='utf-8')
+          old = "      quantidade:      Math.max(1, Number(quantidade) || 1),\n"
+          if old not in text:
+              raise SystemExit('Campo quantidade não encontrado no insert')
+          text = text.replace(old, '', 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build
+        run: npm run build
+
+      - name: Commit changes
+        run: |
+          rm .github/workflows/remove-quantidade-tarefas.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/banco-tarefas.js .github/workflows/remove-quantidade-tarefas.yml
+          git commit -m "Remove campo quantidade inexistente das tarefas"
+          git push origin main
