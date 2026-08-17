@@ -1,0 +1,124 @@
+name: Corrigir livrarias nas tarefas de influencers
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-livraria-tarefas-influencers.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Aplicar correção apenas em tarefas influencers
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/pages/TarefasInfluencersOrganizadas.js')
+          s = path.read_text(encoding='utf-8')
+
+          s = s.replace(
+            "  getUsuarios, getParceiros, getLivros, getTarefas,\n",
+            "  getUsuarios, getLivros, getTarefas,\n",
+            1,
+          )
+
+          client_import = "import { supabase } from '../lib/client'\n"
+          if client_import not in s:
+            marker = "import { useAuth } from '../context/AuthContext'\n"
+            if marker not in s:
+              raise SystemExit('Import de useAuth não encontrado')
+            s = s.replace(marker, marker + client_import, 1)
+
+          helper = """
+async function getParceirosInfluencersTarefas() {
+  const { data, error } = await supabase
+    .from('parceiros')
+    .select('*')
+    .eq('grupo', 'influencers')
+    .order('nome', { ascending: true })
+  if (error) throw error
+  return (data || []).sort((a, b) => nomeParceiro(a).localeCompare(nomeParceiro(b), 'pt-BR'))
+}
+"""
+          if 'async function getParceirosInfluencersTarefas()' not in s:
+            marker = "function parceiroDa(tarefa) {"
+            if marker not in s:
+              raise SystemExit('Função parceiroDa não encontrada')
+            s = s.replace(marker, helper + "\n" + marker, 1)
+
+          old_load = "getAtribuicoesInf(), getTarefas(), getUsuarios(), getBancoTarefasInf(), getParceiros(), getLivros({ page:0, pageSize:500 })"
+          new_load = "getAtribuicoesInf(), getTarefas(), getUsuarios(), getBancoTarefasInf(), getParceirosInfluencersTarefas(), getLivros({ page:0, pageSize:500 })"
+          if old_load not in s and new_load not in s:
+            raise SystemExit('Carga de parceiros não encontrada')
+          s = s.replace(old_load, new_load, 1)
+
+          old_set = "setUsuarios(equipe); setModelos(modelosData || []); setParceiros((parceirosData || []).filter(x => (x.grupo || '') === 'influencers')); setLivros(livrosRes?.data || livrosRes || [])"
+          new_set = "setUsuarios(equipe); setModelos(modelosData || []); setParceiros(parceirosData || []); setLivros(livrosRes?.data || livrosRes || [])"
+          if old_set in s:
+            s = s.replace(old_set, new_set, 1)
+
+          abrir = """
+  async function abrirNovaTarefa() {
+    try {
+      // Busca novamente ao abrir o modal para refletir imediatamente o nome da
+      // livraria salvo no CRM de influencers, sem depender da lista em cache.
+      const parceirosAtualizados = await getParceirosInfluencersTarefas()
+      setParceiros(parceirosAtualizados)
+    } catch (e) {
+      console.error('Erro ao atualizar parceiros de influencers:', e)
+    }
+    setModalNova(true)
+  }
+"""
+          if 'async function abrirNovaTarefa()' not in s:
+            marker = "  if (modelosAberto) return "
+            if marker not in s:
+              raise SystemExit('Ponto para função abrirNovaTarefa não encontrado')
+            s = s.replace(marker, abrir + "\n" + marker, 1)
+
+          old_button = "onClick={() => setModalNova(true)}><Plus size={14}/> Nova tarefa"
+          new_button = "onClick={abrirNovaTarefa}><Plus size={14}/> Nova tarefa"
+          if old_button not in s and new_button not in s:
+            raise SystemExit('Botão Nova tarefa não encontrado')
+          s = s.replace(old_button, new_button, 1)
+
+          path.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Garantir que nenhum arquivo de editoras parceiras foi alterado
+        run: |
+          git diff --name-only
+          if git diff --name-only | grep -E 'CRMEditorasParceiras|crm-editoras-parceiras|TarefasParceiras|editoras-livrarias|parceiras'; then
+            echo 'ERRO: arquivo de editoras parceiras seria alterado.'
+            exit 1
+          fi
+
+      - name: Instalar dependências
+        run: npm install --no-audit --no-fund
+
+      - name: Validar build
+        run: npm run build
+
+      - name: Publicar na main
+        run: |
+          rm .github/workflows/fix-livraria-tarefas-influencers.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/TarefasInfluencersOrganizadas.js .github/workflows/fix-livraria-tarefas-influencers.yml
+          git commit -m "fix: atualiza livrarias no cadastro de tarefas influencers"
+          git push origin main
