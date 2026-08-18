@@ -136,6 +136,13 @@ const ADMIN_MENU_GRUPOS = [
     ],
   },
   {
+    key: 'campanhas', label: 'Campanhas', icon: Megaphone,
+    items: [
+      { path: '/campanhas', label: 'Influencers' },
+      { path: '/promocoes-parceiras', label: 'Editoras Parceiras / Promoções' },
+    ],
+  },
+  {
     key: 'monitoramento', label: 'Monitoramento', icon: Eye,
     items: [
       { path: '/monitoramento', label: 'Influencers' },
