@@ -1,0 +1,59 @@
+name: Corrigir login do ORBITA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-login-orbita.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Corrigir redirecionamento após login
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/App.js')
+          s = path.read_text(encoding='utf-8')
+          old = 'if(session)return <Navigate to="/login" replace/>'
+          new = 'if(session)return <Navigate to="/" replace/>'
+          if old not in s:
+              raise SystemExit('Redirecionamento incorreto não encontrado em App.js')
+          path.write_text(s.replace(old, new, 1), encoding='utf-8')
+          PY
+
+      - name: Verificar escopo
+        run: |
+          changed="$(git diff --name-only)"
+          echo "$changed"
+          test "$changed" = "src/App.js"
+          grep -q 'if(session)return <Navigate to="/" replace/>' src/App.js
+
+      - name: Instalar dependências
+        run: npm install --no-audit --no-fund
+
+      - name: Validar build
+        run: npm run build
+
+      - name: Publicar na main
+        run: |
+          rm .github/workflows/fix-login-orbita.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.js .github/workflows/fix-login-orbita.yml
+          git commit -m "fix: corrige redirecionamento apos login"
+          git push origin main
