@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom'
 import { lazy, Suspense, useState, useEffect } from 'react'
 import { AuthProvider, useAuth, MODULOS_PERMISSOES } from './context/AuthContext'
 import { ViewAsContext } from './context/ViewAsContext'
@@ -43,7 +43,7 @@ import ResetPassword from './pages/ResetPassword'
 
 const Dashboard              = lazy(() => import('./pages/Dashboard'))
 const TarefasParceiras       = lazy(() => import('./pages/TarefasParceiras'))
-const TarefasInfluencers2     = lazy(() => import('./pages/TarefasInfluencersOrganizadas'))
+const TarefasInfluencers2    = lazy(() => import('./pages/TarefasInfluencersOrganizadas'))
 const DashboardParceiras     = lazy(() => import('./pages/DashboardParceiras'))
 const BemVindo               = lazy(() => import('./pages/BemVindo'))
 const AcessosEquipe          = lazy(() => import('./pages/AcessosEquipe'))
@@ -119,6 +119,59 @@ const MENU = [
   { path: '/usuarios', label: 'Usuários', icon: Users, modulo: 'usuarios' },
 ]
 
+const ADMIN_MENU_GRUPOS = [
+  {
+    key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard,
+    items: [
+      { path: '/dashboard', label: 'Visão geral' },
+      { path: '/dashboard-parceiras', label: 'Editoras Parceiras' },
+    ],
+  },
+  {
+    key: 'crm', label: 'CRM', icon: Network,
+    items: [
+      { path: '/crm-influencers', label: 'Influencers' },
+      { path: '/crm-parceiras', label: 'Parceiras' },
+      { path: '/crm-editoras-parceiras', label: 'Editoras Parceiras' },
+    ],
+  },
+  {
+    key: 'monitoramento', label: 'Monitoramento', icon: Eye,
+    items: [
+      { path: '/monitoramento', label: 'Influencers' },
+      { path: '/monitoramento-parceiras', label: 'Editoras Parceiras' },
+    ],
+  },
+  {
+    key: 'tarefas', label: 'Tarefas', icon: CheckSquare,
+    items: [
+      { path: '/tarefas-influencers', label: 'Influencers' },
+      { path: '/tarefas-parceiras', label: 'Editoras Parceiras' },
+    ],
+  },
+  {
+    key: 'rh', label: 'RH', icon: HeartHandshake,
+    items: [
+      { path: '/rh', label: 'Equipe Geral' },
+      { path: '/rh-parceiras', label: 'Editoras Parceiras' },
+    ],
+  },
+  {
+    key: 'pda', label: 'PDA', icon: Target,
+    items: [
+      { path: '/pda', label: 'Equipe Geral' },
+      { path: '/pda-parceiras', label: 'Editoras Parceiras' },
+    ],
+  },
+  {
+    key: 'treinamentos', label: 'Treinamentos', icon: GraduationCap,
+    items: [
+      { path: '/treinamentos', label: 'Equipe Geral' },
+      { path: '/treinamentos-parceiras', label: 'Editoras Parceiras' },
+    ],
+  },
+]
+
 const PERFIL_LABEL = {
   administrador: 'Administrador', gerente: 'Gerente', estagiario_proprias: 'Estagiário Próprias', analista_proprias: 'Analista Próprias', supervisor_proprias: 'Supervisor Próprias', estagiario_influencers: 'Estagiário Influencers', analista_influencers: 'Analista Influencers', estagiario_marketplaces: 'Estagiário Mkt & Eventos', analista_marketplaces: 'Analista Mkt & Eventos', estagiario_parceiras: 'Estagiário Parceiras', analista_parceiras: 'Analista Parceiras', supervisor_parceiras: 'Supervisor Parceiras',
 }
@@ -135,6 +188,49 @@ function ModalVerComo({ todosUsuarios, usuarioAtual, onSelecionar, onFechar }) {
   return <div onClick={onFechar} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}><div onClick={e=>e.stopPropagation()} style={{background:'var(--sidebar-bg,#1a1a2e)',border:'1px solid var(--border,#2a2a3e)',borderRadius:14,width:'100%',maxWidth:420,maxHeight:'75vh',overflow:'auto',padding:14}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:10}}><strong>Visualizar como</strong><button onClick={onFechar} className="btn btn-ghost btn-icon"><X size={16}/></button></div><div style={{position:'relative',marginBottom:8}}><Search size={14} style={{position:'absolute',left:10,top:10}}/><input autoFocus placeholder="Buscar por nome ou perfil..." value={busca} onChange={e=>setBusca(e.target.value)} style={{width:'100%',padding:'8px 10px 8px 30px',boxSizing:'border-box'}}/></div>{filtrados.map(u=><button key={u.id} onClick={()=>onSelecionar(u)} style={{width:'100%',padding:10,background:'none',border:'none',textAlign:'left',color:'inherit',cursor:'pointer'}}>{u.nome} · {PERFIL_LABEL[u.perfil] || u.perfil}</button>)}</div></div>
 }
 function BannerVerComo({ viewAs, onSair }) { return <div style={{background:'linear-gradient(90deg,#92400e,#b45309)',color:'#fef3c7',padding:'9px 20px',display:'flex',alignItems:'center',gap:10,fontSize:13}}><SwitchCamera size={15}/><span style={{flex:1}}>Modo visualização: <strong>{viewAs.nome}</strong></span><button onClick={onSair} className="btn btn-ghost btn-sm"><X size={13}/> Sair</button></div> }
+
+function MenuAdminUnificado({ menuVisivel, pedidosNovos }) {
+  const location = useLocation()
+  const [abertos, setAbertos] = useState({})
+  const porPath = new Map(menuVisivel.map(item => [item.path, item]))
+  const pathsAgrupados = new Set(ADMIN_MENU_GRUPOS.flatMap(g => g.items.map(i => i.path)))
+  const gruposRenderizados = new Set()
+  const saida = []
+
+  function linkNormal(item) {
+    const Icon = item.icon
+    return <NavLink key={item.path} to={item.path} className={({isActive})=>isActive?'nav-item active':'nav-item'}><Icon size={17}/><span>{item.label}</span>{item.path==='/vitrine-admin'&&pedidosNovos>0&&<span style={{marginLeft:'auto'}}>{pedidosNovos}</span>}</NavLink>
+  }
+
+  for (const item of menuVisivel) {
+    if (!pathsAgrupados.has(item.path)) {
+      saida.push(linkNormal(item))
+      continue
+    }
+
+    const grupo = ADMIN_MENU_GRUPOS.find(g => g.items.some(i => i.path === item.path))
+    if (!grupo || gruposRenderizados.has(grupo.key)) continue
+    gruposRenderizados.add(grupo.key)
+
+    const filhos = grupo.items.map(cfg => porPath.has(cfg.path) ? { ...porPath.get(cfg.path), labelAdmin: cfg.label } : null).filter(Boolean)
+    if (!filhos.length) continue
+
+    const ativo = filhos.some(f => location.pathname === f.path)
+    const aberto = abertos[grupo.key] ?? ativo
+    const Icon = grupo.icon
+
+    saida.push(
+      <div key={`grupo-${grupo.key}`}>
+        <button type="button" className={`nav-item ${ativo ? 'active' : ''}`} onClick={()=>setAbertos(prev=>({...prev,[grupo.key]:!(prev[grupo.key] ?? ativo)}))} style={{width:'100%',border:'none',cursor:'pointer',fontFamily:'inherit',textAlign:'left'}}>
+          <Icon size={17}/><span>{grupo.label}</span><ChevronDown size={14} style={{marginLeft:'auto',transform:aberto?'rotate(180deg)':'none',transition:'transform .15s'}}/>
+        </button>
+        {aberto && <div style={{display:'flex',flexDirection:'column',gap:2,margin:'2px 0 6px'}}>{filhos.map(f=><NavLink key={f.path} to={f.path} className={({isActive})=>isActive?'nav-item active':'nav-item'} style={{paddingLeft:38,fontSize:12}}><span>{f.labelAdmin}</span></NavLink>)}</div>}
+      </div>
+    )
+  }
+
+  return <>{saida}</>
+}
 
 function Shell() {
   const { usuario, session } = useAuth()
@@ -156,7 +252,7 @@ function Shell() {
   const ehDono=(session?.user?.email||'').toLowerCase()===DONO_EMAIL.toLowerCase()
   const menuVisivel=MENU.filter(m=>{if(m.soEmail&&!ehDono)return false;if(m.ocultarPerfis&&m.ocultarPerfis.includes(perfilAtivo))return false;return m.sempreVisivel||canAtivo(m.modulo)}).filter((m,i,a)=>a.findIndex(x=>x.path===m.path)===i)
   const usuarioDisplay=viewAs||usuario
-  return <ViewAsContext.Provider value={{perfilAtivo,usuarioAtivo:usuarioDisplay,estaEmModoVisual:!!viewAs}}><div className="app-shell"><aside className="sidebar"><div className="sidebar-brand"><Orbit size={20} strokeWidth={1.5} className="brand-icon"/><div><div className="brand-name">Orbita MKT</div><div className="brand-sub">CEDET</div></div></div><nav className="sidebar-nav">{menuVisivel.map(({path,label,icon:Icon})=><NavLink key={path} to={path} className={({isActive})=>isActive?'nav-item active':'nav-item'}><Icon size={17}/><span>{label}</span>{path==='/vitrine-admin'&&pedidosNovos>0&&<span style={{marginLeft:'auto'}}>{pedidosNovos}</span>}</NavLink>)}</nav>{podeUsarVerComo&&<button onClick={()=>setShowModal(true)} className="btn btn-ghost" style={{margin:10}}><SwitchCamera size={14}/> Visualizar como...</button>}<div className="sidebar-user">{usuarioDisplay&&<><div className="user-avatar">{(usuarioDisplay.nome||'U')[0].toUpperCase()}</div><div className="user-info"><div className="user-name">{usuarioDisplay.nome}</div><div className="user-perfil" style={{color:PERFIL_COLOR[usuarioDisplay.perfil]}}>{PERFIL_LABEL[usuarioDisplay.perfil]||usuarioDisplay.perfil}</div></div></>}<button className="btn-logout" onClick={handleLogout}><LogOut size={15}/></button></div></aside><main className="main-content" style={{display:'flex',flexDirection:'column'}}>{viewAs&&<BannerVerComo viewAs={viewAs} onSair={()=>setViewAs(null)}/>}<div style={{flex:1,overflow:'auto'}}><Suspense fallback={<div className="loading"><div className="spinner"/></div>}><Routes>
+  return <ViewAsContext.Provider value={{perfilAtivo,usuarioAtivo:usuarioDisplay,estaEmModoVisual:!!viewAs}}><div className="app-shell"><aside className="sidebar"><div className="sidebar-brand"><Orbit size={20} strokeWidth={1.5} className="brand-icon"/><div><div className="brand-name">Orbita MKT</div><div className="brand-sub">CEDET</div></div></div><nav className="sidebar-nav">{perfilAtivo==='administrador'?<MenuAdminUnificado menuVisivel={menuVisivel} pedidosNovos={pedidosNovos}/>:menuVisivel.map(({path,label,icon:Icon})=><NavLink key={path} to={path} className={({isActive})=>isActive?'nav-item active':'nav-item'}><Icon size={17}/><span>{label}</span>{path==='/vitrine-admin'&&pedidosNovos>0&&<span style={{marginLeft:'auto'}}>{pedidosNovos}</span>}</NavLink>)}</nav>{podeUsarVerComo&&<button onClick={()=>setShowModal(true)} className="btn btn-ghost" style={{margin:10}}><SwitchCamera size={14}/> Visualizar como...</button>}<div className="sidebar-user">{usuarioDisplay&&<><div className="user-avatar">{(usuarioDisplay.nome||'U')[0].toUpperCase()}</div><div className="user-info"><div className="user-name">{usuarioDisplay.nome}</div><div className="user-perfil" style={{color:PERFIL_COLOR[usuarioDisplay.perfil]}}>{PERFIL_LABEL[usuarioDisplay.perfil]||usuarioDisplay.perfil}</div></div></>}<button className="btn-logout" onClick={handleLogout}><LogOut size={15}/></button></div></aside><main className="main-content" style={{display:'flex',flexDirection:'column'}}>{viewAs&&<BannerVerComo viewAs={viewAs} onSair={()=>setViewAs(null)}/>}<div style={{flex:1,overflow:'auto'}}><Suspense fallback={<div className="loading"><div className="spinner"/></div>}><Routes>
     <Route path="/" element={<RequireAuth><BemVindo menu={menuVisivel}/></RequireAuth>}/><Route path="/dashboard" element={<RequireAuth modulo="dashboard"><Dashboard/></RequireAuth>}/><Route path="/dashboard-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><DashboardParceiras/></RequireAuth>}/><Route path="/base-comando" element={<RequireAuth><BaseComando/></RequireAuth>}/><Route path="/cortesias" element={<RequireAuth modulo="cortesias"><Cortesias/></RequireAuth>}/><Route path="/parceiros" element={<RequireAuth modulo="parceiros"><Parceiros/></RequireAuth>}/><Route path="/usuarios" element={<RequireAuth modulo="usuarios"><Usuarios/></RequireAuth>}/><Route path="/acessos-equipe" element={<RequireAuth modulo="acessos_equipe"><AcessosEquipe/></RequireAuth>}/><Route path="/campanhas" element={<RequireAuth modulo="campanhas"><Campanhas/></RequireAuth>}/><Route path="/monitoramento" element={<RequireAuth modulo="monitoramento"><Monitoramento/></RequireAuth>}/><Route path="/monitoramento-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><MonitoramentoParceiras/></RequireAuth>}/><Route path="/crm-influencers" element={<RequireAuth modulo="crm_influencers"><CRM grupo="influencers" titulo="CRM Influencers"/></RequireAuth>}/><Route path="/calculadora-influenciadores" element={<RequireAuth modulo="calculadora_influenciadores"><CalculadoraInfluenciadores/></RequireAuth>}/><Route path="/crm-parceiras" element={<RequireAuth modulo="crm_parceiras"><CRM grupo="parceiras" titulo="CRM Parceiras"/></RequireAuth>}/><Route path="/crm-editoras-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><CRMEditorasParceiras/></RequireAuth>}/><Route path="/editoras-livrarias" element={<RequireAuth modulo="tarefas_parceiras"><EditorasLivrarias/></RequireAuth>}/><Route path="/promocoes-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><PromocoesParceiras/></RequireAuth>}/><Route path="/calculadora" element={<RequireAuth modulo="calculadora"><Calculadora/></RequireAuth>}/><Route path="/rh" element={<RequireAuth modulo="rh"><RH/></RequireAuth>}/><Route path="/rh-parceiras" element={<RequireAuth modulo="rh_parceiras"><RHParceiras/></RequireAuth>}/><Route path="/eventos" element={<RequireAuth modulo="eventos"><Eventos/></RequireAuth>}/><Route path="/lancamentos" element={<RequireAuth modulo="lancamentos"><Lancamentos/></RequireAuth>}/><Route path="/tarefas" element={<RequireAuth modulo="tarefas"><Tarefas/></RequireAuth>}/><Route path="/tarefas-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><TarefasParceiras grupo="parceiras" titulo="Tarefas — Editoras Parceiras"/></RequireAuth>}/><Route path="/tarefas-influencers" element={<RequireAuth modulo="tarefas_influencers"><TarefasInfluencers2/></RequireAuth>}/><Route path="/agenda" element={<RequireAuth modulo="tarefas_parceiras"><Agenda/></RequireAuth>}/><Route path="/treinamentos" element={<RequireAuth modulo="treinamentos"><Treinamentos/></RequireAuth>}/><Route path="/treinamentos-parceiras" element={<RequireAuth modulo="treinamentos_parceiras"><TreinamentosParceiras/></RequireAuth>}/><Route path="/jornada-parceiras" element={<RequireAuth modulo="jornada_parceiras"><JornadaParceiras/></RequireAuth>}/><Route path="/pda" element={<RequireAuth modulo="pda"><PDA/></RequireAuth>}/><Route path="/pda-parceiras" element={<RequireAuth modulo="pda_parceiras"><PDAParceiras/></RequireAuth>}/><Route path="/cac-ltv" element={<RequireAuth modulo="cac_ltv"><CacLtv/></RequireAuth>}/><Route path="/vitrine-admin" element={<RequireAuth modulo="parceiros"><VitrineAdmin/></RequireAuth>}/><Route path="/guia-parcerias" element={<RequireAuth modulo="guia_parcerias"><GuiaParcerias/></RequireAuth>}/><Route path="/pedidos-crm" element={<RequireAuth modulo="pedidos_crm"><PedidosCRM/></RequireAuth>}/><Route path="/crm-inteligencia" element={<RequireAuth modulo="crm_inteligencia"><CRMInteligencia/></RequireAuth>}/><Route path="/notas" element={<RequireAuth><BlocoNotas/></RequireAuth>}/><Route path="/configuracoes" element={<RequireAuth><Configuracoes tema={tema} corDestaque={corDestaque} onTemaChange={handleTemaChange} onCorChange={handleCorChange}/></RequireAuth>}/>
   </Routes></Suspense></div></main>{showModal&&<ModalVerComo todosUsuarios={todosUsuarios} usuarioAtual={usuario} onSelecionar={u=>{setViewAs(u);setShowModal(false)}} onFechar={()=>setShowModal(false)}/>}</div></ViewAsContext.Provider>
 }
