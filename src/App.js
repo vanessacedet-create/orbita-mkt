@@ -131,7 +131,6 @@ const ADMIN_MENU_GRUPOS = [
     key: 'crm', label: 'CRM', icon: Network,
     items: [
       { path: '/crm-influencers', label: 'Influencers' },
-      { path: '/crm-parceiras', label: 'Parceiras' },
       { path: '/crm-editoras-parceiras', label: 'Editoras Parceiras' },
     ],
   },
