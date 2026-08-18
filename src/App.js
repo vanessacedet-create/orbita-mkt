@@ -162,4 +162,4 @@ function Shell() {
 }
 
 export default function App(){return <AuthProvider><BrowserRouter><Suspense fallback={<div className="loading"><div className="spinner"/></div>}><Routes><Route path="/login" element={<PublicRoute><Login/></PublicRoute>}/><Route path="/reset-password" element={<ResetPassword/>}/><Route path="/vitrine" element={<VitrinePublica/>}/><Route path="/*" element={<RequireAuth><Shell/></RequireAuth>}/></Routes></Suspense></BrowserRouter></AuthProvider>}
-function PublicRoute({children}){const{session,loading}=useAuth();if(loading)return <div className="loading"><div className="spinner"/></div>;if(session)return <Navigate to="/login" replace/>;return children}
+function PublicRoute({children}){const{session,loading}=useAuth();if(loading)return <div className="loading"><div className="spinner"/></div>;if(session)return <Navigate to="/" replace/>;return children}
