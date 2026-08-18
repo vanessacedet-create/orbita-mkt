@@ -1,0 +1,209 @@
+name: Unificar menu do administrador
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/unificar-menu-admin.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Unificar menu apenas para administrador
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/App.js')
+          s = path.read_text(encoding='utf-8')
+
+          old_import = "import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom'"
+          new_import = "import { BrowserRouter, Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom'"
+          if old_import in s:
+              s = s.replace(old_import, new_import, 1)
+          elif new_import not in s:
+              raise SystemExit('Import do react-router-dom não encontrado')
+
+          marker = "]\n\nconst PERFIL_LABEL = {"
+          bloco = r''']
+
+const ADMIN_MENU_GRUPOS = [
+  {
+    key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard,
+    items: [
+      { path: '/dashboard', label: 'Visão geral' },
+      { path: '/dashboard-parceiras', label: 'Editoras Parceiras' },
+    ],
+  },
+  {
+    key: 'crm', label: 'CRM', icon: Network,
+    items: [
+      { path: '/crm-influencers', label: 'Influencers' },
+      { path: '/crm-parceiras', label: 'Parceiras' },
+      { path: '/crm-editoras-parceiras', label: 'Editoras Parceiras' },
+    ],
+  },
+  {
+    key: 'monitoramento', label: 'Monitoramento', icon: Eye,
+    items: [
+      { path: '/monitoramento', label: 'Influencers' },
+      { path: '/monitoramento-parceiras', label: 'Editoras Parceiras' },
+    ],
+  },
+  {
+    key: 'tarefas', label: 'Tarefas', icon: CheckSquare,
+    items: [
+      { path: '/tarefas-influencers', label: 'Influencers' },
+      { path: '/tarefas-parceiras', label: 'Editoras Parceiras' },
+    ],
+  },
+  {
+    key: 'rh', label: 'RH', icon: HeartHandshake,
+    items: [
+      { path: '/rh', label: 'Equipe Geral' },
+      { path: '/rh-parceiras', label: 'Editoras Parceiras' },
+    ],
+  },
+  {
+    key: 'pda', label: 'PDA', icon: Target,
+    items: [
+      { path: '/pda', label: 'Equipe Geral' },
+      { path: '/pda-parceiras', label: 'Editoras Parceiras' },
+    ],
+  },
+  {
+    key: 'treinamentos', label: 'Treinamentos', icon: GraduationCap,
+    items: [
+      { path: '/treinamentos', label: 'Equipe Geral' },
+      { path: '/treinamentos-parceiras', label: 'Editoras Parceiras' },
+    ],
+  },
+]
+
+const PERFIL_LABEL = {'''
+          if 'const ADMIN_MENU_GRUPOS = [' not in s:
+              if marker not in s:
+                  raise SystemExit('Ponto de inserção dos grupos não encontrado')
+              s = s.replace(marker, bloco, 1)
+
+          componente = r'''
+function MenuAdminUnificado({ menuVisivel, pedidosNovos }) {
+  const location = useLocation()
+  const [abertos, setAbertos] = useState({})
+  const porPath = new Map(menuVisivel.map(item => [item.path, item]))
+  const pathsAgrupados = new Set(ADMIN_MENU_GRUPOS.flatMap(g => g.items.map(i => i.path)))
+  const gruposRenderizados = new Set()
+  const saida = []
+
+  function linkNormal(item) {
+    const Icon = item.icon
+    return (
+      <NavLink key={item.path} to={item.path} className={({isActive})=>isActive?'nav-item active':'nav-item'}>
+        <Icon size={17}/><span>{item.label}</span>
+        {item.path==='/vitrine-admin'&&pedidosNovos>0&&<span style={{marginLeft:'auto'}}>{pedidosNovos}</span>}
+      </NavLink>
+    )
+  }
+
+  for (const item of menuVisivel) {
+    if (!pathsAgrupados.has(item.path)) {
+      saida.push(linkNormal(item))
+      continue
+    }
+
+    const grupo = ADMIN_MENU_GRUPOS.find(g => g.items.some(i => i.path === item.path))
+    if (!grupo || gruposRenderizados.has(grupo.key)) continue
+    gruposRenderizados.add(grupo.key)
+
+    const filhos = grupo.items
+      .map(cfg => porPath.has(cfg.path) ? { ...porPath.get(cfg.path), labelAdmin: cfg.label } : null)
+      .filter(Boolean)
+    if (!filhos.length) continue
+
+    const ativo = filhos.some(f => location.pathname === f.path)
+    const aberto = abertos[grupo.key] ?? ativo
+    const Icon = grupo.icon
+
+    saida.push(
+      <div key={`grupo-${grupo.key}`}>
+        <button
+          type="button"
+          className={`nav-item ${ativo ? 'active' : ''}`}
+          onClick={()=>setAbertos(prev=>({...prev,[grupo.key]:!(prev[grupo.key] ?? ativo)}))}
+          style={{width:'100%',border:'none',cursor:'pointer',fontFamily:'inherit',textAlign:'left'}}>
+          <Icon size={17}/><span>{grupo.label}</span>
+          <ChevronDown size={14} style={{marginLeft:'auto',transform:aberto?'rotate(180deg)':'none',transition:'transform .15s'}}/>
+        </button>
+        {aberto && (
+          <div style={{display:'flex',flexDirection:'column',gap:2,margin:'2px 0 6px'}}>
+            {filhos.map(f=>(
+              <NavLink
+                key={f.path}
+                to={f.path}
+                className={({isActive})=>isActive?'nav-item active':'nav-item'}
+                style={{paddingLeft:38,fontSize:12}}>
+                <span>{f.labelAdmin}</span>
+              </NavLink>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return <>{saida}</>
+}
+
+'''
+          if 'function MenuAdminUnificado(' not in s:
+              shell_marker = 'function Shell() {'
+              if shell_marker not in s:
+                  raise SystemExit('Shell não encontrado')
+              s = s.replace(shell_marker, componente + shell_marker, 1)
+
+          old_nav = '<nav className="sidebar-nav">{menuVisivel.map(({path,label,icon:Icon})=><NavLink key={path} to={path} className={({isActive})=>isActive?\'nav-item active\':\'nav-item\'}><Icon size={17}/><span>{label}</span>{path===\'/vitrine-admin\'&&pedidosNovos>0&&<span style={{marginLeft:\'auto\'}}>{pedidosNovos}</span>}</NavLink>)}</nav>'
+          new_nav = '<nav className="sidebar-nav">{perfilAtivo===\'administrador\'?<MenuAdminUnificado menuVisivel={menuVisivel} pedidosNovos={pedidosNovos}/>:menuVisivel.map(({path,label,icon:Icon})=><NavLink key={path} to={path} className={({isActive})=>isActive?\'nav-item active\':\'nav-item\'}><Icon size={17}/><span>{label}</span>{path===\'/vitrine-admin\'&&pedidosNovos>0&&<span style={{marginLeft:\'auto\'}}>{pedidosNovos}</span>}</NavLink>)}</nav>'
+          if old_nav in s:
+              s = s.replace(old_nav, new_nav, 1)
+          elif '<MenuAdminUnificado menuVisivel={menuVisivel}' not in s:
+              raise SystemExit('Navegação lateral não encontrada')
+
+          path.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Verificar escopo
+        run: |
+          changed="$(git diff --name-only)"
+          echo "$changed"
+          test "$changed" = "src/App.js"
+          grep -q "const ADMIN_MENU_GRUPOS" src/App.js
+          grep -q "perfilAtivo==='administrador'?<MenuAdminUnificado" src/App.js
+
+      - name: Instalar dependências
+        run: npm install --no-audit --no-fund
+
+      - name: Validar build
+        run: npm run build
+
+      - name: Publicar na main
+        run: |
+          rm .github/workflows/unificar-menu-admin.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.js .github/workflows/unificar-menu-admin.yml
+          git commit -m "feat: unifica menu do administrador"
+          git push origin main
