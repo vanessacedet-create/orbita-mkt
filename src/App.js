@@ -178,6 +178,14 @@ const ADMIN_MENU_GRUPOS = [
   },
 ]
 
+const ADMIN_MENU_OCULTOS = new Set([
+  '/crm-parceiras',
+  '/notas',
+  '/agenda',
+  '/editoras-livrarias',
+  '/jornada-parceiras',
+])
+
 const PERFIL_LABEL = {
   administrador: 'Administrador', gerente: 'Gerente', estagiario_proprias: 'Estagiário Próprias', analista_proprias: 'Analista Próprias', supervisor_proprias: 'Supervisor Próprias', estagiario_influencers: 'Estagiário Influencers', analista_influencers: 'Analista Influencers', estagiario_marketplaces: 'Estagiário Mkt & Eventos', analista_marketplaces: 'Analista Mkt & Eventos', estagiario_parceiras: 'Estagiário Parceiras', analista_parceiras: 'Analista Parceiras', supervisor_parceiras: 'Supervisor Parceiras',
 }
@@ -198,7 +206,8 @@ function BannerVerComo({ viewAs, onSair }) { return <div style={{background:'lin
 function MenuAdminUnificado({ menuVisivel, pedidosNovos }) {
   const location = useLocation()
   const [abertos, setAbertos] = useState({})
-  const porPath = new Map(menuVisivel.map(item => [item.path, item]))
+  const menuAdmin = menuVisivel.filter(item => !ADMIN_MENU_OCULTOS.has(item.path))
+  const porPath = new Map(menuAdmin.map(item => [item.path, item]))
   const pathsAgrupados = new Set(ADMIN_MENU_GRUPOS.flatMap(g => g.items.map(i => i.path)))
   const gruposRenderizados = new Set()
   const saida = []
@@ -208,7 +217,7 @@ function MenuAdminUnificado({ menuVisivel, pedidosNovos }) {
     return <NavLink key={item.path} to={item.path} className={({isActive})=>isActive?'nav-item active':'nav-item'}><Icon size={17}/><span>{item.label}</span>{item.path==='/vitrine-admin'&&pedidosNovos>0&&<span style={{marginLeft:'auto'}}>{pedidosNovos}</span>}</NavLink>
   }
 
-  for (const item of menuVisivel) {
+  for (const item of menuAdmin) {
     if (!pathsAgrupados.has(item.path)) {
       saida.push(linkNormal(item))
       continue
