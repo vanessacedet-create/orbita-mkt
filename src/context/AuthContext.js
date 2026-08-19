@@ -19,6 +19,7 @@ export const MODULOS_PERMISSOES = {
   tarefas: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers', 'analista_marketplaces', 'estagiario_marketplaces'],
   tarefas_parceiras: ['administrador', 'gerente', 'supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras'],
   tarefas_influencers: ['administrador', 'gerente', 'analista_influencers', 'estagiario_influencers'],
+  tarefas_marketplaces: ['administrador', 'gerente', 'analista_marketplaces', 'estagiario_marketplaces'],
   eventos: ['administrador', 'gerente', 'estagiario_marketplaces', 'analista_marketplaces'],
 
   // ── TEMPORÁRIO: acesso da Vivi (supervisor_parceiras) ao RH ORIGINAL,
