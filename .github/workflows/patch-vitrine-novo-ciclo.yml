@@ -1,0 +1,194 @@
+name: Patch Vitrine novo ciclo manual
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/patch-vitrine-novo-ciclo.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-build:
+    if: ${{ !contains(github.event.head_commit.message, '[vitrine-novo-ciclo-done]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Patch public storefront and admin
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          marker_const = "const CICLO_MARKER_PREFIX = '[ORBITA:NOVO_CICLO_LIBERADO|';\nfunction temMarcadorNovoCiclo(obs) { return (obs || '').includes(CICLO_MARKER_PREFIX); }\nfunction limparMarcadoresNovoCiclo(obs) { return (obs || '').replace(/\\s*\\[ORBITA:NOVO_CICLO_LIBERADO\\|[^\\]]+\\]\\s*/g, ' ').trim(); }\n"
+
+          # ---------- VitrinePublica.js ----------
+          pub = Path('src/pages/VitrinePublica.js')
+          text = pub.read_text(encoding='utf-8')
+
+          if 'CICLO_MARKER_PREFIX' not in text:
+              anchor = "const FONTS = {\n  display: \"'Playfair Display', 'Georgia', serif\",\n  body: \"'DM Sans', 'Helvetica Neue', sans-serif\",\n};\n"
+              if anchor not in text:
+                  raise SystemExit('Âncora FONTS não encontrada em VitrinePublica.js')
+              text = text.replace(anchor, anchor + '\n' + marker_const, 1)
+
+          old_query = """    const { data: pedidosMes } = await supabase
+      .from('vitrine_pedidos')
+      .select('vitrine_pedido_itens(quantidade)')
+      .or(`cpf.eq.${parceiroData.cpf},cpf.eq.${cpfNorm},email.ilike.${parceiroData.email}`)
+      .gte('created_at', inicioMes)
+      .lte('created_at', fimMes);
+
+    const total = (pedidosMes || []).reduce((soma, p) =>
+      soma + (p.vitrine_pedido_itens || []).reduce((s, i) => s + (i.quantidade || 1), 0), 0);
+    setLivrosUsadosMes(total);
+"""
+          new_query = """    const { data: pedidosMes } = await supabase
+      .from('vitrine_pedidos')
+      .select('created_at, observacoes, vitrine_pedido_itens(quantidade)')
+      .or(`cpf.eq.${parceiroData.cpf},cpf.eq.${cpfNorm},email.ilike.${parceiroData.email}`)
+      .gte('created_at', inicioMes)
+      .lte('created_at', fimMes)
+      .order('created_at', { ascending: true });
+
+    const pedidos = pedidosMes || [];
+    let inicioCiclo = new Date(inicioMes).getTime();
+    for (const p of pedidos) {
+      if (temMarcadorNovoCiclo(p.observacoes)) {
+        const ts = new Date(p.created_at).getTime();
+        if (!Number.isNaN(ts) && ts > inicioCiclo) inicioCiclo = ts;
+      }
+    }
+
+    const total = pedidos
+      .filter(p => new Date(p.created_at).getTime() > inicioCiclo)
+      .reduce((soma, p) =>
+        soma + (p.vitrine_pedido_itens || []).reduce((s, i) => s + (i.quantidade || 1), 0), 0);
+    setLivrosUsadosMes(total);
+"""
+          if old_query in text:
+              text = text.replace(old_query, new_query, 1)
+          elif "select('created_at, observacoes, vitrine_pedido_itens(quantidade)')" not in text:
+              raise SystemExit('Bloco de cálculo mensal não encontrado em VitrinePublica.js')
+
+          # Não exibir o marcador interno no histórico público
+          text = text.replace("{pedido.observacoes && (", "{limparMarcadoresNovoCiclo(pedido.observacoes) && (", 1)
+          text = text.replace("Obs: {pedido.observacoes}", "Obs: {limparMarcadoresNovoCiclo(pedido.observacoes)}", 1)
+
+          # Mensagens passam a falar em ciclo quando houver nova liberação
+          text = text.replace("Você já utilizou seu limite de ${limiteTotal} livro${limiteTotal !== 1 ? 's' : ''} em ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}. Seu ciclo renova em ${new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toLocaleDateString('pt-BR')}.", "Você já utilizou o limite de ${limiteTotal} livro${limiteTotal !== 1 ? 's' : ''} do seu ciclo atual. Quando um novo ciclo for liberado pela equipe CEDET, você poderá escolher novamente.")
+          text = text.replace("Você pode solicitar ainda ${limite} livro${limite !== 1 ? 's' : ''} em ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })} (${livrosUsadosMes} de ${limiteTotal} usados).", "Você pode solicitar ainda ${limite} livro${limite !== 1 ? 's' : ''} no seu ciclo atual (${livrosUsadosMes} de ${limiteTotal} usados).")
+
+          pub.write_text(text, encoding='utf-8')
+
+          # ---------- VitrineAdmin.js ----------
+          adm = Path('src/pages/VitrineAdmin.js')
+          text = adm.read_text(encoding='utf-8')
+
+          if 'RefreshCw' not in text:
+              text = text.replace('FileSpreadsheet, Check, AlertCircle, Package, ClipboardList, Users, Link2, Megaphone', 'FileSpreadsheet, Check, AlertCircle, Package, ClipboardList, Users, Link2, Megaphone, RefreshCw', 1)
+
+          if 'CICLO_MARKER_PREFIX' not in text:
+              anchor = "/* ============================================\n   VITRINE ADMIN — Gerenciamento de Livros\n"
+              if anchor not in text:
+                  raise SystemExit('Âncora de cabeçalho não encontrada em VitrineAdmin.js')
+              text = text.replace(anchor, marker_const + '\n' + anchor, 1)
+
+          func = r'''
+  // ── Parceiros: liberar um novo ciclo de escolha antes da virada do mês ──
+  async function liberarNovoPedido(parceiro) {
+    if (!parceiro?.email) {
+      alert('Este parceiro não possui e-mail cadastrado.');
+      return;
+    }
+    if (!window.confirm(`Liberar um novo ciclo de escolha para ${parceiro.nome}?\n\nOs pedidos anteriores deste mês deixarão de consumir o limite e, a partir do próximo pedido, a contagem começa novamente.`)) return;
+
+    const { data: ultimo, error: erroBusca } = await supabase
+      .from('vitrine_pedidos')
+      .select('id, observacoes, created_at')
+      .ilike('email', parceiro.email)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (erroBusca) {
+      alert(`Não foi possível localizar o último pedido: ${erroBusca.message}`);
+      return;
+    }
+    if (!ultimo) {
+      alert('Este parceiro ainda não possui pedido na Vitrine. Não é necessário liberar um novo ciclo.');
+      return;
+    }
+
+    const marcador = `${CICLO_MARKER_PREFIX}${new Date().toISOString()}]`;
+    const obsVisivel = limparMarcadoresNovoCiclo(ultimo.observacoes);
+    const novaObs = [obsVisivel, marcador].filter(Boolean).join('\n');
+    const { error } = await supabase
+      .from('vitrine_pedidos')
+      .update({ observacoes: novaObs })
+      .eq('id', ultimo.id);
+
+    if (error) {
+      alert(`Não foi possível liberar o novo ciclo: ${error.message}`);
+      return;
+    }
+
+    setPedidos(prev => prev.map(p => p.id === ultimo.id ? { ...p, observacoes: novaObs } : p));
+    alert(`Novo ciclo liberado para ${parceiro.nome}. Ele já pode entrar na Vitrine e escolher novamente.`);
+  }
+
+'''
+          if 'async function liberarNovoPedido(parceiro)' not in text:
+              anchor = '  // ── Parceiros: excluir ──\n'
+              if anchor not in text:
+                  raise SystemExit('Âncora de parceiros não encontrada em VitrineAdmin.js')
+              text = text.replace(anchor, func + anchor, 1)
+
+          # Ocultar marcador interno na observação do pedido do admin
+          text = text.replace("{pedido.observacoes && (", "{limparMarcadoresNovoCiclo(pedido.observacoes) && (", 1)
+          text = text.replace('"{pedido.observacoes}"', '"{limparMarcadoresNovoCiclo(pedido.observacoes)}"', 1)
+
+          # Botão na aba Parceiros, antes do editar
+          if 'title="Liberar novo pedido"' not in text:
+              target = '''                          <button
+                            onClick={() => { setEditandoParceiro(parceiro); setShowFormParceiro(true); }}
+                            style={iconBtn}
+                            title="Editar"
+                          >'''
+              button = '''                          <button
+                            onClick={() => liberarNovoPedido(parceiro)}
+                            style={{ ...iconBtn, color: '#2563eb' }}
+                            title="Liberar novo pedido"
+                          >
+                            <RefreshCw size={15} />
+                          </button>
+'''
+              if target not in text:
+                  raise SystemExit('Botão Editar parceiro não encontrado')
+              text = text.replace(target, button + target, 1)
+
+          adm.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate production build
+        run: npm run build
+
+      - name: Commit production change
+        run: |
+          rm .github/workflows/patch-vitrine-novo-ciclo.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/VitrinePublica.js src/pages/VitrineAdmin.js .github/workflows/patch-vitrine-novo-ciclo.yml
+          git commit -m "Permite liberar novo ciclo individual na Vitrine [vitrine-novo-ciclo-done]"
+          git push origin main
