@@ -1,0 +1,132 @@
+name: Finaliza Vitrine ciclo
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/finaliza-vitrine-ciclo.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply final Vitrine cycle patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # PUBLICA: ativa o patch de contagem por ciclo
+          pub = Path('src/pages/VitrinePublica.js')
+          text = pub.read_text(encoding='utf-8')
+          imp = "import { installVitrineCycleQueryPatch } from '../lib/vitrineCycle';\n"
+          if imp not in text:
+              text = text.replace("import { supabase } from '../lib/supabase';\n", "import { supabase } from '../lib/supabase';\n" + imp, 1)
+          if "installVitrineCycleQueryPatch();" not in text:
+              marker = "/* ============================================\n   VITRINE CEDET — Página Pública"
+              text = text.replace(marker, "installVitrineCycleQueryPatch();\n\n" + marker, 1)
+          pub.write_text(text, encoding='utf-8')
+
+          # ADMIN: botão de liberação individual
+          adm = Path('src/pages/VitrineAdmin.js')
+          text = adm.read_text(encoding='utf-8')
+          imp2 = "import { createVitrineCycleMarker } from '../lib/vitrineCycle';\n"
+          if imp2 not in text:
+              text = text.replace("import { supabase } from '../lib/supabase';\n", "import { supabase } from '../lib/supabase';\n" + imp2, 1)
+
+          if "async function liberarNovoPedidoParceiro" not in text:
+              anchor = "  // ── Parceiros: excluir ──\n"
+              fn = r'''  // ── Parceiros: liberar novo ciclo de pedido ──
+  async function liberarNovoPedidoParceiro(parceiro) {
+    const ok = window.confirm(`Liberar um novo ciclo de pedido para ${parceiro.nome}? Os pedidos anteriores deste mês deixarão de consumir o limite do novo ciclo.`);
+    if (!ok) return;
+
+    const { data: ultimoPedido, error: erroBusca } = await supabase
+      .from('vitrine_pedidos')
+      .select('id, observacoes')
+      .ilike('email', parceiro.email)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (erroBusca) {
+      alert('Não foi possível localizar o último pedido deste parceiro.');
+      return;
+    }
+    if (!ultimoPedido) {
+      alert('Este parceiro ainda não possui pedido anterior; ele já pode solicitar normalmente.');
+      return;
+    }
+
+    const marker = createVitrineCycleMarker();
+    const observacoes = [ultimoPedido.observacoes, marker].filter(Boolean).join(' ');
+    const { error } = await supabase
+      .from('vitrine_pedidos')
+      .update({ observacoes })
+      .eq('id', ultimoPedido.id);
+
+    if (error) {
+      alert('Não foi possível liberar o novo ciclo. Tente novamente.');
+      return;
+    }
+
+    setPedidos(prev => prev.map(p => p.id === ultimoPedido.id ? { ...p, observacoes } : p));
+    alert(`Novo ciclo liberado para ${parceiro.nome}. Ele já pode entrar na Vitrine e escolher novamente conforme o limite do grupo.`);
+  }
+
+'''
+              if anchor not in text:
+                  raise SystemExit('Anchor parceiros excluir not found')
+              text = text.replace(anchor, fn + anchor, 1)
+
+          if 'title="Liberar novo pedido"' not in text:
+              anchor_btn = '''                          <button
+                            onClick={() => { setEditandoParceiro(parceiro); setShowFormParceiro(true); }}
+                            style={iconBtn}
+                            title="Editar"
+                          >
+                            <Edit2 size={15} />
+                          </button>
+'''
+              button = '''                          <button
+                            onClick={() => liberarNovoPedidoParceiro(parceiro)}
+                            style={{ ...iconBtn, color: '#16a34a' }}
+                            title="Liberar novo pedido"
+                          >
+                            <RefreshCw size={15} />
+                          </button>
+'''
+              if anchor_btn not in text:
+                  raise SystemExit('Partner edit button anchor not found')
+              text = text.replace(anchor_btn, button + anchor_btn, 1)
+
+          if 'RefreshCw' not in text.split('} from \'lucide-react\';',1)[0]:
+              text = text.replace('FileSpreadsheet, Check, AlertCircle, Package, ClipboardList, Users, Link2, Megaphone', 'FileSpreadsheet, Check, AlertCircle, Package, ClipboardList, Users, Link2, Megaphone, RefreshCw', 1)
+
+          adm.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Validate build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Commit final implementation
+        run: |
+          rm .github/workflows/finaliza-vitrine-ciclo.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/VitrinePublica.js src/pages/VitrineAdmin.js .github/workflows/finaliza-vitrine-ciclo.yml
+          git commit -m "Finaliza liberação individual de novo ciclo na Vitrine"
+          git push origin main
