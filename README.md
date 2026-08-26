@@ -97,3 +97,5 @@ cp .env.example .env
 # Edite .env com suas credenciais do Supabase
 npm start
 ```
+
+<!-- trigger-vitrine-cycle -->
