@@ -91,7 +91,7 @@ const MENU = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, modulo: 'dashboard', ocultarPerfis: PERFIS_PARCEIRAS },
   { path: '/dashboard-parceiras', label: 'Dashboard', icon: LayoutDashboard, modulo: 'tarefas_parceiras' },
   { path: '/notas', label: 'Bloco de Notas', icon: BookMarked, modulo: 'tarefas_parceiras', sempreVisivel: true },
-  { path: '/base-comando', label: 'Base de Comando', icon: Activity, modulo: 'base_comando', sempreVisivel: true, soEmail: true },
+  { path: '/base-comando', label: 'Projetos', icon: Activity, modulo: 'base_comando', sempreVisivel: true, soEmail: true },
   { path: '/crm-influencers', label: 'CRM Influencers', icon: Network, modulo: 'crm_influencers', ocultarPerfis: PERFIS_PARCEIRAS },
   { path: '/calculadora-influenciadores', label: 'Calculadora Influencers', icon: Calculator, modulo: 'calculadora_influenciadores', ocultarPerfis: PERFIS_PARCEIRAS },
   { path: '/crm-parceiras', label: 'CRM Parceiras', icon: Network, modulo: 'crm_parceiras', ocultarPerfis: PERFIS_PARCEIRAS },
