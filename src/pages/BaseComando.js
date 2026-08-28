@@ -235,7 +235,11 @@ export default function BaseComando() {
 
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(145px,1fr))', gap:10, margin:'18px 0 14px' }}>
         {Object.entries(FASE_LABEL).map(([fase, label]) => (
-          <button key={fase} onClick={() => setFiltroFase(filtroFase === fase ? 'todas' : fase)}
+          <button key={fase} onClick={() => {
+            const selecionando = filtroFase !== fase
+            setFiltroFase(selecionando ? fase : 'todas')
+            if (selecionando && fase === 'concluido') setFiltroTrimestre('todos')
+          }}
             style={{ ...s.card, margin:0, padding:'12px 14px', cursor:'pointer', textAlign:'left', borderTop:`3px solid ${FASE_COR[fase]}`, ...(filtroFase === fase ? { background:'var(--accent-glow)', borderColor:FASE_COR[fase] } : {}) }}>
             <div style={{ fontSize:11, color:'var(--text-muted, #94a3b8)', fontWeight:700, textTransform:'uppercase' }}>{label}</div>
             <div style={{ fontSize:24, fontWeight:800, color:FASE_COR[fase], marginTop:3 }}>{contagemFases[fase] || 0}</div>
@@ -271,7 +275,9 @@ export default function BaseComando() {
         <>
           {projetosVisiveis.length === 0 && (
             <div style={{ ...s.card, textAlign: 'center', color: 'var(--text-muted, #94a3b8)' }}>
-              Nenhum projeto ainda. Crie o primeiro em <b>+ Projeto</b>.
+              {projetos.length === 0
+                ? <>Nenhum projeto ainda. Crie o primeiro em <b>+ Projeto</b>.</>
+                : <>Nenhum projeto encontrado com os filtros selecionados.</>}
             </div>
           )}
 
