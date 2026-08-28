@@ -17,6 +17,46 @@ const fmtData = (d) => (d ? new Date(d + 'T00:00:00').toLocaleDateString('pt-BR'
 const hojeISO = () => new Date().toISOString().slice(0, 10)
 const atrasada = (t) => t.prazo && t.status !== 'concluida' && t.prazo < hojeISO()
 
+const FASE_LABEL = {
+  planejado: 'Planejado',
+  preparacao: 'Em preparação',
+  andamento: 'Em andamento',
+  pausado: 'Pausado',
+  concluido: 'Concluído',
+}
+const FASE_COR = {
+  planejado: '#64748b',
+  preparacao: '#f59e0b',
+  andamento: '#0ea5e9',
+  pausado: '#94a3b8',
+  concluido: '#10b981',
+}
+
+function faseDoProjeto(projeto, tarefasProjeto) {
+  if (projeto.status === 'concluido') return 'concluido'
+  if (projeto.status === 'pausado') return 'pausado'
+  if (!tarefasProjeto.length) return 'planejado'
+  const iniciou = tarefasProjeto.some((t) => ['fazendo', 'concluida'].includes(t.status))
+  return iniciou ? 'andamento' : 'preparacao'
+}
+
+function limiteTrimestre(offset = 0) {
+  const agora = new Date()
+  const trimestreAtual = Math.floor(agora.getMonth() / 3)
+  const inicio = new Date(agora.getFullYear(), (trimestreAtual + offset) * 3, 1)
+  const fim = new Date(agora.getFullYear(), (trimestreAtual + offset + 1) * 3, 0)
+  const iso = (d) => d.toISOString().slice(0, 10)
+  return { inicio: iso(inicio), fim: iso(fim) }
+}
+
+function pertenceAoTrimestre(projeto, filtro) {
+  if (filtro === 'todos') return true
+  if (filtro === 'sem_prazo') return !projeto.prazo
+  if (!projeto.prazo) return false
+  const periodo = limiteTrimestre(filtro === 'proximo' ? 1 : 0)
+  return projeto.prazo >= periodo.inicio && projeto.prazo <= periodo.fim
+}
+
 // Ordena tarefas: concluídas no fim; ativas por prazo crescente (sem prazo por último)
 const ordenaTarefas = (arr) => [...arr].sort((a, b) => {
   const ca = a.status === 'concluida' ? 1 : 0
@@ -49,6 +89,8 @@ export default function BaseComando() {
   const [carregando, setCarregando] = useState(true)
   const [modal, setModal] = useState(null) // 'projeto' | 'tarefa' | {tipo:'editar-projeto',p} | {tipo:'editar-tarefa',t} | {tipo:'excluir-projeto',p}
   const [filtroStatus, setFiltroStatus] = useState('todas')
+  const [filtroFase, setFiltroFase] = useState('todas')
+  const [filtroTrimestre, setFiltroTrimestre] = useState('atual')
   const [mostrarArquivados, setMostrarArquivados] = useState(false)
   const dragId = useRef(null)
   const [dragOverId, setDragOverId] = useState(null)
@@ -153,7 +195,18 @@ export default function BaseComando() {
   const avulsas = ordenaTarefas(tarefasFiltradas.filter((t) => !t.projeto_id))
   const porProjeto = (pid) => ordenaTarefas(tarefasFiltradas.filter((t) => t.projeto_id === pid))
 
-  const projetosVisiveis = projetos.filter((p) => mostrarArquivados || p.status !== 'arquivado')
+  const projetosComFase = projetos.map((p) => {
+    const tarefasProjeto = tarefas.filter((t) => t.projeto_id === p.id)
+    return { ...p, faseCalculada: faseDoProjeto(p, tarefasProjeto), tarefasProjeto }
+  })
+  const contagemFases = Object.keys(FASE_LABEL).reduce((acc, fase) => {
+    acc[fase] = projetosComFase.filter((p) => p.status !== 'arquivado' && p.faseCalculada === fase).length
+    return acc
+  }, {})
+  const projetosVisiveis = projetosComFase
+    .filter((p) => mostrarArquivados || p.status !== 'arquivado')
+    .filter((p) => filtroFase === 'todas' || p.faseCalculada === filtroFase)
+    .filter((p) => pertenceAoTrimestre(p, filtroTrimestre))
   const temArquivados = projetos.some((p) => p.status === 'arquivado')
 
   // ── Estados de acesso ─────────────────────────────────────────
@@ -171,8 +224,8 @@ export default function BaseComando() {
     <div style={s.page}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h1 style={s.h1}>🛰️ Base de Comando</h1>
-          <p style={s.sub}>Seus projetos e demandas — vinculadas ou avulsas. Só você vê esta tela.</p>
+          <h1 style={s.h1}>🛰️ Projetos do Trimestre</h1>
+          <p style={s.sub}>Planejamento e acompanhamento dos seus projetos. Área privada de Vanessa Rocha.</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button style={s.btnGhost} onClick={() => setModal('projeto')}>+ Projeto</button>
@@ -180,13 +233,32 @@ export default function BaseComando() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, margin: '18px 0', flexWrap: 'wrap', alignItems: 'center' }}>
-        {[['todas', 'Todas'], ['ativas', 'Ativas'], ['concluidas', 'Concluídas']].map(([k, v]) => (
-          <button key={k} onClick={() => setFiltroStatus(k)}
-            style={{ ...s.btnGhost, ...(filtroStatus === k ? { background: '#6366f1', color: '#fff', borderColor: '#6366f1' } : {}) }}>{v}</button>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(145px,1fr))', gap:10, margin:'18px 0 14px' }}>
+        {Object.entries(FASE_LABEL).map(([fase, label]) => (
+          <button key={fase} onClick={() => setFiltroFase(filtroFase === fase ? 'todas' : fase)}
+            style={{ ...s.card, margin:0, padding:'12px 14px', cursor:'pointer', textAlign:'left', borderTop:`3px solid ${FASE_COR[fase]}`, ...(filtroFase === fase ? { background:'var(--accent-glow)', borderColor:FASE_COR[fase] } : {}) }}>
+            <div style={{ fontSize:11, color:'var(--text-muted, #94a3b8)', fontWeight:700, textTransform:'uppercase' }}>{label}</div>
+            <div style={{ fontSize:24, fontWeight:800, color:FASE_COR[fase], marginTop:3 }}>{contagemFases[fase] || 0}</div>
+          </button>
         ))}
+      </div>
+
+      <div style={{ display:'flex', gap:8, marginBottom:18, flexWrap:'wrap', alignItems:'center' }}>
+        <select value={filtroTrimestre} onChange={(e) => setFiltroTrimestre(e.target.value)} style={{ ...s.input, width:'auto', minWidth:180 }}>
+          <option value="atual" style={{ color:'#0f172a', background:'#fff' }}>Trimestre atual</option>
+          <option value="proximo" style={{ color:'#0f172a', background:'#fff' }}>Próximo trimestre</option>
+          <option value="sem_prazo" style={{ color:'#0f172a', background:'#fff' }}>Sem prazo definido</option>
+          <option value="todos" style={{ color:'#0f172a', background:'#fff' }}>Todos os períodos</option>
+        </select>
+        {[['todas', 'Todas as tarefas'], ['ativas', 'Tarefas ativas'], ['concluidas', 'Tarefas concluídas']].map(([k, v]) => (
+          <button key={k} onClick={() => setFiltroStatus(k)}
+            style={{ ...s.btnGhost, ...(filtroStatus === k ? { background:'#6366f1', color:'#fff', borderColor:'#6366f1' } : {}) }}>{v}</button>
+        ))}
+        {(filtroFase !== 'todas' || filtroTrimestre !== 'atual') && (
+          <button style={s.btnGhost} onClick={() => { setFiltroFase('todas'); setFiltroTrimestre('atual') }}>Limpar filtros</button>
+        )}
         {temArquivados && (
-          <label style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--text-muted, #94a3b8)', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+          <label style={{ marginLeft:'auto', fontSize:13, color:'var(--text-muted, #94a3b8)', display:'flex', alignItems:'center', gap:6, cursor:'pointer' }}>
             <input type="checkbox" checked={mostrarArquivados} onChange={(e) => setMostrarArquivados(e.target.checked)} />
             Mostrar arquivados
           </label>
@@ -212,6 +284,7 @@ export default function BaseComando() {
             const total = ativas.length
             const pct = total > 0 ? Math.round((feitas / total) * 100) : 0
             const arquivado = p.status === 'arquivado'
+            const proximaAcao = ordenaTarefas(doProjeto.filter((t) => t.status !== 'concluida'))[0]
             return (
               <div key={p.id}
                 draggable
@@ -236,8 +309,8 @@ export default function BaseComando() {
                     <span style={{ fontSize: 17, fontWeight: 700, color: 'var(--text, #f1f5f9)' }}>
                       <span style={s.chip(p.cor || '#6366f1')} />{p.nome}
                     </span>
-                    <span style={{ marginLeft: 6, ...s.badge('#e2e8f0'), color: 'var(--text-muted, #475569)' }}>{PROJ_STATUS[p.status]}</span>
-                    {p.prazo && <span style={{ marginLeft: 4, fontSize: 12, color: 'var(--text-muted, #94a3b8)' }}>prazo {fmtData(p.prazo)}</span>}
+                    <span style={{ marginLeft:6, ...s.badge(FASE_COR[p.faseCalculada]) }}>{FASE_LABEL[p.faseCalculada]}</span>
+                    {p.prazo && <span style={{ marginLeft:4, fontSize:12, color:'var(--text-muted, #94a3b8)' }}>prazo {fmtData(p.prazo)}</span>}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span style={{ fontSize: 12, color: 'var(--text-muted, #94a3b8)' }}>
@@ -255,8 +328,15 @@ export default function BaseComando() {
 
                 {!p.colapsado && (
                   <>
-                    {p.descricao && <p style={{ color: 'var(--text-muted, #94a3b8)', fontSize: 13, margin: '8px 0 0 18px' }}>{p.descricao}</p>}
-                    <div style={{ marginTop: 10 }}>
+                    {p.descricao && <p style={{ color:'var(--text-muted, #94a3b8)', fontSize:13, margin:'8px 0 0 18px' }}>{p.descricao}</p>}
+                    {proximaAcao && (
+                      <div style={{ margin:'10px 0 0 18px', padding:'8px 10px', borderRadius:8, background:'var(--accent-glow)', border:'1px solid var(--border, rgba(255,255,255,.1))', fontSize:12 }}>
+                        <strong style={{ color:'var(--accent)' }}>Próxima ação:</strong> <span style={{ color:'var(--text)' }}>{proximaAcao.titulo}</span>
+                        {proximaAcao.responsavel && <span style={{ color:'var(--text-muted)', marginLeft:8 }}>· {proximaAcao.responsavel}</span>}
+                        {proximaAcao.prazo && <span style={{ color:'var(--text-muted)', marginLeft:8 }}>· {fmtData(proximaAcao.prazo)}</span>}
+                      </div>
+                    )}
+                    <div style={{ marginTop:10 }}>
                       {ts.length === 0
                         ? <p style={{ color: 'var(--text-muted, #64748b)', fontSize: 13, marginLeft: 18 }}>Sem tarefas neste filtro.</p>
                         : ts.map((t) => <LinhaTarefa key={t.id} t={t} onToggle={toggleConcluida} onStatus={mudarStatus} onDelete={excluirTarefa} onEdit={() => setModal({ tipo: 'editar-tarefa', t })} />)}
