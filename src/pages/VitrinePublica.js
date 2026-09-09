@@ -93,13 +93,10 @@ function TelaLogin({ onLogin }) {
     setCarregando(true);
 
     try {
-      const { data, error } = await supabase
-        .from('vitrine_parceiros')
-        .select('*')
-        .eq('ativo', true)
-        .ilike('email', email)
-        .limit(1)
-        .single();
+      // RPC: devolve apenas id, nome e grupo — nunca CPF.
+      const { data: rows, error } = await supabase
+        .rpc('vitrine_identificar', { p_email: email });
+      const data = Array.isArray(rows) ? rows[0] : rows;
 
       if (error || !data) {
         setErro('E-mail não encontrado. Verifique seus dados ou entre em contato com a equipe CEDET.');
@@ -107,7 +104,8 @@ function TelaLogin({ onLogin }) {
         return;
       }
 
-      onLogin(data);
+      // o e-mail vem do que a pessoa digitou; o RPC não o devolve
+      onLogin({ ...data, email });
     } catch {
       setErro('Erro ao verificar acesso. Tente novamente.');
     } finally {
@@ -312,15 +310,15 @@ function PainelHistorico({ parceiro, onClose }) {
   useEffect(() => {
     async function carregarHistorico() {
       setLoading(true);
-      const cpfNorm = normalizeCpf(parceiro.cpf);
 
+      // RPC: só os pedidos do próprio parceiro.
       const { data } = await supabase
-        .from('vitrine_pedidos')
-        .select('*, vitrine_pedido_itens(*)')
-        .or(`cpf.eq.${parceiro.cpf},cpf.eq.${cpfNorm},email.ilike.${parceiro.email}`)
-        .order('created_at', { ascending: false });
+        .rpc('vitrine_meus_pedidos', { p_parceiro_id: parceiro.id });
 
-      setPedidos(data || []);
+      setPedidos((data || []).map(p => ({
+        ...p,
+        vitrine_pedido_itens: p.itens || [],
+      })));
       setLoading(false);
     }
     carregarHistorico();
@@ -604,54 +602,33 @@ export default function VitrinePublica() {
 
   async function carregarLivros() {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('vitrine_livros')
-      .select('*')
-      .eq('ativo', true)
-      .order('destaque', { ascending: false })
-      .order('data_lancamento', { ascending: false, nullsFirst: false })
-      .order('titulo', { ascending: true });
+    // RPC: catálogo público, já filtrado e ordenado no banco.
+    const { data, error } = await supabase.rpc('vitrine_catalogo');
 
     if (!error && data) setLivros(data);
     setLoading(false);
   }
 
-  // ── Pré-preencher dados do último pedido ──
+  // ── Pré-preencher contato e endereço do último pedido ──
+  // O CPF NÃO é pré-preenchido: o parceiro digita a cada pedido.
   async function preencherUltimoPedido(parceiroData) {
-    const cpfNorm = normalizeCpf(parceiroData.cpf);
-    const { data } = await supabase
-      .from('vitrine_pedidos')
-      .select('contato, cep, endereco, cpf')
-      .or(`cpf.eq.${parceiroData.cpf},cpf.eq.${cpfNorm},email.ilike.${parceiroData.email}`)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    const { data: rows } = await supabase
+      .rpc('vitrine_ultimo_endereco', { p_parceiro_id: parceiroData.id });
+    const data = Array.isArray(rows) ? rows[0] : rows;
 
     setForm(prev => ({
       ...prev,
-      cpf: data?.cpf || parceiroData.cpf || '',
       telefone: data?.contato || '',
       cep: data?.cep || '',
       endereco: data?.endereco || '',
     }));
   }
 
+  // Saldo do mês calculado no banco (conta títulos distintos).
   async function buscarLivrosUsadosMes(parceiroData) {
-    const agora = new Date();
-    const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1).toISOString();
-    const fimMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 0, 23, 59, 59).toISOString();
-    const cpfNorm = normalizeCpf(parceiroData.cpf);
-
-    const { data: pedidosMes } = await supabase
-      .from('vitrine_pedidos')
-      .select('vitrine_pedido_itens(quantidade)')
-      .or(`cpf.eq.${parceiroData.cpf},cpf.eq.${cpfNorm},email.ilike.${parceiroData.email}`)
-      .gte('created_at', inicioMes)
-      .lte('created_at', fimMes);
-
-    const total = (pedidosMes || []).reduce((soma, p) =>
-      soma + (p.vitrine_pedido_itens || []).reduce((s, i) => s + (i.quantidade || 1), 0), 0);
-    setLivrosUsadosMes(total);
+    const { data } = await supabase
+      .rpc('vitrine_saldo_mes', { p_parceiro_id: parceiroData.id });
+    setLivrosUsadosMes(data || 0);
   }
 
   function handleLogin(parceiroData) {
@@ -715,91 +692,35 @@ export default function VitrinePublica() {
   }
 
   // ── Enviar pedido ──
+  // Tudo numa chamada só: o banco valida o parceiro, o limite do grupo,
+  // grava pedido + itens e registra no monitoramento numa transação.
   async function enviarPedido() {
     if (!form.cpf.trim() || !form.telefone.trim() || !form.dataDivulgacao) return;
-    const cpfLimpo = normalizeCpf(form.cpf);
     setEnviando(true);
 
     try {
-      const { data: pedido, error: errPedido } = await supabase
-        .from('vitrine_pedidos')
-        .insert({
-          nome_parceiro: parceiro.nome,
-          cpf: cpfLimpo,
-          contato: form.telefone.trim(),
-          tipo_contato: 'whatsapp',
-          email: parceiro.email,
-          cep: form.cep.trim() || null,
-          endereco: form.endereco.trim() || null,
-          data_divulgacao: form.dataDivulgacao,
-          observacoes: form.obs.trim() || null,
-        })
-        .select()
-        .single();
+      const itens = Object.entries(selecionados).map(([livroId, qty]) => ({
+        livro_id: parseInt(livroId, 10),
+        quantidade: qty,
+      }));
 
-      if (errPedido) throw errPedido;
-
-      const itens = Object.entries(selecionados).map(([livroId, qty]) => {
-        const livro = livros.find(l => l.id === parseInt(livroId));
-        return {
-          pedido_id: pedido.id,
-          livro_id: parseInt(livroId),
-          titulo_livro: livro?.titulo || 'Título desconhecido',
-          ean_livro: livro?.ean || null,
-          quantidade: qty,
-        };
+      const { error } = await supabase.rpc('vitrine_criar_pedido', {
+        p_parceiro_id:     parceiro.id,
+        p_cpf:             normalizeCpf(form.cpf),
+        p_contato:         form.telefone.trim(),
+        p_cep:             form.cep.trim() || null,
+        p_endereco:        form.endereco.trim() || null,
+        p_data_divulgacao: form.dataDivulgacao,
+        p_observacoes:     form.obs.trim() || null,
+        p_itens:           itens,
       });
 
-      const { error: errItens } = await supabase
-        .from('vitrine_pedido_itens')
-        .insert(itens);
+      if (error) throw error;
 
-      if (errItens) throw errItens;
-
-      const livrosSelecionados = Object.keys(selecionados)
-        .map(id => livros.find(l => l.id === parseInt(id))?.titulo || '')
-        .filter(Boolean).join(', ');
-
-      // Busca parceiro_id no CRM (parceiros) — primeiro pelo nome, depois pela livraria
-      let parceiroCRMid = null;
-      const { data: porNome } = await supabase
-        .from('parceiros')
-        .select('id')
-        .ilike('nome', `%${parceiro.nome}%`)
-        .limit(1)
-        .maybeSingle();
-
-      if (porNome) {
-        parceiroCRMid = porNome.id;
-      } else {
-        const { data: porLivraria } = await supabase
-          .from('parceiros')
-          .select('id')
-          .ilike('livraria', `%${parceiro.nome}%`)
-          .limit(1)
-          .maybeSingle();
-        parceiroCRMid = porLivraria?.id || null;
-      }
-
-      // Só registra no monitoramento se encontrou o parceiro no CRM
-      if (parceiroCRMid) {
-        await supabase.from('monitoramento').insert({
-          parceiro_id: parceiroCRMid,
-          data: form.dataDivulgacao,
-          status: 'pendente',
-          tipo_postagem: null,
-          observacao: `[Vitrine] Pedido #${pedido.id} — Livros: ${livrosSelecionados}`,
-          origem: 'vitrine',
-          origem_id: pedido.id,
-        });
-      } else {
-        console.warn(`[Vitrine→Monitoramento] Parceiro "${parceiro.nome}" não encontrado no CRM. Registro não criado.`);
-      }
-
-      setLivrosUsadosMes(prev => prev + Object.values(selecionados).reduce((a, b) => a + b, 0));
+      await buscarLivrosUsadosMes(parceiro);
       setEnviado(true);
       setSelecionados({});
-      setForm(prev => ({ ...prev, dataDivulgacao: '', obs: '' }));
+      setForm(prev => ({ ...prev, cpf: '', dataDivulgacao: '', obs: '' }));
       setTimeout(() => {
         setEnviado(false);
         setShowForm(false);
@@ -807,7 +728,14 @@ export default function VitrinePublica() {
       }, 3500);
     } catch (err) {
       console.error('Erro ao enviar pedido:', err);
-      alert('Erro ao enviar pedido. Tente novamente.');
+      const msg = (err?.message || '').toLowerCase();
+      if (msg.includes('limite mensal')) {
+        alert('Você já atingiu o limite de livros deste mês. O ciclo renova no dia 1º.');
+      } else if (msg.includes('data de divulgação')) {
+        alert('A data de divulgação precisa ser hoje ou uma data futura.');
+      } else {
+        alert('Erro ao enviar pedido. Tente novamente.');
+      }
     } finally {
       setEnviando(false);
     }
