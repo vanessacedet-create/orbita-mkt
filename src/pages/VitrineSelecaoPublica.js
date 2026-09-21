@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import {
   Check, Loader2, BookOpen, ArrowRight, ArrowLeft, AlertCircle,
-  CalendarDays, Send
+  CalendarDays, Send, Search
 } from 'lucide-react';
 
 const COLORS = {
@@ -33,6 +33,7 @@ export default function VitrineSelecaoPublica() {
   const [etapa, setEtapa] = useState('livros');
   const [enviando, setEnviando] = useState(false);
   const [concluido, setConcluido] = useState(false);
+  const [busca, setBusca] = useState('');
   const [form, setForm] = useState({
     cpf: '', telefone: '', cep: '', endereco: '', dataDivulgacao: '', obs: '',
   });
@@ -81,6 +82,16 @@ export default function VitrineSelecaoPublica() {
     () => (dados?.livros || []).filter(l => selecionados.includes(l.id)),
     [dados, selecionados]
   );
+
+  const livrosFiltrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    if (!termo) return dados?.livros || [];
+    return (dados?.livros || []).filter(l =>
+      l.titulo?.toLowerCase().includes(termo) ||
+      l.autor?.toLowerCase().includes(termo) ||
+      l.editora?.toLowerCase().includes(termo)
+    );
+  }, [dados, busca]);
 
   function toggleLivro(livro) {
     setSelecionados(prev => {
@@ -166,12 +177,23 @@ export default function VitrineSelecaoPublica() {
 
         {etapa === 'livros' ? (
           <>
-            <div style={progress}>
-              <strong>{selecionados.length} de {limite}</strong> selecionados
+            <div style={selectionTools}>
+              <div style={progress}>
+                <strong>{selecionados.length} de {limite}</strong> selecionados
+              </div>
+              <div style={searchWrap}>
+                <Search size={17} style={searchIcon} />
+                <input
+                  value={busca}
+                  onChange={e => setBusca(e.target.value)}
+                  placeholder="Buscar por título, autor ou editora..."
+                  style={searchInput}
+                />
+              </div>
             </div>
 
-            <div style={grid}>
-              {(dados.livros || []).map(livro => {
+            <div style={grid} className="vitrine-selecao-grid">
+              {livrosFiltrados.map(livro => {
                 const marcado = selecionados.includes(livro.id);
                 const bloqueado = atingiuLimite && !marcado;
                 return (
@@ -192,10 +214,12 @@ export default function VitrineSelecaoPublica() {
                         borderColor: marcado ? COLORS.accent : '#bbb',
                       }}>{marcado && <Check size={15} color="#222" />}</span>
                     </div>
-                    <div style={{ padding: 13, textAlign: 'left' }}>
-                      <strong style={{ display: 'block', fontSize: 14, lineHeight: 1.35 }}>{livro.titulo}</strong>
-                      {livro.autor && <span style={{ display: 'block', color: COLORS.muted, fontSize: 12, marginTop: 5 }}>{livro.autor}</span>}
-                      {livro.editora && <span style={{ display: 'block', color: '#999', fontSize: 11, marginTop: 3 }}>{livro.editora}</span>}
+                    <div style={bookInfo}>
+                      <strong style={bookTitle}>{livro.titulo}</strong>
+                      <div style={bookMeta}>
+                        {livro.autor && <span>{livro.autor}</span>}
+                        {livro.editora && <span style={{ color: '#999' }}>{livro.editora}</span>}
+                      </div>
                     </div>
                   </button>
                 );
@@ -272,8 +296,15 @@ export default function VitrineSelecaoPublica() {
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg) } }
+        @media (max-width: 900px) {
+          .vitrine-selecao-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+        }
         @media (max-width: 760px) {
           .vitrine-selecao-confirmacao { grid-template-columns: 1fr !important; }
+          .vitrine-selecao-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+        }
+        @media (max-width: 520px) {
+          .vitrine-selecao-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
         }
       `}</style>
     </div>
@@ -284,11 +315,18 @@ const page = { minHeight: '100vh', background: COLORS.bg, color: COLORS.text, fo
 const fullCenter = { minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 24, fontFamily: "'DM Sans', Arial, sans-serif", color: COLORS.text, background: COLORS.bg };
 const header = { background: '#2c2c2c', color: '#fff', padding: '16px 22px', display: 'flex', alignItems: 'center', gap: 10 };
 const title = { fontFamily: "'Playfair Display', Georgia, serif", fontSize: 30, margin: 0 };
-const progress = { background: '#fff', border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '10px 13px', marginBottom: 14, fontSize: 13 };
-const grid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(165px, 1fr))', gap: 14 };
-const bookCard = { padding: 0, background: COLORS.card, border: '1.5px solid', borderRadius: 12, overflow: 'hidden', position: 'relative', transition: '.15s ease', fontFamily: 'inherit', color: COLORS.text };
-const coverWrap = { height: 220, background: '#efefec', display: 'grid', placeItems: 'center', position: 'relative' };
-const cover = { width: '100%', height: '100%', objectFit: 'contain' };
+const selectionTools = { display: 'grid', gridTemplateColumns: 'minmax(180px, 230px) minmax(260px, 1fr)', gap: 12, marginBottom: 18, alignItems: 'stretch' };
+const progress = { background: '#fff', border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '12px 14px', fontSize: 13, display: 'flex', alignItems: 'center' };
+const searchWrap = { position: 'relative' };
+const searchIcon = { position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: '#999', pointerEvents: 'none' };
+const searchInput = { width: '100%', height: '100%', minHeight: 44, boxSizing: 'border-box', border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '10px 13px 10px 40px', background: '#fff', color: COLORS.text, fontSize: 13, fontFamily: 'inherit', outline: 'none' };
+const grid = { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 18 };
+const bookCard = { padding: 0, minWidth: 0, height: '100%', background: COLORS.card, border: '1.5px solid', borderRadius: 13, overflow: 'hidden', position: 'relative', transition: '.15s ease', fontFamily: 'inherit', color: COLORS.text, display: 'flex', flexDirection: 'column' };
+const coverWrap = { height: 300, padding: '16px 14px 8px', boxSizing: 'border-box', background: '#fafaf8', display: 'grid', placeItems: 'center', position: 'relative' };
+const cover = { width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center bottom', display: 'block' };
+const bookInfo = { padding: '13px 14px 15px', textAlign: 'left', minHeight: 104, display: 'flex', flexDirection: 'column', borderTop: `1px solid ${COLORS.border}`, background: '#fff' };
+const bookTitle = { display: 'block', fontSize: 14, lineHeight: 1.35, minHeight: '2.7em', overflow: 'hidden' };
+const bookMeta = { marginTop: 'auto', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 3, color: COLORS.muted, fontSize: 12, lineHeight: 1.3 };
 const checkCircle = { position: 'absolute', top: 9, right: 9, width: 25, height: 25, borderRadius: '50%', border: '1.5px solid', display: 'grid', placeItems: 'center' };
 const stickyBar = { position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 10, background: 'rgba(255,255,255,.96)', borderTop: `1px solid ${COLORS.border}`, padding: '12px max(18px, calc((100vw - 1100px)/2 + 18px))', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, boxShadow: '0 -8px 25px rgba(0,0,0,.06)' };
 const primaryBtn = { border: 'none', borderRadius: 9, background: COLORS.primary, color: '#fff', padding: '11px 15px', display: 'inline-flex', alignItems: 'center', gap: 7, fontWeight: 700, fontFamily: 'inherit' };
