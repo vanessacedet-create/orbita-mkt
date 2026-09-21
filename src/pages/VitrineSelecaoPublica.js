@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import {
   Check, Loader2, BookOpen, ArrowRight, ArrowLeft, AlertCircle,
-  CalendarDays, Send, Search
+  CalendarDays, Send, Search, X
 } from 'lucide-react';
 
 const COLORS = {
@@ -34,6 +34,7 @@ export default function VitrineSelecaoPublica() {
   const [enviando, setEnviando] = useState(false);
   const [concluido, setConcluido] = useState(false);
   const [busca, setBusca] = useState('');
+  const [livroDetalhe, setLivroDetalhe] = useState(null);
   const [form, setForm] = useState({
     cpf: '', telefone: '', cep: '', endereco: '', dataDivulgacao: '', obs: '',
   });
@@ -92,6 +93,18 @@ export default function VitrineSelecaoPublica() {
       l.editora?.toLowerCase().includes(termo)
     );
   }, [dados, busca]);
+
+  function resumoDescricao(texto, limiteChars = 150) {
+    const limpo = (texto || '').replace(/\s+/g, ' ').trim();
+    if (!limpo) return 'Sinopse não disponível para este título.';
+    return limpo.length > limiteChars ? limpo.slice(0, limiteChars).trimEnd() + '…' : limpo;
+  }
+
+  function formatarPreco(valor) {
+    const numero = Number(valor);
+    if (!Number.isFinite(numero)) return null;
+    return numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  }
 
   function toggleLivro(livro) {
     setSelecionados(prev => {
@@ -197,31 +210,40 @@ export default function VitrineSelecaoPublica() {
                 const marcado = selecionados.includes(livro.id);
                 const bloqueado = atingiuLimite && !marcado;
                 return (
-                  <button key={livro.id} onClick={() => toggleLivro(livro)} disabled={bloqueado} style={{
+                  <article key={livro.id} style={{
                     ...bookCard,
-                    opacity: bloqueado ? .48 : 1,
+                    opacity: bloqueado ? .62 : 1,
                     borderColor: marcado ? COLORS.accent : COLORS.border,
                     boxShadow: marcado ? '0 0 0 2px rgba(242,183,5,.18)' : '0 3px 14px rgba(0,0,0,.04)',
-                    cursor: bloqueado ? 'not-allowed' : 'pointer',
                   }}>
-                    <div style={coverWrap}>
-                      {livro.imagem_url
-                        ? <img src={livro.imagem_url} alt="" style={cover} />
-                        : <BookOpen size={32} color="#aaa" />}
-                      <span style={{
-                        ...checkCircle,
-                        background: marcado ? COLORS.accent : '#fff',
-                        borderColor: marcado ? COLORS.accent : '#bbb',
-                      }}>{marcado && <Check size={15} color="#222" />}</span>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleLivro(livro)}
+                      disabled={bloqueado}
+                      aria-label={marcado ? `Remover ${livro.titulo} da seleção` : `Adicionar ${livro.titulo} à seleção`}
+                      style={{ ...coverButton, cursor: bloqueado ? 'not-allowed' : 'pointer' }}
+                    >
+                      <div style={coverWrap}>
+                        {livro.imagem_url
+                          ? <img src={livro.imagem_url} alt={`Capa de ${livro.titulo}`} style={cover} />
+                          : <BookOpen size={32} color="#aaa" />}
+                        <span style={{
+                          ...checkCircle,
+                          background: marcado ? COLORS.accent : '#fff',
+                          borderColor: marcado ? COLORS.accent : '#bbb',
+                        }}>{marcado && <Check size={15} color="#222" />}</span>
+                      </div>
+                    </button>
                     <div style={bookInfo}>
                       <strong style={bookTitle}>{livro.titulo}</strong>
                       <div style={bookMeta}>
                         {livro.autor && <span>{livro.autor}</span>}
                         {livro.editora && <span style={{ color: '#999' }}>{livro.editora}</span>}
                       </div>
+                      <p style={bookDescription}>{resumoDescricao(livro.descricao)}</p>
+                      <button type="button" onClick={() => setLivroDetalhe(livro)} style={moreBtn}>Ver mais <ArrowRight size={14} /></button>
                     </div>
-                  </button>
+                  </article>
                 );
               })}
             </div>
@@ -294,6 +316,52 @@ export default function VitrineSelecaoPublica() {
         )}
       </main>
 
+      {livroDetalhe && (
+        <div style={detailOverlay} onClick={() => setLivroDetalhe(null)}>
+          <div style={detailModal} className="vitrine-detalhe-modal" onClick={e => e.stopPropagation()}>
+            <button type="button" onClick={() => setLivroDetalhe(null)} style={detailClose} aria-label="Fechar detalhes"><X size={22} /></button>
+            <div style={detailLayout} className="vitrine-detalhe-layout">
+              <div style={detailCoverColumn}>
+                <div style={detailCoverWrap}>
+                  {livroDetalhe.imagem_url
+                    ? <img src={livroDetalhe.imagem_url} alt={`Capa de ${livroDetalhe.titulo}`} style={detailCover} />
+                    : <BookOpen size={46} color="#aaa" />}
+                </div>
+              </div>
+              <div style={detailContent}>
+                <h2 style={{ ...title, fontSize: 28, marginBottom: 5 }}>{livroDetalhe.titulo}</h2>
+                {livroDetalhe.autor && <div style={{ color: COLORS.muted, fontSize: 15 }}>{livroDetalhe.autor}</div>}
+                {livroDetalhe.editora && <div style={{ color: '#999', fontSize: 13, marginTop: 3 }}>{livroDetalhe.editora}</div>}
+
+                <div style={detailFacts}>
+                  {formatarPreco(livroDetalhe.preco) && <div><span style={factLabel}>Preço de capa</span><strong>{formatarPreco(livroDetalhe.preco)}</strong></div>}
+                  {livroDetalhe.encadernacao && <div><span style={factLabel}>Encadernação</span><strong>{livroDetalhe.encadernacao}</strong></div>}
+                  {livroDetalhe.ean && <div><span style={factLabel}>ISBN / EAN</span><strong>{livroDetalhe.ean}</strong></div>}
+                  {livroDetalhe.data_lancamento && <div><span style={factLabel}>Lançamento</span><strong>{new Date(livroDetalhe.data_lancamento).toLocaleDateString('pt-BR')}</strong></div>}
+                </div>
+
+                <div style={detailSection}>
+                  <h3 style={detailHeading}>Sobre o livro</h3>
+                  <p style={detailDescription}>{livroDetalhe.descricao || 'Sinopse não disponível para este título.'}</p>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={atingiuLimite && !selecionados.includes(livroDetalhe.id)}
+                  onClick={() => toggleLivro(livroDetalhe)}
+                  style={{
+                    ...primaryBtn, width: '100%', justifyContent: 'center', marginTop: 18,
+                    opacity: atingiuLimite && !selecionados.includes(livroDetalhe.id) ? .45 : 1,
+                  }}
+                >
+                  {selecionados.includes(livroDetalhe.id) ? 'Remover da seleção' : 'Adicionar à seleção'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes spin { to { transform: rotate(360deg) } }
         @media (max-width: 900px) {
@@ -302,6 +370,8 @@ export default function VitrineSelecaoPublica() {
         @media (max-width: 760px) {
           .vitrine-selecao-confirmacao { grid-template-columns: 1fr !important; }
           .vitrine-selecao-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+          .vitrine-detalhe-modal { width: calc(100vw - 24px) !important; max-height: calc(100vh - 24px) !important; padding: 18px !important; }
+          .vitrine-detalhe-layout { grid-template-columns: 1fr !important; }
         }
         @media (max-width: 520px) {
           .vitrine-selecao-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
@@ -322,11 +392,14 @@ const searchIcon = { position: 'absolute', left: 13, top: '50%', transform: 'tra
 const searchInput = { width: '100%', height: '100%', minHeight: 44, boxSizing: 'border-box', border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: '10px 13px 10px 40px', background: '#fff', color: COLORS.text, fontSize: 13, fontFamily: 'inherit', outline: 'none' };
 const grid = { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 18 };
 const bookCard = { padding: 0, minWidth: 0, height: '100%', background: COLORS.card, border: '1.5px solid', borderRadius: 13, overflow: 'hidden', position: 'relative', transition: '.15s ease', fontFamily: 'inherit', color: COLORS.text, display: 'flex', flexDirection: 'column' };
+const coverButton = { display: 'block', width: '100%', padding: 0, border: 0, background: 'transparent', color: 'inherit', fontFamily: 'inherit' };
 const coverWrap = { height: 300, padding: '16px 14px 8px', boxSizing: 'border-box', background: '#fafaf8', display: 'grid', placeItems: 'center', position: 'relative' };
 const cover = { width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'center bottom', display: 'block' };
-const bookInfo = { padding: '13px 14px 15px', textAlign: 'left', minHeight: 104, display: 'flex', flexDirection: 'column', borderTop: `1px solid ${COLORS.border}`, background: '#fff' };
+const bookInfo = { padding: '13px 14px 15px', textAlign: 'left', minHeight: 210, display: 'flex', flexDirection: 'column', borderTop: `1px solid ${COLORS.border}`, background: '#fff' };
 const bookTitle = { display: 'block', fontSize: 14, lineHeight: 1.35, minHeight: '2.7em', overflow: 'hidden' };
-const bookMeta = { marginTop: 'auto', paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 3, color: COLORS.muted, fontSize: 12, lineHeight: 1.3 };
+const bookMeta = { paddingTop: 7, display: 'flex', flexDirection: 'column', gap: 3, color: COLORS.muted, fontSize: 12, lineHeight: 1.3, minHeight: 38 };
+const bookDescription = { margin: '10px 0 12px', color: '#626262', fontSize: 12, lineHeight: 1.5, flex: 1 };
+const moreBtn = { border: 0, background: 'transparent', padding: 0, color: COLORS.text, fontWeight: 700, fontSize: 12, fontFamily: 'inherit', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, alignSelf: 'flex-start' };
 const checkCircle = { position: 'absolute', top: 9, right: 9, width: 25, height: 25, borderRadius: '50%', border: '1.5px solid', display: 'grid', placeItems: 'center' };
 const stickyBar = { position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 10, background: 'rgba(255,255,255,.96)', borderTop: `1px solid ${COLORS.border}`, padding: '12px max(18px, calc((100vw - 1100px)/2 + 18px))', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, boxShadow: '0 -8px 25px rgba(0,0,0,.06)' };
 const primaryBtn = { border: 'none', borderRadius: 9, background: COLORS.primary, color: '#fff', padding: '11px 15px', display: 'inline-flex', alignItems: 'center', gap: 7, fontWeight: 700, fontFamily: 'inherit' };
@@ -336,3 +409,17 @@ const label = { display: 'block', fontSize: 11, fontWeight: 700, color: '#666', 
 const input = { width: '100%', boxSizing: 'border-box', border: `1px solid ${COLORS.border}`, borderRadius: 9, padding: '10px 11px', fontSize: 14, fontFamily: 'inherit', color: COLORS.text, background: '#fff' };
 const errorBox = { marginTop: 12, background: '#fef3f2', color: COLORS.error, border: '1px solid #fecdca', borderRadius: 9, padding: 10, display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12 };
 const successIcon = { width: 64, height: 64, borderRadius: '50%', background: '#eaf5ed', color: COLORS.success, display: 'grid', placeItems: 'center', margin: '0 auto 18px' };
+
+const detailOverlay = { position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(20,20,20,.48)', display: 'grid', placeItems: 'center', padding: 18 };
+const detailModal = { position: 'relative', width: 'min(880px, calc(100vw - 36px))', maxHeight: 'min(760px, calc(100vh - 36px))', overflowY: 'auto', background: '#fff', borderRadius: 16, padding: 24, boxShadow: '0 24px 80px rgba(0,0,0,.25)' };
+const detailClose = { position: 'absolute', top: 14, right: 14, zIndex: 2, border: 0, background: '#fff', width: 38, height: 38, borderRadius: '50%', display: 'grid', placeItems: 'center', cursor: 'pointer', color: '#666', boxShadow: '0 2px 10px rgba(0,0,0,.08)' };
+const detailLayout = { display: 'grid', gridTemplateColumns: 'minmax(220px, 330px) minmax(0, 1fr)', gap: 28, alignItems: 'start' };
+const detailCoverColumn = { background: '#fafaf8', borderRadius: 12, padding: 18 };
+const detailCoverWrap = { height: 430, display: 'grid', placeItems: 'center' };
+const detailCover = { width: '100%', height: '100%', objectFit: 'contain' };
+const detailContent = { padding: '8px 4px 4px' };
+const detailFacts = { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 14, marginTop: 22, padding: '18px 0', borderTop: `1px solid ${COLORS.border}`, borderBottom: `1px solid ${COLORS.border}`, fontSize: 13 };
+const factLabel = { display: 'block', color: COLORS.muted, fontSize: 11, marginBottom: 3 };
+const detailSection = { paddingTop: 18 };
+const detailHeading = { margin: '0 0 8px', fontSize: 15 };
+const detailDescription = { margin: 0, whiteSpace: 'pre-line', color: '#555', fontSize: 13, lineHeight: 1.7 };

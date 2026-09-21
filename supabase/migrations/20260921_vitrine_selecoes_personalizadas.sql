@@ -83,6 +83,8 @@ BEGIN
           'categoria', l.categoria,
           'imagem_url', l.imagem_url,
           'descricao', l.descricao,
+          'preco', l.preco,
+          'encadernacao', l.encadernacao,
           'ean', l.ean,
           'data_lancamento', l.data_lancamento
         )
