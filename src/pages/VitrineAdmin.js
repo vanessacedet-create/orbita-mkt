@@ -147,7 +147,58 @@ export default function VitrineAdmin() {
 
     if (livrosData) setLivros(livrosData);
     if (pedidosData) setPedidos(pedidosData);
-    if (parceirosData) setParceiros(parceirosData);
+
+    // Sincroniza automaticamente parceiros ativos do CRM com a Vitrine.
+    // Assim, ao ativar um parceiro no cadastro geral, ele passa a ficar
+    // disponível também para a criação de seleções personalizadas.
+    let parceirosVitrine = parceirosData || [];
+    try {
+      const { data: parceirosCRM, error: crmError } = await supabase
+        .from('parceiros')
+        .select('*');
+
+      if (!crmError && parceirosCRM) {
+        const ativosCRM = parceirosCRM.filter(p => p.ativo !== false);
+        const emailsVitrine = new Set(
+          parceirosVitrine.map(p => (p.email || '').trim().toLowerCase()).filter(Boolean)
+        );
+        const nomesVitrine = new Set(
+          parceirosVitrine.map(p => (p.nome || '').trim().toLowerCase()).filter(Boolean)
+        );
+
+        const novos = ativosCRM
+          .map(p => ({
+            nome: (p.nome || p.livraria || '').trim(),
+            email: (p.email || '').trim().toLowerCase(),
+            grupo: null,
+            ativo: true,
+          }))
+          .filter(p =>
+            p.nome &&
+            p.email &&
+            !emailsVitrine.has(p.email) &&
+            !nomesVitrine.has(p.nome.toLowerCase())
+          );
+
+        if (novos.length > 0) {
+          const { data: inseridos, error: syncError } = await supabase
+            .from('vitrine_parceiros')
+            .insert(novos)
+            .select();
+
+          if (!syncError && inseridos) {
+            parceirosVitrine = [...parceirosVitrine, ...inseridos]
+              .sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+          } else if (syncError) {
+            console.warn('[Vitrine] Não foi possível sincronizar parceiros ativos:', syncError);
+          }
+        }
+      }
+    } catch (syncErr) {
+      console.warn('[Vitrine] Erro ao sincronizar parceiros do CRM:', syncErr);
+    }
+
+    setParceiros(parceirosVitrine);
     setLoading(false);
   }
 
