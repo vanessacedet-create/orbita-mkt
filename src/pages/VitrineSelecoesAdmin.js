@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   Link2, Plus, Copy, Check, Search, X, Loader2, Lock,
-  ExternalLink, CalendarDays, BookOpen, UserRound
+  ExternalLink, CalendarDays, BookOpen, UserRound, Edit2
 } from 'lucide-react';
 
 const STATUS = {
@@ -15,6 +15,7 @@ export default function VitrineSelecoesAdmin({ livros = [], parceiros = [] }) {
   const [selecoes, setSelecoes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showNova, setShowNova] = useState(false);
+  const [editando, setEditando] = useState(null);
   const [salvando, setSalvando] = useState(false);
   const [copiado, setCopiado] = useState(null);
   const [buscaLivro, setBuscaLivro] = useState('');
@@ -85,7 +86,38 @@ export default function VitrineSelecoesAdmin({ livros = [], parceiros = [] }) {
     }));
   }
 
-  async function criarSelecao() {
+  function abrirNova() {
+    setEditando(null);
+    setForm({ parceiroId: '', nome: '', quantidade: 3, expiraEm: '', livros: [] });
+    setBuscaLivro('');
+    setShowNova(true);
+  }
+
+  function abrirEdicao(sel) {
+    if (sel.status !== 'aberta') {
+      alert('Somente seleções que ainda aguardam resposta podem ser editadas.');
+      return;
+    }
+    setEditando(sel);
+    setForm({
+      parceiroId: String(sel.parceiro_id),
+      nome: sel.nome || '',
+      quantidade: sel.quantidade_titulos || 1,
+      expiraEm: sel.expira_em ? new Date(sel.expira_em).toISOString().slice(0, 10) : '',
+      livros: (sel.vitrine_selecao_livros || []).map(i => i.livro_id),
+    });
+    setBuscaLivro('');
+    setShowNova(true);
+  }
+
+  function fecharModal() {
+    if (salvando) return;
+    setShowNova(false);
+    setEditando(null);
+    setBuscaLivro('');
+  }
+
+  async function salvarSelecao() {
     const quantidade = Number(form.quantidade);
     if (!form.parceiroId || !form.nome.trim()) {
       alert('Selecione o parceiro e informe o nome da ação.');
@@ -102,36 +134,59 @@ export default function VitrineSelecoesAdmin({ livros = [], parceiros = [] }) {
 
     setSalvando(true);
     try {
-      const token = crypto.randomUUID();
-      const { data: sel, error } = await supabase
-        .from('vitrine_selecoes')
-        .insert({
-          token,
-          parceiro_id: Number(form.parceiroId),
-          nome: form.nome.trim(),
-          quantidade_titulos: quantidade,
-          expira_em: form.expiraEm ? new Date(form.expiraEm + 'T23:59:59').toISOString() : null,
-          status: 'aberta',
-        })
-        .select()
-        .single();
-      if (error) throw error;
+      let sel;
+      if (editando) {
+        const { data, error } = await supabase
+          .from('vitrine_selecoes')
+          .update({
+            parceiro_id: Number(form.parceiroId),
+            nome: form.nome.trim(),
+            quantidade_titulos: quantidade,
+            expira_em: form.expiraEm ? new Date(form.expiraEm + 'T23:59:59').toISOString() : null,
+          })
+          .eq('id', editando.id)
+          .eq('status', 'aberta')
+          .select()
+          .single();
+        if (error) throw error;
+        sel = data;
+
+        const { error: errDelete } = await supabase
+          .from('vitrine_selecao_livros')
+          .delete()
+          .eq('selecao_id', sel.id);
+        if (errDelete) throw errDelete;
+      } else {
+        const token = crypto.randomUUID();
+        const { data, error } = await supabase
+          .from('vitrine_selecoes')
+          .insert({
+            token,
+            parceiro_id: Number(form.parceiroId),
+            nome: form.nome.trim(),
+            quantidade_titulos: quantidade,
+            expira_em: form.expiraEm ? new Date(form.expiraEm + 'T23:59:59').toISOString() : null,
+            status: 'aberta',
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        sel = data;
+      }
 
       const { error: errItens } = await supabase
         .from('vitrine_selecao_livros')
         .insert(form.livros.map(livro_id => ({ selecao_id: sel.id, livro_id })));
-      if (errItens) {
-        await supabase.from('vitrine_selecoes').delete().eq('id', sel.id);
-        throw errItens;
-      }
+      if (errItens) throw errItens;
 
       setForm({ parceiroId: '', nome: '', quantidade: 3, expiraEm: '', livros: [] });
       setBuscaLivro('');
       setShowNova(false);
+      setEditando(null);
       await carregar();
     } catch (err) {
-      console.error('[Vitrine Seleções] Erro ao criar:', err);
-      alert('Não foi possível criar a seleção.');
+      console.error('[Vitrine Seleções] Erro ao salvar:', err);
+      alert(editando ? 'Não foi possível salvar as alterações.' : 'Não foi possível criar a seleção.');
     } finally {
       setSalvando(false);
     }
@@ -159,7 +214,7 @@ export default function VitrineSelecoesAdmin({ livros = [], parceiros = [] }) {
             Envie uma curadoria exclusiva e defina quantos títulos o parceiro deve escolher.
           </p>
         </div>
-        <button onClick={() => setShowNova(true)} style={btnPrimary}>
+        <button onClick={abrirNova} style={btnPrimary}>
           <Plus size={16} /> Nova seleção
         </button>
       </div>
@@ -197,7 +252,10 @@ export default function VitrineSelecoesAdmin({ livros = [], parceiros = [] }) {
                     </button>
                     <a href={linkDaSelecao(sel)} target="_blank" rel="noreferrer" style={btnLink}><ExternalLink size={15} /></a>
                     {sel.status === 'aberta' && (
-                      <button onClick={() => encerrar(sel)} style={btnDanger}><Lock size={15} /> Encerrar</button>
+                      <>
+                        <button onClick={() => abrirEdicao(sel)} style={btnSecondary}><Edit2 size={15} /> Editar</button>
+                        <button onClick={() => encerrar(sel)} style={btnDanger}><Lock size={15} /> Encerrar</button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -217,14 +275,14 @@ export default function VitrineSelecoesAdmin({ livros = [], parceiros = [] }) {
       )}
 
       {showNova && (
-        <div style={overlay} onClick={() => !salvando && setShowNova(false)}>
+        <div style={overlay} onClick={fecharModal}>
           <div style={modal} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: 18 }}>Nova seleção</h3>
+                <h3 style={{ margin: 0, fontSize: 18 }}>{editando ? 'Editar seleção' : 'Nova seleção'}</h3>
                 <p style={{ margin: '4px 0 0', fontSize: 12, color: '#777' }}>Cada título equivale sempre a 1 unidade.</p>
               </div>
-              <button onClick={() => setShowNova(false)} style={iconBtn}><X size={19} /></button>
+              <button onClick={fecharModal} style={iconBtn}><X size={19} /></button>
             </div>
 
             <label style={label}>Parceiro</label>
@@ -284,10 +342,10 @@ export default function VitrineSelecoesAdmin({ livros = [], parceiros = [] }) {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 9, marginTop: 18 }}>
-              <button disabled={salvando} onClick={() => setShowNova(false)} style={btnSecondary}>Cancelar</button>
-              <button disabled={salvando} onClick={criarSelecao} style={btnPrimary}>
+              <button disabled={salvando} onClick={fecharModal} style={btnSecondary}>Cancelar</button>
+              <button disabled={salvando} onClick={salvarSelecao} style={btnPrimary}>
                 {salvando ? <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> : <Link2 size={15} />}
-                Criar e gerar link
+                {editando ? 'Salvar alterações' : 'Criar e gerar link'}
               </button>
             </div>
           </div>
