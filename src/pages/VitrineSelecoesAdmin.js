@@ -19,6 +19,8 @@ export default function VitrineSelecoesAdmin({ livros = [], parceiros = [] }) {
   const [salvando, setSalvando] = useState(false);
   const [copiado, setCopiado] = useState(null);
   const [buscaLivro, setBuscaLivro] = useState('');
+  const [filtroEditora, setFiltroEditora] = useState('');
+  const [filtroMesLancamento, setFiltroMesLancamento] = useState('');
   const [form, setForm] = useState({
     parceiroId: '',
     nome: '',
@@ -37,15 +39,25 @@ export default function VitrineSelecoesAdmin({ livros = [], parceiros = [] }) {
     [livros]
   );
 
+  const editorasDisponiveis = useMemo(
+    () => [...new Set(livrosAtivos.map(l => l.editora).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [livrosAtivos]
+  );
+
   const livrosFiltrados = useMemo(() => {
     const termo = buscaLivro.trim().toLowerCase();
-    if (!termo) return livrosAtivos;
-    return livrosAtivos.filter(l =>
-      l.titulo?.toLowerCase().includes(termo) ||
-      l.autor?.toLowerCase().includes(termo) ||
-      l.editora?.toLowerCase().includes(termo)
-    );
-  }, [livrosAtivos, buscaLivro]);
+    return livrosAtivos.filter(l => {
+      const correspondeBusca = !termo ||
+        l.titulo?.toLowerCase().includes(termo) ||
+        l.autor?.toLowerCase().includes(termo) ||
+        l.editora?.toLowerCase().includes(termo);
+      const correspondeEditora = !filtroEditora || l.editora === filtroEditora;
+      const mesLivro = l.data_lancamento ? String(l.data_lancamento).slice(0, 7) : '';
+      const correspondeMes = !filtroMesLancamento || mesLivro === filtroMesLancamento;
+      return correspondeBusca && correspondeEditora && correspondeMes;
+    });
+  }, [livrosAtivos, buscaLivro, filtroEditora, filtroMesLancamento]);
 
   useEffect(() => { carregar(); }, []);
 
@@ -90,6 +102,8 @@ export default function VitrineSelecoesAdmin({ livros = [], parceiros = [] }) {
     setEditando(null);
     setForm({ parceiroId: '', nome: '', quantidade: 3, expiraEm: '', livros: [] });
     setBuscaLivro('');
+    setFiltroEditora('');
+    setFiltroMesLancamento('');
     setShowNova(true);
   }
 
@@ -107,6 +121,8 @@ export default function VitrineSelecoesAdmin({ livros = [], parceiros = [] }) {
       livros: (sel.vitrine_selecao_livros || []).map(i => i.livro_id),
     });
     setBuscaLivro('');
+    setFiltroEditora('');
+    setFiltroMesLancamento('');
     setShowNova(true);
   }
 
@@ -115,6 +131,8 @@ export default function VitrineSelecoesAdmin({ livros = [], parceiros = [] }) {
     setShowNova(false);
     setEditando(null);
     setBuscaLivro('');
+    setFiltroEditora('');
+    setFiltroMesLancamento('');
   }
 
   async function salvarSelecao() {
@@ -316,7 +334,45 @@ export default function VitrineSelecoesAdmin({ livros = [], parceiros = [] }) {
                 <Search size={15} style={{ position: 'absolute', left: 11, top: 11, color: '#999' }} />
                 <input value={buscaLivro} onChange={e => setBuscaLivro(e.target.value)} placeholder="Buscar título, autor ou editora..." style={{ ...input, paddingLeft: 34, margin: 0 }} />
               </div>
+
+              <div className="vitrine-curadoria-filtros" style={filterGrid}>
+                <div>
+                  <label style={filterLabel}>Editora</label>
+                  <select value={filtroEditora} onChange={e => setFiltroEditora(e.target.value)} style={input}>
+                    <option value="">Todas as editoras</option>
+                    {editorasDisponiveis.map(editora => <option key={editora} value={editora}>{editora}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={filterLabel}>Mês de lançamento</label>
+                  <input
+                    type="month"
+                    value={filtroMesLancamento}
+                    onChange={e => setFiltroMesLancamento(e.target.value)}
+                    style={input}
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setBuscaLivro(''); setFiltroEditora(''); setFiltroMesLancamento(''); }}
+                  style={clearFiltersBtn}
+                  disabled={!buscaLivro && !filtroEditora && !filtroMesLancamento}
+                >
+                  Limpar filtros
+                </button>
+              </div>
+
+              <div style={filterSummary}>
+                <span><strong>{livrosFiltrados.length}</strong> {livrosFiltrados.length === 1 ? 'livro encontrado' : 'livros encontrados'}</span>
+                {(filtroEditora || filtroMesLancamento) && <span>Os livros já marcados continuam na curadoria mesmo se ficarem ocultos pelo filtro.</span>}
+              </div>
+
               <div style={{ maxHeight: 280, overflow: 'auto', border: '1px solid #eee', borderRadius: 10 }}>
+                {livrosFiltrados.length === 0 && (
+                  <div style={{ padding: 24, textAlign: 'center', color: '#888', fontSize: 13 }}>
+                    Nenhum livro encontrado com esses filtros.
+                  </div>
+                )}
                 {livrosFiltrados.map(l => {
                   const marcado = form.livros.includes(l.id);
                   return (
@@ -351,6 +407,11 @@ export default function VitrineSelecoesAdmin({ livros = [], parceiros = [] }) {
           </div>
         </div>
       )}
+      <style>{`
+        @media (max-width: 680px) {
+          .vitrine-curadoria-filtros { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </div>
   );
 }
@@ -368,3 +429,8 @@ const modal = { background: '#fff', color: '#222', width: 'min(820px, 96vw)', ma
 const label = { display: 'block', fontSize: 12, fontWeight: 700, color: '#666', margin: '12px 0 6px' };
 const input = { width: '100%', boxSizing: 'border-box', border: '1px solid #d1d5db', borderRadius: 9, padding: '10px 11px', fontSize: 14, background: '#fff', color: '#222' };
 const iconBtn = { border: 'none', background: 'none', cursor: 'pointer', color: '#777' };
+
+const filterGrid = { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr) auto', gap: 10, alignItems: 'end', marginBottom: 8 };
+const filterLabel = { display: 'block', fontSize: 11, fontWeight: 700, color: '#777', margin: '0 0 5px' };
+const clearFiltersBtn = { minHeight: 40, border: '1px solid #d1d5db', background: '#fff', color: '#555', borderRadius: 9, padding: '8px 11px', cursor: 'pointer', fontWeight: 600 };
+const filterSummary = { display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', color: '#777', fontSize: 11, margin: '0 2px 10px' };
