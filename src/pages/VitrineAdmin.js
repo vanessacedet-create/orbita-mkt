@@ -6,6 +6,7 @@ import {
   Star, StarOff, Save, X, ChevronDown, Loader2, BookOpen,
   FileSpreadsheet, Check, AlertCircle, Package, ClipboardList, Users, Link2, Megaphone
 } from 'lucide-react';
+import VitrineSelecoesAdmin from './VitrineSelecoesAdmin';
 
 /* ============================================
    VITRINE ADMIN — Gerenciamento de Livros
@@ -28,7 +29,7 @@ async function mapearEansParaLivroIds(eans) {
 }
 
 export default function VitrineAdmin() {
-  const [tab, setTab] = useState('livros'); // 'livros' | 'pedidos' | 'parceiros'
+  const [tab, setTab] = useState('livros'); // 'livros' | 'pedidos' | 'parceiros' | 'selecoes'
   const [livros, setLivros] = useState([]);
   const [pedidos, setPedidos] = useState([]);
   const [parceiros, setParceiros] = useState([]);
@@ -570,6 +571,7 @@ export default function VitrineAdmin() {
           { key: 'livros',     label: 'Livros',    icon: BookOpen },
           { key: 'pedidos',    label: 'Pedidos',   icon: ClipboardList, badge: pedidosNovos },
           { key: 'parceiros',  label: 'Parceiros', icon: Users },
+          { key: 'selecoes',   label: 'Seleções',   icon: Link2 },
         ].map(t => (
           <button
             key={t.key}
@@ -610,6 +612,11 @@ export default function VitrineAdmin() {
           </button>
         ))}
       </div>
+
+      {/* ═══ ABA SELEÇÕES ═══ */}
+      {tab === 'selecoes' && (
+        <VitrineSelecoesAdmin livros={livros} parceiros={parceiros} />
+      )}
 
       {/* ═══ ABA LIVROS ═══ */}
       {tab === 'livros' && (
