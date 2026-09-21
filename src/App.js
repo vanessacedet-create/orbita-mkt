@@ -72,6 +72,7 @@ const JornadaParceiras       = lazy(() => import('./pages/JornadaParceiras'))
 const PDA                    = lazy(() => import('./pages/PDA'))
 const PDAParceiras           = lazy(() => import('./pages/PDAParceiras'))
 const VitrinePublica         = lazy(() => import('./pages/VitrinePublica'))
+const VitrineSelecaoPublica  = lazy(() => import('./pages/VitrineSelecaoPublica'))
 const VitrineAdmin           = lazy(() => import('./pages/VitrineAdmin'))
 const GuiaParcerias          = lazy(() => import('./pages/GuiaParcerias'))
 const CacLtv                 = lazy(() => import('./pages/CacLtv'))
@@ -275,5 +276,5 @@ function Shell() {
   </Routes></Suspense></div></main>{showModal&&<ModalVerComo todosUsuarios={todosUsuarios} usuarioAtual={usuario} onSelecionar={u=>{setViewAs(u);setShowModal(false)}} onFechar={()=>setShowModal(false)}/>}</div></ViewAsContext.Provider>
 }
 
-export default function App(){return <AuthProvider><BrowserRouter><Suspense fallback={<div className="loading"><div className="spinner"/></div>}><Routes><Route path="/login" element={<PublicRoute><Login/></PublicRoute>}/><Route path="/reset-password" element={<ResetPassword/>}/><Route path="/vitrine" element={<VitrinePublica/>}/><Route path="/*" element={<RequireAuth><Shell/></RequireAuth>}/></Routes></Suspense></BrowserRouter></AuthProvider>}
+export default function App(){return <AuthProvider><BrowserRouter><Suspense fallback={<div className="loading"><div className="spinner"/></div>}><Routes><Route path="/login" element={<PublicRoute><Login/></PublicRoute>}/><Route path="/reset-password" element={<ResetPassword/>}/><Route path="/vitrine" element={<VitrinePublica/>}/><Route path="/vitrine/selecao/:token" element={<VitrineSelecaoPublica/>}/><Route path="/*" element={<RequireAuth><Shell/></RequireAuth>}/></Routes></Suspense></BrowserRouter></AuthProvider>}
 function PublicRoute({children}){const{session,loading}=useAuth();if(loading)return <div className="loading"><div className="spinner"/></div>;if(session)return <Navigate to="/" replace/>;return children}
