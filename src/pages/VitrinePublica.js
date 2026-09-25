@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { filtrarLivrosComEstoque } from '../lib/estoqueCdl';
 import {
   Search, ShoppingBag, X, Send, Check,
   BookOpen, Filter, Minus, Plus, ArrowLeft, Loader2, Star,
@@ -602,10 +603,21 @@ export default function VitrinePublica() {
 
   async function carregarLivros() {
     setLoading(true);
-    // RPC: catálogo público, já filtrado e ordenado no banco.
+    // O RPC define quais títulos estão ativos para a Vitrine.
+    // A disponibilidade final é cruzada com o estoque físico do Estoque CDL.
     const { data, error } = await supabase.rpc('vitrine_catalogo');
 
-    if (!error && data) setLivros(data);
+    if (!error && data) {
+      try {
+        const disponiveis = await filtrarLivrosComEstoque(data);
+        setLivros(disponiveis);
+      } catch (estoqueError) {
+        console.error('[Vitrine] Falha ao consultar estoque físico:', estoqueError);
+        // Falha fechada: se não conseguimos confirmar estoque, não oferecemos
+        // um livro que talvez ainda não tenha chegado da gráfica.
+        setLivros([]);
+      }
+    }
     setLoading(false);
   }
 
@@ -644,16 +656,7 @@ export default function VitrinePublica() {
     [...new Set(livros.map(l => l.categoria).filter(Boolean))].sort(), [livros]);
 
   const livrosFiltrados = useMemo(() => {
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const limite = new Date(hoje);
-    limite.setDate(limite.getDate() + 14);
-
     return livros.filter(l => {
-      if (l.data_lancamento) {
-        const dataLanc = new Date(l.data_lancamento);
-        if (dataLanc > limite) return false;
-      }
       const matchBusca = !busca ||
         l.titulo?.toLowerCase().includes(busca.toLowerCase()) ||
         l.autor?.toLowerCase().includes(busca.toLowerCase());
