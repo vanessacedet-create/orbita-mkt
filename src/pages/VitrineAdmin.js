@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import {
   Plus, Trash2, Edit2, Upload, Download, Search, Eye, EyeOff,
   Star, StarOff, Save, X, ChevronDown, Loader2, BookOpen,
-  FileSpreadsheet, Check, AlertCircle, Package, ClipboardList, Users, Link2, Megaphone
+  FileSpreadsheet, Check, AlertCircle, Package, ClipboardList, Users, Link2, Megaphone, RefreshCw
 } from 'lucide-react';
 import VitrineSelecoesAdmin from './VitrineSelecoesAdmin';
 
@@ -606,6 +606,26 @@ export default function VitrineAdmin() {
         p.id === parceiro.id ? { ...p, ativo: !p.ativo } : p
       ));
     }
+  }
+
+  // ── Parceiros: abrir um novo ciclo de escolha ──
+  async function abrirNovoCiclo(parceiro) {
+    const ok = window.confirm(
+      `Abrir um novo ciclo para ${parceiro.nome}?\n\nA contagem do limite será reiniciada agora. Os pedidos anteriores permanecem no histórico.`
+    );
+    if (!ok) return;
+
+    const { error } = await supabase.rpc('vitrine_abrir_novo_ciclo', {
+      p_parceiro_id: parceiro.id,
+    });
+
+    if (error) {
+      console.error('[Vitrine] Erro ao abrir novo ciclo:', error);
+      alert(`Não foi possível abrir o novo ciclo: ${error.message}`);
+      return;
+    }
+
+    alert(`Novo ciclo aberto para ${parceiro.nome}. O parceiro já pode escolher novamente conforme o limite do grupo.`);
   }
 
   // ── Parceiros: excluir ──
@@ -1509,6 +1529,13 @@ export default function VitrineAdmin() {
                       </td>
                       <td style={td}>
                         <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                          <button
+                            onClick={() => abrirNovoCiclo(parceiro)}
+                            style={{ ...iconBtn, color: '#16a34a' }}
+                            title="Abrir novo ciclo"
+                          >
+                            <RefreshCw size={15} />
+                          </button>
                           <button
                             onClick={() => { setEditandoParceiro(parceiro); setShowFormParceiro(true); }}
                             style={iconBtn}
