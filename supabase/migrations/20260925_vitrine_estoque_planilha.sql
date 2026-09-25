@@ -10,8 +10,11 @@ CREATE INDEX IF NOT EXISTS idx_vitrine_livros_estoque
   ON public.vitrine_livros (estoque_disponivel);
 
 -- Catálogo público: somente títulos ativos e fisicamente disponíveis.
--- Mantém o formato de retorno esperado pelo frontend.
-CREATE OR REPLACE FUNCTION public.vitrine_catalogo()
+-- A função já existia no banco com outro tipo de retorno; por isso ela
+-- precisa ser removida antes de ser recriada com o formato atual.
+DROP FUNCTION IF EXISTS public.vitrine_catalogo();
+
+CREATE FUNCTION public.vitrine_catalogo()
 RETURNS SETOF public.vitrine_livros
 LANGUAGE sql
 STABLE
