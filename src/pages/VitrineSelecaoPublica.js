@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { filtrarLivrosComEstoque } from '../lib/estoqueCdl';
 import {
   Check, Loader2, BookOpen, ArrowRight, ArrowLeft, AlertCircle,
   CalendarDays, Send, Search, X
@@ -56,7 +57,14 @@ export default function VitrineSelecaoPublica() {
       if (error || !data) {
         setErro('Este link não é válido ou não está mais disponível.');
       } else {
-        setDados(data);
+        try {
+          const livrosDisponiveis = await filtrarLivrosComEstoque(data.livros || []);
+          setDados({ ...data, livros: livrosDisponiveis });
+        } catch (estoqueError) {
+          console.error('[Vitrine Seleção] Falha ao consultar estoque físico:', estoqueError);
+          setDados({ ...data, livros: [] });
+          setErro('Não foi possível confirmar a disponibilidade dos livros agora. Tente novamente em alguns minutos.');
+        }
         if (data.status === 'respondida') setConcluido(true);
         if (data.parceiro?.id) {
           const { data: rows } = await supabase.rpc('vitrine_ultimo_endereco', { p_parceiro_id: data.parceiro.id });
