@@ -382,28 +382,35 @@ export default function VitrineAdmin() {
       }
 
       const agora = new Date().toISOString();
-      let atualizados = 0;
-      for (const livro of encontrados) {
-        const qtd = estoquePorEan.get(normalizar(livro.ean));
-        const { error } = await supabase
-          .from('vitrine_livros')
-          .update({ estoque_disponivel: qtd, estoque_atualizado_em: agora })
-          .eq('id', livro.id);
-        if (error) throw error;
-        atualizados++;
-      }
+
+      // Atualiza em lotes concorrentes. A versão anterior aguardava uma
+      // requisição por livro, o que tornava planilhas grandes muito lentas.
+      const atualizarEmLotes = async (itens, tamanhoLote = 40) => {
+        for (let i = 0; i < itens.length; i += tamanhoLote) {
+          const lote = itens.slice(i, i + tamanhoLote);
+          const resultados = await Promise.all(lote.map(({ id, quantidade }) =>
+            supabase
+              .from('vitrine_livros')
+              .update({ estoque_disponivel: quantidade, estoque_atualizado_em: agora })
+              .eq('id', id)
+          ));
+          const falha = resultados.find(r => r.error);
+          if (falha?.error) throw falha.error;
+        }
+      };
+
+      const atualizacoes = encontrados.map(livro => ({
+        id: livro.id,
+        quantidade: estoquePorEan.get(normalizar(livro.ean)) ?? 0,
+      }));
+      await atualizarEmLotes(atualizacoes);
+      const atualizados = atualizacoes.length;
 
       // Importação é um retrato completo: título da Vitrine ausente da
       // planilha passa a ter estoque zero e deixa de ser oferecido.
       const eansPlanilha = new Set(eans);
       const zerar = livros.filter(l => l.ean && !eansPlanilha.has(normalizar(l.ean)));
-      for (const livro of zerar) {
-        const { error } = await supabase
-          .from('vitrine_livros')
-          .update({ estoque_disponivel: 0, estoque_atualizado_em: agora })
-          .eq('id', livro.id);
-        if (error) throw error;
-      }
+      await atualizarEmLotes(zerar.map(livro => ({ id: livro.id, quantidade: 0 })));
 
       const naoEncontrados = eans.length - encontrados.length;
       setMsgEstoque({
