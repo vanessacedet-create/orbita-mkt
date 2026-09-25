@@ -687,7 +687,9 @@ export default function VitrinePublica() {
   function ajustarQtd(livroId, delta) {
     setSelecionados(prev => {
       const novo = { ...prev };
-      const novaQtd = (novo[livroId] || 1) + delta;
+      const livro = livros.find(l => String(l.id) === String(livroId));
+      const maxEstoque = Math.max(1, Number(livro?.estoque_cdl) || 1);
+      const novaQtd = Math.min(maxEstoque, (novo[livroId] || 1) + delta);
       if (novaQtd <= 0) delete novo[livroId];
       else novo[livroId] = novaQtd;
       return novo;
