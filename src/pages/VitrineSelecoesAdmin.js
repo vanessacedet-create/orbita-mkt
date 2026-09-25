@@ -35,7 +35,7 @@ export default function VitrineSelecoesAdmin({ livros = [], parceiros = [] }) {
   );
 
   const livrosAtivos = useMemo(
-    () => livros.filter(l => l.ativo !== false),
+    () => livros.filter(l => l.ativo !== false && Number(l.estoque_disponivel || 0) > 0),
     [livros]
   );
 

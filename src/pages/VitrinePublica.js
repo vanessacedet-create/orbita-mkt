@@ -644,16 +644,7 @@ export default function VitrinePublica() {
     [...new Set(livros.map(l => l.categoria).filter(Boolean))].sort(), [livros]);
 
   const livrosFiltrados = useMemo(() => {
-    const hoje = new Date();
-    hoje.setHours(0, 0, 0, 0);
-    const limite = new Date(hoje);
-    limite.setDate(limite.getDate() + 14);
-
     return livros.filter(l => {
-      if (l.data_lancamento) {
-        const dataLanc = new Date(l.data_lancamento);
-        if (dataLanc > limite) return false;
-      }
       const matchBusca = !busca ||
         l.titulo?.toLowerCase().includes(busca.toLowerCase()) ||
         l.autor?.toLowerCase().includes(busca.toLowerCase());

@@ -47,6 +47,9 @@ export default function VitrineAdmin() {
   const [divulgacoesPedido, setDivulgacoesPedido] = useState({}); // pedido.id -> resultado
   const [verificandoPedido, setVerificandoPedido] = useState(null);
   const fileRef = useRef(null);
+  const estoqueFileRef = useRef(null);
+  const [importandoEstoque, setImportandoEstoque] = useState(false);
+  const [msgEstoque, setMsgEstoque] = useState(null);
 
   // ── Verifica nas campanhas se o parceiro do pedido já divulgou os livros ──
   async function verificarDivulgacoesPedido(pedido) {
@@ -324,6 +327,96 @@ export default function VitrineAdmin() {
     } finally {
       setImportando(false);
       if (fileRef.current) fileRef.current.value = '';
+    }
+  }
+
+  // ── Atualizar estoque da Vitrine por planilha ──
+  async function handleImportEstoque(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportandoEstoque(true);
+    setMsgEstoque(null);
+
+    const normalizar = valor => String(valor ?? '').replace(/\D/g, '');
+    const valorColuna = (row, nomes) => {
+      const keys = Object.keys(row || {});
+      const alvo = keys.find(k => nomes.includes(String(k).trim().toLowerCase()));
+      return alvo ? row[alvo] : undefined;
+    };
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      let rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+      // Algumas exportações trazem uma linha de título antes dos cabeçalhos.
+      if (rows.length > 0) {
+        const primeira = Object.keys(rows[0]).map(k => k.trim().toLowerCase());
+        const temIsbn = primeira.some(k => ['ean', 'isbn', 'isbn/ean', 'ean/isbn'].includes(k));
+        if (!temIsbn) rows = XLSX.utils.sheet_to_json(ws, { range: 1, defval: '' });
+      }
+
+      const estoquePorEan = new Map();
+      for (const row of rows) {
+        const codigo = normalizar(valorColuna(row, ['ean', 'isbn', 'isbn/ean', 'ean/isbn']));
+        const qtdRaw = valorColuna(row, ['quantidade', 'qtd', 'estoque', 'quantidade disponível', 'quantidade disponivel', 'saldo']);
+        if (!codigo || qtdRaw === undefined || qtdRaw === '') continue;
+        const qtd = Math.max(0, Math.floor(Number(String(qtdRaw).replace(',', '.')) || 0));
+        estoquePorEan.set(codigo, qtd);
+      }
+
+      if (estoquePorEan.size === 0) {
+        throw new Error('A planilha precisa ter uma coluna EAN/ISBN e uma coluna Quantidade/Estoque.');
+      }
+
+      const eans = [...estoquePorEan.keys()];
+      const encontrados = [];
+      for (let i = 0; i < eans.length; i += 200) {
+        const { data, error } = await supabase
+          .from('vitrine_livros')
+          .select('id, ean, titulo')
+          .in('ean', eans.slice(i, i + 200));
+        if (error) throw error;
+        encontrados.push(...(data || []));
+      }
+
+      const agora = new Date().toISOString();
+      let atualizados = 0;
+      for (const livro of encontrados) {
+        const qtd = estoquePorEan.get(normalizar(livro.ean));
+        const { error } = await supabase
+          .from('vitrine_livros')
+          .update({ estoque_disponivel: qtd, estoque_atualizado_em: agora })
+          .eq('id', livro.id);
+        if (error) throw error;
+        atualizados++;
+      }
+
+      // Importação é um retrato completo: título da Vitrine ausente da
+      // planilha passa a ter estoque zero e deixa de ser oferecido.
+      const eansPlanilha = new Set(eans);
+      const zerar = livros.filter(l => l.ean && !eansPlanilha.has(normalizar(l.ean)));
+      for (const livro of zerar) {
+        const { error } = await supabase
+          .from('vitrine_livros')
+          .update({ estoque_disponivel: 0, estoque_atualizado_em: agora })
+          .eq('id', livro.id);
+        if (error) throw error;
+      }
+
+      const naoEncontrados = eans.length - encontrados.length;
+      setMsgEstoque({
+        tipo: 'sucesso',
+        texto: `Estoque atualizado: ${atualizados} livro(s). ${zerar.length} título(s) ausente(s) da planilha ficaram com estoque 0.${naoEncontrados > 0 ? ` ${naoEncontrados} ISBN(s) da planilha não existem na Vitrine.` : ''}`,
+      });
+      await carregarDados();
+    } catch (err) {
+      console.error('[Vitrine] Erro ao importar estoque:', err);
+      setMsgEstoque({ tipo: 'erro', texto: `Erro ao atualizar estoque: ${err.message}` });
+    } finally {
+      setImportandoEstoque(false);
+      if (estoqueFileRef.current) estoqueFileRef.current.value = '';
     }
   }
 
@@ -721,6 +814,24 @@ export default function VitrineAdmin() {
               {importando ? <Loader2 size={16} className="spin" /> : <Upload size={16} />}
               Importar planilha
             </label>
+            <label style={{
+              ...btnSecondary,
+              cursor: importandoEstoque ? 'wait' : 'pointer',
+              opacity: importandoEstoque ? 0.6 : 1,
+              borderColor: '#86efac',
+              background: '#f0fdf4',
+            }} title="Atualiza somente a quantidade disponível dos livros pelo ISBN/EAN">
+              <input
+                ref={estoqueFileRef}
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleImportEstoque}
+                disabled={importandoEstoque}
+                style={{ display: 'none' }}
+              />
+              {importandoEstoque ? <Loader2 size={16} className="spin" /> : <Package size={16} />}
+              Atualizar estoque
+            </label>
           </div>
 
           {/* Mensagem de importação */}
@@ -748,6 +859,20 @@ export default function VitrineAdmin() {
             </div>
           )}
 
+          {msgEstoque && (
+            <div style={{
+              padding: '12px 16px', borderRadius: 8, marginBottom: 16,
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: msgEstoque.tipo === 'sucesso' ? '#f0fdf4' : '#fef2f2',
+              border: `1px solid ${msgEstoque.tipo === 'sucesso' ? '#bbf7d0' : '#fecaca'}`,
+              color: msgEstoque.tipo === 'sucesso' ? '#16a34a' : '#dc2626', fontSize: 14,
+            }}>
+              {msgEstoque.tipo === 'sucesso' ? <Check size={16} /> : <AlertCircle size={16} />}
+              {msgEstoque.texto}
+              <button onClick={() => setMsgEstoque(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer' }}><X size={14} /></button>
+            </div>
+          )}
+
           {/* Tabela de livros */}
           {loading ? (
             <p style={{ textAlign: 'center', padding: 40, color: '#999' }}>Carregando...</p>
@@ -769,6 +894,7 @@ export default function VitrineAdmin() {
                     <th style={th}>Editora</th>
                     <th style={th}>ISBN</th>
                     <th style={th}>Preço</th>
+                    <th style={th}>Estoque</th>
                     <th style={th}>Catálogo</th>
                     <th style={th}>Status</th>
                     <th style={th}>Ações</th>
@@ -823,6 +949,14 @@ export default function VitrineAdmin() {
                       <td style={{ ...td, fontFamily: 'monospace', fontSize: 11 }}>{livro.ean || '—'}</td>
                       <td style={td}>
                         {livro.preco ? `R$ ${Number(livro.preco).toFixed(2).replace('.', ',')}` : '—'}
+                      </td>
+                      <td style={td}>
+                        <span title={livro.estoque_atualizado_em ? `Atualizado em ${new Date(livro.estoque_atualizado_em).toLocaleString('pt-BR')}` : 'Estoque ainda não importado'} style={{
+                          fontWeight: 700,
+                          color: Number(livro.estoque_disponivel || 0) > 0 ? '#16a34a' : '#dc2626',
+                        }}>
+                          {Number(livro.estoque_disponivel || 0)}
+                        </span>
                       </td>
                       <td style={td}>
                         {livro.livro_id ? (
