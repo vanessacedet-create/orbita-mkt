@@ -602,11 +602,35 @@ export default function VitrinePublica() {
 
   async function carregarLivros() {
     setLoading(true);
-    // RPC: catálogo público, já filtrado e ordenado no banco.
-    const { data, error } = await supabase.rpc('vitrine_catalogo');
 
-    if (!error && data) setLivros(data);
-    setLoading(false);
+    try {
+      // O PostgREST limita cada resposta a 1.000 linhas. Busca o catálogo
+      // público em páginas para garantir que todos os títulos elegíveis
+      // (ativo + estoque disponível) cheguem à vitrine.
+      const TAMANHO_PAGINA = 1000;
+      const catalogoCompleto = [];
+
+      for (let inicio = 0; ; inicio += TAMANHO_PAGINA) {
+        const fim = inicio + TAMANHO_PAGINA - 1;
+        const { data, error } = await supabase
+          .rpc('vitrine_catalogo')
+          .range(inicio, fim);
+
+        if (error) throw error;
+
+        const pagina = data || [];
+        catalogoCompleto.push(...pagina);
+
+        if (pagina.length < TAMANHO_PAGINA) break;
+      }
+
+      setLivros(catalogoCompleto);
+    } catch (error) {
+      console.error('Erro ao carregar catálogo da vitrine:', error);
+      setLivros([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   // ── Pré-preencher contato e endereço do último pedido ──
