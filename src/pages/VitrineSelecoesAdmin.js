@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { filtrarLivrosComEstoque } from '../lib/estoqueCdl';
 import {
   Link2, Plus, Copy, Check, Search, X, Loader2, Lock,
   ExternalLink, CalendarDays, BookOpen, UserRound, Edit2
@@ -21,6 +22,7 @@ export default function VitrineSelecoesAdmin({ livros = [], parceiros = [] }) {
   const [buscaLivro, setBuscaLivro] = useState('');
   const [filtroEditora, setFiltroEditora] = useState('');
   const [filtroMesLancamento, setFiltroMesLancamento] = useState('');
+  const [livrosEmEstoque, setLivrosEmEstoque] = useState([]);
   const [form, setForm] = useState({
     parceiroId: '',
     nome: '',
@@ -34,9 +36,20 @@ export default function VitrineSelecoesAdmin({ livros = [], parceiros = [] }) {
     [parceiros]
   );
 
+  useEffect(() => {
+    let ativo = true;
+    filtrarLivrosComEstoque(livros)
+      .then(lista => { if (ativo) setLivrosEmEstoque(lista); })
+      .catch(err => {
+        console.error('[Vitrine Seleções] Falha ao consultar estoque físico:', err);
+        if (ativo) setLivrosEmEstoque([]);
+      });
+    return () => { ativo = false; };
+  }, [livros]);
+
   const livrosAtivos = useMemo(
-    () => livros.filter(l => l.ativo !== false),
-    [livros]
+    () => livrosEmEstoque.filter(l => l.ativo !== false),
+    [livrosEmEstoque]
   );
 
   const editorasDisponiveis = useMemo(
