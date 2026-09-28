@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SERVICE_ROLE_KEY')!
   const db = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
@@ -65,9 +65,9 @@ Deno.serve(async (req) => {
         responsavelId = candidatos[0].id
       }
 
-      let q = db.from('tarefas').select(
-        'id,titulo,descricao,status,prioridade,data_prazo,created_at,responsavel:responsavel_id(id,nome)'
-      ).order('created_at', { ascending: false })
+      let q = db.from('tarefas_atribuidas').select(
+        'id,banco_tarefa_id,especificidade,status,data_prazo,data_atribuicao,responsavel:responsavel_id(id,nome),banco_tarefa:banco_tarefa_id(id,nome,descricao)'
+      ).eq('grupo', 'parceiras').order('data_atribuicao', { ascending: false })
       if (responsavelId) q = q.eq('responsavel_id', responsavelId)
       if (status) q = q.eq('status', status)
       const { data, error } = await q.limit(100)
@@ -97,50 +97,78 @@ Deno.serve(async (req) => {
         return json({ error: 'prioridade inválida' }, 400)
       }
 
-      const payload: Record<string, unknown> = {
-        titulo,
+      // O módulo atual de Parceiras trabalha com um modelo do banco de tarefas
+      // e uma atribuição. Para uma tarefa avulsa criada pelo chat, criamos um
+      // modelo avulso e já o atribuímos à pessoa escolhida.
+      const { data: criador, error: criadorError } = await db
+        .from('usuarios').select('id').order('created_at', { ascending: true }).limit(1).maybeSingle()
+      if (criadorError) throw criadorError
+      const atribuidaPor = body.atribuida_por || body.created_by || criador?.id || pessoa.id
+
+      const { data: modelo, error: modeloError } = await db.from('banco_tarefas').insert([{
+        nome: titulo,
         descricao: body.descricao || null,
-        status: body.status || 'a_fazer',
-        prioridade,
+        periodicidade: 'avulsa',
+        responsavel_id: pessoa.id,
+        created_by: atribuidaPor,
+        grupo: 'parceiras',
+        ativo: true,
+      }]).select('id,nome,descricao').single()
+      if (modeloError) throw modeloError
+
+      const detalhes = [
+        `Prioridade: ${prioridade}`,
+        body.descricao ? String(body.descricao).trim() : '',
+      ].filter(Boolean).join('\n')
+
+      const { data: tarefa, error } = await db.from('tarefas_atribuidas').insert([{
+        banco_tarefa_id: modelo.id,
         responsavel_id: pessoa.id,
         data_prazo: body.data_prazo || null,
-        grupo: body.grupo || 'influencers',
-        created_via: 'chatgpt',
+        especificidade: detalhes || null,
+        atribuida_por: atribuidaPor,
+        status: 'a_fazer',
+        grupo: 'parceiras',
+        parceiros_ids: [],
+      }]).select('id,banco_tarefa_id,status,data_prazo,especificidade').single()
+      if (error) {
+        await db.from('banco_tarefas').delete().eq('id', modelo.id)
+        throw error
       }
 
-      // Usa um usuário real como criador quando explicitamente informado.
-      if (body.created_by) payload.created_by = body.created_by
-
-      const { data: tarefa, error } = await db.from('tarefas').insert([payload]).select('id,titulo,status,prioridade,data_prazo').single()
-      if (error) throw error
-
-      const { error: re } = await db.from('tarefa_responsaveis').insert([
-        { tarefa_id: tarefa.id, usuario_id: pessoa.id, concluido: false },
+      const { error: re } = await db.from('atribuicao_responsaveis').insert([
+        { atribuicao_id: tarefa.id, usuario_id: pessoa.id },
       ])
       if (re) throw re
 
       const checklist = Array.isArray(body.checklist) ? body.checklist.map((x: unknown) => String(x).trim()).filter(Boolean) : []
       if (checklist.length) {
-        const { error: ce } = await db.from('tarefa_checklist').insert(
-          checklist.map((texto: string, ordem: number) => ({ tarefa_id: tarefa.id, texto, concluido: false, ordem }))
+        const { error: ce } = await db.from('atribuicao_checklist').insert(
+          checklist.map((texto: string, ordem: number) => ({ atribuicao_id: tarefa.id, texto, concluido: false, ordem }))
         )
         if (ce) throw ce
       }
 
-      return json({ ok: true, tarefa: { ...tarefa, responsavel: pessoa.nome } }, 201)
+      return json({ ok: true, tarefa: { ...tarefa, titulo: modelo.nome, responsavel: pessoa.nome } }, 201)
     }
 
     // PATCH /tarefas/:id
     if (method === 'PATCH' && path.startsWith('tarefas/')) {
       const id = path.split('/')[1]
       const body = await req.json()
-      const permitidos = ['titulo', 'descricao', 'status', 'prioridade', 'data_prazo']
-      const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+      const permitidos = ['status', 'data_prazo']
+      const updates: Record<string, unknown> = {}
       for (const campo of permitidos) if (campo in body) updates[campo] = body[campo]
-      const { data, error } = await db.from('tarefas').update(updates).eq('id', id)
-        .select('id,titulo,status,prioridade,data_prazo').single()
-      if (error) throw error
-      return json({ ok: true, tarefa: data })
+      if (body.prioridade || body.descricao) {
+        const { data: atual, error: ae } = await db.from('tarefas_atribuidas').select('especificidade').eq('id', id).single()
+        if (ae) throw ae
+        const linhas = String(atual?.especificidade || '').split('\n').filter(Boolean)
+        const semPrioridade = linhas.filter((x: string) => !x.startsWith('Prioridade: '))
+        updates.especificidade = [`Prioridade: ${body.prioridade || 'media'}`, body.descricao || semPrioridade.join('\n')].filter(Boolean).join('\n')
+      }
+      const { data, error } = await db.from('tarefas_atribuidas').update(updates).eq('id', id)
+        .select('id,banco_tarefa_id,status,data_prazo,especificidade').single()
+      if (error) throw error      return json({ ok: true, tarefa: data })
     }
 
     return json({ error: 'Rota não encontrada' }, 404)
