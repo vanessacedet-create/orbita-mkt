@@ -33,12 +33,12 @@ Deno.serve(async (req) => {
   })
 
   const url = new URL(req.url)
-  const path = url.pathname.replace(/^.*\/chatgpt-tarefas\/?/, '')
+  const path = url.pathname.replace(/^.*\/chatgpt-tarefas\/?/, '')\n  const rota = path || (req.method.toUpperCase() === 'GET' && url.searchParams.has('nome') ? 'usuarios' : path)
   const method = req.method.toUpperCase()
 
   try {
     // GET /usuarios?nome=Yasmin
-    if (method === 'GET' && path === 'usuarios') {
+    if (method === 'GET' && rota === 'usuarios') {
       const nome = url.searchParams.get('nome')?.trim()
       let q = db.from('usuarios').select('id,nome,email,perfil').order('nome')
       if (nome) q = q.ilike('nome', `%${nome}%`)
