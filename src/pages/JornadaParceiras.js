@@ -117,7 +117,22 @@ function calcularHorasTrabalhadas(reg, membro) {
       bruto -= (retornoAlmoco - saidaAlmoco)
     }
   }
+
+  // Café/intervalo: desconta apenas o que passar do limite (15min efetivas, 20min estagiária)
+  const durCafe = duracaoIntervalo(reg)
+  if (durCafe != null && durCafe > 0) {
+    const limite = limiteIntervaloMembro(membro)
+    if (durCafe > limite) bruto -= (durCafe - limite)
+  }
   return bruto
+}
+
+// Limite do café: usa o valor da ficha do RH; se não houver, aplica a regra padrão
+function limiteIntervaloMembro(membro) {
+  if (membro?.intervalo_remunerado_min != null && membro.intervalo_remunerado_min !== '') {
+    return Number(membro.intervalo_remunerado_min)
+  }
+  return membro?.tipo === 'estagiaria' ? 20 : 15
 }
 
 function calcularSaldoDiario(reg, membro) {
@@ -207,7 +222,7 @@ function CartaoDia({ data, membro, registro, bloqueio, editavel, onSalvarCampo, 
   const durAlmoco = duracaoAlmoco(regAtual)
   const durAlmocoEsperada = duracaoAlmocoEsperada(membro)
   const durIntervalo = duracaoIntervalo(regAtual)
-  const limiteIntervalo = membro?.intervalo_remunerado_min
+  const limiteIntervalo = limiteIntervaloMembro(membro)
 
   // Versão com os tipos certos pra mandar pro banco (números convertidos, vazio vira null)
   const regParaSalvar = {
@@ -494,6 +509,12 @@ function TabelaJornada({ membro, registros, registrosAcumulado, feriados, diasIn
             <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Banco de horas acumulado</div>
             <div style={{ fontSize: 22, fontWeight: 700, color: corSaldo(saldoAcumulado) }}>{formatarSaldo(saldoAcumulado)}</div>
             <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>desde {fmtDataBR(membro.saldo_inicial_data)}</div>
+            {membro.saldo_inicial_data < dataInicio && (
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                Trazido dos meses anteriores: <span style={{ color: corSaldo(saldoAcumulado - totais.saldoTotal), fontWeight: 700 }}>{formatarSaldo(saldoAcumulado - totais.saldoTotal)}</span>
+                {' · '}Saldo deste período: <span style={{ color: corSaldo(totais.saldoTotal), fontWeight: 700 }}>{formatarSaldo(totais.saldoTotal)}</span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -704,6 +725,11 @@ export default function JornadaParceiras() {
       const payload = editadaPorOutra ? { ...campos, editado_por_supervisora: true } : campos
       const upd = await upsertRegistro(membroId, data, payload)
       setRegistros(prev => {
+        const idx = prev.findIndex(r => r.data === data)
+        if (idx === -1) return [...prev, upd]
+        const novo = [...prev]; novo[idx] = upd; return novo
+      })
+      setRegistrosAcumulado(prev => {
         const idx = prev.findIndex(r => r.data === data)
         if (idx === -1) return [...prev, upd]
         const novo = [...prev]; novo[idx] = upd; return novo
