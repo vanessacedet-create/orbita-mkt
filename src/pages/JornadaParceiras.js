@@ -95,6 +95,14 @@ function primeiroEUltimoDiaDoMes(anoMes) {
   return { inicio, fim }
 }
 
+function objParaISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function hojeISO() {
+  return objParaISO(new Date())
+}
+
 // ── CÁLCULO DE HORAS TRABALHADAS E SALDO ──────────────────
 function calcularHorasTrabalhadas(reg, membro) {
   if (!reg) return null
@@ -108,21 +116,38 @@ function calcularHorasTrabalhadas(reg, membro) {
 
   let bruto = saidaFinal - entrada
 
-  // Efetivas e supervisora descontam o almoço. Estagiária não desconta (seus 20min já
-  // estão "dentro" da jornada de 6h, por definição combinada com a Vivi).
-  if (membro?.tipo !== 'estagiaria' && reg.saida_almoco && reg.retorno_almoco) {
+  const ehEstagiaria = membro?.tipo === 'estagiaria'
+
+  // Almoço:
+  // - Efetivas e supervisora: desconta o almoço inteiro (fica fora da jornada).
+  // - Estagiária: os campos de almoço são o intervalo dela. Até 20min (ou o limite
+  //   da ficha do RH) não desconta; só o que passar disso é descontado.
+  if (reg.saida_almoco && reg.retorno_almoco) {
     const saidaAlmoco = horaParaMinutos(reg.saida_almoco)
     const retornoAlmoco = horaParaMinutos(reg.retorno_almoco)
     if (saidaAlmoco != null && retornoAlmoco != null) {
-      bruto -= (retornoAlmoco - saidaAlmoco)
+      const durAlmoco = retornoAlmoco - saidaAlmoco
+      if (ehEstagiaria) {
+        const limite = limiteIntervaloMembro(membro)
+        if (durAlmoco > limite) bruto -= (durAlmoco - limite)
+      } else {
+        bruto -= durAlmoco
+      }
     }
   }
 
-  // Café/intervalo: desconta apenas o que passar do limite (15min efetivas, 20min estagiária)
+  // Café:
+  // - Efetivas: desconta apenas o que passar de 15min (ou o limite da ficha do RH).
+  // - Estagiária: não tem café (o intervalo dela é o do almoço); se houver algo
+  //   lançado no café, é descontado integralmente.
   const durCafe = duracaoIntervalo(reg)
   if (durCafe != null && durCafe > 0) {
-    const limite = limiteIntervaloMembro(membro)
-    if (durCafe > limite) bruto -= (durCafe - limite)
+    if (ehEstagiaria) {
+      bruto -= durCafe
+    } else {
+      const limite = limiteIntervaloMembro(membro)
+      if (durCafe > limite) bruto -= (durCafe - limite)
+    }
   }
   return bruto
 }
@@ -135,19 +160,70 @@ function limiteIntervaloMembro(membro) {
   return membro?.tipo === 'estagiaria' ? 20 : 15
 }
 
+// Saldo do dia = horas no escritório + horas em casa/evento − jornada.
+// Casa/evento entram no saldo (e portanto no banco de horas) uma única vez.
 function calcularSaldoDiario(reg, membro) {
   if (!membro) return null
+  const jornadaMin = (Number(membro.jornada_horas) || 0) * 60
+  const extras = calcularHorasExtras(reg)
   if (reg && reg.situacao === 'atestado') {
-    if (reg.atestado_horas == null || reg.atestado_horas === '') return 0 // dia inteiro
+    if (reg.atestado_horas == null || reg.atestado_horas === '') return extras // dia inteiro
     const trabalhadas = calcularHorasTrabalhadas(reg, membro) || 0
-    const alvoReduzido = (membro.jornada_horas * 60) - (Number(reg.atestado_horas) * 60)
-    return trabalhadas - alvoReduzido
+    const alvoReduzido = jornadaMin - (Number(reg.atestado_horas) * 60)
+    return trabalhadas + extras - alvoReduzido
   }
-  if (reg && ['ferias', 'folga'].includes(reg.situacao)) return 0
-  if (reg && reg.situacao === 'falta') return -(membro.jornada_horas * 60)
+  if (reg && ['ferias', 'folga'].includes(reg.situacao)) return extras
+  if (reg && reg.situacao === 'falta') return -jornadaMin + extras
   const trabalhadas = calcularHorasTrabalhadas(reg, membro)
   if (trabalhadas == null) return null
-  return trabalhadas - (membro.jornada_horas * 60)
+  return trabalhadas + extras - jornadaMin
+}
+
+// Um dia conta como dívida quando está em branco ou incompleto e já passou
+// (é anterior a hoje) e é posterior à data do saldo inicial da ficha do RH.
+// O dia de hoje nunca vira dívida enquanto estiver incompleto.
+function diaContaDivida(data, membro, hoje) {
+  return !!membro?.saldo_inicial_data && data > membro.saldo_inicial_data && data < hoje
+}
+
+// Saldo final do dia, já aplicando a regra de dívida ("pendente de preenchimento").
+function saldoDoDia(reg, membro, contaDivida) {
+  const s = calcularSaldoDiario(reg, membro)
+  if (s != null) return { saldo: s, pendente: false }
+  if (contaDivida && membro) {
+    return { saldo: -((Number(membro.jornada_horas) || 0) * 60) + calcularHorasExtras(reg), pendente: true }
+  }
+  return { saldo: null, pendente: false }
+}
+
+function diaBloqueado(data, membro, feriados, diasInativos) {
+  if (ehFimDeSemana(data)) return true
+  if (feriados.some(f => f.data === data)) return true
+  if (diasInativos.some(d => d.data === data && (d.membro_id === membro.id || !d.membro_id))) return true
+  return false
+}
+
+// Banco de horas TOTAL (situação real até hoje, independente do período na tela):
+// saldo inicial da ficha do RH + saldo de cada dia, do dia seguinte à data do
+// saldo inicial até hoje. Casa/evento lançados em fim de semana ou feriado também contam.
+function calcularBancoTotal(membro, registros, feriados, diasInativos) {
+  if (!membro?.saldo_inicial_data) return null
+  const hoje = hojeISO()
+  let total = Number(membro.saldo_inicial_minutos) || 0
+  let extrasTotal = 0
+  const inicio = proximoDiaISO(membro.saldo_inicial_data)
+  if (inicio > hoje) return { total, extrasTotal }
+  const mapa = {}
+  ;(registros || []).forEach(r => { mapa[r.data] = r })
+  for (const data of listarDatasDoPeriodo(inicio, hoje)) {
+    const reg = mapa[data]
+    const extras = calcularHorasExtras(reg)
+    extrasTotal += extras
+    if (diaBloqueado(data, membro, feriados, diasInativos)) { total += extras; continue }
+    const { saldo } = saldoDoDia(reg, membro, diaContaDivida(data, membro, hoje))
+    if (saldo != null) total += saldo
+  }
+  return { total, extrasTotal }
 }
 
 // Duração real do almoço (retorno - saída), em minutos
@@ -158,6 +234,7 @@ function duracaoAlmoco(reg) {
 
 // Duração esperada do almoço, a partir da jornada padrão da pessoa (fallback 60min)
 function duracaoAlmocoEsperada(membro) {
+  if (membro?.tipo === 'estagiaria') return limiteIntervaloMembro(membro)
   if (membro?.almoco_inicio_padrao && membro?.almoco_fim_padrao) {
     return horaParaMinutos(membro.almoco_fim_padrao) - horaParaMinutos(membro.almoco_inicio_padrao)
   }
@@ -170,7 +247,7 @@ function duracaoIntervalo(reg) {
   return horaParaMinutos(reg.intervalo_fim) - horaParaMinutos(reg.intervalo_inicio)
 }
 
-// Horas extras (casa + evento), em minutos — contabilizadas à parte do saldo
+// Horas em casa + evento, em minutos — entram no saldo do dia (e no banco de horas)
 function calcularHorasExtras(reg) {
   return (Number(reg?.horas_casa_min) || 0) + (Number(reg?.horas_evento_min) || 0)
 }
@@ -194,7 +271,8 @@ function useToast() {
 
 
 // ── LINHA DE UM DIA (editável) ─────────────────────────────
-function CartaoDia({ data, membro, registro, bloqueio, editavel, onSalvarCampo, onSalvarTudo }) {
+function CartaoDia({ data, membro, registro, bloqueio, editavel, contaDivida, onSalvarCampo, onSalvarTudo }) {
+  const ehEstagiaria = membro?.tipo === 'estagiaria'
   const [entrada, setEntrada] = useState(registro?.entrada || '')
   const [saidaAlmoco, setSaidaAlmoco] = useState(registro?.saida_almoco || '')
   const [retornoAlmoco, setRetornoAlmoco] = useState(registro?.retorno_almoco || '')
@@ -216,13 +294,16 @@ function CartaoDia({ data, membro, registro, bloqueio, editavel, onSalvarCampo, 
     atestado_horas: (situacao === 'atestado' && !atestadoDiaInteiro && atestadoHoras !== '') ? Number(atestadoHoras) : null,
   }
   const horasTrabalhadas = calcularHorasTrabalhadas(regAtual, membro)
-  const saldo = calcularSaldoDiario(regAtual, membro)
+  const { saldo, pendente } = saldoDoDia(regAtual, membro, contaDivida)
   const extras = calcularHorasExtras(regAtual)
   const totalGeral = calcularTotalGeral(regAtual, membro)
   const durAlmoco = duracaoAlmoco(regAtual)
   const durAlmocoEsperada = duracaoAlmocoEsperada(membro)
   const durIntervalo = duracaoIntervalo(regAtual)
-  const limiteIntervalo = limiteIntervaloMembro(membro)
+  // Estagiária não tem café: qualquer tempo lançado ali é descontado integralmente
+  const limiteIntervalo = ehEstagiaria ? 0 : limiteIntervaloMembro(membro)
+  // Para a estagiária, o campo de café só aparece se já houver algo lançado nele
+  const mostrarCafe = !ehEstagiaria || !!(registro?.intervalo_inicio || registro?.intervalo_fim || intervaloInicio || intervaloFim)
 
   // Versão com os tipos certos pra mandar pro banco (números convertidos, vazio vira null)
   const regParaSalvar = {
@@ -245,12 +326,21 @@ function CartaoDia({ data, membro, registro, bloqueio, editavel, onSalvarCampo, 
   // terminar de chegar no banco — o dia inteiro fica sempre coberto por um envio
   // recente, não só o último campo em que ela ficou parada.
   const primeiraRenderRef = useRef(true)
+  const sujoRef = useRef(false)
+  const ultimoRegRef = useRef(regParaSalvar)
+  ultimoRegRef.current = regParaSalvar
+  // Se a janela do dia for fechada antes do autosave terminar, salva na hora
+  useEffect(() => () => {
+    if (sujoRef.current) onSalvarTudo(data, ultimoRegRef.current)
+  }, [])
   useEffect(() => {
     if (primeiraRenderRef.current) { primeiraRenderRef.current = false; return }
+    sujoRef.current = true
     let jaSalvou = false
     salvamentosPendentes++
     const timer = setTimeout(async () => {
       jaSalvou = true
+      sujoRef.current = false
       try { await onSalvarTudo(data, regParaSalvar) }
       finally { salvamentosPendentes = Math.max(0, salvamentosPendentes - 1) }
     }, 700)
@@ -381,8 +471,8 @@ function CartaoDia({ data, membro, registro, bloqueio, editavel, onSalvarCampo, 
           <input type="time" className="form-input" style={timeInputStyle} value={saidaFinal} disabled={!editavel} onClick={e => e.currentTarget.showPicker?.()}
             onChange={e => setSaidaFinal(e.target.value)} onBlur={() => salvar('saida_final', saidaFinal || null)} />
         </div>
-        <div>
-          <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Café (início–fim)</label>
+        {mostrarCafe && <div>
+          <label style={{ fontSize: 10, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>{ehEstagiaria ? 'Café (desconta integralmente)' : 'Café (início–fim)'}</label>
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             <input type="time" className="form-input" style={{ ...timeInputStyle, width: 74 }} value={intervaloInicio} disabled={!editavel} onClick={e => e.currentTarget.showPicker?.()}
               onChange={e => setIntervaloInicio(e.target.value)} onBlur={() => salvar('intervalo_inicio', intervaloInicio || null)} />
@@ -391,11 +481,11 @@ function CartaoDia({ data, membro, registro, bloqueio, editavel, onSalvarCampo, 
               onChange={e => setIntervaloFim(e.target.value)} onBlur={() => salvar('intervalo_fim', intervaloFim || null)} />
           </div>
           {durIntervalo != null && (
-            <div style={{ fontSize: 9, marginTop: 3, maxWidth: 150, color: (limiteIntervalo && durIntervalo > limiteIntervalo) ? 'var(--red)' : 'var(--text-muted)' }}>
-              {minutosParaHoraLegivel(durIntervalo)} de café{(limiteIntervalo && durIntervalo > limiteIntervalo) ? ` (+${durIntervalo - limiteIntervalo}min)` : ''}
+            <div style={{ fontSize: 9, marginTop: 3, maxWidth: 150, color: (durIntervalo > limiteIntervalo) ? 'var(--red)' : 'var(--text-muted)' }}>
+              {minutosParaHoraLegivel(durIntervalo)} de café{(durIntervalo > limiteIntervalo) ? ` (−${durIntervalo - limiteIntervalo}min)` : ''}
             </div>
           )}
-        </div>
+        </div>}
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, alignItems: 'flex-end', paddingTop: 10, borderTop: '1px solid var(--border)' }}>
@@ -427,6 +517,7 @@ function CartaoDia({ data, membro, registro, bloqueio, editavel, onSalvarCampo, 
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 9, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Saldo</div>
             <div style={{ fontSize: 14, fontWeight: 700, color: corSaldo(saldo) }}>{formatarSaldo(saldo)}</div>
+            {pendente && <div style={{ fontSize: 9, color: 'var(--red)', fontWeight: 700, textTransform: 'uppercase' }}>pendente de preenchimento</div>}
           </div>
         </div>
       </div>
@@ -434,8 +525,70 @@ function CartaoDia({ data, membro, registro, bloqueio, editavel, onSalvarCampo, 
   )
 }
 
-// ── TABELA DE JORNADA (todos os dias do período + totais) ─
-function TabelaJornada({ membro, registros, registrosAcumulado, feriados, diasInativos, dataInicio, dataFim, editavel, onSalvarCampo }) {
+// ── COLUNA DE UM DIA NA GRADE SEMANAL (resumo compacto) ───
+function etiquetaStyle(cor) {
+  return { fontSize: 9, fontWeight: 700, color: cor, border: `1px solid ${cor}`, borderRadius: 4, padding: '1px 4px', textTransform: 'uppercase', letterSpacing: 0.3, lineHeight: 1.3 }
+}
+
+function fmtHora(h) {
+  return h ? String(h).slice(0, 5) : ''
+}
+
+function ColunaDia({ data, membro, registro, bloqueio, foraDoPeriodo, contaDivida, ehHoje, onAbrir }) {
+  const diaIdx = dataISOparaObj(data).getDay()
+  const [, mes, dia] = data.split('-')
+  const cabecalho = (
+    <div style={{ textAlign: 'center', marginBottom: 6 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: ehHoje ? 'var(--accent)' : 'var(--text)' }}>{dia}/{mes}</div>
+      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{DIAS_SEMANA_CURTO[diaIdx]}{ehHoje ? ' · hoje' : ''}</div>
+    </div>
+  )
+  const base = { borderRadius: 8, padding: '8px 6px', border: `1px solid ${ehHoje ? 'var(--accent)' : 'var(--border)'}`, minHeight: 130, boxSizing: 'border-box' }
+
+  if (foraDoPeriodo) return <div style={{ ...base, opacity: 0.25 }}>{cabecalho}</div>
+
+  const extras = calcularHorasExtras(registro)
+
+  if (bloqueio) {
+    return (
+      <div style={{ ...base, background: 'rgba(255,255,255,0.02)' }}>
+        {cabecalho}
+        {!ehFimDeSemana(data) && <div style={{ fontSize: 9, color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center' }}>{bloqueio}</div>}
+        {extras > 0 && <div style={{ textAlign: 'center', marginTop: 6 }}><span style={etiquetaStyle('#22c55e')}>+{minutosParaHoraLegivel(extras)} casa/ev.</span></div>}
+      </div>
+    )
+  }
+
+  const { saldo, pendente } = saldoDoDia(registro, membro, contaDivida)
+  const situ = registro?.situacao && registro.situacao !== 'normal' ? SITUACOES.find(s => s.value === registro.situacao) : null
+  const horarios = [registro?.entrada, registro?.saida_almoco, registro?.retorno_almoco, registro?.saida_final].filter(Boolean)
+  const temCafe = registro?.intervalo_inicio && registro?.intervalo_fim
+
+  return (
+    <button type="button" onClick={onAbrir} title="Clique para ver e editar o dia"
+      style={{ ...base, background: 'var(--surface)', cursor: 'pointer', textAlign: 'center', color: 'inherit', fontFamily: 'inherit', display: 'flex', flexDirection: 'column', alignItems: 'stretch', width: '100%' }}>
+      {cabecalho}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: 'var(--text-muted)', flex: 1 }}>
+        {horarios.length > 0
+          ? horarios.map((h, i) => <span key={i}>{fmtHora(h)}</span>)
+          : <span style={{ opacity: 0.4 }}>—</span>}
+        {temCafe && <span style={{ fontSize: 10, opacity: 0.8 }}>café {fmtHora(registro.intervalo_inicio)}–{fmtHora(registro.intervalo_fim)}</span>}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 6, alignItems: 'center' }}>
+        {situ && <span style={etiquetaStyle(situ.cor)}>{situ.label}</span>}
+        {extras > 0 && <span style={etiquetaStyle('#22c55e')}>+{minutosParaHoraLegivel(extras)} casa/ev.</span>}
+        {pendente && <span style={etiquetaStyle('var(--red)')}>pendente</span>}
+        {registro?.observacoes && <span style={{ fontSize: 9, color: 'var(--accent)' }}>• observação</span>}
+      </div>
+      <div style={{ marginTop: 6, fontSize: 13, fontWeight: 700, color: corSaldo(saldo) }}>{formatarSaldo(saldo)}</div>
+    </button>
+  )
+}
+
+// ── TABELA DE JORNADA (resumo + grade semanal) ────────────
+function TabelaJornada({ membro, registros, banco, feriados, diasInativos, dataInicio, dataFim, editavel, onSalvarCampo }) {
+  const [diaAberto, setDiaAberto] = useState(null)
+  const hoje = hojeISO()
   const datas = useMemo(() => listarDatasDoPeriodo(dataInicio, dataFim), [dataInicio, dataFim])
   const registrosPorData = useMemo(() => {
     const map = {}
@@ -454,80 +607,100 @@ function TabelaJornada({ membro, registros, registrosAcumulado, feriados, diasIn
     return null
   }
 
+  // Saldo e casa/evento do período selecionado
   const totais = useMemo(() => {
-    let horas = 0, saldoTotal = 0, extras = 0, diasComRegistro = 0, diasUteis = 0
+    let saldoTotal = 0, extras = 0
     for (const data of datas) {
-      if (motivoBloqueio(data)) continue
-      diasUteis++
       const reg = registrosPorData[data]
-      const trabalhadas = calcularHorasTrabalhadas(reg, membro)
-      const saldo = calcularSaldoDiario(reg, membro)
-      if (trabalhadas != null) { horas += trabalhadas; diasComRegistro++ }
+      const ex = calcularHorasExtras(reg)
+      extras += ex
+      if (motivoBloqueio(data)) { saldoTotal += ex; continue }
+      const { saldo } = saldoDoDia(reg, membro, diaContaDivida(data, membro, hoje))
       if (saldo != null) saldoTotal += saldo
-      extras += calcularHorasExtras(reg)
     }
-    return { horas, saldoTotal, extras, total: horas + extras, diasComRegistro, diasUteis }
-  }, [datas, registrosPorData, diasInativos, feriados, membro])
+    return { saldoTotal, extras }
+  }, [datas, registrosPorData, diasInativos, feriados, membro, hoje])
 
-  // Saldo acumulado (banco de horas) — saldo inicial + soma dos saldos diários
-  // desde a data de referência até o fim do período selecionado.
-  const saldoAcumulado = useMemo(() => {
-    if (!membro?.saldo_inicial_data) return null
-    let total = Number(membro.saldo_inicial_minutos) || 0
-    const inicioAcum = proximoDiaISO(membro.saldo_inicial_data)
-    if (inicioAcum > dataFim) return total
-    const datasAcum = listarDatasDoPeriodo(inicioAcum, dataFim)
-    const mapAcum = {}
-    ;(registrosAcumulado || []).forEach(r => { mapAcum[r.data] = r })
-    for (const data of datasAcum) {
-      if (ehFimDeSemana(data)) continue
-      if (feriados.some(f => f.data === data)) continue
-      if (diasInativos.some(d => d.data === data && (d.membro_id === membro.id || !d.membro_id))) continue
-      const saldo = calcularSaldoDiario(mapAcum[data], membro)
-      if (saldo != null) total += saldo
+  // Semanas (segunda a domingo) que cobrem o período selecionado
+  const semanas = useMemo(() => {
+    if (!datas.length) return []
+    const primeiro = dataISOparaObj(datas[0])
+    const desloc = (primeiro.getDay() + 6) % 7
+    let cursor = new Date(primeiro.getFullYear(), primeiro.getMonth(), primeiro.getDate() - desloc)
+    const fim = dataISOparaObj(datas[datas.length - 1])
+    const lista = []
+    while (cursor <= fim) {
+      const dias = []
+      for (let i = 0; i < 7; i++) dias.push(objParaISO(new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + i)))
+      lista.push(dias)
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 7)
     }
-    return total
-  }, [membro, dataFim, registrosAcumulado, feriados, diasInativos])
+    return lista
+  }, [datas])
+
+  const rotulo = { fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }
+  const notinha = { fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }
 
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${saldoAcumulado != null ? 4 : 3}, 1fr)`, gap: 12, marginBottom: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12, marginBottom: 16 }}>
         <div className="table-card" style={{ padding: '12px 16px' }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>No escritório</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>{minutosParaHoraLegivel(totais.horas)}</div>
+          <div style={rotulo}>Banco de horas total</div>
+          {banco?.status === 'ok' && (
+            <>
+              <div style={{ fontSize: 22, fontWeight: 700, color: corSaldo(banco.total) }}>{formatarSaldo(banco.total)}</div>
+              <div style={notinha}>desde {fmtDataBR(membro.saldo_inicial_data)} até hoje</div>
+            </>
+          )}
+          {banco?.status === 'carregando' && <div style={{ ...notinha, marginTop: 8 }}>Calculando...</div>}
+          {banco?.status === 'sem_data' && <div style={{ ...notinha, marginTop: 8 }}>Preencha o saldo inicial e a data do saldo inicial na ficha do RH para ativar.</div>}
         </div>
         <div className="table-card" style={{ padding: '12px 16px' }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Total geral (+casa/evento)</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>{minutosParaHoraLegivel(totais.total)}</div>
-        </div>
-        <div className="table-card" style={{ padding: '12px 16px' }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Saldo do período</div>
+          <div style={rotulo}>Saldo do período</div>
           <div style={{ fontSize: 22, fontWeight: 700, color: corSaldo(totais.saldoTotal) }}>{formatarSaldo(totais.saldoTotal)}</div>
+          <div style={notinha}>{fmtDataBR(dataInicio)} a {fmtDataBR(dataFim)}</div>
         </div>
-        {saldoAcumulado != null && (
-          <div className="table-card" style={{ padding: '12px 16px' }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Banco de horas acumulado</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: corSaldo(saldoAcumulado) }}>{formatarSaldo(saldoAcumulado)}</div>
-            <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>desde {fmtDataBR(membro.saldo_inicial_data)}</div>
-            {membro.saldo_inicial_data < dataInicio && (
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
-                Trazido dos meses anteriores: <span style={{ color: corSaldo(saldoAcumulado - totais.saldoTotal), fontWeight: 700 }}>{formatarSaldo(saldoAcumulado - totais.saldoTotal)}</span>
-                {' · '}Saldo deste período: <span style={{ color: corSaldo(totais.saldoTotal), fontWeight: 700 }}>{formatarSaldo(totais.saldoTotal)}</span>
-              </div>
-            )}
-          </div>
-        )}
+        <div className="table-card" style={{ padding: '12px 16px' }}>
+          <div style={rotulo}>Casa / eventos no período</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>{minutosParaHoraLegivel(totais.extras)}</div>
+          {banco?.status === 'ok' && <div style={notinha}>Desde o início: {minutosParaHoraLegivel(banco.extrasTotal)}</div>}
+          <div style={{ ...notinha, fontStyle: 'italic' }}>Já incluídas no banco de horas e nos saldos.</div>
+        </div>
       </div>
 
-      <div>
-        {datas.map(data => (
-          <CartaoDia key={data} data={data} membro={membro} registro={registrosPorData[data]}
-            bloqueio={motivoBloqueio(data)} editavel={editavel}
-            onSalvarCampo={(d, campo, valor) => onSalvarCampo(membro.id, d, { [campo]: valor })}
-            onSalvarTudo={(d, campos) => onSalvarCampo(membro.id, d, campos)}
-          />
-        ))}
-      </div>
+      {semanas.map(sem => (
+        <div key={sem[0]} className="table-card" style={{ padding: '10px 12px', marginBottom: 12, overflowX: 'auto' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+            <strong style={{ color: 'var(--text)' }}>Semana de</strong> {fmtDataBR(sem[0])} a {fmtDataBR(sem[6])}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(96px, 1fr)) repeat(2, minmax(64px, 0.6fr))', gap: 6, minWidth: 640 }}>
+            {sem.map(data => (
+              <ColunaDia key={data} data={data} membro={membro} registro={registrosPorData[data]}
+                bloqueio={motivoBloqueio(data)}
+                foraDoPeriodo={data < dataInicio || data > dataFim}
+                contaDivida={diaContaDivida(data, membro, hoje)}
+                ehHoje={data === hoje}
+                onAbrir={() => setDiaAberto(data)} />
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {diaAberto && (
+        <div onClick={() => setDiaAberto(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 820, maxHeight: '90vh', overflow: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setDiaAberto(null)}><X size={14} /> Fechar</button>
+            </div>
+            <CartaoDia key={diaAberto} data={diaAberto} membro={membro} registro={registrosPorData[diaAberto]}
+              bloqueio={null} editavel={editavel}
+              contaDivida={diaContaDivida(diaAberto, membro, hoje)}
+              onSalvarCampo={(d, campo, valor) => onSalvarCampo(membro.id, d, { [campo]: valor })}
+              onSalvarTudo={(d, campos) => onSalvarCampo(membro.id, d, campos)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -608,7 +781,9 @@ export default function JornadaParceiras() {
   const [feriados, setFeriados] = useState([])
   const [diasInativos, setDiasInativos] = useState([])
   const [registros, setRegistros] = useState([])
-  const [registrosAcumulado, setRegistrosAcumulado] = useState([])
+  // Registros desde a data do saldo inicial até hoje (para o banco de horas total)
+  const [acumulado, setAcumulado] = useState({ membroId: null, regs: [] })
+  const [bancosEquipe, setBancosEquipe] = useState({})
   const [carregandoRegistros, setCarregandoRegistros] = useState(true)
   const [loading, setLoading] = useState(true)
   const [aba, setAba] = useState('minha') // 'minha' | 'equipe'
@@ -713,11 +888,50 @@ export default function JornadaParceiras() {
       .catch(e => { console.error(e); setCarregandoRegistros(false) })
   }, [membroVisivel?.id, dataInicio, dataFim])
 
+  // Banco de horas total: busca os registros da data do saldo inicial até hoje,
+  // independente do período escolhido na tela.
   useEffect(() => {
-    if (!membroVisivel?.saldo_inicial_data) { setRegistrosAcumulado([]); return }
-    const inicioAcum = membroVisivel.saldo_inicial_data < dataInicio ? membroVisivel.saldo_inicial_data : dataInicio
-    getRegistros(membroVisivel.id, inicioAcum, dataFim).then(setRegistrosAcumulado).catch(console.error)
-  }, [membroVisivel?.id, membroVisivel?.saldo_inicial_data, dataInicio, dataFim])
+    const id = membroVisivel?.id
+    const ini = membroVisivel?.saldo_inicial_data
+    if (!id || !ini) { setAcumulado({ membroId: null, regs: [] }); return }
+    const hoje = hojeISO()
+    if (ini > hoje) { setAcumulado({ membroId: id, regs: [] }); return }
+    let cancelado = false
+    getRegistros(id, ini, hoje)
+      .then(regs => { if (!cancelado) setAcumulado({ membroId: id, regs }) })
+      .catch(console.error)
+    return () => { cancelado = true }
+  }, [membroVisivel?.id, membroVisivel?.saldo_inicial_data])
+
+  const bancoVisivel = useMemo(() => {
+    if (!membroVisivel?.saldo_inicial_data) return { status: 'sem_data' }
+    if (acumulado.membroId !== membroVisivel.id) return { status: 'carregando' }
+    return { status: 'ok', ...calcularBancoTotal(membroVisivel, acumulado.regs, feriados, diasInativos) }
+  }, [membroVisivel, acumulado, feriados, diasInativos])
+
+  // Visão da equipe: banco de horas total de cada pessoa
+  useEffect(() => {
+    if (!souSupervisora || aba !== 'equipe' || membros.length === 0) return
+    let cancelado = false
+    const hoje = hojeISO()
+    ;(async () => {
+      const res = {}
+      for (const m of membros) {
+        if (!m.saldo_inicial_data) continue
+        try {
+          const regs = m.saldo_inicial_data <= hoje ? await getRegistros(m.id, m.saldo_inicial_data, hoje) : []
+          res[m.id] = calcularBancoTotal(m, regs, feriados, diasInativos)
+        } catch (e) { console.error(e) }
+      }
+      if (!cancelado) setBancosEquipe(res)
+    })()
+    return () => { cancelado = true }
+  }, [souSupervisora, aba, membros, feriados, diasInativos])
+
+  function bancoDoMembro(m) {
+    if (m.id === membroVisivel?.id && bancoVisivel.status === 'ok') return bancoVisivel.total
+    return bancosEquipe[m.id]?.total ?? null
+  }
 
   async function handleSalvarCampo(membroId, data, campos) {
     try {
@@ -729,10 +943,11 @@ export default function JornadaParceiras() {
         if (idx === -1) return [...prev, upd]
         const novo = [...prev]; novo[idx] = upd; return novo
       })
-      setRegistrosAcumulado(prev => {
-        const idx = prev.findIndex(r => r.data === data)
-        if (idx === -1) return [...prev, upd]
-        const novo = [...prev]; novo[idx] = upd; return novo
+      setAcumulado(prev => {
+        if (prev.membroId !== membroId) return prev
+        const idx = prev.regs.findIndex(r => r.data === data)
+        const regs = idx === -1 ? [...prev.regs, upd] : prev.regs.map((r, i) => (i === idx ? upd : r))
+        return { ...prev, regs }
       })
     } catch (e) { console.error(e); showToast('Erro ao salvar registro.', 'error') }
   }
@@ -819,9 +1034,18 @@ export default function JornadaParceiras() {
                   <span style={{ color: 'var(--text-muted)' }}>{m.cargo || '—'}</span>
                   <span style={{ color: 'var(--text-muted)' }}>{TIPO_LABEL[m.tipo] || m.tipo}</span>
                   <span style={{ color: 'var(--text-muted)' }}>{m.jornada_horas}h/dia</span>
-                  <span style={{ color: m.saldo_inicial_data ? corSaldo(m.saldo_inicial_minutos) : 'var(--text-muted)' }}>
-                    {m.saldo_inicial_data ? `Saldo inicial: ${formatarSaldo(m.saldo_inicial_minutos)} (desde ${fmtDataBR(m.saldo_inicial_data)})` : 'sem saldo inicial definido'}
-                  </span>
+                  {m.saldo_inicial_data ? (
+                    <>
+                      <span style={{ fontWeight: 700, color: corSaldo(bancoDoMembro(m)) }}>
+                        Banco atual: {bancoDoMembro(m) == null ? 'calculando...' : formatarSaldo(bancoDoMembro(m))}
+                      </span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                        (saldo inicial {formatarSaldo(m.saldo_inicial_minutos)} em {fmtDataBR(m.saldo_inicial_data)})
+                      </span>
+                    </>
+                  ) : (
+                    <span style={{ color: 'var(--text-muted)' }}>sem saldo inicial definido</span>
+                  )}
                   <span style={{ color: m.email ? 'var(--text-muted)' : 'var(--red)', fontSize: 11, marginLeft: 'auto' }}>{m.email || 'sem e-mail no RH'}</span>
                 </div>
               ))}
@@ -862,7 +1086,7 @@ export default function JornadaParceiras() {
           <TabelaJornada
             membro={membroVisivel}
             registros={registros}
-            registrosAcumulado={registrosAcumulado}
+            banco={bancoVisivel}
             feriados={feriados}
             diasInativos={diasInativos}
             dataInicio={dataInicio}
