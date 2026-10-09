@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
-import { Upload, Download, Send, Check, AlertCircle, Loader2, BookOpen, FileSpreadsheet } from 'lucide-react';
+import { Upload, Download, Send, Check, AlertCircle, Loader2, BookOpen, FileSpreadsheet, RefreshCw } from 'lucide-react';
 import { CAMPOS, lerLinhas, mascararCpf, formatarMoeda } from '../lib/envio-brindes-validacao';
 
 /* ============================================
@@ -56,14 +56,14 @@ async function chamarApi(caminho, corpo) {
 }
 
 // ── Tela de confirmação depois do envio (hierarquia: H1 > H2 > H3) ──
-export function TelaSucesso({ sucesso, onNovo }) {
+export function TelaSucesso({ sucesso, onNovo, onVerEnvios }) {
   const n = sucesso.quantidade;
   const linha = { display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 0', borderBottom: `1px solid ${COLORS.border}`, fontSize: 15 };
   const rotulo = { color: COLORS.textLight, margin: 0 };
   const valor = { margin: 0, fontWeight: 600, textAlign: 'right' };
   const passos = [
     { t: 'Calculamos o frete', d: 'A equipe da CEDET calcula o frete de cada envio.' },
-    { t: 'Você aprova o valor final', d: 'Enviamos o valor dos livros somados ao frete para você confirmar.' },
+    { t: 'Você aprova o valor final', d: 'Quando o frete estiver calculado, o valor final (livros + frete) aparece na aba "Meus envios" para você aprovar.' },
     { t: 'Pagamento e despacho', d: 'Combinamos a forma de pagamento (comissão no portal CEDET, PIX, cartão ou boleto) e despachamos os livros.' },
   ];
   return (
@@ -118,11 +118,140 @@ export function TelaSucesso({ sucesso, onNovo }) {
           <span><strong>Não envie esta mesma planilha de novo.</strong> Guarde o número do protocolo para falar com a equipe sobre este envio.</span>
         </aside>
 
-        <div style={{ marginTop: 24, textAlign: 'center' }}>
-          <button style={s.btn} onClick={onNovo}>Fazer outro envio</button>
+        <div style={{ marginTop: 24, display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+          <button style={s.btn} onClick={onVerEnvios}>Ver meus envios</button>
+          <button style={{ ...s.btn, ...s.btnGhost }} onClick={onNovo}>Fazer outro envio</button>
         </div>
       </div>
     </div></div>
+  );
+}
+
+// ── "Meus envios": o que a livraria enviou e o que precisa aprovar ──
+const STATUS_LIVRARIA = {
+  recebido:             { t: 'Em análise pela CEDET',              cor: '#6B6B6B', bg: '#F0F0EE' },
+  em_analise:           { t: 'Em análise pela CEDET',              cor: '#6B6B6B', bg: '#F0F0EE' },
+  frete_calculado:      { t: 'Em análise pela CEDET',              cor: '#6B6B6B', bg: '#F0F0EE' },
+  aguardando_aprovacao: { t: 'Aguardando a sua aprovação',         cor: '#8A6500', bg: COLORS.warnLight },
+  aprovado:             { t: 'Aprovado, combinando o pagamento',   cor: '#2F6B45', bg: COLORS.successLight },
+  enviado:              { t: 'Enviado',                            cor: '#2F6B45', bg: COLORS.successLight },
+  cancelado:            { t: 'Cancelado',                          cor: COLORS.error, bg: COLORS.errorLight },
+};
+const FORMA_PAGAMENTO = {
+  desconto_comissao: 'Desconto na comissão do portal CEDET',
+  pix: 'PIX',
+  cartao: 'Cartão de crédito',
+  boleto: 'Boleto',
+};
+const TIPO_ROTULO = { aluno_novo: 'Aluno novo', renovacao: 'Renovação' };
+const mesAno = (iso) => (iso ? `${String(iso).slice(5, 7)}/${String(iso).slice(0, 4)}` : '');
+const dataCurta = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '');
+
+export function CartaoEnvio({ envio, nomePadrao, emailPadrao, onAprovar }) {
+  const [nome, setNome] = useState(nomePadrao || '');
+  const [email, setEmail] = useState(emailPadrao || '');
+  const [concordo, setConcordo] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  const st = STATUS_LIVRARIA[envio.status] || { t: envio.status, cor: COLORS.textLight, bg: '#F0F0EE' };
+  const temFinal = envio.valor_final != null;
+  const aguardando = envio.status === 'aguardando_aprovacao';
+  const nomeOk = nome.trim().split(/\s+/).filter(Boolean).length >= 2;
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
+  const podeAprovar = aguardando && nomeOk && emailOk && concordo && !enviando;
+
+  async function aprovar() {
+    setEnviando(true); setErro('');
+    const r = await onAprovar(envio, nome.trim(), email.trim());
+    if (!r.ok) setErro(r.erro);
+    setEnviando(false);
+  }
+
+  const linha = { display: 'flex', justifyContent: 'space-between', gap: 16, padding: '8px 0', borderBottom: `1px solid ${COLORS.border}`, fontSize: 14 };
+  const rot = { color: COLORS.textLight, margin: 0 };
+  const val = { margin: 0, fontWeight: 600, textAlign: 'right' };
+
+  return (
+    <article style={{ ...s.card, padding: 20, borderColor: aguardando ? COLORS.gold : COLORS.border, borderWidth: aguardando ? 2 : 1 }}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <h3 style={{ fontSize: 17, fontWeight: 700, margin: '0 0 2px' }}>Envio nº {envio.id}</h3>
+          <p style={{ ...s.muted, margin: 0 }}>{TIPO_ROTULO[envio.tipo] || envio.tipo} · {mesAno(envio.mes_referencia)} · enviado em {dataCurta(envio.criado_em)}</p>
+        </div>
+        <span style={{ background: st.bg, color: st.cor, borderRadius: 999, padding: '5px 12px', fontSize: 13, fontWeight: 600 }}>{st.t}</span>
+      </header>
+
+      <dl style={{ margin: '14px 0 0' }}>
+        <div style={linha}><dt style={rot}>Livro</dt><dd style={{ ...val, maxWidth: '65%' }}>{envio.livro_titulo}</dd></div>
+        <div style={linha}><dt style={rot}>Quantidade</dt><dd style={val}>{envio.qtd_livros} {envio.qtd_livros === 1 ? 'livro' : 'livros'}</dd></div>
+        <div style={linha}><dt style={rot}>Valor dos livros</dt><dd style={val}>{formatarMoeda(envio.valor_livros)}</dd></div>
+        {temFinal && <div style={linha}><dt style={rot}>Frete</dt><dd style={val}>{formatarMoeda(envio.valor_frete)}</dd></div>}
+        <div style={{ ...linha, borderBottom: 'none', alignItems: 'baseline', paddingTop: 12 }}>
+          <dt style={{ ...rot, color: COLORS.text, fontWeight: 600, fontSize: 15 }}>{temFinal ? 'Valor final' : 'Valor final'}</dt>
+          <dd style={{ ...val, fontSize: temFinal ? 24 : 15, fontFamily: temFinal ? FONTS.display : FONTS.body, color: temFinal ? COLORS.text : COLORS.textLight, fontWeight: temFinal ? 700 : 400 }}>
+            {temFinal ? formatarMoeda(envio.valor_final) : 'frete a calcular'}
+          </dd>
+        </div>
+      </dl>
+
+      {envio.forma_pagamento && (
+        <p style={{ ...s.muted, margin: '8px 0 0' }}>Forma de pagamento: <strong>{FORMA_PAGAMENTO[envio.forma_pagamento] || envio.forma_pagamento}</strong></p>
+      )}
+      {envio.aprovado_em && <p style={{ ...s.muted, margin: '4px 0 0' }}>Aprovado em {dataCurta(envio.aprovado_em)}.</p>}
+
+      {aguardando && (
+        <section style={{ marginTop: 18, background: COLORS.warnLight, border: `1px solid ${COLORS.gold}`, borderRadius: 8, padding: 16 }}>
+          <h4 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 4px' }}>Aprovar o valor final</h4>
+          <p style={{ ...s.muted, margin: '0 0 12px' }}>Depois do seu OK, a equipe da CEDET combina com você a forma de pagamento e despacha os livros.</p>
+          <div style={s.grid}>
+            <div>
+              <label style={s.label} htmlFor={`ap-nome-${envio.id}`}>Seu nome completo</label>
+              <input id={`ap-nome-${envio.id}`} style={s.input} value={nome} onChange={(e) => setNome(e.target.value)} />
+            </div>
+            <div>
+              <label style={s.label} htmlFor={`ap-email-${envio.id}`}>Seu e-mail</label>
+              <input id={`ap-email-${envio.id}`} style={s.input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+          </div>
+          <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 14, marginTop: 12 }}>
+            <input type="checkbox" checked={concordo} onChange={(e) => setConcordo(e.target.checked)} style={{ marginTop: 3 }} />
+            <span>Li o valor final de <strong>{formatarMoeda(envio.valor_final)}</strong> e concordo com ele.</span>
+          </label>
+          {erro && <div style={s.box(COLORS.errorLight, COLORS.error)}><AlertCircle size={14} /> {erro}</div>}
+          <div style={{ marginTop: 14 }}>
+            <button style={{ ...s.btn, ...(podeAprovar ? {} : s.btnOff) }} disabled={!podeAprovar} onClick={aprovar}>
+              {enviando ? <Loader2 size={16} /> : <Check size={16} />} Aprovar valor final
+            </button>
+          </div>
+        </section>
+      )}
+    </article>
+  );
+}
+
+export function MeusEnvios({ envios, carregando, erro, onAtualizar, onAprovar, nomePadrao, emailPadrao }) {
+  return (
+    <section>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <h2 style={{ ...s.h2, marginBottom: 4 }}>Meus envios</h2>
+          <p style={{ ...s.muted, margin: 0 }}>Acompanhe cada envio e aprove o valor final quando o frete estiver calculado.</p>
+        </div>
+        <button style={{ ...s.btn, ...s.btnGhost }} onClick={onAtualizar} disabled={carregando}>
+          {carregando ? <Loader2 size={16} /> : <RefreshCw size={16} />} Atualizar
+        </button>
+      </div>
+      {erro && <div style={s.box(COLORS.errorLight, COLORS.error)}><AlertCircle size={14} /> {erro}</div>}
+      <div style={{ marginTop: 18 }}>
+        {!carregando && !erro && envios.length === 0 && (
+          <div style={{ ...s.card, textAlign: 'center', color: COLORS.textLight }}>Você ainda não fez nenhum envio.</div>
+        )}
+        {envios.map((e) => (
+          <CartaoEnvio key={e.id} envio={e} nomePadrao={nomePadrao} emailPadrao={emailPadrao} onAprovar={onAprovar} />
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -154,6 +283,12 @@ export default function EnvioBrindesPublico() {
   const [errosServidor, setErrosServidor] = useState([]);
   const [sucesso, setSucesso] = useState(null);
 
+  // Meus envios
+  const [aba, setAba] = useState('novo'); // 'novo' | 'meus'
+  const [envios, setEnvios] = useState([]);
+  const [carregandoEnvios, setCarregandoEnvios] = useState(false);
+  const [erroEnvios, setErroEnvios] = useState('');
+
   const livro = useMemo(() => livros.find((l) => String(l.livro_id) === String(livroId)) || null, [livros, livroId]);
   const comErro = useMemo(() => linhas.filter((l) => l.erros.length > 0), [linhas]);
   const qtd = linhas.length;
@@ -171,10 +306,35 @@ export default function EnvioBrindesPublico() {
       if (!r.ok) { setErroId(r.json.erro || 'Não foi possível identificar a livraria.'); return; }
       setParceiro(r.json.parceiro);
       setLivros(r.json.livros || []);
+      carregarEnvios(emailLivraria.trim());
     } catch {
       setErroId('Erro de conexão. Tente novamente.');
     } finally {
       setIdentificando(false);
+    }
+  }
+
+  async function carregarEnvios(email = emailLivraria.trim()) {
+    setCarregandoEnvios(true); setErroEnvios('');
+    try {
+      const r = await chamarApi('meus-envios', { email });
+      if (!r.ok) { setErroEnvios(r.json.erro || 'Não foi possível carregar os envios.'); return; }
+      setEnvios(r.json.envios || []);
+    } catch {
+      setErroEnvios('Erro de conexão. Tente novamente.');
+    } finally {
+      setCarregandoEnvios(false);
+    }
+  }
+
+  async function aprovarEnvio(envio, nome, emailAprovador) {
+    try {
+      const r = await chamarApi('aprovar', { email: emailLivraria.trim(), lote_id: envio.id, nome, email_aprovador: emailAprovador });
+      if (!r.ok) return { ok: false, erro: r.json.erro || 'Não foi possível aprovar.' };
+      await carregarEnvios();
+      return { ok: true };
+    } catch {
+      return { ok: false, erro: 'Erro de conexão. A aprovação NÃO foi registrada; tente novamente.' };
     }
   }
 
@@ -228,6 +388,7 @@ export default function EnvioBrindesPublico() {
       });
       if (r.ok && r.json.ok) {
         setSucesso(r.json);
+        carregarEnvios();
         setLinhas([]); setArquivoNome(''); // não mantém dados pessoais na tela
         return;
       }
@@ -242,7 +403,11 @@ export default function EnvioBrindesPublico() {
 
   function novoEnvio() {
     setSucesso(null); setLinhas([]); setArquivoNome(''); setAutorizo(false);
-    setErroEnvio(''); setErrosServidor([]); setObservacoes('');
+    setErroEnvio(''); setErrosServidor([]); setObservacoes(''); setAba('novo');
+  }
+  function verEnvios() {
+    novoEnvio();
+    setAba('meus');
   }
 
   // ───────────── Telas ─────────────
@@ -266,14 +431,34 @@ export default function EnvioBrindesPublico() {
     );
   }
 
-  if (sucesso) return <TelaSucesso sucesso={sucesso} onNovo={novoEnvio} />;
+  if (sucesso) return <TelaSucesso sucesso={sucesso} onNovo={novoEnvio} onVerEnvios={verEnvios} />;
 
   return (
     <div style={s.page}><div style={s.wrap}>
       <h1 style={s.h1}>Envio de brindes</h1>
       <p style={s.muted}>Livraria: <strong>{parceiro.nome}</strong></p>
 
-      <div style={{ ...s.card, marginTop: 20 }}>
+      <div role="tablist" style={{ display: 'flex', gap: 8, margin: '18px 0 20px', borderBottom: `1px solid ${COLORS.border}` }}>
+        {[['novo', 'Novo envio'], ['meus', 'Meus envios']].map(([k, r]) => (
+          <button key={k} role="tab" aria-selected={aba === k} onClick={() => setAba(k)}
+            style={{ background: 'none', border: 'none', borderBottom: aba === k ? `3px solid ${COLORS.primary}` : '3px solid transparent', padding: '10px 14px', fontSize: 16, fontWeight: aba === k ? 700 : 500, fontFamily: FONTS.body, color: aba === k ? COLORS.text : COLORS.textLight, cursor: 'pointer' }}>
+            {r}
+            {k === 'meus' && envios.filter((e) => e.status === 'aguardando_aprovacao').length > 0 && (
+              <span style={{ marginLeft: 8, background: COLORS.gold, color: COLORS.text, borderRadius: 999, padding: '1px 8px', fontSize: 12, fontWeight: 700 }}>
+                {envios.filter((e) => e.status === 'aguardando_aprovacao').length}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {aba === 'meus' && (
+        <MeusEnvios envios={envios} carregando={carregandoEnvios} erro={erroEnvios}
+          onAtualizar={() => carregarEnvios()} onAprovar={aprovarEnvio} nomePadrao={nomeEnvio} emailPadrao={emailEnvio} />
+      )}
+
+      {aba === 'novo' && (<>
+      <div style={{ ...s.card, marginTop: 0 }}>
         <h2 style={s.h2}>1. Sobre este envio</h2>
         <div style={s.grid}>
           <div>
@@ -416,6 +601,7 @@ export default function EnvioBrindesPublico() {
           )}
         </div>
       </div>
+      </>)}
     </div></div>
   );
 }
