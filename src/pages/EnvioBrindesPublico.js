@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
-import { Upload, Download, Send, Check, AlertCircle, Loader2, BookOpen, FileSpreadsheet, RefreshCw } from 'lucide-react';
+import { Upload, Download, Send, Check, AlertCircle, Loader2, BookOpen, FileSpreadsheet, RefreshCw, Package } from 'lucide-react';
 import { CAMPOS, lerLinhas, mascararCpf, formatarMoeda } from '../lib/envio-brindes-validacao';
 
 /* ============================================
@@ -64,7 +64,7 @@ export function TelaSucesso({ sucesso, onNovo, onVerEnvios }) {
   const passos = [
     { t: 'Calculamos o frete', d: 'A equipe da CEDET calcula o frete de cada envio.' },
     { t: 'Você aprova o valor final', d: 'Quando o frete estiver calculado, o valor final (livros + frete) aparece na aba "Meus envios" para você aprovar.' },
-    { t: 'Pagamento e despacho', d: 'Combinamos a forma de pagamento (comissão no portal CEDET, PIX, cartão ou boleto) e despachamos os livros.' },
+    { t: 'Pagamento e despacho', d: 'Combinamos a forma de pagamento (comissão no portal CEDET, PIX, cartão ou boleto) e despachamos os livros. Os códigos de rastreio ficam disponíveis em "Meus envios".' },
   ];
   return (
     <div style={s.page}><div style={{ ...s.wrap, maxWidth: 640 }}>
@@ -147,12 +147,36 @@ const TIPO_ROTULO = { aluno_novo: 'Aluno novo', renovacao: 'Renovação' };
 const mesAno = (iso) => (iso ? `${String(iso).slice(5, 7)}/${String(iso).slice(0, 4)}` : '');
 const dataCurta = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '');
 
-export function CartaoEnvio({ envio, nomePadrao, emailPadrao, onAprovar }) {
+export function CartaoEnvio({ envio, nomePadrao, emailPadrao, onAprovar, onCarregarRastreio, rastreioInicial }) {
   const [nome, setNome] = useState(nomePadrao || '');
   const [email, setEmail] = useState(emailPadrao || '');
   const [concordo, setConcordo] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState('');
+  const [rast, setRast] = useState(rastreioInicial || null); // lista [{nome_completo, codigo_rastreio}]
+  const [rastAberto, setRastAberto] = useState(!!rastreioInicial);
+  const [rastCarregando, setRastCarregando] = useState(false);
+  const [rastErro, setRastErro] = useState('');
+  const nRastreios = Number(envio.rastreios_informados || 0);
+
+  async function alternarRastreio() {
+    if (rastAberto) { setRastAberto(false); return; }
+    if (!rast) {
+      setRastCarregando(true); setRastErro('');
+      const r = await onCarregarRastreio(envio);
+      setRastCarregando(false);
+      if (!r.ok) { setRastErro(r.erro); return; }
+      setRast(r.itens);
+    }
+    setRastAberto(true);
+  }
+  function baixarRastreio() {
+    const ws = XLSX.utils.aoa_to_sheet([['Nome completo', 'Código de rastreio'], ...rast.map((r) => [r.nome_completo, r.codigo_rastreio])]);
+    ws['!cols'] = [{ wch: 36 }, { wch: 24 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Rastreio');
+    XLSX.writeFile(wb, `rastreio-envio-${envio.id}.xlsx`);
+  }
 
   const st = STATUS_LIVRARIA[envio.status] || { t: envio.status, cor: COLORS.textLight, bg: '#F0F0EE' };
   const temFinal = envio.valor_final != null;
@@ -200,6 +224,43 @@ export function CartaoEnvio({ envio, nomePadrao, emailPadrao, onAprovar }) {
       )}
       {envio.aprovado_em && <p style={{ ...s.muted, margin: '4px 0 0' }}>Aprovado em {dataCurta(envio.aprovado_em)}.</p>}
 
+      {envio.status === 'enviado' && (
+        <section style={{ marginTop: 16, borderTop: `1px solid ${COLORS.border}`, paddingTop: 14 }}>
+          <h4 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 4px' }}>Rastreio</h4>
+          {nRastreios === 0 ? (
+            <p style={{ ...s.muted, margin: 0 }}>Os códigos de rastreio ainda não foram informados. Eles aparecem aqui assim que a CEDET enviar.</p>
+          ) : (
+            <>
+              <p style={{ ...s.muted, margin: '0 0 10px' }}>{nRastreios} de {envio.qtd_livros} códigos informados.</p>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button style={{ ...s.btn, ...s.btnGhost }} onClick={alternarRastreio} disabled={rastCarregando}>
+                  {rastCarregando ? <Loader2 size={16} /> : <Package size={16} />} {rastAberto ? 'Ocultar códigos' : 'Ver códigos de rastreio'}
+                </button>
+                {rast && <button style={{ ...s.btn, ...s.btnGhost }} onClick={baixarRastreio}><Download size={16} /> Baixar planilha (.xlsx)</button>}
+              </div>
+              {rastErro && <div style={s.box(COLORS.errorLight, COLORS.error)}><AlertCircle size={14} /> {rastErro}</div>}
+              {rastAberto && rast && (
+                <div style={{ overflow: 'auto', maxHeight: 360, border: `1px solid ${COLORS.border}`, borderRadius: 8, marginTop: 12 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                    <thead><tr style={{ textAlign: 'left', background: '#FAFAF8' }}>
+                      <th style={{ padding: '8px 12px' }}>Nome</th><th style={{ padding: '8px 12px' }}>Código de rastreio</th>
+                    </tr></thead>
+                    <tbody>
+                      {rast.map((r, i) => (
+                        <tr key={i} style={{ borderTop: `1px solid ${COLORS.border}` }}>
+                          <td style={{ padding: '8px 12px' }}>{r.nome_completo}</td>
+                          <td style={{ padding: '8px 12px', fontFamily: 'monospace', fontWeight: 600 }}>{r.codigo_rastreio}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
       {aguardando && (
         <section style={{ marginTop: 18, background: COLORS.warnLight, border: `1px solid ${COLORS.gold}`, borderRadius: 8, padding: 16 }}>
           <h4 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 4px' }}>Aprovar o valor final</h4>
@@ -230,7 +291,7 @@ export function CartaoEnvio({ envio, nomePadrao, emailPadrao, onAprovar }) {
   );
 }
 
-export function MeusEnvios({ envios, carregando, erro, onAtualizar, onAprovar, nomePadrao, emailPadrao }) {
+export function MeusEnvios({ envios, carregando, erro, onAtualizar, onAprovar, onCarregarRastreio, nomePadrao, emailPadrao }) {
   return (
     <section>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -248,7 +309,7 @@ export function MeusEnvios({ envios, carregando, erro, onAtualizar, onAprovar, n
           <div style={{ ...s.card, textAlign: 'center', color: COLORS.textLight }}>Você ainda não fez nenhum envio.</div>
         )}
         {envios.map((e) => (
-          <CartaoEnvio key={e.id} envio={e} nomePadrao={nomePadrao} emailPadrao={emailPadrao} onAprovar={onAprovar} />
+          <CartaoEnvio key={e.id} envio={e} nomePadrao={nomePadrao} emailPadrao={emailPadrao} onAprovar={onAprovar} onCarregarRastreio={onCarregarRastreio} />
         ))}
       </div>
     </section>
@@ -335,6 +396,16 @@ export default function EnvioBrindesPublico() {
       return { ok: true };
     } catch {
       return { ok: false, erro: 'Erro de conexão. A aprovação NÃO foi registrada; tente novamente.' };
+    }
+  }
+
+  async function carregarRastreio(envio) {
+    try {
+      const r = await chamarApi('rastreio', { email: emailLivraria.trim(), lote_id: envio.id });
+      if (!r.ok) return { ok: false, erro: r.json.erro || 'Não foi possível carregar os códigos.' };
+      return { ok: true, itens: r.json.rastreios || [] };
+    } catch {
+      return { ok: false, erro: 'Erro de conexão. Tente novamente.' };
     }
   }
 
@@ -454,7 +525,7 @@ export default function EnvioBrindesPublico() {
 
       {aba === 'meus' && (
         <MeusEnvios envios={envios} carregando={carregandoEnvios} erro={erroEnvios}
-          onAtualizar={() => carregarEnvios()} onAprovar={aprovarEnvio} nomePadrao={nomeEnvio} emailPadrao={emailEnvio} />
+          onAtualizar={() => carregarEnvios()} onAprovar={aprovarEnvio} onCarregarRastreio={carregarRastreio} nomePadrao={nomeEnvio} emailPadrao={emailEnvio} />
       )}
 
       {aba === 'novo' && (<>
