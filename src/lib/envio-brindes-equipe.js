@@ -131,3 +131,79 @@ export function montarFretes(destinatarios, linhasFrete, casamento, resolucoes) 
   const total = Math.round(itens.reduce((s, i) => s + i.valor_frete, 0) * 100) / 100;
   return { itens, faltam, total };
 }
+
+// ───────────── Planilha de RASTREIO (nome + código) ─────────────
+
+// "ab 123 456 789 br" -> "AB123456789BR" (ou null se não parecer um código)
+export function normalizarCodigo(v) {
+  const t = String(v == null ? '' : v).replace(/\s+/g, '').toUpperCase();
+  return /^[A-Z0-9-]{5,40}$/.test(t) ? t : null;
+}
+
+function sugerirColunasRastreio(cabecalho) {
+  const norm = cabecalho.map(normalizarNome);
+  const acha = (palavras, evitar = -1) => {
+    for (const p of palavras) {
+      const i = norm.findIndex((h, k) => k !== evitar && h && h.split(' ').includes(p));
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+  const idxNome = acha(['nome', 'cliente', 'destinatario', 'contato', 'aluno', 'aluna']);
+  const idxCodigo = acha(['rastreio', 'rastreamento', 'codigo', 'objeto', 'tracking', 'cod'], idxNome);
+  return { idxNome, idxCodigo };
+}
+
+// Mesma ideia do frete: procura nas primeiras 25 linhas o cabeçalho com nome E código.
+export function lerCabecalhoRastreio(matriz) {
+  const limite = Math.min(matriz.length, 25);
+  let primeira = -1;
+  for (let i = 0; i < limite; i++) {
+    const linha = matriz[i];
+    if (!linha.some((c) => String(c).trim() !== '')) continue;
+    if (primeira < 0) primeira = i;
+    const cabecalho = linha.map((c) => String(c == null ? '' : c).trim());
+    const { idxNome, idxCodigo } = sugerirColunasRastreio(cabecalho);
+    if (idxNome >= 0 && idxCodigo >= 0) return { idxCab: i, cabecalho, idxNome, idxCodigo };
+  }
+  if (primeira < 0) return null;
+  const cabecalho = matriz[primeira].map((c) => String(c == null ? '' : c).trim());
+  const { idxNome, idxCodigo } = sugerirColunasRastreio(cabecalho);
+  return { idxCab: primeira, cabecalho, idxNome, idxCodigo };
+}
+
+// Devolve linhas no mesmo formato do frete, com o CÓDIGO no campo "valor" (assim a função
+// casar() serve para os dois casos). valor = null quando o código é inválido.
+export function extrairLinhasRastreio(matriz, idxCab, idxNome, idxCodigo) {
+  const linhas = [];
+  for (let i = idxCab + 1; i < matriz.length; i++) {
+    const l = matriz[i];
+    const nome = String(l[idxNome] == null ? '' : l[idxNome]).replace(/\s+/g, ' ').trim();
+    const bruto = String(l[idxCodigo] == null ? '' : l[idxCodigo]).trim();
+    if (!nome && !bruto) continue;
+    linhas.push({ linha: i + 1, nome, valor: normalizarCodigo(bruto), bruto });
+  }
+  return linhas;
+}
+
+// resolucoes: { [destId]: { tipo: 'linha', idx } | { tipo: 'manual', valor: 'AB123456789BR' } }
+// Devolve os códigos que já dá para gravar e quem ainda está sem código.
+export function montarRastreios(destinatarios, linhas, casamento, resolucoes) {
+  const itens = [];
+  const faltam = [];
+  const usadas = new Set();
+  destinatarios.forEach((d) => {
+    let codigo = null;
+    const c = casamento.casados.get(d.id);
+    if (c) codigo = linhas[c.idx].valor;
+    else {
+      const r = resolucoes[d.id];
+      if (r && r.tipo === 'linha' && linhas[r.idx]) {
+        if (!usadas.has(r.idx)) { usadas.add(r.idx); codigo = linhas[r.idx].valor; }
+      } else if (r && r.tipo === 'manual') codigo = normalizarCodigo(r.valor);
+    }
+    if (codigo == null) faltam.push(d.id);
+    else itens.push({ destinatario_id: d.id, codigo_rastreio: codigo });
+  });
+  return { itens, faltam };
+}
