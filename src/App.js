@@ -89,6 +89,8 @@ const BlocoNotas             = lazy(() => import('./pages/BlocoNotas'))
 const InfluencersParceiras   = lazy(() => import('./pages/InfluencersParceiras'))
 const VitrineParceirasAdmin  = lazy(() => import('./pages/VitrineParceirasAdmin'))
 const CortesiasParceiras     = lazy(() => import('./pages/CortesiasParceiras'))
+const VitrineParceirasPublica = lazy(() => import('./pages/VitrineParceirasPublica'))
+const VitrineParceirasSelecao = lazy(() => import('./pages/VitrineParceirasSelecao'))
 
 const PERFIS_PARCEIRAS = ['supervisor_parceiras', 'analista_parceiras', 'estagiario_parceiras']
 
@@ -293,5 +295,5 @@ function Shell() {
   </Routes></Suspense></div></main>{showModal&&<ModalVerComo todosUsuarios={todosUsuarios} usuarioAtual={usuario} onSelecionar={u=>{setViewAs(u);setShowModal(false)}} onFechar={()=>setShowModal(false)}/>}</div></ViewAsContext.Provider>
 }
 
-export default function App(){return <AuthProvider><BrowserRouter><Suspense fallback={<div className="loading"><div className="spinner"/></div>}><Routes><Route path="/login" element={<PublicRoute><Login/></PublicRoute>}/><Route path="/reset-password" element={<ResetPassword/>}/><Route path="/vitrine" element={<VitrinePublica/>}/><Route path="/vitrine/selecao/:token" element={<VitrineSelecaoPublica/>}/><Route path="/envio-brindes" element={<EnvioBrindesPublico/>}/><Route path="/*" element={<RequireAuth><Shell/></RequireAuth>}/></Routes></Suspense></BrowserRouter></AuthProvider>}
+export default function App(){return <AuthProvider><BrowserRouter><Suspense fallback={<div className="loading"><div className="spinner"/></div>}><Routes><Route path="/login" element={<PublicRoute><Login/></PublicRoute>}/><Route path="/reset-password" element={<ResetPassword/>}/><Route path="/vitrine" element={<VitrinePublica/>}/><Route path="/vitrine/selecao/:token" element={<VitrineSelecaoPublica/>}/><Route path="/envio-brindes" element={<EnvioBrindesPublico/>}/><Route path="/vitrine-parceiras" element={<VitrineParceirasPublica/>}/><Route path="/vitrine-parceiras/selecao/:token" element={<VitrineParceirasSelecao/>}/><Route path="/*" element={<RequireAuth><Shell/></RequireAuth>}/></Routes></Suspense></BrowserRouter></AuthProvider>}
 function PublicRoute({children}){const{session,loading}=useAuth();if(loading)return <div className="loading"><div className="spinner"/></div>;if(session)return <Navigate to="/" replace/>;return children}
