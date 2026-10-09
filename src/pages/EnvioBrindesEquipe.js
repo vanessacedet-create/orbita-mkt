@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import {
   lerCabecalho, extrairLinhas, casar, montarFretes,
+  lerCabecalhoRastreio, extrairLinhasRastreio, montarRastreios,
 } from '../lib/envio-brindes-equipe';
 
 /* ============================================
@@ -49,6 +50,159 @@ async function chamarApi(caminho, { metodo = 'GET', corpo } = {}) {
 
 const caixa = (cor) => ({ border: `1px solid ${cor}`, borderRadius: 8, padding: '10px 12px', fontSize: 13, margin: '10px 0' });
 
+// ───────────────────── Rastreio (planilha nome + código) ─────────────────────
+function SecaoRastreio({ lote, dests, executar, rpc, ocupado, recarregarDests, avisar }) {
+  const [rast, setRast] = useState(null); // { nomeArquivo, matriz, idxCab, cabecalho, idxNome, idxCodigo }
+  const [resol, setResol] = useState({});
+
+  const linhas = useMemo(
+    () => (rast && rast.idxNome >= 0 && rast.idxCodigo >= 0 ? extrairLinhasRastreio(rast.matriz, rast.idxCab, rast.idxNome, rast.idxCodigo) : []),
+    [rast]
+  );
+  const casamento = useMemo(() => casar(dests, linhas), [dests, linhas]);
+  const montado = useMemo(() => montarRastreios(dests, linhas, casamento, resol), [dests, linhas, casamento, resol]);
+  const comCodigo = dests.filter((d) => d.codigo_rastreio).length;
+  const livres = casamento.sobras.filter((i) => linhas[i] && linhas[i].valor != null);
+
+  async function lerArquivo(e) {
+    const arquivo = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!arquivo) return;
+    try {
+      const wb = XLSX.read(await arquivo.arrayBuffer(), { type: 'array' });
+      const matriz = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
+      const cab = lerCabecalhoRastreio(matriz);
+      if (!cab) { avisar('erro', 'A planilha está vazia.'); return; }
+      setResol({});
+      setRast({ nomeArquivo: arquivo.name, matriz, ...cab });
+    } catch {
+      avisar('erro', 'Não consegui ler este arquivo. Use .xlsx ou .csv.');
+    }
+  }
+
+  const aplicar = () => executar('rastreio', async () => {
+    await rpc('envio_brinde_aplicar_rastreio', { p_lote_id: lote.id, p_rastreios: montado.itens });
+    await recarregarDests();
+    setRast(null); setResol({});
+  }, 'Códigos de rastreio gravados.');
+
+  return (
+    <div style={caixa('var(--border)')}>
+      <strong>Rastreio</strong>
+      <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+        {comCodigo} de {dests.length} com código
+        {lote.status === 'aprovado' ? ' · a livraria só vê depois que o lote for marcado como enviado' : ' · a livraria já pode ver em "Meus envios"'}
+      </span>
+      <div style={{ marginTop: 8 }}>
+        <label className="btn btn-primary btn-sm" style={{ cursor: 'pointer' }}>
+          <Upload size={14} /> Subir planilha de rastreio
+          <input type="file" accept=".xlsx,.xls,.csv" onChange={lerArquivo} style={{ display: 'none' }} />
+        </label>
+        {rast && <span style={{ marginLeft: 8, fontSize: 12 }}>{rast.nomeArquivo}</span>}
+      </div>
+
+      {rast && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <div className="form-group" style={{ minWidth: 220 }}>
+              <label className="form-label">Coluna do NOME</label>
+              <select className="form-select" value={rast.idxNome} onChange={(e) => { setResol({}); setRast({ ...rast, idxNome: Number(e.target.value) }); }}>
+                <option value={-1}>— escolha —</option>
+                {rast.cabecalho.map((c, i) => <option key={i} value={i}>{c || `(coluna ${i + 1})`}</option>)}
+              </select>
+            </div>
+            <div className="form-group" style={{ minWidth: 220 }}>
+              <label className="form-label">Coluna do CÓDIGO DE RASTREIO</label>
+              <select className="form-select" value={rast.idxCodigo} onChange={(e) => { setResol({}); setRast({ ...rast, idxCodigo: Number(e.target.value) }); }}>
+                <option value={-1}>— escolha —</option>
+                {rast.cabecalho.map((c, i) => <option key={i} value={i}>{c || `(coluna ${i + 1})`}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {linhas.length > 0 && (
+            <>
+              <div style={{ overflow: 'auto', maxHeight: 320, border: '1px solid var(--border)', borderRadius: 8, marginTop: 10 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead><tr style={{ textAlign: 'left', background: 'var(--surface-3)' }}>
+                    <th style={{ padding: 8 }}>Pessoa do lote</th><th style={{ padding: 8 }}>Planilha de rastreio</th><th style={{ padding: 8 }}>Código</th>
+                  </tr></thead>
+                  <tbody>
+                    {dests.map((d) => {
+                      const c = casamento.casados.get(d.id);
+                      if (c) {
+                        const l = linhas[c.idx];
+                        return (
+                          <tr key={d.id} style={{ borderTop: '1px solid var(--border)' }}>
+                            <td style={{ padding: 8 }}>{d.nome_completo}</td>
+                            <td style={{ padding: 8 }}>{l.nome} {c.tipo === 'aproximado' && <span className="badge badge-amber">nome parecido, confira</span>}</td>
+                            <td style={{ padding: 8, fontFamily: 'monospace' }}>{l.valor}</td>
+                          </tr>
+                        );
+                      }
+                      const r = resol[d.id] || {};
+                      return (
+                        <tr key={d.id} style={{ borderTop: '1px solid var(--border)', background: 'var(--red-light)' }}>
+                          <td style={{ padding: 8 }}>{d.nome_completo}<div style={{ fontSize: 11, color: 'var(--red)' }}>sem correspondência única</div></td>
+                          <td style={{ padding: 8 }}>
+                            <select className="form-select" value={r.tipo === 'linha' ? String(r.idx) : (r.tipo === 'manual' ? 'manual' : '')}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setResol({ ...resol, [d.id]: v === '' ? undefined : v === 'manual' ? { tipo: 'manual', valor: '' } : { tipo: 'linha', idx: Number(v) } });
+                              }}>
+                              <option value="">— deixar sem código por enquanto —</option>
+                              {livres.map((i) => <option key={i} value={i}>{linhas[i].nome} — {linhas[i].valor}</option>)}
+                              <option value="manual">Digitar o código manualmente</option>
+                            </select>
+                          </td>
+                          <td style={{ padding: 8 }}>
+                            {r.tipo === 'manual'
+                              ? <input className="form-input" style={{ width: 170, fontFamily: 'monospace' }} placeholder="AB123456789BR" value={r.valor}
+                                  onChange={(e) => setResol({ ...resol, [d.id]: { tipo: 'manual', valor: e.target.value } })} />
+                              : (r.tipo === 'linha' && linhas[r.idx] ? <span style={{ fontFamily: 'monospace' }}>{linhas[r.idx].valor}</span> : '—')}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {linhas.some((l) => l.valor == null) && (
+                <div style={caixa('var(--amber)')}><AlertCircle size={13} /> {linhas.filter((l) => l.valor == null).length} linha(s) com código ilegível foram ignoradas (use de 5 a 40 letras, números ou hífen).</div>
+              )}
+
+              <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                <strong>{montado.itens.length} código(s) para gravar</strong>
+                {montado.faltam.length > 0 && <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{montado.faltam.length} pessoa(s) ficam sem código (dá para enviar depois).</span>}
+                <button className="btn btn-primary" disabled={!!ocupado || montado.itens.length === 0} onClick={aplicar}>
+                  {ocupado === 'rastreio' ? <Loader2 size={14} /> : <Check size={14} />} Gravar códigos de rastreio
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {comCodigo > 0 && (
+        <div style={{ overflow: 'auto', maxHeight: 220, border: '1px solid var(--border)', borderRadius: 8, marginTop: 12 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead><tr style={{ textAlign: 'left', background: 'var(--surface-3)' }}><th style={{ padding: 8 }}>Pessoa</th><th style={{ padding: 8 }}>Código gravado</th></tr></thead>
+            <tbody>
+              {dests.map((d) => (
+                <tr key={d.id} style={{ borderTop: '1px solid var(--border)' }}>
+                  <td style={{ padding: 8 }}>{d.nome_completo}</td>
+                  <td style={{ padding: 8, fontFamily: 'monospace' }}>{d.codigo_rastreio || <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ───────────────────────── Detalhe de um lote ─────────────────────────
 function DetalheLote({ lote, onAtualizar, avisar }) {
   const [dests, setDests] = useState([]);
@@ -60,7 +214,7 @@ function DetalheLote({ lote, onAtualizar, avisar }) {
 
   const carregarDests = useCallback(async () => {
     const { data } = await supabase.from('envio_brinde_destinatarios')
-      .select('id, nome_completo, valor_frete').eq('lote_id', lote.id).order('id');
+      .select('id, nome_completo, valor_frete, codigo_rastreio').eq('lote_id', lote.id).order('id');
     setDests(data || []);
   }, [lote.id]);
   useEffect(() => { carregarDests(); }, [carregarDests, lote.status]);
@@ -338,6 +492,10 @@ function DetalheLote({ lote, onAtualizar, avisar }) {
           )}
           {lote.status === 'enviado' && <div style={{ marginTop: 8, fontSize: 13 }}>Enviado em {dataBR(lote.enviado_em)}.</div>}
         </div>
+      )}
+
+      {['aprovado', 'enviado'].includes(lote.status) && (
+        <SecaoRastreio lote={lote} dests={dests} executar={executar} rpc={rpc} ocupado={ocupado} recarregarDests={carregarDests} avisar={avisar} />
       )}
 
       {!['enviado', 'cancelado'].includes(lote.status) && (
