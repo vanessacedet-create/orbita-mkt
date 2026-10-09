@@ -54,7 +54,9 @@ async function driveFetch(url, opcoes = {}) {
   const json = await resp.json().catch(() => ({}));
   if (!resp.ok) {
     const msg = (json.error && (json.error.message || json.error)) || resp.status;
-    throw falhar(`Erro do Google Drive: ${msg}`, 502);
+    const e = falhar(`Erro do Google Drive: ${msg}`, 502);
+    e.google = resp.status; // código HTTP devolvido pelo Google (ex.: 404 = arquivo não existe)
+    throw e;
   }
   return json;
 }
@@ -102,10 +104,28 @@ async function enviarArquivo({ pastaId, nome, buffer, mimeType }) {
 
 // Apaga o arquivo. A API do Drive apaga direto, sem passar pela lixeira
 // (conforme a documentação que conheço; não testei na conta de vocês).
+// Se o arquivo já não existe (404), considera como apagado.
 async function apagarArquivo(arquivoId) {
-  await driveFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(arquivoId)}`, {
-    method: 'DELETE',
-  });
+  try {
+    await driveFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(arquivoId)}`, {
+      method: 'DELETE',
+    });
+  } catch (e) {
+    if (e.google === 404) return;
+    throw e;
+  }
 }
 
-module.exports = { PASTA_ENVIOS, garantirPasta, enviarArquivo, apagarArquivo };
+// Baixa o conteúdo do arquivo (Buffer). Só funciona para arquivos criados por este app.
+async function baixarArquivo(arquivoId) {
+  const token = await obterAccessToken();
+  const resp = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(arquivoId)}?alt=media`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  );
+  if (resp.status === 404) throw falhar('Arquivo não encontrado no Drive.', 404);
+  if (!resp.ok) throw falhar(`Erro do Google Drive ao baixar (${resp.status}).`, 502);
+  return Buffer.from(await resp.arrayBuffer());
+}
+
+module.exports = { PASTA_ENVIOS, garantirPasta, enviarArquivo, apagarArquivo, baixarArquivo };
