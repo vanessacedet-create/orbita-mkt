@@ -55,6 +55,77 @@ async function chamarApi(caminho, corpo) {
   return { ok: resp.ok, status: resp.status, json };
 }
 
+// ── Tela de confirmação depois do envio (hierarquia: H1 > H2 > H3) ──
+export function TelaSucesso({ sucesso, onNovo }) {
+  const n = sucesso.quantidade;
+  const linha = { display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 0', borderBottom: `1px solid ${COLORS.border}`, fontSize: 15 };
+  const rotulo = { color: COLORS.textLight, margin: 0 };
+  const valor = { margin: 0, fontWeight: 600, textAlign: 'right' };
+  const passos = [
+    { t: 'Calculamos o frete', d: 'A equipe da CEDET calcula o frete de cada envio.' },
+    { t: 'Você aprova o valor final', d: 'Enviamos o valor dos livros somados ao frete para você confirmar.' },
+    { t: 'Pagamento e despacho', d: 'Combinamos a forma de pagamento (comissão no portal CEDET, PIX, cartão ou boleto) e despachamos os livros.' },
+  ];
+  return (
+    <div style={s.page}><div style={{ ...s.wrap, maxWidth: 640 }}>
+      <div style={{ ...s.card, padding: 32 }}>
+        <header style={{ textAlign: 'center', paddingBottom: 24, borderBottom: `1px solid ${COLORS.border}` }}>
+          <div style={{ width: 60, height: 60, borderRadius: '50%', background: COLORS.successLight, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Check size={32} color={COLORS.success} />
+          </div>
+          <h1 style={{ ...s.h1, fontSize: 36, margin: '16px 0 8px' }}>Envio recebido</h1>
+          <p style={{ fontSize: 17, margin: '0 0 14px' }}>
+            Recebemos a planilha com <strong>{n} {n === 1 ? 'pessoa' : 'pessoas'}</strong>.
+          </p>
+          <span style={{ display: 'inline-block', background: COLORS.bg, border: `1px solid ${COLORS.border}`, borderRadius: 999, padding: '5px 14px', fontSize: 13, fontWeight: 600 }}>
+            Protocolo nº {sucesso.lote_id}
+          </span>
+        </header>
+
+        <section style={{ marginTop: 28 }}>
+          <h2 style={s.h2}>Resumo do pedido</h2>
+          <dl style={{ margin: 0 }}>
+            <div style={linha}><dt style={rotulo}>Livro</dt><dd style={{ ...valor, maxWidth: '65%' }}>{sucesso.livro}</dd></div>
+            <div style={linha}><dt style={rotulo}>Quantidade</dt><dd style={valor}>{n} {n === 1 ? 'livro' : 'livros'}</dd></div>
+            <div style={linha}><dt style={rotulo}>Preço de capa</dt><dd style={valor}>{formatarMoeda(sucesso.preco_capa)}</dd></div>
+            <div style={linha}><dt style={rotulo}>Desconto da sua livraria</dt><dd style={valor}>{Number(sucesso.desconto_percentual)}%</dd></div>
+            <div style={linha}><dt style={rotulo}>Preço por livro</dt><dd style={valor}>{formatarMoeda(sucesso.preco_unitario)}</dd></div>
+            <div style={{ ...linha, alignItems: 'baseline', borderBottom: 'none', paddingTop: 16 }}>
+              <dt style={{ ...rotulo, fontSize: 16, color: COLORS.text, fontWeight: 600 }}>Valor dos livros</dt>
+              <dd style={{ ...valor, fontSize: 28, fontFamily: FONTS.display }}>{formatarMoeda(sucesso.valor_livros)}</dd>
+            </div>
+          </dl>
+          <p style={{ ...s.muted, margin: '4px 0 0', textAlign: 'right' }}>Frete: a calcular pela CEDET</p>
+        </section>
+
+        <section style={{ marginTop: 32 }}>
+          <h2 style={s.h2}>O que acontece agora</h2>
+          <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 14 }}>
+            {passos.map((p, i) => (
+              <li key={p.t} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                <span aria-hidden="true" style={{ flex: '0 0 30px', height: 30, borderRadius: '50%', background: COLORS.primary, color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700 }}>{i + 1}</span>
+                <div>
+                  <h3 style={{ fontSize: 15, fontWeight: 700, margin: '4px 0 2px' }}>{p.t}</h3>
+                  <p style={{ ...s.muted, margin: 0 }}>{p.d}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <aside role="note" style={{ marginTop: 28, background: COLORS.warnLight, border: `1px solid ${COLORS.gold}`, borderRadius: 8, padding: '12px 14px', fontSize: 14, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+          <AlertCircle size={18} style={{ flex: '0 0 auto', marginTop: 1 }} />
+          <span><strong>Não envie esta mesma planilha de novo.</strong> Guarde o número do protocolo para falar com a equipe sobre este envio.</span>
+        </aside>
+
+        <div style={{ marginTop: 24, textAlign: 'center' }}>
+          <button style={s.btn} onClick={onNovo}>Fazer outro envio</button>
+        </div>
+      </div>
+    </div></div>
+  );
+}
+
 export default function EnvioBrindesPublico() {
   // Identificação da livraria
   const [emailLivraria, setEmailLivraria] = useState('');
@@ -195,24 +266,7 @@ export default function EnvioBrindesPublico() {
     );
   }
 
-  if (sucesso) {
-    return (
-      <div style={s.page}><div style={s.wrap}>
-        <div style={{ ...s.card, maxWidth: 560 }}>
-          <h1 style={s.h1}><Check size={26} color={COLORS.success} /> Envio recebido</h1>
-          <p>Recebemos <strong>{sucesso.quantidade}</strong> {sucesso.quantidade === 1 ? 'pessoa' : 'pessoas'} para o livro <strong>{sucesso.livro}</strong>.</p>
-          <p style={s.muted}>
-            Preço de capa {formatarMoeda(sucesso.preco_capa)} com {sucesso.desconto_percentual}% de desconto:
-            {' '}{formatarMoeda(sucesso.preco_unitario)} por livro.
-          </p>
-          <p><strong>Valor dos livros: {formatarMoeda(sucesso.valor_livros)}</strong><br />
-            <span style={s.muted}>Frete: a calcular pela CEDET. Entraremos em contato com o valor final.</span></p>
-          <p style={s.muted}>Protocolo do envio: nº {sucesso.lote_id}. <strong>Não envie esta mesma planilha de novo.</strong></p>
-          <button style={s.btn} onClick={novoEnvio}>Fazer outro envio</button>
-        </div>
-      </div></div>
-    );
-  }
+  if (sucesso) return <TelaSucesso sucesso={sucesso} onNovo={novoEnvio} />;
 
   return (
     <div style={s.page}><div style={s.wrap}>
