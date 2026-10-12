@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { TrendingUp, ChevronDown, CheckCircle, Clock, Target, Users, Info } from 'lucide-react'
+import { TrendingUp, ChevronDown, CheckCircle, Clock, Target, Users, Info, ArrowLeft, Pencil, X, AlertTriangle } from 'lucide-react'
 
 /* ============================================
    PLANO DE CARREIRA — EDITORAS PARCEIRAS
@@ -238,11 +238,8 @@ export default function PlanoCarreiraParceiras() {
 
       {erro && <Aviso texto={erro} />}
 
-      {!erro && ehGestao && !colab && (
-        <div className="table-card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
-          <Users size={34} style={{ opacity: 0.3, marginBottom: 10 }} />
-          <p style={{ margin: 0, fontSize: 14 }}>A tela da equipe está em construção (próxima etapa).</p>
-        </div>
+      {!erro && ehGestao && !colab && est && (
+        <PainelEquipe est={est} toast={mostrarToast} />
       )}
 
       {!erro && !ehGestao && !colab && (
@@ -509,6 +506,359 @@ function GraficoHistorico({ historico }) {
             <span style={{ width: 10, height: 10, borderRadius: 2, background: s.cor }} /> Bloco {s.nome}
           </span>
         ))}
+      </div>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════
+// TELA "EQUIPE" (só supervisão e administração)
+// ════════════════════════════════════════════════════════════════
+function PainelEquipe({ est, toast }) {
+  const [colabs, setColabs] = useState([])
+  const [nomes, setNomes] = useState({})
+  const [avaliacoes, setAvaliacoes] = useState([])
+  const [carregando, setCarregando] = useState(true)
+  const [selecionado, setSelecionado] = useState(null)
+
+  useEffect(() => { carregar() }, [])
+
+  async function carregar() {
+    setCarregando(true)
+    const [c, a] = await Promise.all([
+      supabase.from('pd_colaboradores').select('*').eq('ativo', true),
+      supabase.from('pd_avaliacoes').select('*'),
+    ])
+    if (c.error || a.error) { toast('Erro ao carregar a equipe: ' + (c.error || a.error).message, 'erro'); setCarregando(false); return }
+    const ids = (c.data || []).map(x => x.usuario_id)
+    let mapaNomes = {}
+    if (ids.length) {
+      const { data: us } = await supabase.from('usuarios').select('id, nome').in('id', ids)
+      ;(us || []).forEach(u => { mapaNomes[u.id] = u.nome })
+    }
+    setNomes(mapaNomes)
+    setColabs((c.data || []).sort((x, y) => (mapaNomes[x.usuario_id] || '').localeCompare(mapaNomes[y.usuario_id] || '', 'pt-BR')))
+    setAvaliacoes(a.data || [])
+    setCarregando(false)
+  }
+
+  function atualizarAvaliacao(registro) {
+    setAvaliacoes(prev => [...prev.filter(a => a.id !== registro.id), registro])
+  }
+
+  function atualizarColab(registro) {
+    setColabs(prev => prev.map(c => (c.id === registro.id ? registro : c)))
+  }
+
+  if (carregando) return <div className="loading"><div className="spinner" /></div>
+
+  if (selecionado) {
+    const colab = colabs.find(c => c.id === selecionado)
+    return (
+      <AvaliarPessoa
+        colab={colab}
+        nome={nomes[colab.usuario_id]}
+        est={est}
+        avaliacoes={avaliacoes.filter(a => a.colaborador_id === colab.id)}
+        onVoltar={() => setSelecionado(null)}
+        onAvaliacaoSalva={atualizarAvaliacao}
+        onColabSalvo={atualizarColab}
+        toast={toast}
+      />
+    )
+  }
+
+  if (!colabs.length) {
+    return (
+      <div className="table-card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
+        <Users size={34} style={{ opacity: 0.3, marginBottom: 10 }} />
+        <p style={{ margin: 0, fontSize: 14 }}>Nenhuma colaboradora cadastrada no Plano de Carreira.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+      {colabs.map(c => {
+        const plano = montarPlano(c, est, avaliacoes.filter(a => a.colaborador_id === c.id))
+        if (!plano) return null
+        const divergencias = plano.itens.filter(i => temDivergencia(i.avaliacao)).length
+        const avaliados = plano.itens.filter(i => i.avaliacao?.nota_supervisao != null).length
+        return (
+          <div key={c.id} className="table-card" style={{ padding: '16px 20px', cursor: 'pointer' }} onClick={() => setSelecionado(c.id)}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text)' }}>{nomes[c.usuario_id] || '—'}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', margin: '3px 0 12px' }}>
+              {plano.cargo.nome} → <span style={{ color: 'var(--accent)' }}>{plano.alvoLabel}</span>
+            </div>
+            {[['A', plano.pctA], ['B', plano.pctB], ['C', plano.pctC]].map(([k, v]) => (
+              <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, width: 14, color: 'var(--text-muted)' }}>{k}</span>
+                <div style={{ flex: 1, height: 6, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${v || 0}%`, background: BLOCOS[k].cor, borderRadius: 99 }} />
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 700, width: 36, textAlign: 'right', color: 'var(--text)' }}>{v === null ? '—' : `${v}%`}</span>
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+              {plano.topo
+                ? <Selo ok texto="Topo da trilha" />
+                : <Selo ok={plano.apta} texto={plano.apta ? 'Apta à promoção' : 'Não apta ainda'} />}
+              <Selo ok={plano.prontaFerias} texto={plano.prontaFerias ? 'Cobre férias' : 'Não cobre férias ainda'} />
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10, display: 'flex', gap: 12 }}>
+              <span>{avaliados}/{plano.itens.length} itens avaliados</span>
+              {divergencias > 0 && <span style={{ color: '#f97316', fontWeight: 700 }}>{divergencias} divergência{divergencias !== 1 ? 's' : ''}</span>}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function temDivergencia(a) {
+  return a && a.nota_supervisao != null && a.autoavaliacao != null && a.nota_supervisao !== a.autoavaliacao
+}
+
+function AvaliarPessoa({ colab, nome, est, avaliacoes, onVoltar, onAvaliacaoSalva, onColabSalvo, toast }) {
+  const [soDivergencias, setSoDivergencias] = useState(false)
+  const [soPendentes, setSoPendentes] = useState(false)
+  const [editandoCargo, setEditandoCargo] = useState(false)
+  const plano = useMemo(() => montarPlano(colab, est, avaliacoes), [colab, est, avaliacoes])
+  if (!plano) return <Aviso texto="Cargo não encontrado para esta colaboradora." />
+
+  async function salvar(item, campos) {
+    const { data, error } = await supabase
+      .from('pd_avaliacoes')
+      .upsert(
+        { colaborador_id: colab.id, bloco: item.bloco, tipo: item.tipo, item_id: item.item_id, ...campos },
+        { onConflict: 'colaborador_id,bloco,tipo,item_id' }
+      )
+      .select()
+      .single()
+    if (error) { toast('Erro ao salvar: ' + error.message, 'erro'); return }
+    onAvaliacaoSalva(data)
+    toast('Salvo!')
+  }
+
+  const itensVisiveis = plano.itens.filter(i =>
+    (!soDivergencias || temDivergencia(i.avaliacao)) &&
+    (!soPendentes || i.status !== 'ok'))
+  const totalDiv = plano.itens.filter(i => temDivergencia(i.avaliacao)).length
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+        <button className="btn btn-ghost btn-icon" onClick={onVoltar} title="Voltar para a equipe"><ArrowLeft size={18} /></button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>{nome}</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+            {plano.cargo.nome} → <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{plano.alvoLabel}</span>
+          </div>
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={() => setEditandoCargo(true)}><Pencil size={13} /> Alterar cargo</button>
+      </div>
+
+      <Prontidao plano={plano} />
+
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', margin: '6px 0 14px', fontSize: 12 }}>
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', color: 'var(--text)' }}>
+          <input type="checkbox" checked={soPendentes} onChange={e => setSoPendentes(e.target.checked)} /> Só itens não atingidos
+        </label>
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', color: totalDiv ? '#f97316' : 'var(--text-muted)', fontWeight: totalDiv ? 700 : 400 }}>
+          <input type="checkbox" checked={soDivergencias} onChange={e => setSoDivergencias(e.target.checked)} /> Só divergências ({totalDiv})
+        </label>
+        <span style={{ color: 'var(--text-muted)' }}>
+          Escala: {Object.entries(ESCALA).map(([n, l]) => `${n} ${l}`).join(' · ')} · Exigido: 3 (A e B), 2 (C)
+        </span>
+      </div>
+
+      {['A', 'B', 'C'].map(b => {
+        const itens = itensVisiveis.filter(i => i.bloco === b)
+        if (!itens.length) return null
+        return <BlocoAvaliacao key={b} bloco={b} itens={itens} total={plano.itens.filter(i => i.bloco === b)} onSalvar={salvar} />
+      })}
+      {!itensVisiveis.length && (
+        <div className="table-card" style={{ padding: 24, textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' }}>Nenhum item com esse filtro.</div>
+      )}
+
+      {editandoCargo && (
+        <ModalCargo colab={colab} est={est} onFechar={() => setEditandoCargo(false)}
+          onSalvo={c => { onColabSalvo(c); setEditandoCargo(false); toast('Cargo atualizado!') }} toast={toast} />
+      )}
+    </>
+  )
+}
+
+function BlocoAvaliacao({ bloco, itens, total, onSalvar }) {
+  const [aberto, setAberto] = useState(true)
+  const atingidos = total.filter(i => i.status === 'ok').length
+  const grupos = []
+  itens.forEach(i => {
+    const nomeGrupo = i.tipo === 'tarefa' ? `Tarefas · ${i.grupo}` : i.grupo
+    let g = grupos.find(x => x.nome === nomeGrupo)
+    if (!g) { g = { nome: nomeGrupo, itens: [] }; grupos.push(g) }
+    g.itens.push(i)
+  })
+  return (
+    <div className="table-card" style={{ marginBottom: 12, overflow: 'hidden', borderLeft: `3px solid ${BLOCOS[bloco].cor}` }}>
+      <button onClick={() => setAberto(a => !a)} style={{
+        width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px',
+        background: 'none', border: 'none', cursor: 'pointer', borderBottom: aberto ? '1px solid var(--border)' : 'none',
+      }}>
+        <ChevronDown size={15} color="var(--text-muted)" style={{ transform: aberto ? 'none' : 'rotate(-90deg)', transition: 'transform 0.2s' }} />
+        <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{BLOCOS[bloco].titulo}</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{atingidos}/{total.length} atingidos</span>
+      </button>
+      {aberto && grupos.map(g => (
+        <div key={g.nome}>
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 60px 90px 170px 120px', gap: 8,
+            padding: '7px 20px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)',
+            fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em',
+          }}>
+            <span>{g.nome}</span>
+            <span style={{ textAlign: 'center' }}>Exigido</span>
+            <span style={{ textAlign: 'center' }}>Autoaval.</span>
+            <span style={{ textAlign: 'center' }}>Sua avaliação</span>
+            <span style={{ textAlign: 'center' }}>Status</span>
+          </div>
+          {g.itens.map(i => <LinhaAvaliacao key={`${i.bloco}-${i.tipo}-${i.item_id}`} item={i} onSalvar={onSalvar} />)}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function LinhaAvaliacao({ item, onSalvar }) {
+  const a = item.avaliacao || {}
+  const st = STATUS[item.status]
+  const diverge = temDivergencia(a)
+  const [aberto, setAberto] = useState(false)
+  const [evidencia, setEvidencia] = useState(a.evidencia || '')
+  const [acao, setAcao] = useState(a.acao || '')
+  const [prazo, setPrazo] = useState(a.prazo || '')
+
+  useEffect(() => { setEvidencia(a.evidencia || ''); setAcao(a.acao || ''); setPrazo(a.prazo || '') }, [a.id, a.evidencia, a.acao, a.prazo])
+
+  const salvarTexto = (campo, valor, original) => {
+    const v = valor.trim() === '' ? null : valor.trim()
+    if ((v || null) === (original || null)) return
+    onSalvar(item, { [campo]: v })
+  }
+
+  return (
+    <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--border)', background: diverge ? 'rgba(249,115,22,0.06)' : undefined }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 60px 90px 170px 120px', gap: 8, alignItems: 'center' }}>
+        <div style={{ minWidth: 0, cursor: 'pointer' }} onClick={() => setAberto(o => !o)} title="Clique para evidência, ação e prazo">
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+            {item.titulo}
+            {item.tag && (
+              <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: 'var(--accent)', border: '1px solid var(--accent)', borderRadius: 4, padding: '0 5px' }}>{item.tag}</span>
+            )}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{item.esperado}</div>
+          {(a.evidencia || a.acao || a.prazo) && !aberto && (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              {a.evidencia && <span>📝 {a.evidencia} </span>}
+              {a.acao && <span>🎯 {a.acao} </span>}
+              {a.prazo && <span>📅 {fmtData(a.prazo)}</span>}
+            </div>
+          )}
+        </div>
+        <div style={{ textAlign: 'center', fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{item.exigido}</div>
+        <div style={{ textAlign: 'center' }} title={a.autoavaliacao ? ESCALA[a.autoavaliacao] : 'Sem autoavaliação'}>
+          {a.autoavaliacao
+            ? <span style={{ fontSize: 13, fontWeight: 700, color: diverge ? '#f97316' : 'var(--text)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                {diverge && <AlertTriangle size={12} />}{a.autoavaliacao}
+              </span>
+            : <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>}
+        </div>
+        <div>
+          <select className="form-select" value={a.nota_supervisao ?? ''}
+            onChange={e => onSalvar(item, { nota_supervisao: e.target.value === '' ? null : Number(e.target.value) })}
+            style={{ padding: '4px 6px', fontSize: 12, width: '100%', borderColor: diverge ? '#f97316' : undefined }}>
+            <option value="">— avaliar —</option>
+            {Object.entries(ESCALA).map(([n, l]) => <option key={n} value={n}>{n} · {l}</option>)}
+          </select>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 20, color: st.cor, background: st.fundo, whiteSpace: 'nowrap' }}>{st.label}</span>
+        </div>
+      </div>
+      {aberto && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8, marginTop: 10 }}>
+          <div>
+            <label className="form-label" style={{ fontSize: 11 }}>Evidência</label>
+            <input className="form-input" style={{ fontSize: 12 }} value={evidencia} onChange={e => setEvidencia(e.target.value)}
+              onBlur={() => salvarTexto('evidencia', evidencia, a.evidencia)} placeholder="O que comprova o nível?" />
+          </div>
+          <div>
+            <label className="form-label" style={{ fontSize: 11 }}>Ação de desenvolvimento</label>
+            <input className="form-input" style={{ fontSize: 12 }} value={acao} onChange={e => setAcao(e.target.value)}
+              onBlur={() => salvarTexto('acao', acao, a.acao)} placeholder="O que fazer para evoluir?" />
+          </div>
+          <div>
+            <label className="form-label" style={{ fontSize: 11 }}>Prazo</label>
+            <input className="form-input" type="date" style={{ fontSize: 12 }} value={prazo || ''}
+              onChange={e => { setPrazo(e.target.value); onSalvar(item, { prazo: e.target.value || null }) }} />
+          </div>
+          {a.avaliado_em && (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'end' }}>
+              Avaliado por {a.avaliado_por || '—'} em {new Date(a.avaliado_em).toLocaleDateString('pt-BR')}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ModalCargo({ colab, est, onFechar, onSalvo, toast }) {
+  const [cargoAtual, setCargoAtual] = useState(colab.cargo_atual)
+  const [cargoAlvo, setCargoAlvo] = useState(colab.cargo_alvo || '')
+  const [salvando, setSalvando] = useState(false)
+  const opcoesAlvo = est.cargos.find(c => c.codigo === cargoAtual)?.proximos || []
+
+  async function salvar() {
+    setSalvando(true)
+    const { data, error } = await supabase.from('pd_colaboradores')
+      .update({ cargo_atual: cargoAtual, cargo_alvo: cargoAlvo || null })
+      .eq('id', colab.id).select().single()
+    setSalvando(false)
+    if (error) { toast('Erro: ' + error.message, 'erro'); return }
+    onSalvo(data)
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onFechar}>
+      <div className="modal" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2 className="modal-title">Alterar cargo</h2>
+          <button className="btn btn-ghost btn-icon" onClick={onFechar}><X size={16} /></button>
+        </div>
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">Cargo atual</label>
+            <select className="form-select" value={cargoAtual} onChange={e => { setCargoAtual(e.target.value); setCargoAlvo('') }}>
+              {est.cargos.map(c => <option key={c.codigo} value={c.codigo}>{c.nome}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Cargo-alvo</label>
+            <select className="form-select" value={cargoAlvo} onChange={e => setCargoAlvo(e.target.value)} disabled={!opcoesAlvo.length}>
+              <option value="">{opcoesAlvo.length ? 'A definir' : 'Topo da trilha'}</option>
+              {opcoesAlvo.map(cod => <option key={cod} value={cod}>{est.cargos.find(c => c.codigo === cod)?.nome || cod}</option>)}
+            </select>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            As avaliações já feitas ficam guardadas. Os blocos se ajustam ao novo cargo automaticamente.
+          </div>
+        </div>
+        <div className="form-actions">
+          <button className="btn btn-ghost" onClick={onFechar}>Cancelar</button>
+          <button className="btn btn-primary" onClick={salvar} disabled={salvando}>{salvando ? 'Salvando...' : 'Salvar'}</button>
+        </div>
       </div>
     </div>
   )
