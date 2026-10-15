@@ -5,7 +5,7 @@ import {
   Package, Download, Upload, Check, AlertCircle, Loader2, RefreshCw, Trash2, Send, X,
 } from 'lucide-react';
 import {
-  lerCabecalho, extrairLinhas, casar, montarFretes,
+  lerCabecalho, extrairLinhas, casar, montarFretes, chaveNome,
   lerCabecalhoRastreio, extrairLinhasRastreio, montarRastreios,
 } from '../lib/envio-brindes-equipe';
 
@@ -209,6 +209,8 @@ function DetalheLote({ lote, onAtualizar, avisar }) {
   const [ocupado, setOcupado] = useState('');
   const [frete, setFrete] = useState(null); // { nomeArquivo, matriz, idxCab, cabecalho, idxNome, idxValor }
   const [resolucoes, setResolucoes] = useState({});
+  const [duplicadosAutorizados, setDuplicadosAutorizados] = useState({});
+  const [confirmoDuplicados, setConfirmoDuplicados] = useState(false);
   const [forma, setForma] = useState(lote.forma_pagamento || '');
   const [pago, setPago] = useState(!!lote.pagamento_confirmado_em);
 
@@ -226,6 +228,24 @@ function DetalheLote({ lote, onAtualizar, avisar }) {
   );
   const casamento = useMemo(() => casar(dests, linhasFrete), [dests, linhasFrete]);
   const montado = useMemo(() => montarFretes(dests, linhasFrete, casamento, resolucoes), [dests, linhasFrete, casamento, resolucoes]);
+  const linhasConsumidas = useMemo(() => {
+    const usadas = new Set(Array.from(casamento.casados.values(), (c) => c.idx));
+    Object.values(resolucoes).forEach((r) => { if (r && r.tipo === 'linha') usadas.add(r.idx); });
+    return usadas;
+  }, [casamento, resolucoes]);
+  const candidatosDuplicados = useMemo(() => linhasFrete
+    .map((l, idx) => ({ ...l, idx }))
+    .filter((l) => !linhasConsumidas.has(l.idx) && l.valor != null && l.nome && dests.some((d) => chaveNome(d.nome_completo) === chaveNome(l.nome))),
+    [linhasFrete, linhasConsumidas, dests]);
+  const linhasExtras = useMemo(() => linhasFrete.map((l, idx) => ({ ...l, idx }))
+    .filter((l) => !linhasConsumidas.has(l.idx) && l.valor != null),
+    [linhasFrete, linhasConsumidas]);
+  const duplicados = candidatosDuplicados.filter((l) => duplicadosAutorizados[l.idx]);
+  const extrasNaoAutorizados = linhasExtras.filter((l) => !duplicadosAutorizados[l.idx]);
+  const totalDuplicados = duplicados.reduce((t, l) => t + l.valor, 0);
+  const valorLivrosDuplicados = duplicados.length * Number(lote.preco_unitario || 0);
+  const prontoParaGravar = montado.faltam.length === 0 && extrasNaoAutorizados.length === 0
+    && (duplicados.length === 0 || confirmoDuplicados);
 
   async function executar(nome, fn, sucesso) {
     setOcupado(nome);
@@ -277,7 +297,7 @@ function DetalheLote({ lote, onAtualizar, avisar }) {
       const matriz = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
       const cab = lerCabecalho(matriz);
       if (!cab) { avisar('erro', 'A planilha está vazia.'); return; }
-      setResolucoes({});
+      setResolucoes({}); setDuplicadosAutorizados({}); setConfirmoDuplicados(false);
       setFrete({ nomeArquivo: arquivo.name, matriz, ...cab });
     } catch {
       avisar('erro', 'Não consegui ler este arquivo. Use .xlsx ou .csv.');
@@ -285,8 +305,19 @@ function DetalheLote({ lote, onAtualizar, avisar }) {
   }
 
   const aplicarFrete = () => executar('frete', async () => {
-    await rpc('envio_brinde_aplicar_frete', { p_lote_id: lote.id, p_fretes: montado.itens });
-    setFrete(null); setResolucoes({});
+    if (!prontoParaGravar) throw new Error('Resolva todas as linhas e confirme os envios duplicados.');
+    if (duplicados.length) {
+      await rpc('envio_brinde_aplicar_frete_com_duplicados', {
+        p_lote_id: lote.id, p_fretes: montado.itens,
+        p_duplicados: duplicados.map((l) => ({
+          destinatario_id: dests.find((d) => chaveNome(d.nome_completo) === chaveNome(l.nome)).id,
+          valor_frete: l.valor,
+        })),
+      });
+    } else {
+      await rpc('envio_brinde_aplicar_frete', { p_lote_id: lote.id, p_fretes: montado.itens });
+    }
+    setFrete(null); setResolucoes({}); setDuplicadosAutorizados({}); setConfirmoDuplicados(false);
   }, 'Frete gravado.');
 
   const podeAlterarFrete = ['recebido', 'em_analise', 'frete_calculado'].includes(lote.status);
@@ -423,14 +454,37 @@ function DetalheLote({ lote, onAtualizar, avisar }) {
                   {linhasFrete.some((l) => l.valor == null) && (
                     <div style={caixa('var(--amber)')}><AlertCircle size={13} /> {linhasFrete.filter((l) => l.valor == null).length} linha(s) da planilha com valor ilegível foram ignoradas.</div>
                   )}
-                  {livresLinhas.length > 0 && montado.faltam.length === 0 && (
-                    <div style={caixa('var(--amber)')}><AlertCircle size={13} /> Há {livresLinhas.length} linha(s) na planilha de frete que não são de ninguém deste lote. Confira se é a planilha certa.</div>
+                  {candidatosDuplicados.length > 0 && (
+                    <div style={caixa('var(--amber)')}>
+                      <strong>Possíveis envios duplicados</strong>
+                      <p style={{ margin: '6px 0' }}>Autorize individualmente somente quando houver dois pacotes físicos e dois livros para a mesma pessoa.</p>
+                      {candidatosDuplicados.map((l) => (
+                        <label key={l.idx} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                          <input type="checkbox" checked={!!duplicadosAutorizados[l.idx]}
+                            onChange={(e) => { setDuplicadosAutorizados({ ...duplicadosAutorizados, [l.idx]: e.target.checked }); setConfirmoDuplicados(false); }} />
+                          Linha {l.linha}: {l.nome} — frete adicional {moeda(l.valor)}
+                        </label>
+                      ))}
+                      {duplicados.length > 0 && (
+                        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 12, fontWeight: 600 }}>
+                          <input type="checkbox" checked={confirmoDuplicados} onChange={(e) => setConfirmoDuplicados(e.target.checked)} />
+                          Confirmo {duplicados.length} envio(s) físico(s) adicional(is), {duplicados.length} livro(s) extra(s)
+                          e a cobrança de {moeda(totalDuplicados)} em fretes extras mais {moeda(valorLivrosDuplicados)} em livros.
+                        </label>
+                      )}
+                    </div>
+                  )}
+                  {extrasNaoAutorizados.length > 0 && montado.faltam.length === 0 && (
+                    <div style={caixa('var(--amber)')}><AlertCircle size={13} />
+                      Existem {extrasNaoAutorizados.length} linha(s) de frete não utilizadas. Confira as correspondências
+                      e autorize apenas duplicidades reais para continuar.</div>
                   )}
 
                   <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    <strong>Total do frete: {moeda(montado.total)}</strong>
+                    <strong>Total do frete: {moeda(montado.total + totalDuplicados)}</strong>
+                    {duplicados.length > 0 && <span style={{ fontSize: 13 }}>Livros adicionais: {duplicados.length} ({moeda(valorLivrosDuplicados)})</span>}
                     {montado.faltam.length > 0 && <span style={{ color: 'var(--red)', fontSize: 13 }}>Falta resolver {montado.faltam.length} pessoa(s).</span>}
-                    <button className="btn btn-primary" disabled={ocupadoOuNao || montado.faltam.length > 0 || dests.length === 0} onClick={aplicarFrete}>
+                    <button className="btn btn-primary" disabled={ocupadoOuNao || !prontoParaGravar || dests.length === 0} onClick={aplicarFrete}>
                       {ocupado === 'frete' ? <Loader2 size={14} /> : <Check size={14} />} Gravar frete
                     </button>
                   </div>
