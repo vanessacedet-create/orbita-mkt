@@ -28,8 +28,16 @@ begin
 
   select * into v_lote from public.envio_brinde_lotes
     where id = p_lote_id for update;
-  if not found or v_lote.status not in ('recebido', 'em_analise', 'frete_calculado') then
-    raise exception 'Lote inexistente ou não permite alterações de frete.';
+  if not found or v_lote.status not in ('recebido', 'em_analise') then
+    raise exception 'Duplicidades só podem ser autorizadas antes de gravar o frete pela primeira vez.';
+  end if;
+  if v_lote.valor_frete_total is not null
+    or exists (select 1 from public.envio_brinde_destinatarios
+               where lote_id = p_lote_id and valor_frete is not null) then
+    raise exception 'Este lote já possui fretes gravados. Reimportação de duplicidades bloqueada.';
+  end if;
+  if v_lote.qtd_livros <> (select count(*) from public.envio_brinde_destinatarios where lote_id = p_lote_id) then
+    raise exception 'Quantidade de livros diferente dos destinatários. Solicite conferência antes de continuar.';
   end if;
 
   -- A função existente valida e grava os fretes regulares.
