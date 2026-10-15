@@ -76,7 +76,8 @@ export function extrairLinhas(matriz, idxCab, idxNome, idxValor) {
 }
 
 // Casa cada pessoa do lote com UMA linha da planilha de frete.
-// Só casa automaticamente quando o nome é único dos dois lados. O resto vai para conferência manual.
+// Para um único destinatário com múltiplos fretes, reserva a primeira linha como envio base.
+// As demais ficam disponíveis apenas como pacotes adicionais autorizados.
 export function casar(destinatarios, linhasFrete) {
   const porChave = new Map();
   linhasFrete.forEach((l, idx) => {
@@ -96,7 +97,7 @@ export function casar(destinatarios, linhasFrete) {
   destinatarios.forEach((d) => {
     const k = chaveNome(d.nome_completo);
     const candidatos = porChave.get(k) || [];
-    if (contaDest.get(k) === 1 && candidatos.length === 1) {
+    if (contaDest.get(k) === 1 && candidatos.length >= 1) {
       const idx = candidatos[0];
       const exato = normalizarNome(linhasFrete[idx].nome) === normalizarNome(d.nome_completo);
       casados.set(d.id, { idx, tipo: exato ? 'exato' : 'aproximado' });
