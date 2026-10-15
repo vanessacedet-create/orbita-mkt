@@ -7,7 +7,7 @@ create or replace function public.envio_brinde_aplicar_frete_com_duplicados(
   p_duplicados jsonb
 ) returns void
 language plpgsql
-security invoker
+security definer
 set search_path = public, pg_temp
 as $$
 declare
@@ -17,7 +17,11 @@ declare
   v_valor numeric;
   v_quantidade integer := 0;
   v_frete_extra numeric := 0;
+  v_frete_base numeric := 0;
 begin
+  if not public.envio_brinde_eh_equipe() then
+    raise exception 'Sem permissão para este módulo.';
+  end if;
   if jsonb_typeof(p_duplicados) <> 'array' or jsonb_array_length(p_duplicados) = 0 then
     raise exception 'Não há envios duplicados para confirmar.';
   end if;
@@ -29,7 +33,7 @@ begin
   end if;
 
   -- A função existente valida e grava os fretes regulares.
-  perform public.envio_brinde_aplicar_frete(p_lote_id, p_fretes);
+  v_frete_base := public.envio_brinde_aplicar_frete(p_lote_id, p_fretes);
 
   for v_extra in select value from jsonb_array_elements(p_duplicados)
   loop
@@ -38,6 +42,9 @@ begin
       raise exception 'Envio duplicado com destinatário ou valor inválido.';
     end if;
     v_valor := (v_extra->>'valor_frete')::numeric(12,2);
+    if v_valor < 0 or v_valor > 99999 then
+      raise exception 'Valor de frete adicional inválido.';
+    end if;
 
     select * into v_origem
       from public.envio_brinde_destinatarios
@@ -55,9 +62,10 @@ begin
   end loop;
 
   update public.envio_brinde_lotes
-     set qtd_livros = qtd_livros + v_quantidade,
-         valor_livros = round((valor_livros + (v_quantidade * preco_unitario))::numeric, 2),
-         valor_frete_total = round((valor_frete_total + v_frete_extra)::numeric, 2)
+     set qtd_livros = (select count(*) from public.envio_brinde_destinatarios where lote_id = p_lote_id),
+         valor_livros = round(((select count(*) from public.envio_brinde_destinatarios where lote_id = p_lote_id) * preco_unitario)::numeric, 2),
+         valor_frete_total = round((v_frete_base + v_frete_extra)::numeric, 2),
+         atualizado_em = now()
    where id = p_lote_id;
 end;
 $$;
