@@ -7,6 +7,7 @@ const AuthContext = createContext(null)
 export const MODULOS_PERMISSOES = {
   dashboard: ['administrador', 'gerente', 'analista_influencers', 'estagiario_influencers', 'estagiario_proprias', 'analista_proprias', 'supervisor_proprias', 'estagiario_marketplaces', 'analista_marketplaces'],
   base_comando: ['administrador', 'gerente'],
+  calendario_divulgacoes: ['administrador','gerente','analista_influencers','estagiario_influencers','supervisor_parceiras','analista_parceiras','estagiario_parceiras'],
   inbox_influencers: ['administrador', 'gerente', 'analista_influencers', 'estagiario_influencers'],
   parceiros: ['administrador', 'gerente', 'estagiario_influencers', 'analista_influencers'],
   crm_influencers: ['administrador', 'analista_influencers', 'estagiario_influencers'],
