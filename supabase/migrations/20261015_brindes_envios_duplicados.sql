@@ -46,7 +46,41 @@ begin
   for v_extra in select value from jsonb_array_elements(p_duplicados)
   loop
     if (v_extra->>'destinatario_id') !~ '^[0-9]+$'
-       or (v_extra->>'valor_frete') !~ '^[0-9]+(\\.[0-9]{1,2})?$' then
+       or (v_extra->>'valor_frete') !~ '^[0-9]+([.][0-9]{1,2})?
+      raise exception 'Envio duplicado com destinatário ou valor inválido.';
+    end if;
+    v_valor := (v_extra->>'valor_frete')::numeric(12,2);
+    if v_valor < 0 or v_valor > 99999 then
+      raise exception 'Valor de frete adicional inválido.';
+    end if;
+
+    select * into v_origem
+      from public.envio_brinde_destinatarios
+      where id = (v_extra->>'destinatario_id')::bigint and lote_id = p_lote_id;
+    if not found then
+      raise exception 'Destinatário da duplicidade não pertence ao lote.';
+    end if;
+
+    -- Segundo registro representa um segundo pacote e possibilita segundo rastreio.
+    insert into public.envio_brinde_destinatarios (lote_id, nome_completo, valor_frete)
+      values (p_lote_id, v_origem.nome_completo, v_valor);
+
+    v_quantidade := v_quantidade + 1;
+    v_frete_extra := v_frete_extra + v_valor;
+  end loop;
+
+  update public.envio_brinde_lotes
+     set qtd_livros = (select count(*) from public.envio_brinde_destinatarios where lote_id = p_lote_id),
+         valor_livros = round(((select count(*) from public.envio_brinde_destinatarios where lote_id = p_lote_id) * preco_unitario)::numeric, 2),
+         valor_frete_total = round((v_frete_base + v_frete_extra)::numeric, 2),
+         atualizado_em = now()
+   where id = p_lote_id;
+end;
+$$;
+
+revoke all on function public.envio_brinde_aplicar_frete_com_duplicados(bigint,jsonb,jsonb) from public;
+grant execute on function public.envio_brinde_aplicar_frete_com_duplicados(bigint,jsonb,jsonb) to authenticated;
+ then
       raise exception 'Envio duplicado com destinatário ou valor inválido.';
     end if;
     v_valor := (v_extra->>'valor_frete')::numeric(12,2);
