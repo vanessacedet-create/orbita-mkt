@@ -1,6 +1,7 @@
 -- Calendário de divulgações / Órbita
 -- Execute no SQL Editor do projeto Órbita, antes de publicar a interface.
-create extension if not exists pgcrypto;
+create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;
 create table if not exists public.calendario_divulgacoes (
   id uuid primary key default gen_random_uuid(),
   parceiro_id uuid not null references public.parceiros(id) on delete cascade,
