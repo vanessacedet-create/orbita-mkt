@@ -5,8 +5,9 @@ import CalendarioGrade,{STATUS} from '../components/CalendarioGrade'
 const vazio={data_publicacao:'',titulo:'',tipo:'Reels',tema:'',roteiro:'',orientacoes:'',status:'pendente',livro_id:'',link_publicacao:''}
 export default function CalendarioDivulgacoes(){
  const [parceiros,setParceiros]=useState([]),[livros,setLivros]=useState([]),[parceiroId,setParceiroId]=useState(''),[items,setItems]=useState([])
- const [form,setForm]=useState(null),[erro,setErro]=useState(''),[aviso,setAviso]=useState(''),[carregando,setCarregando]=useState(false),[link,setLink]=useState('')
- useEffect(()=>{getParceiros().then(p=>setParceiros(p||[])).catch(e=>setErro(e.message));getLivros().then(setLivros).catch(()=>{})},[])
+ const [livroBusca,setLivroBusca]=useState(''),[form,setForm]=useState(null),[erro,setErro]=useState(''),[aviso,setAviso]=useState(''),[carregando,setCarregando]=useState(false),[link,setLink]=useState('')
+ useEffect(()=>{getParceiros().then(p=>setParceiros(p||[])).catch(e=>setErro(e.message))},[])
+ useEffect(()=>{let ativo=true;getLivros({page:0,pageSize:50,search:livroBusca}).then(({data})=>{if(ativo)setLivros(Array.isArray(data)?data:[])}).catch(e=>{if(ativo)setErro('Não foi possível carregar livros: '+e.message)});return()=>{ativo=false}},[livroBusca])
  useEffect(()=>{if(!parceiroId){setItems([]);return}let ativo=true;supabase.from('calendario_divulgacoes').select('*').eq('parceiro_id',parceiroId).order('data_publicacao').then(({data,error})=>{if(!ativo)return;if(error)setErro(error.message);else setItems(data||[])});return()=>{ativo=false}},[parceiroId])
  const salvar=async()=>{if(!form?.titulo?.trim()||!form?.data_publicacao)return setErro('Informe título e data.');setCarregando(true);setErro('');setAviso('')
  const {id,...campos}=form;const payload={...campos,parceiro_id:parceiroId,livro_id:form.livro_id||null}
@@ -25,7 +26,7 @@ export default function CalendarioDivulgacoes(){
  {form&&<div className="cd-panel"><h3>{form.id?'Editar divulgação':'Nova divulgação'}</h3><label>Data</label><input type="date" value={form.data_publicacao||''} onChange={e=>v('data_publicacao',e.target.value)}/>
  <label>Título</label><input value={form.titulo||''} onChange={e=>v('titulo',e.target.value)}/>
  <label>Formato</label><select value={form.tipo} onChange={e=>v('tipo',e.target.value)}>{['Reels','Stories','Carrossel','Post','Live','Outro'].map(x=><option key={x}>{x}</option>)}</select>
- <label>Livro relacionado</label><select value={form.livro_id||''} onChange={e=>v('livro_id',e.target.value)}><option value="">Nenhum</option>{livros.map(l=><option key={l.id} value={l.id}>{l.titulo}</option>)}</select>
+ <label>Livro relacionado (opcional)</label><input placeholder="Busque pelo título, autor ou ISBN" value={livroBusca} onChange={e=>setLivroBusca(e.target.value)}/><select value={form.livro_id||''} onChange={e=>v('livro_id',e.target.value)}><option value="">Nenhum livro selecionado</option>{form.livro_id&&!livros.some(l=>l.id===form.livro_id)&&<option value={form.livro_id}>Livro selecionado (busque para alterar)</option>}{livros.map(l=><option key={l.id} value={l.id}>{l.titulo}</option>)}</select>
  <label>Tema / sugestão</label><textarea value={form.tema||''} onChange={e=>v('tema',e.target.value)}/>
  <label>Roteiro</label><textarea value={form.roteiro||''} onChange={e=>v('roteiro',e.target.value)}/>
  <label>Orientações</label><textarea value={form.orientacoes||''} onChange={e=>v('orientacoes',e.target.value)}/>
