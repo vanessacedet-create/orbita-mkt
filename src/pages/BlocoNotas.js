@@ -1,13 +1,14 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import { Save, FileText, Plus, Trash2, Check } from 'lucide-react'
+import { Save, FileText, Plus, Trash2, Check, RotateCcw, ArrowLeft } from 'lucide-react'
 
 async function getNotas(usuarioId) {
   const { data, error } = await supabase
     .from('bloco_notas')
     .select('*')
     .eq('usuario_id', usuarioId)
+    .is('excluido_em', null)
     .order('atualizado_em', { ascending: false })
   if (error) throw error
   return data || []
@@ -31,9 +32,26 @@ async function salvarNota(nota) {
   }
 }
 
+// Exclusão "suave": a nota vai para a Lixeira e pode ser restaurada
 async function deletarNota(id) {
-  const { error } = await supabase.from('bloco_notas').delete().eq('id', id)
+  const { error } = await supabase.from('bloco_notas').update({ excluido_em: new Date().toISOString() }).eq('id', id)
   if (error) throw error
+}
+
+async function getLixeira(usuarioId) {
+  const { data, error } = await supabase
+    .from('bloco_notas').select('*')
+    .eq('usuario_id', usuarioId)
+    .not('excluido_em', 'is', null)
+    .order('excluido_em', { ascending: false })
+  if (error) throw error
+  return data || []
+}
+
+async function restaurarNotaDb(id) {
+  const { data, error } = await supabase.from('bloco_notas').update({ excluido_em: null }).eq('id', id).select().single()
+  if (error) throw error
+  return data
 }
 
 export default function BlocoNotas() {
@@ -47,6 +65,9 @@ export default function BlocoNotas() {
   const [loading, setLoading] = useState(true)
   const autoSaveRef = useRef(null)
   const isDirty = useRef(false)
+  const notaAtualRef = useRef(null) // nota realmente aberta no editor (evita salvar texto na nota errada)
+  const [verLixeira, setVerLixeira] = useState(false)
+  const [lixeira, setLixeira] = useState([])
 
   useEffect(() => {
     if (!usuario?.id) return
@@ -55,7 +76,6 @@ export default function BlocoNotas() {
 
   // Faz o container pai ocupar toda a altura sem scroll externo
   useLayoutEffect(() => {
-    // Ajusta o container pai para que position:absolute do BlocoNotas funcione
     const mainContent = document.querySelector('.main-content')
     const mainScroll = document.querySelector('.main-content > div')
     if (mainContent) mainContent.style.position = 'relative'
@@ -86,7 +106,9 @@ export default function BlocoNotas() {
   }
 
   function selecionarNota(nota) {
+    if (autoSaveRef.current) clearTimeout(autoSaveRef.current)
     if (isDirty.current) salvarAtual()
+    notaAtualRef.current = nota
     setNotaSelecionada(nota)
     setTitulo(nota.titulo || '')
     setConteudo(nota.conteudo || '')
@@ -95,8 +117,10 @@ export default function BlocoNotas() {
   }
 
   function novaNota() {
+    if (autoSaveRef.current) clearTimeout(autoSaveRef.current)
     if (isDirty.current) salvarAtual()
     const nova = { id: null, titulo: 'Nova nota', conteudo: '', usuario_id: usuario.id }
+    notaAtualRef.current = nova
     setNotaSelecionada(nova)
     setTitulo('Nova nota')
     setConteudo('')
@@ -114,30 +138,47 @@ export default function BlocoNotas() {
   }
 
   async function salvarAtual() {
-    if (!notaSelecionada || !isDirty.current) return
+    const notaOrigem = notaAtualRef.current
+    if (!notaOrigem || !isDirty.current) return
+    isDirty.current = false
     setSalvando(true)
     try {
-      const tituloAtual = document.getElementById('nota-titulo')?.value || titulo
-      const conteudoAtual = document.getElementById('nota-conteudo')?.value || conteudo
-      const payload = { id: notaSelecionada.id, usuario_id: usuario.id, titulo: tituloAtual.trim() || 'Sem título', conteudo: conteudoAtual }
+      const tituloAtual = document.getElementById('nota-titulo')?.value ?? titulo
+      const conteudoAtual = document.getElementById('nota-conteudo')?.value ?? conteudo
+      const payload = { id: notaOrigem.id, usuario_id: usuario.id, titulo: tituloAtual.trim() || 'Sem título', conteudo: conteudoAtual }
       const salva = await salvarNota(payload)
-      setNotaSelecionada(salva)
+      // Só atualiza o editor se o usuário ainda estiver na mesma nota
+      if (notaAtualRef.current === notaOrigem) {
+        notaAtualRef.current = salva
+        setNotaSelecionada(salva)
+      }
       setNotas(prev => {
         const existe = prev.find(n => n.id === salva.id)
         if (existe) return prev.map(n => n.id === salva.id ? salva : n)
         return [salva, ...prev]
       })
-      isDirty.current = false
       setSalvo(true)
       setTimeout(() => setSalvo(false), 2000)
-    } catch (e) { console.error(e) }
+    } catch (e) { console.error(e); isDirty.current = true; alert('Não foi possível salvar. Copie seu texto antes de sair da página.') }
     finally { setSalvando(false) }
+  }
+
+  async function abrirLixeira() {
+    try { setLixeira(await getLixeira(usuario.id)); setVerLixeira(true) } catch (e) { console.error(e) }
+  }
+
+  async function restaurarNota(nota) {
+    try {
+      const r = await restaurarNotaDb(nota.id)
+      setLixeira(prev => prev.filter(n => n.id !== nota.id))
+      setNotas(prev => [r, ...prev])
+    } catch (e) { console.error(e) }
   }
 
   async function excluirNota(nota, e) {
     e.stopPropagation()
     if (!nota.id) return
-    if (!window.confirm('Excluir esta nota?')) return
+    if (!window.confirm(`Mover "${nota.titulo || 'Sem título'}" para a Lixeira?`)) return
     try {
       await deletarNota(nota.id)
       const restantes = notas.filter(n => n.id !== nota.id)
@@ -169,7 +210,22 @@ export default function BlocoNotas() {
         </div>
 
         <div style={{ flex:1, overflowY:'auto' }}>
-          {loading ? (
+          {verLixeira ? (
+            <div>
+              <button onClick={() => setVerLixeira(false)} className="btn btn-ghost btn-sm" style={{ margin:10 }}><ArrowLeft size={12}/> Voltar às notas</button>
+              {lixeira.length === 0 ? (
+                <div style={{ padding:20, color:'var(--text-muted)', fontSize:13, textAlign:'center' }}>Lixeira vazia.</div>
+              ) : lixeira.map(nota => (
+                <div key={nota.id} style={{ padding:'10px 14px', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:600, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{nota.titulo || 'Sem título'}</div>
+                    <div style={{ fontSize:10, color:'var(--text-muted)', marginTop:3 }}>Excluída em {formatarData(nota.excluido_em)}</div>
+                  </div>
+                  <button onClick={() => restaurarNota(nota)} className="btn btn-ghost btn-sm" title="Restaurar"><RotateCcw size={12}/> Restaurar</button>
+                </div>
+              ))}
+            </div>
+          ) : loading ? (
             <div style={{ padding:20, color:'var(--text-muted)', fontSize:13 }}>Carregando...</div>
           ) : notas.length === 0 ? (
             <div style={{ padding:20, color:'var(--text-muted)', fontSize:13, textAlign:'center' }}>
@@ -197,6 +253,9 @@ export default function BlocoNotas() {
             ))
           )}
         </div>
+        {!verLixeira && (
+          <button onClick={abrirLixeira} className="btn btn-ghost btn-sm" style={{ margin:10, justifyContent:'center' }}><Trash2 size={12}/> Lixeira</button>
+        )}
       </div>
 
       {/* Editor */}
