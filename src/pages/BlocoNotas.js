@@ -48,6 +48,12 @@ async function getLixeira(usuarioId) {
   return data || []
 }
 
+// Exclusão definitiva (a versão final ainda fica guardada no histórico do banco)
+async function excluirDefinitivoDb(ids) {
+  const { error } = await supabase.from('bloco_notas').delete().in('id', ids)
+  if (error) throw error
+}
+
 async function restaurarNotaDb(id) {
   const { data, error } = await supabase.from('bloco_notas').update({ excluido_em: null }).eq('id', id).select().single()
   if (error) throw error
@@ -76,6 +82,7 @@ export default function BlocoNotas() {
 
   // Faz o container pai ocupar toda a altura sem scroll externo
   useLayoutEffect(() => {
+    // Ajusta o container pai para que position:absolute do BlocoNotas funcione
     const mainContent = document.querySelector('.main-content')
     const mainScroll = document.querySelector('.main-content > div')
     if (mainContent) mainContent.style.position = 'relative'
@@ -175,6 +182,23 @@ export default function BlocoNotas() {
     } catch (e) { console.error(e) }
   }
 
+  async function excluirDefinitivo(nota) {
+    if (!window.confirm(`Excluir "${nota.titulo || 'Sem título'}" definitivamente? Ela não aparecerá mais na Lixeira.`)) return
+    try {
+      await excluirDefinitivoDb([nota.id])
+      setLixeira(prev => prev.filter(n => n.id !== nota.id))
+    } catch (e) { console.error(e); alert('Não foi possível excluir.') }
+  }
+
+  async function esvaziarLixeira() {
+    if (lixeira.length === 0) return
+    if (!window.confirm(`Excluir definitivamente as ${lixeira.length} nota(s) da Lixeira?`)) return
+    try {
+      await excluirDefinitivoDb(lixeira.map(n => n.id))
+      setLixeira([])
+    } catch (e) { console.error(e); alert('Não foi possível esvaziar a Lixeira.') }
+  }
+
   async function excluirNota(nota, e) {
     e.stopPropagation()
     if (!nota.id) return
@@ -212,7 +236,12 @@ export default function BlocoNotas() {
         <div style={{ flex:1, overflowY:'auto' }}>
           {verLixeira ? (
             <div>
-              <button onClick={() => setVerLixeira(false)} className="btn btn-ghost btn-sm" style={{ margin:10 }}><ArrowLeft size={12}/> Voltar às notas</button>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'6px 4px' }}>
+                <button onClick={() => setVerLixeira(false)} className="btn btn-ghost btn-sm"><ArrowLeft size={12}/> Voltar</button>
+                {lixeira.length > 0 && (
+                  <button onClick={esvaziarLixeira} className="btn btn-ghost btn-sm" style={{ color:'var(--red, #c0392b)' }}><Trash2 size={12}/> Esvaziar</button>
+                )}
+              </div>
               {lixeira.length === 0 ? (
                 <div style={{ padding:20, color:'var(--text-muted)', fontSize:13, textAlign:'center' }}>Lixeira vazia.</div>
               ) : lixeira.map(nota => (
@@ -221,7 +250,10 @@ export default function BlocoNotas() {
                     <div style={{ fontSize:13, fontWeight:600, color:'var(--text)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{nota.titulo || 'Sem título'}</div>
                     <div style={{ fontSize:10, color:'var(--text-muted)', marginTop:3 }}>Excluída em {formatarData(nota.excluido_em)}</div>
                   </div>
-                  <button onClick={() => restaurarNota(nota)} className="btn btn-ghost btn-sm" title="Restaurar"><RotateCcw size={12}/> Restaurar</button>
+                  <div style={{ display:'flex', gap:2, flexShrink:0 }}>
+                    <button onClick={() => restaurarNota(nota)} className="btn btn-ghost btn-icon btn-sm" title="Restaurar"><RotateCcw size={13}/></button>
+                    <button onClick={() => excluirDefinitivo(nota)} className="btn btn-ghost btn-icon btn-sm" title="Excluir definitivamente" style={{ color:'var(--red, #c0392b)' }}><Trash2 size={13}/></button>
+                  </div>
                 </div>
               ))}
             </div>
