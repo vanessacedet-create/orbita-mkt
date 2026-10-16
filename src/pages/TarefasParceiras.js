@@ -23,11 +23,12 @@ import {
   Calendar, Flag, User, ChevronDown, List, Columns, Clock,
   AlertCircle, ArrowUp, Minus, CheckCircle2, Circle, LayoutList,
   CalendarDays, ChevronLeft, ChevronRight, Book, Search,
-  Upload, Download, FileSpreadsheet, ChevronUp, Users, Check, Database
+  Upload, Download, FileSpreadsheet, ChevronUp, Users, Check, Database, FolderOpen
 } from 'lucide-react'
 import { format, isPast, isToday, differenceInDays } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import * as XLSX from 'xlsx'
+import { SeletorPessoas, PainelProjetos, getProjetosParceiras } from './TarefasParceirasExtras'
 
 // ── CONSTANTES ─────────────────────────────────────────────
 const STATUS = [
@@ -212,16 +213,17 @@ function primeiraOcorrencia(tipo, cfg = {}) {
   return isoData(d)
 }
 
-function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
+function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete, projetos = [] }) {
   const { usuario } = useAuth()
   const ehAdminModal = usuario?.perfil === 'administrador' || usuario?.perfil === 'gerente'
   const usuariosSelecionaveis = ehAdminModal ? usuarios : usuarios.filter(u => (PERFIL_GRUPO[u.perfil] || null) === (PERFIL_GRUPO[usuario?.perfil] || null))
-  const EMPTY = { titulo:'', descricao:'', status:'a_fazer', prioridade:'media', responsaveis: [], data_prazo: tarefa?._dataPrazo || '', recorrencia_tipo:'', recorrencia_dia_semana:'1', recorrencia_dia_mes:'1' }
+  const EMPTY = { titulo:'', descricao:'', status:'a_fazer', prioridade:'media', responsaveis: [], data_prazo: tarefa?._dataPrazo || '', recorrencia_tipo:'', recorrencia_dia_semana:'1', recorrencia_dia_mes:'1', projeto_id: tarefa?._projetoId || '' }
   const [form, setForm] = useState(tarefa && !tarefa._dataPrazo ? {
     titulo: tarefa.titulo, descricao: tarefa.descricao || '', status: tarefa.status, prioridade: tarefa.prioridade,
     responsaveis: (tarefa.tarefa_responsaveis || []).map(r => r.usuario_id),
     data_prazo: tarefa.recorrencia_tipo ? (tarefa.recorrencia_fim || '') : (tarefa.data_prazo || ''),
     recorrencia_tipo: tarefa.recorrencia_tipo || '', recorrencia_dia_semana: String(tarefa.recorrencia_config?.dia_semana ?? '1'), recorrencia_dia_mes: String(tarefa.recorrencia_config?.dia_mes ?? '1'),
+    projeto_id: tarefa.projeto_id || '',
   } : EMPTY)
   const [checklist, setChecklist] = useState(tarefa?.tarefa_checklist || [])
   const [comentarios, setComentarios] = useState(tarefa?.tarefa_comentarios || [])
@@ -248,7 +250,7 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
         if (dataPrazoFinal > recorrenciaFim) { setErroForm('A data "repetir até" é anterior à primeira ocorrência da recorrência.'); setSaving(false); return }
       }
       setErroForm('')
-      await onSave({ ...resto, responsavel_id: responsaveis[0] || null, data_prazo: dataPrazoFinal, created_by: tarefa ? undefined : usuario?.id, recorrencia_ativa: !!recorrencia_tipo, recorrencia_tipo: recorrencia_tipo || null, recorrencia_config: recorrenciaConfig, recorrencia_fim: recorrenciaFim }, tarefa?.id, responsaveis, tarefa ? [] : checklist.filter(c => c._local))
+      await onSave({ ...resto, projeto_id: resto.projeto_id || null, responsavel_id: responsaveis[0] || null, data_prazo: dataPrazoFinal, created_by: tarefa ? undefined : usuario?.id, recorrencia_ativa: !!recorrencia_tipo, recorrencia_tipo: recorrencia_tipo || null, recorrencia_config: recorrenciaConfig, recorrencia_fim: recorrenciaFim }, tarefa?.id, responsaveis, tarefa ? [] : checklist.filter(c => c._local))
       onClose()
     } catch(e) { console.error(e) } finally { setSaving(false) }
   }
@@ -327,6 +329,7 @@ function ModalTarefa({ tarefa, usuarios, onSave, onClose, onDelete }) {
                 <div style={{fontSize:11,color:'var(--text-muted)',marginTop:4}}>A tarefa é concluída automaticamente quando todos marcarem a sua parte.</div>
               </div>
             )}
+            <div className="form-group"><label className="form-label">Projeto (opcional)</label><select className="form-select" value={form.projeto_id} onChange={e=>setForm(f=>({...f,projeto_id:e.target.value}))}><option value="">Sem projeto</option>{projetos.filter(p => p.status !== 'concluido' || p.id === form.projeto_id).map(p=><option key={p.id} value={p.id}>{p.nome}</option>)}</select></div>
             <div className="form-group"><label className="form-label">Livros relacionados (opcional)</label><SeletorLivros tarefaId={tarefa?.id} livrosVinculados={livrosVinculados} onChange={setLivrosVinculados}/></div>
           </div>
         )}
@@ -475,7 +478,7 @@ function ModalImportar({ usuarios, onClose, onImported }) {
         )}
       </div>
     </div>
-  )
+      )
 }
 
 // ── CARD KANBAN ────────────────────────────────────────────
@@ -955,7 +958,7 @@ function ViewBancoTarefas({ usuarios, usuario }) {
                     </div>
                     {isAdmin && (
                       <div style={{ display:'flex', gap:4 }}>
-                        <button className="btn btn-ghost btn-sm" style={{ fontSize:11 }} onClick={() => abrirAtribuir(s)}>Atribuir</button>
+                                              <button className="btn btn-ghost btn-sm" style={{ fontSize:11 }} onClick={() => abrirAtribuir(s)}>Atribuir</button>
                         <button className="btn btn-ghost btn-icon btn-sm" onClick={() => abrirModalBanco(s, t)}><Pencil size={11}/></button>
                         <button className="btn btn-danger btn-icon btn-sm" onClick={() => desativarTarefa(s.id)}><Trash2 size={11}/></button>
                       </div>
@@ -1425,7 +1428,7 @@ function ViewBancoTarefas({ usuarios, usuario }) {
             </div>
             <div className="form-actions"><button className="btn btn-ghost" onClick={() => setModalBanco(false)}>Cancelar</button><button className="btn btn-primary" onClick={salvarBanco} disabled={!formBanco.nome.trim()}>Salvar</button></div>
           </div>
-        </div>
+                  </div>
       )}
 
       {/* Modal: Atribuir */}
@@ -1541,6 +1544,11 @@ export default function Tarefas({ grupo: grupoFixo = null, titulo = 'Tarefas' })
   const [sortCol, setSortCol]         = useState('data_prazo')
   const [sortDir, setSortDir]         = useState('asc')
   const [abaView, setAbaView]         = useState('ativas')
+  // ── Parceiras: de quem ver, projetos ──
+  const [pessoasSel, setPessoasSel]   = useState(null)
+  const [projetos, setProjetos]       = useState([])
+  const [filtroProjeto, setFiltroProjeto] = useState('todos')
+  const ehSupervisora = usuario?.perfil === 'supervisor_parceiras'
   const menuRef = useRef()
 
   function toggleSort(col) {
@@ -1551,12 +1559,22 @@ export default function Tarefas({ grupo: grupoFixo = null, titulo = 'Tarefas' })
   async function carregar() {
     setLoading(true)
     try {
-      const [t, us] = await Promise.all([getTarefas(), getUsuarios()])
-      setTarefas(t); setUsuarios(us || [])
+      const [t, us, pj] = await Promise.all([getTarefas(), getUsuarios(), getProjetosParceiras().catch(() => [])])
+      setTarefas(t); setUsuarios(us || []); setProjetos(pj || [])
     } catch(e) { console.error(e) } finally { setLoading(false) }
   }
 
   useEffect(() => { carregar() }, [])
+
+  // Ao abrir: supervisora vê todas as pessoas marcadas; as demais, só o próprio nome
+  useEffect(() => {
+    if (pessoasSel !== null || !usuario?.id || usuariosDaEquipe.length === 0) return
+    setPessoasSel(ehSupervisora ? usuariosDaEquipe.map(u => u.id) : [usuario.id])
+  }, [usuariosDaEquipe.length, usuario?.id])
+
+  async function recarregarProjetos() {
+    try { setProjetos(await getProjetosParceiras()) } catch (e) { console.error(e) }
+  }
 
   useEffect(() => {
     function handleClick(e) { if (menuRef.current && !menuRef.current.contains(e.target)) setShowMenuNova(false) }
@@ -1621,6 +1639,8 @@ export default function Tarefas({ grupo: grupoFixo = null, titulo = 'Tarefas' })
     const idsResp = (t.tarefa_responsaveis || []).map(r => r.usuario_id)
     if (t.responsavel_id && !idsResp.includes(t.responsavel_id)) idsResp.push(t.responsavel_id)
     if (filtroResponsavel !== 'todos') { if (filtroResponsavel === 'minha' && !idsResp.includes(usuario?.id)) return false; if (filtroResponsavel !== 'minha' && !idsResp.includes(filtroResponsavel)) return false }
+    if (pessoasSel && !idsResp.some(id => pessoasSel.includes(id)) && !pessoasSel.includes(t.created_by)) return false
+    if (filtroProjeto !== 'todos' && (filtroProjeto === 'sem' ? !!t.projeto_id : t.projeto_id !== filtroProjeto)) return false
     const gruposTarefa = idsResp.map(id => grupoPorUsuario[id]).filter(Boolean)
     if (gruposTarefa.length === 0 && grupoPorUsuario[t.created_by]) gruposTarefa.push(grupoPorUsuario[t.created_by])
     if (grupoFixo) { if (!gruposTarefa.includes(grupoFixo)) return false }
@@ -1671,6 +1691,7 @@ export default function Tarefas({ grupo: grupoFixo = null, titulo = 'Tarefas' })
               { key:'lista',       label:'Lista',         Icon: List },
               { key:'calendario',  label:'Calendário',    Icon: CalendarDays },
               { key:'equipe',      label:'Equipe',        Icon: Users },
+              { key:'projetos',    label:'Projetos',      Icon: FolderOpen },
               { key:'banco',       label:'Banco',         Icon: Database },
             ].map(({ key, label, Icon }) => (
               <button key={key} onClick={() => { setView(key); localStorage.setItem('tarefas_view', key); }} style={{ padding:'7px 12px', border:'none', cursor:'pointer', background: view===key ? 'var(--accent)' : 'transparent', color: view===key ? '#fff' : 'var(--text-muted)', transition:'all 0.15s', display:'flex', alignItems:'center', gap:5, fontSize:12 }}>
@@ -1679,7 +1700,7 @@ export default function Tarefas({ grupo: grupoFixo = null, titulo = 'Tarefas' })
             ))}
           </div>
 
-          {view !== 'banco' && (
+          {view !== 'banco' && view !== 'projetos' && (
             <div ref={menuRef} style={{ position:'relative', display:'flex' }}>
               <button className="btn btn-primary" onClick={()=>setModal('new')} style={{ borderTopRightRadius:0, borderBottomRightRadius:0, borderRight:'1px solid rgba(255,255,255,0.2)' }}><Plus size={14}/> Nova tarefa</button>
               <button className="btn btn-primary" onClick={()=>setShowMenuNova(s=>!s)} style={{ borderTopLeftRadius:0, borderBottomLeftRadius:0, padding:'0 8px' }} aria-label="Mais opções">{showMenuNova ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}</button>
@@ -1695,7 +1716,7 @@ export default function Tarefas({ grupo: grupoFixo = null, titulo = 'Tarefas' })
       </div>
 
       {/* Abas Ativas / Concluídas — esconde na view banco */}
-      {view !== 'banco' && (
+      {view !== 'banco' && view !== 'projetos' && (
         <div style={{ display:'flex', borderBottom:'1px solid var(--border)', marginBottom:20 }}>
           {[{ k:'ativas', l:`Ativas (${tarefasAtivas.length})` }, { k:'concluidas', l:`Concluídas (${tarefasConcluidas.length})` }].map(({k,l}) => (
             <button key={k} onClick={()=>{ setAbaView(k); setFiltroStatus('todos'); setFiltroPrioridade('todas'); setFiltroResponsavel('todos') }} style={{ padding:'9px 18px', fontSize:13, fontWeight: abaView===k ? 700 : 400, cursor:'pointer', background:'none', border:'none', borderBottom: abaView===k ? '2px solid var(--accent)' : '2px solid transparent', color: abaView===k ? 'var(--accent)' : 'var(--text-muted)' }}>{l}</button>
@@ -1704,7 +1725,7 @@ export default function Tarefas({ grupo: grupoFixo = null, titulo = 'Tarefas' })
       )}
 
       {/* Filtros — esconde na view banco */}
-      {view !== 'banco' && (
+      {view !== 'banco' && view !== 'projetos' && (
         <div style={{ display:'flex', gap:10, marginBottom:20, flexWrap:'wrap' }}>
           <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 10px' }} value={filtroStatus} onChange={e=>setFiltroStatus(e.target.value)}>
             <option value="todos">Todos os status</option>
@@ -1714,11 +1735,12 @@ export default function Tarefas({ grupo: grupoFixo = null, titulo = 'Tarefas' })
             <option value="todas">Todas as prioridades</option>
             {PRIORIDADE.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}
           </select>
-          <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 10px' }} value={filtroResponsavel} onChange={e=>setFiltroResponsavel(e.target.value)}>
-            <option value="todos">Todos os responsáveis</option>
-            <option value="minha">Minhas tarefas</option>
-            {usuariosDaEquipe.map(u=><option key={u.id} value={u.id}>{u.nome}</option>)}
+          <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 10px' }} value={filtroProjeto} onChange={e=>setFiltroProjeto(e.target.value)}>
+            <option value="todos">Todos os projetos</option>
+            <option value="sem">Sem projeto</option>
+            {projetos.map(p=><option key={p.id} value={p.id}>{p.nome}</option>)}
           </select>
+          <div style={{ flexBasis:'100%' }}><SeletorPessoas usuarios={usuariosDaEquipe} selecionados={pessoasSel || []} onChange={setPessoasSel}/></div>
           {ehAdmin && !grupoFixo && (
             <select className="form-select" style={{ width:'auto', fontSize:12, padding:'6px 10px' }} value={filtroGrupo} onChange={e=>setFiltroGrupo(e.target.value)}>
               <option value="todos">Todos os grupos</option>
@@ -1736,6 +1758,9 @@ export default function Tarefas({ grupo: grupoFixo = null, titulo = 'Tarefas' })
 
       {/* BANCO */}
       {view === 'banco' && <ViewBancoTarefas usuarios={usuariosDaEquipe} usuario={usuario}/>}
+
+      {/* PROJETOS */}
+      {view === 'projetos' && <PainelProjetos usuario={usuario} projetos={projetos} tarefas={tarefas} onRecarregar={recarregarProjetos} showToast={showToast} onVerTarefas={(id) => { setFiltroProjeto(id); setPessoasSel(usuariosDaEquipe.map(u => u.id)); setAbaView('ativas'); setView('kanban'); localStorage.setItem('tarefas_view', 'kanban') }}/>}
 
       {/* KANBAN */}
       {view === 'kanban' && (
@@ -1779,7 +1804,7 @@ export default function Tarefas({ grupo: grupoFixo = null, titulo = 'Tarefas' })
       {view === 'equipe' && <ViewEquipe tarefas={tarefas} usuarios={usuariosDaEquipe} usuario={usuario} onOpen={t => setModal(t)}/>}
 
       {/* Modal de tarefa */}
-      {modal && <ModalTarefa tarefa={modal === 'new' ? null : modal} usuarios={usuariosDaEquipe} onSave={handleSave} onDelete={handleDelete} onClose={()=>{ setModal(null); carregar() }}/>}
+      {modal && <ModalTarefa tarefa={modal === 'new' ? null : modal} usuarios={usuariosDaEquipe} projetos={projetos} onSave={handleSave} onDelete={handleDelete} onClose={()=>{ setModal(null); carregar() }}/>}
 
       {/* Modal de importação */}
       {showImportar && <ModalImportar usuarios={usuariosDaEquipe} onClose={()=>setShowImportar(false)} onImported={()=>{ carregar(); showToast('Tarefas importadas!') }}/>}
