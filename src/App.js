@@ -213,6 +213,44 @@ const ADMIN_MENU_OCULTOS = new Set([
   '/cortesias-parceiras',
 ])
 
+// ── Editoras Parceiras: menu agrupado e itens escondidos para a área ──
+const PARCEIRAS_MENU_GRUPOS = [
+  {
+    key: 'tarefas', label: 'Tarefas', icon: CheckSquare,
+    items: [
+      { path: '/tarefas-parceiras', label: 'Tarefas' },
+      { path: '/monitoramento-parceiras', label: 'Monitoramento' },
+      { path: '/agenda', label: 'Agenda' },
+    ],
+  },
+  {
+    key: 'editoras', label: 'Editoras & Livrarias', icon: Building2,
+    items: [
+      { path: '/editoras-livrarias', label: 'Editoras & Livrarias' },
+      { path: '/crm-editoras-parceiras', label: 'Relacionamento' },
+    ],
+  },
+  {
+    key: 'rh', label: 'RH', icon: HeartHandshake,
+    items: [
+      { path: '/rh-parceiras', label: 'RH' },
+      { path: '/plano-carreira-parceiras', label: 'Plano de Carreira' },
+      { path: '/jornada-parceiras', label: 'Controle de Jornada' },
+    ],
+  },
+]
+
+// Itens que não aparecem no menu da área de Editoras Parceiras
+// (as telas e os dados continuam existindo).
+const PARCEIRAS_MENU_OCULTOS = new Set([
+  '/rh',
+  '/pda',
+  '/treinamentos',
+  '/treinamentos-parceiras',
+  '/lancamentos',
+  '/envio-brindes-equipe',
+])
+
 const PERFIL_LABEL = {
   administrador: 'Administrador', gerente: 'Gerente', estagiario_proprias: 'Estagiário Próprias', analista_proprias: 'Analista Próprias', supervisor_proprias: 'Supervisor Próprias', estagiario_influencers: 'Estagiário Influencers', analista_influencers: 'Analista Influencers', estagiario_marketplaces: 'Estagiário Mkt & Eventos', analista_marketplaces: 'Analista Mkt & Eventos', estagiario_parceiras: 'Estagiário Parceiras', analista_parceiras: 'Analista Parceiras', supervisor_parceiras: 'Supervisor Parceiras',
 }
@@ -230,12 +268,12 @@ function ModalVerComo({ todosUsuarios, usuarioAtual, onSelecionar, onFechar }) {
 }
 function BannerVerComo({ viewAs, onSair }) { return <div style={{background:'linear-gradient(90deg,#92400e,#b45309)',color:'#fef3c7',padding:'9px 20px',display:'flex',alignItems:'center',gap:10,fontSize:13}}><SwitchCamera size={15}/><span style={{flex:1}}>Modo visualização: <strong>{viewAs.nome}</strong></span><button onClick={onSair} className="btn btn-ghost btn-sm"><X size={13}/> Sair</button></div> }
 
-function MenuAdminUnificado({ menuVisivel, pedidosNovos }) {
+function MenuAdminUnificado({ menuVisivel, pedidosNovos, grupos = ADMIN_MENU_GRUPOS, ocultos = ADMIN_MENU_OCULTOS }) {
   const location = useLocation()
   const [abertos, setAbertos] = useState({})
-  const menuAdmin = menuVisivel.filter(item => !ADMIN_MENU_OCULTOS.has(item.path))
+  const menuAdmin = menuVisivel.filter(item => !ocultos.has(item.path))
   const porPath = new Map(menuAdmin.map(item => [item.path, item]))
-  const pathsAgrupados = new Set(ADMIN_MENU_GRUPOS.flatMap(g => g.items.map(i => i.path)))
+  const pathsAgrupados = new Set(grupos.flatMap(g => g.items.map(i => i.path)))
   const gruposRenderizados = new Set()
   const saida = []
 
@@ -250,7 +288,7 @@ function MenuAdminUnificado({ menuVisivel, pedidosNovos }) {
       continue
     }
 
-    const grupo = ADMIN_MENU_GRUPOS.find(g => g.items.some(i => i.path === item.path))
+    const grupo = grupos.find(g => g.items.some(i => i.path === item.path))
     if (!grupo || gruposRenderizados.has(grupo.key)) continue
     gruposRenderizados.add(grupo.key)
 
@@ -294,9 +332,9 @@ function Shell() {
   useEffect(() => { async function f(){ const {count}=await supabase.from('vitrine_pedidos').select('*',{count:'exact',head:true}).eq('status','novo'); setPedidosNovos(count||0)} f(); const i=setInterval(f,30000); return()=>clearInterval(i)},[])
   async function handleLogout(){ setViewAs(null); await signOut() }
   const ehDono=(session?.user?.email||'').toLowerCase()===DONO_EMAIL.toLowerCase()
-  const menuVisivel=MENU.filter(m=>{if(ehDono&&!viewAs&&['/campanhas','/promocoes-parceiras'].includes(m.path))return false;if(m.soEmail&&!ehDono)return false;if(m.soBrindes&&!acessoBrindes)return false;if(m.ocultarPerfis&&m.ocultarPerfis.includes(perfilAtivo))return false;return m.sempreVisivel||canAtivo(m.modulo)}).filter((m,i,a)=>a.findIndex(x=>x.path===m.path)===i)
+  const menuVisivel=MENU.filter(m=>{if(ehDono&&!viewAs&&['/campanhas','/promocoes-parceiras'].includes(m.path))return false;if(m.soEmail&&!ehDono)return false;if(m.soBrindes&&!acessoBrindes)return false;if(PERFIS_PARCEIRAS.includes(perfilAtivo)&&PARCEIRAS_MENU_OCULTOS.has(m.path))return false;if(m.ocultarPerfis&&m.ocultarPerfis.includes(perfilAtivo))return false;return m.sempreVisivel||canAtivo(m.modulo)}).filter((m,i,a)=>a.findIndex(x=>x.path===m.path)===i)
   const usuarioDisplay=viewAs||usuario
-  return <ViewAsContext.Provider value={{perfilAtivo,usuarioAtivo:usuarioDisplay,estaEmModoVisual:!!viewAs}}><div className="app-shell"><aside className="sidebar"><div className="sidebar-brand"><Orbit size={20} strokeWidth={1.5} className="brand-icon"/><div><div className="brand-name">Orbita MKT</div><div className="brand-sub">CEDET</div></div></div><nav className="sidebar-nav">{perfilAtivo==='administrador'?<MenuAdminUnificado menuVisivel={menuVisivel} pedidosNovos={pedidosNovos}/>:menuVisivel.map(({path,label,icon:Icon})=><NavLink key={path} to={path} className={({isActive})=>isActive?'nav-item active':'nav-item'}><Icon size={17}/><span>{label}</span>{path==='/vitrine-admin'&&pedidosNovos>0&&<span style={{marginLeft:'auto'}}>{pedidosNovos}</span>}</NavLink>)}</nav>{podeUsarVerComo&&<button onClick={()=>setShowModal(true)} className="btn btn-ghost" style={{margin:10}}><SwitchCamera size={14}/> Visualizar como...</button>}<div className="sidebar-user">{usuarioDisplay&&<><div className="user-avatar">{(usuarioDisplay.nome||'U')[0].toUpperCase()}</div><div className="user-info"><div className="user-name">{usuarioDisplay.nome}</div><div className="user-perfil" style={{color:PERFIL_COLOR[usuarioDisplay.perfil]}}>{PERFIL_LABEL[usuarioDisplay.perfil]||usuarioDisplay.perfil}</div></div></>}<button className="btn-logout" onClick={handleLogout}><LogOut size={15}/></button></div></aside><main className="main-content" style={{display:'flex',flexDirection:'column'}}>{viewAs&&<BannerVerComo viewAs={viewAs} onSair={()=>setViewAs(null)}/>}<div style={{flex:1,overflow:'auto'}}><Suspense fallback={<div className="loading"><div className="spinner"/></div>}><Routes>
+  return <ViewAsContext.Provider value={{perfilAtivo,usuarioAtivo:usuarioDisplay,estaEmModoVisual:!!viewAs}}><div className="app-shell"><aside className="sidebar"><div className="sidebar-brand"><Orbit size={20} strokeWidth={1.5} className="brand-icon"/><div><div className="brand-name">Orbita MKT</div><div className="brand-sub">CEDET</div></div></div><nav className="sidebar-nav">{perfilAtivo==='administrador'?<MenuAdminUnificado menuVisivel={menuVisivel} pedidosNovos={pedidosNovos}/>:PERFIS_PARCEIRAS.includes(perfilAtivo)?<MenuAdminUnificado menuVisivel={menuVisivel} pedidosNovos={pedidosNovos} grupos={PARCEIRAS_MENU_GRUPOS} ocultos={new Set()}/>:menuVisivel.map(({path,label,icon:Icon})=><NavLink key={path} to={path} className={({isActive})=>isActive?'nav-item active':'nav-item'}><Icon size={17}/><span>{label}</span>{path==='/vitrine-admin'&&pedidosNovos>0&&<span style={{marginLeft:'auto'}}>{pedidosNovos}</span>}</NavLink>)}</nav>{podeUsarVerComo&&<button onClick={()=>setShowModal(true)} className="btn btn-ghost" style={{margin:10}}><SwitchCamera size={14}/> Visualizar como...</button>}<div className="sidebar-user">{usuarioDisplay&&<><div className="user-avatar">{(usuarioDisplay.nome||'U')[0].toUpperCase()}</div><div className="user-info"><div className="user-name">{usuarioDisplay.nome}</div><div className="user-perfil" style={{color:PERFIL_COLOR[usuarioDisplay.perfil]}}>{PERFIL_LABEL[usuarioDisplay.perfil]||usuarioDisplay.perfil}</div></div></>}<button className="btn-logout" onClick={handleLogout}><LogOut size={15}/></button></div></aside><main className="main-content" style={{display:'flex',flexDirection:'column'}}>{viewAs&&<BannerVerComo viewAs={viewAs} onSair={()=>setViewAs(null)}/>}<div style={{flex:1,overflow:'auto'}}><Suspense fallback={<div className="loading"><div className="spinner"/></div>}><Routes>
     <Route path="/" element={<RequireAuth><BemVindo menu={menuVisivel}/></RequireAuth>}/><Route path="/dashboard" element={<RequireAuth modulo="dashboard"><Dashboard/></RequireAuth>}/><Route path="/dashboard-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><DashboardParceiras/></RequireAuth>}/><Route path="/base-comando" element={<RequireAuth><BaseComando/></RequireAuth>}/><Route path="/cortesias" element={<RequireAuth modulo="cortesias"><Cortesias/></RequireAuth>}/><Route path="/parceiros" element={<RequireAuth modulo="parceiros"><Parceiros/></RequireAuth>}/><Route path="/usuarios" element={<RequireAuth modulo="usuarios"><Usuarios/></RequireAuth>}/><Route path="/acessos-equipe" element={<RequireAuth modulo="acessos_equipe"><AcessosEquipe/></RequireAuth>}/><Route path="/campanhas" element={<RequireAuth modulo="campanhas"><Campanhas/></RequireAuth>}/><Route path="/monitoramento" element={<RequireAuth modulo="monitoramento"><Monitoramento/></RequireAuth>}/><Route path="/monitoramento-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><MonitoramentoParceiras/></RequireAuth>}/><Route path="/crm-influencers" element={<RequireAuth modulo="crm_influencers"><CRM grupo="influencers" titulo="CRM Influencers"/></RequireAuth>}/><Route path="/calculadora-influenciadores" element={<RequireAuth modulo="calculadora_influenciadores"><CalculadoraInfluenciadores/></RequireAuth>}/><Route path="/crm-parceiras" element={<RequireAuth modulo="crm_parceiras"><CRM grupo="parceiras" titulo="CRM Parceiras"/></RequireAuth>}/><Route path="/crm-editoras-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><CRMEditorasParceiras/></RequireAuth>}/><Route path="/editoras-livrarias" element={<RequireAuth modulo="tarefas_parceiras"><EditorasLivrarias/></RequireAuth>}/><Route path="/promocoes-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><PromocoesParceiras/></RequireAuth>}/><Route path="/calculadora" element={<RequireAuth modulo="calculadora"><Calculadora/></RequireAuth>}/><Route path="/rh" element={<RequireAuth modulo="rh"><RH/></RequireAuth>}/><Route path="/rh-parceiras" element={<RequireAuth modulo="rh_parceiras"><RHParceiras/></RequireAuth>}/><Route path="/eventos" element={<RequireAuth modulo="eventos"><Eventos/></RequireAuth>}/><Route path="/lancamentos" element={<RequireAuth modulo="lancamentos"><Lancamentos/></RequireAuth>}/><Route path="/tarefas" element={<RequireAuth modulo="tarefas"><Tarefas/></RequireAuth>}/><Route path="/tarefas-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><TarefasParceiras grupo="parceiras" titulo="Tarefas — Editoras Parceiras"/></RequireAuth>}/><Route path="/tarefas-influencers" element={<RequireAuth modulo="tarefas_influencers"><TarefasInfluencers2/></RequireAuth>}/><Route path="/tarefas-marketplaces" element={<RequireAuth modulo="tarefas_marketplaces"><TarefasMarketplaces/></RequireAuth>}/><Route path="/agenda" element={<RequireAuth modulo="tarefas_parceiras"><Agenda/></RequireAuth>}/><Route path="/calendario-divulgacoes" element={<RequireAuth modulo="calendario_divulgacoes"><CalendarioDivulgacoes/></RequireAuth>}/><Route path="/treinamentos" element={<RequireAuth modulo="treinamentos"><Treinamentos/></RequireAuth>}/><Route path="/treinamentos-parceiras" element={<RequireAuth modulo="treinamentos_parceiras"><TreinamentosParceiras/></RequireAuth>}/><Route path="/jornada-parceiras" element={<RequireAuth modulo="jornada_parceiras"><JornadaParceiras/></RequireAuth>}/><Route path="/pda" element={<RequireAuth modulo="pda"><PDA/></RequireAuth>}/><Route path="/pda-parceiras" element={<RequireAuth modulo="pda_parceiras"><PDAParceiras/></RequireAuth>}/><Route path="/cac-ltv" element={<RequireAuth modulo="cac_ltv"><CacLtv/></RequireAuth>}/><Route path="/vitrine-admin" element={<RequireAuth modulo="parceiros"><VitrineAdmin/></RequireAuth>}/><Route path="/envio-brindes-equipe" element={<RequireAuth><EnvioBrindesEquipe/></RequireAuth>}/><Route path="/guia-parcerias" element={<RequireAuth modulo="guia_parcerias"><GuiaParcerias/></RequireAuth>}/><Route path="/pedidos-crm" element={<RequireAuth modulo="pedidos_crm"><PedidosCRM/></RequireAuth>}/><Route path="/crm-inteligencia" element={<RequireAuth modulo="crm_inteligencia"><CRMInteligencia/></RequireAuth>}/><Route path="/notas" element={<RequireAuth><BlocoNotas/></RequireAuth>}/><Route path="/influencers-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><InfluencersParceiras/></RequireAuth>}/><Route path="/vitrine-parceiras-admin" element={<RequireAuth modulo="tarefas_parceiras"><VitrineParceirasAdmin/></RequireAuth>}/><Route path="/cortesias-parceiras" element={<RequireAuth modulo="tarefas_parceiras"><CortesiasParceiras/></RequireAuth>}/><Route path="/plano-carreira-parceiras" element={<RequireAuth modulo="rh_parceiras"><PlanoCarreiraParceiras/></RequireAuth>}/><Route path="/configuracoes" element={<RequireAuth><Configuracoes tema={tema} corDestaque={corDestaque} onTemaChange={handleTemaChange} onCorChange={handleCorChange}/></RequireAuth>}/>
   </Routes></Suspense></div></main>{showModal&&<ModalVerComo todosUsuarios={todosUsuarios} usuarioAtual={usuario} onSelecionar={u=>{setViewAs(u);setShowModal(false)}} onFechar={()=>setShowModal(false)}/>}</div></ViewAsContext.Provider>
 }
