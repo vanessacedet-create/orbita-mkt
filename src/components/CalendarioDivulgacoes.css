@@ -1,1 +1,47 @@
 .cd-calendario{width:100%;color:var(--text,#172033)}.cd-toolbar,.cd-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.cd-toolbar{margin:15px 0}.cd-nav button,.cd-event,.cd-panel button{cursor:pointer}.cd-nav button{background:var(--surface-2,#f7f7f8);border:1px solid var(--border,#ddd);border-radius:8px;padding:8px 12px;color:inherit}.cd-nav button[aria-pressed=true]{background:var(--accent,#df6538);color:white}.cd-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border-top:1px solid var(--border,#ddd);border-left:1px solid var(--border,#ddd)}.cd-weekday{text-align:center;padding:10px 2px;background:var(--surface-2,#f7f7f8);font-size:12px;font-weight:600;border-right:1px solid var(--border,#ddd)}.cd-day{min-width:0;min-height:112px;padding:6px;border-right:1px solid var(--border,#ddd);border-bottom:1px solid var(--border,#ddd)}.cd-daynum{font-size:12px;font-weight:600;margin-bottom:5px}.cd-outside{opacity:.45}.cd-event{display:flex;flex-direction:column;width:100%;min-width:0;text-align:left;border:0;border-left:3px solid currentColor;border-radius:4px;padding:6px;margin-bottom:4px;color:inherit;background:var(--surface-2,#eee)}.cd-event span{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}.cd-event small{font-size:10px;white-space:normal}.cd-selected{outline:2px solid var(--accent,#df6538)}.cd-pendente{color:#888}.cd-aguardando_aprovacao{color:#b68a12}.cd-agendado{color:#3485ca}.cd-postado{color:#22976a}.cd-legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;margin-top:10px}.cd-panel{padding:18px;background:var(--surface-2,#fafafa);border:1px solid var(--border,#ddd);border-radius:12px;margin-top:16px}.cd-panel label{display:block;font-size:13px;margin:10px 0 4px}.cd-panel input,.cd-panel select,.cd-panel textarea{box-sizing:border-box;display:block;width:100%;padding:9px;border:1px solid var(--border,#ccc);border-radius:6px;background:var(--surface,#fff);color:var(--text,#222);font:inherit}.cd-panel textarea{min-height:85px}.cd-panel button{padding:9px 14px;margin-top:12px;border:0;border-radius:6px;background:var(--accent,#df6538);color:white}.cd-page{max-width:1200px;margin:0 auto;padding:22px}.cd-page h1{font-size:24px}.cd-error{color:#d04444}.cd-public{font-family:system-ui,sans-serif;background:#f6f7f9;color:#222;min-height:100vh}.cd-public .cd-calendario{color:#222}.cd-public .cd-day{background:#fff}.cd-public .cd-panel{background:#fff}.cd-public .cd-panel input,.cd-public .cd-panel select{background:#fff;color:#222}.cd-public .cd-nav button{color:#222}@media(max-width:700px){.cd-page{padding:12px}.cd-day{min-height:74px;padding:3px}.cd-weekday{font-size:10px}.cd-event{padding:3px;border-left-width:2px}.cd-event span{font-size:9px;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.cd-event small{display:none}.cd-toolbar{align-items:flex-start}.cd-nav strong{font-size:14px}.cd-nav button{padding:7px}.cd-legend{font-size:11px}}
+
+/* Public partner view: explicit accessible colors, independent of the Órbita dark theme. */
+.cd-public .cd-nav button {
+  background: #1f2433;
+  border-color: #1f2433;
+  color: #fff;
+}
+.cd-public .cd-nav button:hover,
+.cd-public .cd-nav button:focus-visible {
+  background: #343d52;
+  border-color: #343d52;
+  color: #fff;
+}
+.cd-public .cd-nav button[aria-pressed="true"] {
+  background: #df6538;
+  border-color: #df6538;
+  color: #fff;
+}
+.cd-public .cd-nav button:focus-visible,
+.cd-public .cd-event:focus-visible {
+  outline: 3px solid #df6538;
+  outline-offset: 2px;
+}
+.cd-public .cd-weekday {
+  background: #1f2433;
+  color: #fff;
+}
+.cd-public .cd-toolbar strong,
+.cd-public .cd-daynum {
+  color: #1a1c26;
+}
+.cd-public .cd-event {
+  background: #f0f3f8;
+  color: #1a1c26;
+  border-left-color: #64748b;
+}
+.cd-public .cd-event.cd-pendente { border-left-color: #64748b; }
+.cd-public .cd-event.cd-aguardando_aprovacao { border-left-color: #b7791f; }
+.cd-public .cd-event.cd-agendado { border-left-color: #2366b1; }
+.cd-public .cd-event.cd-postado { border-left-color: #13835a; }
+.cd-public .cd-event small { color: #3c4859; }
+.cd-public .cd-legend .cd-pendente { color: #596578; }
+.cd-public .cd-legend .cd-aguardando_aprovacao { color: #956015; }
+.cd-public .cd-legend .cd-agendado { color: #215f9d; }
+.cd-public .cd-legend .cd-postado { color: #13714f; }
+.cd-public .cd-panel button { color: #fff; }
