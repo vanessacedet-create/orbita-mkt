@@ -14,7 +14,7 @@ export default function CalendarioDivulgacoes(){
  const {data,error}=id?await supabase.from('calendario_divulgacoes').update(payload).eq('id',id).select().single():await supabase.from('calendario_divulgacoes').insert(payload).select().single()
  setCarregando(false);if(error){setErro(error.message);return}setItems(list=>[...list.filter(i=>i.id!==data.id),data].sort((a,b)=>a.data_publicacao.localeCompare(b.data_publicacao)));setForm(data);setAviso('Divulgação salva.')}
  const excluir=async()=>{if(!form?.id||!window.confirm('Excluir esta divulgação?'))return;const {error}=await supabase.from('calendario_divulgacoes').delete().eq('id',form.id);if(error)return setErro(error.message);setItems(list=>list.filter(x=>x.id!==form.id));setForm(null)}
- const gerarLink=async()=>{setErro('');setAviso('');setLink('');if(!parceiroId)return;const array=new Uint8Array(48);window.crypto.getRandomValues(array);const token=Array.from(array,b=>b.toString(16).padStart(2,'0')).join('')
+ const gerarLink=async()=>{setErro('');setAviso('');setLink('');if(!parceiroId)return;const array=new Uint8Array(16);window.crypto.getRandomValues(array);const token=Array.from(array,b=>b.toString(16).padStart(2,'0')).join('')
  const {data,error}=await supabase.rpc('calendario_criar_link',{p_parceiro:parceiroId,p_token:token});if(error||!data)return setErro(error?.message||'Não foi possível criar o link')
  const url=window.location.origin+'/calendario/parceiro/'+token;setLink(url);setAviso('Link criado. Copie agora: por segurança, ele não poderá ser recuperado depois. Gerar novamente revoga o anterior.')}
  const v=(field,value)=>setForm(f=>({...f,[field]:value}))
