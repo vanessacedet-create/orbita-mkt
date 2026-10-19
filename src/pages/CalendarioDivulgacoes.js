@@ -25,7 +25,7 @@ export default function CalendarioDivulgacoes(){
  <CalendarioGrade items={items} selectedId={form?.id} onSelect={setForm}/>
  {form&&<div className="cd-panel"><h3>{form.id?'Editar divulgação':'Nova divulgação'}</h3><label>Data</label><input type="date" value={form.data_publicacao||''} onChange={e=>v('data_publicacao',e.target.value)}/>
  <label>Título</label><input value={form.titulo||''} onChange={e=>v('titulo',e.target.value)}/>
- <label>Formato</label><select value={form.tipo} onChange={e=>v('tipo',e.target.value)}>{['Reels','Stories','Carrossel','Post','Live','Outro'].map(x=><option key={x}>{x}</option>)}</select>
+ <label>Formato</label><select value={form.tipo} onChange={e=>v('tipo',e.target.value)}>{['Reels','Stories','Carrossel','Post','Live','Vídeo no YouTube','Outro'].map(x=><option key={x}>{x}</option>)}</select>
  <label>Livro relacionado (opcional)</label><input placeholder="Busque pelo título, autor ou ISBN" value={livroBusca} onChange={e=>setLivroBusca(e.target.value)}/><select value={form.livro_id||''} onChange={e=>v('livro_id',e.target.value)}><option value="">Nenhum livro selecionado</option>{form.livro_id&&!livros.some(l=>l.id===form.livro_id)&&<option value={form.livro_id}>Livro selecionado (busque para alterar)</option>}{livros.map(l=><option key={l.id} value={l.id}>{l.titulo}</option>)}</select>
  <label>Tema / sugestão</label><textarea value={form.tema||''} onChange={e=>v('tema',e.target.value)}/>
  <label>Roteiro</label><textarea value={form.roteiro||''} onChange={e=>v('roteiro',e.target.value)}/>
