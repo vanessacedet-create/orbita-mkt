@@ -29,3 +29,12 @@ export function moverNoDia(ids, idsDoDia, origem, destino) {
   const conjunto = new Set(idsDoDia)
   return ids.map(id => conjunto.has(id) ? movidos[i++] : id)
 }
+
+// Mantém os cartões da equipe nos mesmos lugares; só ordena os da Yasmin.
+export function ordenarYasminNaLista(lista, fila) {
+  const visiveis = new Set(lista.map(t => t.id))
+  const ordenadas = fila.filter(t => visiveis.has(t.id))
+  const ids = new Set(ordenadas.map(t => t.id))
+  let i = 0
+  return lista.map(t => ids.has(t.id) ? ordenadas[i++] : t)
+}

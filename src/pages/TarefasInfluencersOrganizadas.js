@@ -1,4 +1,4 @@
-import { ordenarFilaYasmin, moverNoDia, separarAgendaYasmin } from '../lib/fila-yasmin'
+import { ordenarFilaYasmin, moverNoDia, separarAgendaYasmin, ordenarYasminNaLista } from '../lib/fila-yasmin'
 import { getFilaYasminInf, salvarFilaYasminInf } from '../lib/tarefas-influencers'
 import { useEffect, useMemo, useState } from 'react'
 import {
@@ -549,7 +549,7 @@ export default function TarefasInfluencersOrganizadas() {
   }
   useEffect(() => { carregar() }, [])
   useEffect(() => {
-    if (visao !== 'execucao' || filaSalvando) return
+    if (!['execucao', 'lista'].includes(visao) || !fila?.responsavel_id || filaSalvando) return
     let ativo = true
     async function atualizarFila() {
       if (document.hidden) return
@@ -563,7 +563,7 @@ export default function TarefasInfluencersOrganizadas() {
     const timer = setInterval(atualizarFila, 20000)
     window.addEventListener('focus', atualizarFila)
     return () => { ativo = false; clearInterval(timer); window.removeEventListener('focus', atualizarFila) }
-  }, [visao, filaSalvando])
+  }, [visao, filaSalvando, fila?.responsavel_id])
   const base = tarefas
   const filtradas = useMemo(() => base.filter(t => {
     if (responsavelFiltro && !responsaveisDa(t).some(r => r.id === responsavelFiltro)) return false
@@ -574,6 +574,31 @@ export default function TarefasInfluencersOrganizadas() {
     return !['concluida','cancelada'].includes(t.status)
   }).sort(compararPrioridade), [base, filtro, responsavelFiltro])
   const filaTarefas = useMemo(() => fila ? ordenarFilaYasmin(tarefas, fila.responsavel_id, fila.ordem, compararPrioridade) : [], [tarefas, fila])
+  const listaOrdenada = useMemo(() => ordenarYasminNaLista(filtradas, filaTarefas), [filtradas, filaTarefas])
+  const idsVisiveisYasmin = listaOrdenada.filter(t => filaTarefas.some(f => f.id === t.id)).map(t => t.id)
+  async function moverNaLista(origem, destino) {
+    if (!isAdmin || !fila || filaSalvando || origem === destino) return
+    setFilaSalvando(true); setFilaErro('')
+    try {
+      const ordem = moverNoDia(filaTarefas.map(t => t.id), idsVisiveisYasmin, origem, destino)
+      setFila(await salvarFilaYasminInf(ordem, fila.versao))
+    } catch (e) { setFilaErro(e.message) }
+    finally { setFilaSalvando(false); setArrastando(null) }
+  }
+  function cartaoNaLista(t) {
+    const indice = idsVisiveisYasmin.indexOf(t.id)
+    return <div key={t.id} onDragOver={e => { if (isAdmin && indice >= 0) e.preventDefault() }} onDrop={e => { e.preventDefault(); if (indice >= 0 && arrastando) moverNaLista(arrastando, t.id) }}>
+      {indice >= 0 && <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap', marginBottom:7 }}>
+        <strong style={{ fontSize:12 }}>Ordem de execução · Yasmin · {indice + 1}ª nesta lista</strong>
+        {isAdmin && <>
+          <button className="btn btn-ghost btn-sm" aria-label="Arrastar tarefa da Yasmin" draggable={!filaSalvando} disabled={filaSalvando} onDragStart={() => setArrastando(t.id)} onDragEnd={() => setArrastando(null)}>⠿ Arrastar</button>
+          <button className="btn btn-ghost btn-sm" aria-label="Subir tarefa da Yasmin" disabled={filaSalvando || indice === 0} onClick={() => moverNaLista(t.id, idsVisiveisYasmin[indice - 1])}>↑ Subir</button>
+          <button className="btn btn-ghost btn-sm" aria-label="Descer tarefa da Yasmin" disabled={filaSalvando || indice === idsVisiveisYasmin.length - 1} onClick={() => moverNaLista(t.id, idsVisiveisYasmin[indice + 1])}>↓ Descer</button>
+        </>}
+      </div>}
+      <TaskCard tarefa={t} onStatus={mudarStatus} onEdit={setTarefaEditando} onDelete={excluir} podeEditar={podeEditar} podeExcluir={isAdmin}/>
+    </div>
+  }
   const agenda = fila?.agenda || {}
   const { doDia, semDia, anteriores } = separarAgendaYasmin(filaTarefas, agenda, diaExecucao, hojeISO())
   const proximas = doDia.filter(t => t.status !== 'pausada')
@@ -662,7 +687,7 @@ export default function TarefasInfluencersOrganizadas() {
   }
 
   if (modelosAberto) return <div style={{ padding:'24px 28px 40px', maxWidth:1600, margin:'0 auto' }}><div style={{ display:'flex', justifyContent:'space-between', marginBottom:16 }}><div><h1 className="page-title" style={{ margin:0 }}>Modelos de tarefa</h1><p style={{ margin:'5px 0 0', fontSize:12, color:'var(--text-muted)' }}>Cadastre tipos de atividade, instruções e checklists reutilizáveis.</p></div><button className="btn btn-ghost" onClick={() => { setModelosAberto(false); carregar() }}>Voltar às tarefas</button></div><ModelosTarefasInfluencers /></div>
-  return <div style={{ padding:'24px 28px 40px', maxWidth:1500, margin:'0 auto' }}><div style={{ display:'flex', justifyContent:'space-between', gap:16, marginBottom:20, flexWrap:'wrap' }}><div><h1 className="page-title" style={{ margin:0 }}>Tarefas Influencers</h1><p style={{ margin:'5px 0 0', color:'var(--text-muted)', fontSize:12 }}>Tarefas antigas e novas reunidas em uma única visão.</p></div><div style={{ display:'flex', gap:8, flexWrap:'wrap' }}><button className="btn btn-ghost" onClick={carregar}><RefreshCw size={14}/> Atualizar</button>{isAdmin && <button className="btn btn-ghost" onClick={() => setModelosAberto(true)}><Settings size={14}/> Configurar modelos</button>}{podeCriar && <button className="btn btn-primary" onClick={abrirNovaTarefa}><Plus size={14}/> Nova tarefa</button>}</div></div><div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:10, marginBottom:18 }}><ResumoCard icon={AlertTriangle} label="Atrasadas" value={resumo.atrasadas} tone="#ef4444"/><ResumoCard icon={CalendarDays} label="Para hoje" value={resumo.hoje} tone="#f59e0b"/><ResumoCard icon={Clock} label="Em andamento" value={resumo.andamento} tone="#6366f1"/><ResumoCard icon={CheckCircle2} label="Concluídas na semana" value={resumo.concluidas} tone="#10b981"/></div><div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:16 }}>{['todas','hoje','atrasadas','semana','concluidas'].map(v => <button key={v} className={filtro === v ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm'} onClick={() => { setFiltro(v); if (visao === 'execucao') setVisao('lista') }}>{({ todas:'Todas', hoje:'Hoje', atrasadas:'Atrasadas', semana:'Esta semana', concluidas:'Concluídos' })[v]}</button>)}<div style={{ display:'flex', gap:6, marginLeft:'auto' }}>{[...(fila ? [['execucao','Ordem Yasmin']] : []), ['lista','Lista'],['calendario','Calendário']].map(([v,l]) => <button key={v} className={visao === v ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm'} onClick={() => setVisao(v)}>{v === 'calendario' ? <CalendarDays size={13}/> : <ListTodo size={13}/>} {l}</button>)}</div>{isAdmin && <select className="form-select" style={{ width:'auto' }} value={responsavelFiltro} onChange={e => { setResponsavelFiltro(e.target.value); setVisao('lista') }}><option value="">Toda a equipe</option>{usuarios.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}</select>}</div>{loading ? <div className="loading"><div className="spinner"/></div> : visao === 'execucao' && fila ? filaView : visao === 'calendario' ? <CalendarioTarefas eventos={eventos} escopo={escopo} setEscopo={setEscopo} ancora={ancora} setAncora={setAncora} diaSel={diaSel} setDiaSel={setDiaSel}/> : filtradas.length === 0 ? <div className="empty-state"><p>Nenhuma tarefa encontrada neste filtro.</p></div> : <div style={{ display:'grid', gap:10 }}>{filtradas.map(t => <TaskCard key={t.id} tarefa={t} onStatus={mudarStatus} onEdit={setTarefaEditando} onDelete={excluir} podeEditar={podeEditar} podeExcluir={isAdmin}/>)}</div>}{modalNova && <ModalNovaTarefa modelos={modelos} parceiros={parceiros} livros={livros} usuarios={usuarios} usuario={usuario} onClose={() => setModalNova(false)} onCreated={nova => setTarefas(prev => [nova, ...prev])}/>} {tarefaEditando && <ModalEditarTarefa tarefa={tarefaEditando} parceiros={parceiros} livros={livros} usuarios={usuarios} onClose={() => setTarefaEditando(null)} onSaved={salva => setTarefas(prev => prev.map(x => x.id === tarefaEditando.id ? salva : x))}/>}</div>
+  return <div style={{ padding:'24px 28px 40px', maxWidth:1500, margin:'0 auto' }}><div style={{ display:'flex', justifyContent:'space-between', gap:16, marginBottom:20, flexWrap:'wrap' }}><div><h1 className="page-title" style={{ margin:0 }}>Tarefas Influencers</h1><p style={{ margin:'5px 0 0', color:'var(--text-muted)', fontSize:12 }}>Tarefas antigas e novas reunidas em uma única visão.</p></div><div style={{ display:'flex', gap:8, flexWrap:'wrap' }}><button className="btn btn-ghost" onClick={carregar}><RefreshCw size={14}/> Atualizar</button>{isAdmin && <button className="btn btn-ghost" onClick={() => setModelosAberto(true)}><Settings size={14}/> Configurar modelos</button>}{podeCriar && <button className="btn btn-primary" onClick={abrirNovaTarefa}><Plus size={14}/> Nova tarefa</button>}</div></div><div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:10, marginBottom:18 }}><ResumoCard icon={AlertTriangle} label="Atrasadas" value={resumo.atrasadas} tone="#ef4444"/><ResumoCard icon={CalendarDays} label="Para hoje" value={resumo.hoje} tone="#f59e0b"/><ResumoCard icon={Clock} label="Em andamento" value={resumo.andamento} tone="#6366f1"/><ResumoCard icon={CheckCircle2} label="Concluídas na semana" value={resumo.concluidas} tone="#10b981"/></div><div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:16 }}>{['todas','hoje','atrasadas','semana','concluidas'].map(v => <button key={v} className={filtro === v ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm'} onClick={() => { setFiltro(v); if (visao === 'execucao') setVisao('lista') }}>{({ todas:'Todas', hoje:'Hoje', atrasadas:'Atrasadas', semana:'Esta semana', concluidas:'Concluídos' })[v]}</button>)}<div style={{ display:'flex', gap:6, marginLeft:'auto' }}>{[...(fila ? [['execucao','Ordem Yasmin']] : []), ['lista','Lista'],['calendario','Calendário']].map(([v,l]) => <button key={v} className={visao === v ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm'} onClick={() => setVisao(v)}>{v === 'calendario' ? <CalendarDays size={13}/> : <ListTodo size={13}/>} {l}</button>)}</div>{isAdmin && <select className="form-select" style={{ width:'auto' }} value={responsavelFiltro} onChange={e => { setResponsavelFiltro(e.target.value); setVisao('lista') }}><option value="">Toda a equipe</option>{usuarios.map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}</select>}</div>{loading ? <div className="loading"><div className="spinner"/></div> : visao === 'execucao' && fila ? filaView : visao === 'calendario' ? <CalendarioTarefas eventos={eventos} escopo={escopo} setEscopo={setEscopo} ancora={ancora} setAncora={setAncora} diaSel={diaSel} setDiaSel={setDiaSel}/> : filtradas.length === 0 ? <div className="empty-state"><p>Nenhuma tarefa encontrada neste filtro.</p></div> : <div style={{ display:'grid', gap:10 }}>{fila && <div role="status" style={{ fontSize:12, color:'var(--text-muted)' }}>{filaSalvando ? 'Salvando ordem…' : filaErro || (isAdmin ? 'Reorganize aqui as tarefas da Yasmin. Com uma única tarefa, as setas ficam desativadas.' : 'As tarefas da Yasmin seguem a sequência definida pela gestão.')}</div>}{listaOrdenada.map(cartaoNaLista)}</div>}{modalNova && <ModalNovaTarefa modelos={modelos} parceiros={parceiros} livros={livros} usuarios={usuarios} usuario={usuario} onClose={() => setModalNova(false)} onCreated={nova => setTarefas(prev => [nova, ...prev])}/>} {tarefaEditando && <ModalEditarTarefa tarefa={tarefaEditando} parceiros={parceiros} livros={livros} usuarios={usuarios} onClose={() => setTarefaEditando(null)} onSaved={salva => setTarefas(prev => prev.map(x => x.id === tarefaEditando.id ? salva : x))}/>}</div>
 }
 
 // deploy-forcado-livro-opcional-2026-08-05

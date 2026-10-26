@@ -29,3 +29,11 @@ test('reordenar um dia preserva a sequência de todos os outros dias', () => {
  expect(moverNoDia(['a','b','c','d'],['a','c'],'c','a')).toEqual(['c','b','a','d'])
  expect(moverNoDia(['a','b','c'],['a','c'],'a','b')).toEqual(['a','b','c'])
 })
+
+test('ordena na Lista/Hoje sem deslocar cartões de outras pessoas', () => {
+ const { ordenarYasminNaLista } = require('./fila-yasmin')
+ const a=t('a'), b=t('b'), outra=t('outra','a_fazer','anne')
+ expect(ordenarYasminNaLista([a,outra,b],[b,a]).map(x=>x.id)).toEqual(['b','outra','a'])
+ expect(ordenarYasminNaLista([a],[b,a]).map(x=>x.id)).toEqual(['a'])
+ expect(ordenarYasminNaLista([t('fim','concluida')],[])[0].id).toBe('fim')
+})
