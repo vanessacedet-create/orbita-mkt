@@ -383,3 +383,18 @@ export async function salvarFilaYasminInf(ordem, versao, agenda) {
   if (!data) throw new Error('A fila mudou ou você não tem permissão. Atualize a página antes de reorganizar.')
   return data
 }
+
+export async function criarRecorrenciaYasminInf(payload) {
+  const { data, error } = await supabase.rpc('criar_recorrencia_yasmin_inf', payload)
+  if (error) throw error
+  return data
+}
+export async function getRecorrenciasYasminInf() {
+  const { data, error } = await supabase.from('recorrencias_yasmin_inf').select('id,inicio,fim,ativo,banco_tarefa:banco_tarefa_id(nome)').order('created_at', { ascending:false })
+  if (error) throw error
+  return data || []
+}
+export async function pararRecorrenciaYasminInf(id) {
+  const { error } = await supabase.rpc('parar_recorrencia_yasmin_inf', { p_id:id })
+  if (error) throw error
+}
