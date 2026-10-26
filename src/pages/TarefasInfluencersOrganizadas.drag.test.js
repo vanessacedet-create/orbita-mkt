@@ -32,3 +32,32 @@ test('arrastar o cartão completo na Lista salva a ordem e muda a posição vis�
  expect(div.querySelectorAll('[draggable="true"]')[0].getAttribute('data-tarefa-id')).toBe('b')
  await act(async()=>root.unmount());div.remove()
 })
+
+test('digitar posição na Lista salva e reorganiza os cartões', async () => {
+ salvarFilaYasminInf.mockImplementation(async ordem => ({responsavel_id:'yasmin',ordem,versao:1,agenda:{}}))
+ global.IS_REACT_ACT_ENVIRONMENT = true
+ sessionStorage.setItem('orbita_cleanup_anny_v1','1')
+ const div=document.createElement('div');document.body.appendChild(div);const root=createRoot(div)
+ await act(async()=>root.render(<Pagina/>))
+ const input=div.querySelector('[data-tarefa-id="a"] input[aria-label="Posição da tarefa"]')
+ await act(async()=>Simulate.change(input,{target:{value:'2'}}))
+ await act(async()=>Simulate.submit(input.closest('form')))
+ expect(salvarFilaYasminInf).toHaveBeenCalledWith(['b','a'],0)
+ expect(div.querySelector('[data-tarefa-id]').getAttribute('data-tarefa-id')).toBe('b')
+ await act(async()=>root.unmount());div.remove()
+})
+
+test('posição fora da faixa não altera a sequência', async () => {
+ global.IS_REACT_ACT_ENVIRONMENT = true
+ sessionStorage.setItem('orbita_cleanup_anny_v1','1')
+ const div=document.createElement('div');document.body.appendChild(div);const root=createRoot(div)
+ await act(async()=>root.render(<Pagina/>))
+ const input=div.querySelector('input[aria-label="Posição da tarefa"]')
+ for (const valor of ['0','3','1.5','']) {
+  await act(async()=>Simulate.change(input,{target:{value:valor}}))
+  await act(async()=>Simulate.submit(input.closest('form')))
+  expect(salvarFilaYasminInf).not.toHaveBeenCalled()
+  expect(div.querySelector('[role="alert"]').textContent).toContain('entre 1 e 2')
+ }
+ await act(async()=>root.unmount());div.remove()
+})
