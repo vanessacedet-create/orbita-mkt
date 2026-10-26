@@ -370,3 +370,16 @@ export function formatarTempoInf(minutos) {
   const m = minutos % 60
   return m > 0 ? `${h}h ${m}min` : `${h}h`
 }
+// Fila de execução exclusiva da Yasmin. CAS impede sobrescrever outra gerente.
+export async function getFilaYasminInf() {
+  const { data, error } = await supabase.from('fila_execucao_yasmin_inf').select('*').eq('id', 'yasmin').maybeSingle()
+  if (error) throw error
+  return data
+}
+export async function salvarFilaYasminInf(ordem, versao) {
+  const { data, error } = await supabase.from('fila_execucao_yasmin_inf')
+    .update({ ordem, versao: versao + 1 }).eq('id', 'yasmin').eq('versao', versao).select().maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('A fila mudou ou você não tem permissão. Atualize a página antes de reorganizar.')
+  return data
+}
