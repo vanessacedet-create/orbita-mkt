@@ -13,3 +13,19 @@ test('mover para cima/baixo não altera dados ou lista original', () => {
  expect(moverNaFila(ids,'c','a')).toEqual(['c','a','b']); expect(ids).toEqual(['a','b','c'])
  expect(moverNaFila(ids,'inexistente','a')).toEqual(ids)
 })
+
+test('dias independentes, sem dia e pendentes anteriores sem mover automaticamente', () => {
+ const { separarAgendaYasmin } = require('./fila-yasmin')
+ const tarefas=[t('a'),t('b'),t('c'),t('d')]
+ const agenda={a:'2026-10-26',b:'2026-10-27',d:'2026-10-25'}
+ const r=separarAgendaYasmin(tarefas,agenda,'2026-10-26','2026-10-26')
+ expect(r.doDia.map(x=>x.id)).toEqual(['a'])
+ expect(r.semDia.map(x=>x.id)).toEqual(['c'])
+ expect(r.anteriores.map(x=>x.id)).toEqual(['d'])
+ expect(agenda.d).toBe('2026-10-25')
+})
+test('reordenar um dia preserva a sequência de todos os outros dias', () => {
+ const { moverNoDia } = require('./fila-yasmin')
+ expect(moverNoDia(['a','b','c','d'],['a','c'],'c','a')).toEqual(['c','b','a','d'])
+ expect(moverNoDia(['a','b','c'],['a','c'],'a','b')).toEqual(['a','b','c'])
+})

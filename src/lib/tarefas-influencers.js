@@ -376,9 +376,9 @@ export async function getFilaYasminInf() {
   if (error) throw error
   return data
 }
-export async function salvarFilaYasminInf(ordem, versao) {
+export async function salvarFilaYasminInf(ordem, versao, agenda) {
   const { data, error } = await supabase.from('fila_execucao_yasmin_inf')
-    .update({ ordem, versao: versao + 1 }).eq('id', 'yasmin').eq('versao', versao).select().maybeSingle()
+    .update({ ordem, versao: versao + 1, ...(agenda ? { agenda } : {}) }).eq('id', 'yasmin').eq('versao', versao).select().maybeSingle()
   if (error) throw error
   if (!data) throw new Error('A fila mudou ou você não tem permissão. Atualize a página antes de reorganizar.')
   return data

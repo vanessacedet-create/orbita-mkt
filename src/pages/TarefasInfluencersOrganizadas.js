@@ -1,4 +1,4 @@
-import { ordenarFilaYasmin, moverNaFila } from '../lib/fila-yasmin'
+import { ordenarFilaYasmin, moverNoDia, separarAgendaYasmin } from '../lib/fila-yasmin'
 import { getFilaYasminInf, salvarFilaYasminInf } from '../lib/tarefas-influencers'
 import { useEffect, useMemo, useState } from 'react'
 import {
@@ -506,6 +506,7 @@ export default function TarefasInfluencersOrganizadas() {
   const isAdmin = ADMIN_PERFIS.includes(usuario?.perfil)
   const podeCriar = isAdmin || INFLUENCER_PERFIS.includes(usuario?.perfil)
   const podeEditar = isAdmin || usuario?.perfil === 'estagiario_influencers'
+  const [diaExecucao, setDiaExecucao] = useState(() => hojeISO())
   const [fila, setFila] = useState(null)
   const [filaErro, setFilaErro] = useState('')
   const [filaSalvando, setFilaSalvando] = useState(false)
@@ -573,36 +574,67 @@ export default function TarefasInfluencersOrganizadas() {
     return !['concluida','cancelada'].includes(t.status)
   }).sort(compararPrioridade), [base, filtro, responsavelFiltro])
   const filaTarefas = useMemo(() => fila ? ordenarFilaYasmin(tarefas, fila.responsavel_id, fila.ordem, compararPrioridade) : [], [tarefas, fila])
-  const proximas = filaTarefas.filter(t => t.status !== 'pausada')
-  const impedidas = filaTarefas.filter(t => t.status === 'pausada')
+  const agenda = fila?.agenda || {}
+  const { doDia, semDia, anteriores } = separarAgendaYasmin(filaTarefas, agenda, diaExecucao, hojeISO())
+  const proximas = doDia.filter(t => t.status !== 'pausada')
+  const impedidas = doDia.filter(t => t.status === 'pausada')
+  async function programarTarefa(id, dia) {
+    if (!isAdmin || !fila || filaSalvando) return
+    if (dia && !/^\d{4}-\d{2}-\d{2}$/.test(dia)) return
+    setFilaSalvando(true); setFilaErro('')
+    try {
+      const novaAgenda = { ...agenda }
+      if (dia) novaAgenda[id] = dia
+      else delete novaAgenda[id]
+      setFila(await salvarFilaYasminInf(fila.ordem, fila.versao, novaAgenda))
+    } catch (e) { setFilaErro(e.message) }
+    finally { setFilaSalvando(false) }
+  }
+  function programacao(t) {
+    if (!isAdmin) return null
+    return <form key={t.id + (agenda[t.id] || '') + diaExecucao} style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', margin:'8px 0' }} onSubmit={e => { e.preventDefault(); programarTarefa(t.id, new FormData(e.currentTarget).get('dia')) }}>
+      <label>Executar em <input aria-label={'Dia de execução de ' + (t.banco_tarefa?.nome || t.titulo || 'tarefa')} className="form-input" name="dia" type="date" required defaultValue={agenda[t.id] || diaExecucao} disabled={filaSalvando}/></label>
+      <button type="submit" className="btn btn-primary btn-sm" disabled={filaSalvando}>Salvar dia</button>
+      {agenda[t.id] && <button type="button" className="btn btn-ghost btn-sm" disabled={filaSalvando} onClick={() => programarTarefa(t.id, null)}>Voltar para A programar</button>}
+    </form>
+  }
   async function moverFila(origem, destino) {
     if (!isAdmin || !fila || filaSalvando || origem === destino) return
     setFilaSalvando(true); setFilaErro('')
     try {
-      const ordem = moverNaFila(filaTarefas.map(t => t.id), origem, destino)
+      const ordem = moverNoDia(filaTarefas.map(t => t.id), proximas.map(t => t.id), origem, destino)
       setFila(await salvarFilaYasminInf(ordem, fila.versao))
     } catch (e) { setFilaErro(e.message) }
     finally { setFilaSalvando(false); setArrastando(null) }
   }
   const filaView = <section aria-label="Ordem de execução da Yasmin">
     <h2>Ordem de execução · Yasmin</h2>
-    <p style={{ color:'var(--text-muted)', fontSize:12 }}>Siga a sequência abaixo. Prioridade e prazo continuam independentes. Novas tarefas entram após as já ordenadas.</p>
-    {isAdmin && <p style={{ fontSize:12 }}>Arraste as tarefas ou use as setas para definir a sequência. A ordem é salva para a Yasmin.</p>}
+    <p style={{ color:'var(--text-muted)', fontSize:12 }}>Escolha o dia para consultar a sequência de execução. O prazo final permanece independente.</p>
+    <div style={{ display:'flex', gap:10, alignItems:'center', flexWrap:'wrap', marginBottom:15 }}>
+      <label>Dia de execução <input className="form-input" type="date" aria-label="Selecionar dia de execução" value={diaExecucao} onChange={e => { if (e.target.value) setDiaExecucao(e.target.value) }}/></label>
+      <button className="btn btn-ghost btn-sm" onClick={() => setDiaExecucao(addDias(diaExecucao, -1))}>Dia anterior</button>
+      <button className="btn btn-ghost btn-sm" onClick={() => setDiaExecucao(hojeISO())}>Hoje</button>
+      <button className="btn btn-ghost btn-sm" onClick={() => setDiaExecucao(addDias(diaExecucao, 1))}>Próximo dia</button>
+    </div>
+    {isAdmin && <p style={{ fontSize:12 }}>Arraste as tarefas ou use as setas para definir a sequência. A ordem de cada dia é salva para a Yasmin.</p>}
     <div role="status" style={{ marginBottom:12 }}>{filaSalvando ? 'Salvando ordem…' : filaErro || 'Ordem carregada da conta'}</div>
-    {proximas.length === 0 && <p>Nenhuma tarefa pronta para execução.</p>}
+    {proximas.length === 0 && <p>Nenhuma tarefa programada para este dia.</p>}
     {proximas.map((t, i) => <div key={t.id} style={{ marginBottom:12, border:i === 0 ? '2px solid var(--accent)' : '1px solid var(--border)', borderRadius:12, padding:10 }}
       onDragOver={e => { if (isAdmin) e.preventDefault() }} onDrop={e => { e.preventDefault(); if (arrastando) moverFila(arrastando, t.id) }}>
       <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:8 }}>
-        <strong>{i + 1}ª · {i === 0 ? 'Fazer agora' : 'Na sequência'}</strong>
+        <strong>{i + 1}ª · {i === 0 ? (diaExecucao === hojeISO() ? 'Fazer agora' : 'Primeira do dia') : 'Na sequência'}</strong>
         {isAdmin && <><button className="btn btn-ghost btn-sm" draggable={!filaSalvando} disabled={filaSalvando} onDragStart={() => setArrastando(t.id)} onDragEnd={() => setArrastando(null)} aria-label="Arrastar tarefa para reorganizar">⠿ Arrastar</button>
         <button className="btn btn-ghost btn-sm" aria-label="Mover tarefa para cima" disabled={filaSalvando || i === 0} onClick={() => moverFila(t.id, proximas[i - 1].id)}>↑</button>
         <button className="btn btn-ghost btn-sm" aria-label="Mover tarefa para baixo" disabled={filaSalvando || i === proximas.length - 1} onClick={() => moverFila(t.id, proximas[i + 1].id)}>↓</button></>}
       </div>
       <TaskCard tarefa={t} onStatus={mudarStatus} onEdit={setTarefaEditando} onDelete={excluir} podeEditar={podeEditar} podeExcluir={isAdmin}/>
+      {programacao(t)}
       <button className="btn btn-ghost btn-sm" onClick={() => mudarStatus(t, 'pausada')}>Sinalizar impedimento</button>
     </div>)}
     {impedidas.length > 0 && <h3>Aguardando liberação</h3>}
-    {impedidas.map(t => <div key={t.id} style={{ marginBottom:10 }}><TaskCard tarefa={t} onStatus={mudarStatus} onEdit={setTarefaEditando} onDelete={excluir} podeEditar={podeEditar} podeExcluir={isAdmin}/></div>)}
+    {impedidas.map(t => <div key={t.id} style={{ marginBottom:10 }}><TaskCard tarefa={t} onStatus={mudarStatus} onEdit={setTarefaEditando} onDelete={excluir} podeEditar={podeEditar} podeExcluir={isAdmin}/>{programacao(t)}</div>)}
+    {anteriores.length > 0 && <details open><summary style={{ cursor:'pointer', margin:'16px 0' }}>Pendentes de dias anteriores ({anteriores.length})</summary>{anteriores.map(t => <div key={t.id} style={{ border:'1px solid var(--border)', padding:12, marginBottom:8, borderRadius:8 }}><strong>{t.banco_tarefa?.nome || t.titulo}</strong><p>Programada para {agenda[t.id].split('-').reverse().join('/')}. Reagende quando necessário.</p>{programacao(t)}{!isAdmin && <button className="btn btn-ghost btn-sm" onClick={() => setDiaExecucao(agenda[t.id])}>Ver dia da tarefa</button>}</div>)}</details>}
+    <details open><summary style={{ cursor:'pointer', margin:'16px 0' }}>A programar ({semDia.length})</summary>{semDia.map(t => <div key={t.id} style={{ border:'1px solid var(--border)', padding:12, marginBottom:8, borderRadius:8 }}><strong>{t.banco_tarefa?.nome || t.titulo}</strong>{programacao(t)}</div>)}</details>
     <p style={{ fontSize:12 }}>As tarefas concluídas continuam no filtro Concluídos da Lista.</p>
   </section>
   const eventos = useMemo(() => eventosCalendario(

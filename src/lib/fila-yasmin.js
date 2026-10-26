@@ -12,3 +12,20 @@ export function moverNaFila(ids, origem, destino) {
   resultado.splice(para, 0, resultado.splice(de, 1)[0])
   return resultado
 }
+
+// Uma atividade tem um único dia de execução. Não modifica o prazo da tarefa.
+export function separarAgendaYasmin(tarefas, agenda, dia, hoje) {
+  return {
+    doDia: tarefas.filter(t => agenda[t.id] === dia),
+    semDia: tarefas.filter(t => !agenda[t.id]),
+    anteriores: tarefas.filter(t => agenda[t.id] && agenda[t.id] < hoje),
+  }
+}
+// Reordena apenas os lugares das atividades do dia, sem mudar a fila dos outros dias.
+export function moverNoDia(ids, idsDoDia, origem, destino) {
+  if (!idsDoDia.includes(origem) || !idsDoDia.includes(destino)) return [...ids]
+  const movidos = moverNaFila(idsDoDia, origem, destino)
+  let i = 0
+  const conjunto = new Set(idsDoDia)
+  return ids.map(id => conjunto.has(id) ? movidos[i++] : id)
+}
