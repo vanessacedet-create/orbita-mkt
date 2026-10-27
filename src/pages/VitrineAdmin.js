@@ -7,6 +7,7 @@ import {
   FileSpreadsheet, Check, AlertCircle, Package, ClipboardList, Users, Link2, Megaphone, RefreshCw
 } from 'lucide-react';
 import VitrineSelecoesAdmin from './VitrineSelecoesAdmin';
+import { carregarCatalogoAdmin, lerEstoquePlanilha, planejarAtualizacaoEstoque } from '../lib/vitrineEstoque';
 
 /* ============================================
    VITRINE ADMIN — Gerenciamento de Livros
@@ -133,11 +134,8 @@ export default function VitrineAdmin() {
   async function carregarDados() {
     setLoading(true);
 
-    const [{ data: livrosData }, { data: pedidosData }, { data: parceirosData }] = await Promise.all([
-      supabase
-        .from('vitrine_livros')
-        .select('*')
-        .order('created_at', { ascending: false }),
+    const [{ data: livrosData, error: livrosError }, { data: pedidosData }, { data: parceirosData }] = await Promise.all([
+      carregarCatalogoAdmin(supabase).then(data => ({ data })).catch(error => ({ error })),
       supabase
         .from('vitrine_pedidos')
         .select('*, vitrine_pedido_itens(*)')
@@ -148,6 +146,11 @@ export default function VitrineAdmin() {
         .order('nome', { ascending: true }),
     ]);
 
+    if (livrosError) {
+      setMsgImport({ tipo: 'erro', texto: `Erro ao carregar o catálogo: ${livrosError.message}` });
+      setLoading(false);
+      return;
+    }
     if (livrosData) setLivros(livrosData);
     if (pedidosData) setPedidos(pedidosData);
 
@@ -337,13 +340,6 @@ export default function VitrineAdmin() {
     setImportandoEstoque(true);
     setMsgEstoque(null);
 
-    const normalizar = valor => String(valor ?? '').replace(/\D/g, '');
-    const valorColuna = (row, nomes) => {
-      const keys = Object.keys(row || {});
-      const alvo = keys.find(k => nomes.includes(String(k).trim().toLowerCase()));
-      return alvo ? row[alvo] : undefined;
-    };
-
     try {
       const buffer = await file.arrayBuffer();
       const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
@@ -357,29 +353,11 @@ export default function VitrineAdmin() {
         if (!temIsbn) rows = XLSX.utils.sheet_to_json(ws, { range: 1, defval: '' });
       }
 
-      const estoquePorEan = new Map();
-      for (const row of rows) {
-        const codigo = normalizar(valorColuna(row, ['ean', 'isbn', 'isbn/ean', 'ean/isbn']));
-        const qtdRaw = valorColuna(row, ['quantidade', 'qtd', 'estoque', 'quantidade disponível', 'quantidade disponivel', 'saldo']);
-        if (!codigo || qtdRaw === undefined || qtdRaw === '') continue;
-        const qtd = Math.max(0, Math.floor(Number(String(qtdRaw).replace(',', '.')) || 0));
-        estoquePorEan.set(codigo, qtd);
-      }
-
-      if (estoquePorEan.size === 0) {
-        throw new Error('A planilha precisa ter uma coluna EAN/ISBN e uma coluna Quantidade/Estoque.');
-      }
-
-      const eans = [...estoquePorEan.keys()];
-      const encontrados = [];
-      for (let i = 0; i < eans.length; i += 200) {
-        const { data, error } = await supabase
-          .from('vitrine_livros')
-          .select('id, ean, titulo')
-          .in('ean', eans.slice(i, i + 200));
-        if (error) throw error;
-        encontrados.push(...(data || []));
-      }
+      const estoquePorEan = lerEstoquePlanilha(rows);
+      // A importação não depende de uma lista possivelmente antiga na tela.
+      const catalogoCompleto = await carregarCatalogoAdmin(supabase);
+      const { atualizacoes, preservados, naoEncontrados } =
+        planejarAtualizacaoEstoque(catalogoCompleto, estoquePorEan);
 
       const agora = new Date().toISOString();
 
@@ -399,23 +377,12 @@ export default function VitrineAdmin() {
         }
       };
 
-      const atualizacoes = encontrados.map(livro => ({
-        id: livro.id,
-        quantidade: estoquePorEan.get(normalizar(livro.ean)) ?? 0,
-      }));
       await atualizarEmLotes(atualizacoes);
       const atualizados = atualizacoes.length;
 
-      // Importação é um retrato completo: título da Vitrine ausente da
-      // planilha passa a ter estoque zero e deixa de ser oferecido.
-      const eansPlanilha = new Set(eans);
-      const zerar = livros.filter(l => l.ean && !eansPlanilha.has(normalizar(l.ean)));
-      await atualizarEmLotes(zerar.map(livro => ({ id: livro.id, quantidade: 0 })));
-
-      const naoEncontrados = eans.length - encontrados.length;
       setMsgEstoque({
         tipo: 'sucesso',
-        texto: `Estoque atualizado: ${atualizados} livro(s). ${zerar.length} título(s) ausente(s) da planilha ficaram com estoque 0.${naoEncontrados > 0 ? ` ${naoEncontrados} ISBN(s) da planilha não existem na Vitrine.` : ''}`,
+        texto: `Estoque atualizado: ${atualizados} livro(s). ${preservados} título(s) ausente(s) da planilha mantiveram o estoque anterior.${naoEncontrados > 0 ? ` ${naoEncontrados} ISBN(s) da planilha não existem na Vitrine.` : ''}`,
       });
       await carregarDados();
     } catch (err) {
@@ -847,7 +814,7 @@ export default function VitrineAdmin() {
               opacity: importandoEstoque ? 0.6 : 1,
               borderColor: '#86efac',
               background: '#f0fdf4',
-            }} title="Atualiza somente a quantidade disponível dos livros pelo ISBN/EAN">
+            }} title="Atualiza os ISBNs da planilha e preserva os demais livros. Para zerar um título, informe quantidade 0.">
               <input
                 ref={estoqueFileRef}
                 type="file"
