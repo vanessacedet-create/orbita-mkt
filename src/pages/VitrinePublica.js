@@ -36,6 +36,9 @@ const COLORS = {
   white: '#FFFFFF',
 };
 
+const MESES_LANCAMENTO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
 const FONTS = {
   display: "'Playfair Display', 'Georgia', serif",
   body: "'DM Sans', 'Helvetica Neue', sans-serif",
@@ -572,6 +575,8 @@ export default function VitrinePublica() {
   const [busca, setBusca] = useState('');
   const [editoraFiltro, setEditoraFiltro] = useState(_editoraUrl);
   const [categoriaFiltro, setCategoriaFiltro] = useState('');
+  const [mesLancamentoFiltro, setMesLancamentoFiltro] = useState('');
+  const [anoLancamentoFiltro, setAnoLancamentoFiltro] = useState('');
   const [showFiltros, setShowFiltros] = useState(false);
   const [selecionados, setSelecionados] = useState({});
   const [livrosUsadosMes, setLivrosUsadosMes] = useState(0); // livros já pedidos no ciclo atual
@@ -667,6 +672,9 @@ export default function VitrinePublica() {
     [...new Set(livros.map(l => l.editora).filter(Boolean))].sort(), [livros]);
   const categorias = useMemo(() =>
     [...new Set(livros.map(l => l.categoria).filter(Boolean))].sort(), [livros]);
+  const anosLancamento = useMemo(() =>
+    [...new Set(livros.map(l => l.data_lancamento?.slice(0, 4)).filter(Boolean))]
+      .sort((a, b) => b.localeCompare(a)), [livros]);
 
   const livrosFiltrados = useMemo(() => {
     return livros.filter(l => {
@@ -675,9 +683,12 @@ export default function VitrinePublica() {
         l.autor?.toLowerCase().includes(busca.toLowerCase());
       const matchEditora = !editoraFiltro || l.editora === editoraFiltro;
       const matchCategoria = !categoriaFiltro || l.categoria === categoriaFiltro;
-      return matchBusca && matchEditora && matchCategoria;
+      // Datas do tipo DATE são comparadas como texto, sem deslocamento de fuso.
+      const matchMes = !mesLancamentoFiltro || l.data_lancamento?.slice(5, 7) === mesLancamentoFiltro;
+      const matchAno = !anoLancamentoFiltro || l.data_lancamento?.slice(0, 4) === anoLancamentoFiltro;
+      return matchBusca && matchEditora && matchCategoria && matchMes && matchAno;
     });
-  }, [livros, busca, editoraFiltro, categoriaFiltro]);
+  }, [livros, busca, editoraFiltro, categoriaFiltro, mesLancamentoFiltro, anoLancamentoFiltro]);
 
   // ── Seleção ──
   const totalTitulos = Object.keys(selecionados).length;
@@ -761,9 +772,11 @@ export default function VitrinePublica() {
     setBusca('');
     if (!editoraLocked) setEditoraFiltro('');
     setCategoriaFiltro('');
+    setMesLancamentoFiltro('');
+    setAnoLancamentoFiltro('');
   }
 
-  const temFiltroAtivo = busca || (!editoraLocked && editoraFiltro) || categoriaFiltro;
+  const temFiltroAtivo = busca || (!editoraLocked && editoraFiltro) || categoriaFiltro || mesLancamentoFiltro || anoLancamentoFiltro;
 
   // ── Login ──
   if (!parceiro) return <TelaLogin onLogin={handleLogin} />;
@@ -952,10 +965,31 @@ export default function VitrinePublica() {
                 fontSize: 11, display: 'flex', alignItems: 'center',
                 justifyContent: 'center', fontWeight: 700,
               }}>
-                {[busca, editoraFiltro, categoriaFiltro].filter(Boolean).length}
+                {[busca, editoraFiltro, categoriaFiltro, mesLancamentoFiltro, anoLancamentoFiltro].filter(Boolean).length}
               </span>
             )}
           </button>}
+        </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end', marginBottom: 12 }}>
+          <div style={{ flex: '1 1 180px' }}>
+            <label htmlFor="vitrine-mes-lancamento" style={labelStyle}>Mês de lançamento</label>
+            <select id="vitrine-mes-lancamento" value={mesLancamentoFiltro} onChange={e => setMesLancamentoFiltro(e.target.value)} style={selectStyle}>
+              <option value="">Todos os meses</option>
+              {MESES_LANCAMENTO.map((mes, indice) => <option key={mes} value={String(indice + 1).padStart(2, '0')}>{mes}</option>)}
+            </select>
+          </div>
+          <div style={{ flex: '1 1 150px' }}>
+            <label htmlFor="vitrine-ano-lancamento" style={labelStyle}>Ano de lançamento</label>
+            <select id="vitrine-ano-lancamento" value={anoLancamentoFiltro} onChange={e => setAnoLancamentoFiltro(e.target.value)} style={selectStyle}>
+              <option value="">Todos os anos</option>
+              {anosLancamento.map(ano => <option key={ano} value={ano}>{ano}</option>)}
+            </select>
+          </div>
+          {(mesLancamentoFiltro || anoLancamentoFiltro) && <button type="button" onClick={() => { setMesLancamentoFiltro(''); setAnoLancamentoFiltro(''); }} style={{
+            background: 'none', border: `1.5px solid ${COLORS.border}`, borderRadius: 10,
+            padding: '10px 16px', cursor: 'pointer', fontSize: 13, fontFamily: FONTS.body, color: COLORS.textLight,
+          }}>Limpar período</button>}
         </div>
 
         {limiteTotal < Infinity && (
@@ -1194,7 +1228,7 @@ function LivroCard({ livro, selecionado, limiteAtingido, onToggle, onDetalhe, pr
         </p>
         {livro.data_lancamento && (
           <p style={{ fontSize: 11, color: COLORS.textMuted, margin: '0 0 6px' }}>
-            📅 {new Date(livro.data_lancamento).toLocaleDateString('pt-BR')}
+            📅 {livro.data_lancamento.split('-').reverse().join('/')}
           </p>
         )}
         {livro.ean && (
