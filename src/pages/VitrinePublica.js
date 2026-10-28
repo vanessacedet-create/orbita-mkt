@@ -1044,10 +1044,11 @@ export default function VitrinePublica() {
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 20 }}>
-            {livrosFiltrados.map(livro => (
+            {livrosFiltrados.map((livro, indice) => (
               <LivroCard
                 key={livro.id}
                 livro={livro}
+                prioritaria={indice < 5}
                 selecionado={!!selecionados[livro.id]}
                 limiteAtingido={!selecionados[livro.id] && totalTitulos >= limite}
                 onToggle={() => toggleSelecao(livro)}
@@ -1124,7 +1125,7 @@ export default function VitrinePublica() {
 /* ──────────────────────────────
    COMPONENTE: Card de Livro
    ────────────────────────────── */
-function LivroCard({ livro, selecionado, limiteAtingido, onToggle, onDetalhe }) {
+function LivroCard({ livro, selecionado, limiteAtingido, onToggle, onDetalhe, prioritaria = false }) {
   const [imgError, setImgError] = useState(false);
 
   return (
@@ -1171,6 +1172,7 @@ function LivroCard({ livro, selecionado, limiteAtingido, onToggle, onDetalhe }) 
       }}>
         {livro.imagem_url && !imgError ? (
           <img src={livro.imagem_url} alt={livro.titulo} onError={() => setImgError(true)}
+            loading={prioritaria ? 'eager' : 'lazy'} fetchpriority={prioritaria ? 'high' : 'auto'} decoding="async"
             style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
           <BookOpen size={40} color={COLORS.textMuted} style={{ opacity: 0.3 }} />
@@ -1268,7 +1270,7 @@ function ModalDetalhe({ livro, selecionado, onToggle, onClose }) {
             <X size={18} />
           </button>
           {livro.imagem_url && !imgError ? (
-            <img src={livro.imagem_url} alt={livro.titulo} onError={() => setImgError(true)}
+            <img src={livro.imagem_url} alt={livro.titulo} onError={() => setImgError(true)} decoding="async"
               style={{ maxWidth: '100%', maxHeight: 350, objectFit: 'contain' }} />
           ) : (
             <BookOpen size={60} color={COLORS.textMuted} style={{ opacity: 0.3 }} />
@@ -1462,7 +1464,7 @@ function PainelCarrinho({
                     borderBottom: `1px solid ${COLORS.borderLight}`, alignItems: 'center',
                   }}>
                     <div style={{ width: 50, height: 66, borderRadius: 6, overflow: 'hidden', flexShrink: 0, background: COLORS.borderLight }}>
-                      {livro.imagem_url && <img src={livro.imagem_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                      {livro.imagem_url && <img src={livro.imagem_url} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <p style={{ fontSize: 13, fontWeight: 600, margin: '0 0 2px', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
