@@ -1,0 +1,18 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "images": {
+    "sizes": [256, 384, 640, 960],
+    "qualities": [75],
+    "formats": ["image/webp"],
+    "minimumCacheTTL": 86400,
+    "remotePatterns": [
+      {
+        "protocol": "https",
+        "hostname": "cedet-publico.s3.amazonaws.com",
+        "port": "",
+        "pathname": "^/produtos_imagem_principal/[0-9]+\\.jpg$",
+        "search": ""
+      }
+    ]
+  }
+}
