@@ -66,8 +66,9 @@ function vencimento(video, etapaK, cfg, adesao) {
   return ajustarUtil(addDias(video.data_postagem, -Number(n)))
 }
 
-// Data em que o vídeo conta para a meta: postado = data real; senão = prevista
-const dataDoVideo = v => (v.etapa === 'postado' && v.dt_postado ? v.dt_postado : v.data_postagem)
+// Data em que o vídeo aparece no calendário e conta para a meta:
+// registro antigo = data de postagem informada; postado = data real; senão = prevista
+const dataDoVideo = v => (v.historico ? v.data_postagem : v.etapa === 'postado' && v.dt_postado ? v.dt_postado : v.data_postagem)
 
 function pendenciaDe(video, cfg, adesao) {
   if (video.etapa === 'cancelado') return null
@@ -767,8 +768,11 @@ function PainelVideo({ inicial, cfg, equipe, adesoes, adesaoPorParceiro, videos,
     if (!f.data_postagem) return notify('Informe a data de postagem.', 'error')
     if (!livros.length) return notify('Escolha pelo menos um livro.', 'error')
     setSalvando(true)
+    // Registro antigo já postado: a data da publicação é sempre a data de postagem informada,
+    // não importa a ordem em que os campos foram preenchidos
+    const dados = f.historico && f.etapa === 'postado' ? { ...f, dt_postado: f.data_postagem, data_confirmada: true } : f
     try {
-      const salvo = await salvarVideo(f, livros.map(l => l.id), usuario?.id)
+      const salvo = await salvarVideo(dados, livros.map(l => l.id), usuario?.id)
       onSalvo(salvo)
       setF(salvo)
       notify('Vídeo salvo.')
