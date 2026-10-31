@@ -601,8 +601,9 @@ function ModalAdesao({ inicial, cfg, adesoes, notify, onFechar, onSalvo }) {
   }
 
   return (
-    <div className="modal-backdrop" onClick={onFechar}>
-      <div className="modal cb-modal" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Parceiro do Collab BookTime">
+    // Clique fora não fecha: só o botão Fechar/Cancelar ou o X
+    <div className="modal-backdrop">
+      <div className="modal cb-modal" role="dialog" aria-modal="true" aria-label="Parceiro do Collab BookTime">
         <div className="modal-header">
           <h2 className="modal-title">{f.id ? f.parceiro?.nome : 'Adicionar parceiro'}</h2>
           <button className="btn btn-ghost btn-icon" onClick={onFechar} aria-label="Fechar"><X size={18} /></button>
@@ -826,8 +827,9 @@ function PainelVideo({ inicial, cfg, equipe, adesoes, adesaoPorParceiro, videos,
   const aceitos = adesoes.filter(a => a.status === 'aceitou' || a.parceiro_id === f.parceiro_id)
 
   return (
-    <div className="modal-backdrop cb-drawer-bg" onClick={onFechar}>
-      <aside className="cb-drawer" onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Vídeo do Collab BookTime">
+    // Clique fora não fecha: só o botão Fechar ou o X
+    <div className="modal-backdrop cb-drawer-bg">
+      <aside className="cb-drawer" role="dialog" aria-modal="true" aria-label="Vídeo do Collab BookTime">
         <header className="cb-drawer-h">
           <div>
             <h2 className="modal-title">{parceiro?.nome || 'Novo vídeo'}</h2>
