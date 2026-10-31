@@ -116,6 +116,8 @@
 .cb-modal { max-width: 560px; max-height: 90vh; overflow-y: auto; }
 .cb-escolhido { display: flex; justify-content: space-between; align-items: center; background: var(--surface-2); padding: 8px 10px; border-radius: 8px; }
 .cb-dias { display: flex; flex-wrap: wrap; gap: 6px; }
+.cb-ritmo { display: grid; grid-template-columns: 72px auto 1fr; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); }
+.cb-horario { max-width: 200px; }
 .cb-dias button { background: var(--surface-2); border: 1px solid var(--border); color: var(--text-soft); border-radius: 6px; padding: 5px 10px; font: inherit; font-size: 12.5px; cursor: pointer; }
 .cb-dias button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
 .cb-details summary { cursor: pointer; font-size: 13px; color: var(--text-soft); font-weight: 600; }

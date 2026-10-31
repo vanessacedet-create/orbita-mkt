@@ -22,7 +22,8 @@ const CAMPOS_VIDEO = [
 ]
 
 const CAMPOS_ADESAO = [
-  'parceiro_id', 'status', 'data_convite', 'data_resposta', 'videos_por_semana', 'dias_preferidos',
+  'parceiro_id', 'status', 'data_convite', 'data_resposta', 'videos_por_semana', 'ritmo_periodo',
+  'horario_preferido', 'dias_preferidos',
   'prazo_livro_aceito', 'prazo_roteiro_enviado', 'prazo_roteiro_aprovado', 'prazo_video_cru',
   'prazo_edicao', 'prazo_automacao', 'prazo_agendado', 'observacoes',
 ]

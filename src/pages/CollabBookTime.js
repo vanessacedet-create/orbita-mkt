@@ -38,6 +38,11 @@ const ETAPAS = [
 const IDX = Object.fromEntries(ETAPAS.map((e, i) => [e.k, i]))
 const ETAPA_POR_K = Object.fromEntries(ETAPAS.map(e => [e.k, e]))
 
+const PERIODOS = { semana: 'semana', quinzena: 'quinzena', mes: 'mês' }
+const DIAS_PERIODO = { semana: 7, quinzena: 14, mes: 30 }
+const hora = h => (h ? String(h).slice(0, 5) : '')
+const ritmoTexto = a => (a?.videos_por_semana ? `${a.videos_por_semana} por ${PERIODOS[a.ritmo_periodo || 'semana']}` : '')
+
 const STATUS_ADESAO = { convidado: 'Convidado', aceitou: 'Aceitou', recusou: 'Recusou', pausado: 'Pausado', encerrado: 'Encerrado' }
 const MOTIVOS = { livro: 'Não gostou do livro', autor: 'Autor', tema: 'Tema', outro: 'Outro' }
 const PRAZOS = [
@@ -96,15 +101,25 @@ function contarPorDia(videos, ignorarId) {
 }
 
 // Próxima data com vaga na meta (respeita dias preferidos do parceiro, se houver)
+// e espaça os vídeos conforme o ritmo combinado (ex.: 1 por quinzena = 14 dias depois do último)
 function sugerirData(aPartir, adesao, videos, meta, ignorarId) {
   const cont = contarPorDia(videos, ignorarId)
   const dias = adesao?.dias_preferidos?.length ? adesao.dias_preferidos : null
-  for (let i = 0; i < 90; i++) {
-    const d = addDias(aPartir, i)
+  let inicio = aPartir
+  const qtd = Number(adesao?.videos_por_semana) || 0
+  if (adesao && qtd > 0) {
+    const intervalo = Math.max(1, Math.floor(DIAS_PERIODO[adesao.ritmo_periodo || 'semana'] / qtd))
+    const ultima = videos
+      .filter(v => v.parceiro_id === adesao.parceiro_id && v.id !== ignorarId && v.etapa !== 'cancelado' && dataDoVideo(v))
+      .map(dataDoVideo).sort().pop()
+    if (ultima && addDias(ultima, intervalo) > inicio) inicio = addDias(ultima, intervalo)
+  }
+  for (let i = 0; i < 120; i++) {
+    const d = addDias(inicio, i)
     if (dias && !dias.includes(diaSemana(d))) continue
     if ((cont[d] || 0) < Math.max(1, Number(meta) || 1)) return d
   }
-  return aPartir
+  return inicio
 }
 
 const tituloLivros = v => (v.livros || []).map(x => x.livro?.titulo).filter(Boolean).join(' + ')
@@ -500,7 +515,7 @@ function Parceiros({ adesoes, videos, cfg, onAbrir, onNovo }) {
                 <tr key={l.a.id} onClick={() => onAbrir(l.a)} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') onAbrir(l.a) }}>
                   <td className="td-strong">{l.a.parceiro?.nome}</td>
                   <td><span className={`badge ${l.a.status === 'aceitou' ? 'badge-green' : l.a.status === 'convidado' ? 'badge-indigo' : 'badge-gray'}`}>{STATUS_ADESAO[l.a.status]}</span></td>
-                  <td>{l.a.videos_por_semana ? `${l.a.videos_por_semana}/semana` : '—'}{l.a.dias_preferidos?.length ? ` (${l.a.dias_preferidos.map(d => SEMANA[d]).join(', ')})` : ''}</td>
+                  <td>{ritmoTexto(l.a) || '—'}{l.a.dias_preferidos?.length ? ` (${l.a.dias_preferidos.map(d => SEMANA[d]).join(', ')})` : ''}{l.a.horario_preferido ? ` às ${hora(l.a.horario_preferido)}` : ''}</td>
                   <td>{l.total}</td>
                   <td>{l.postados}</td>
                   <td>{l.views ?? '—'}</td>
@@ -587,8 +602,14 @@ function ModalAdesao({ inicial, cfg, adesoes, notify, onFechar, onSalvo }) {
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label" htmlFor="cb-ad-vps">Vídeos por semana</label>
-              <input id="cb-ad-vps" className="form-input" type="number" min="0" value={f.videos_por_semana ?? ''} onChange={e => v('videos_por_semana', e.target.value === '' ? null : parseInt(e.target.value, 10))} />
+              <label className="form-label" htmlFor="cb-ad-vps">Frequência combinada</label>
+              <div className="cb-ritmo">
+                <input id="cb-ad-vps" className="form-input" type="number" min="0" aria-label="Quantidade de vídeos" value={f.videos_por_semana ?? ''} onChange={e => v('videos_por_semana', e.target.value === '' ? null : parseInt(e.target.value, 10))} />
+                <span>por</span>
+                <select className="form-select" aria-label="Período" value={f.ritmo_periodo || 'semana'} onChange={e => v('ritmo_periodo', e.target.value)}>
+                  {Object.entries(PERIODOS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                </select>
+              </div>
             </div>
           </div>
           <div className="form-row">
@@ -608,6 +629,10 @@ function ModalAdesao({ inicial, cfg, adesoes, notify, onFechar, onSalvo }) {
                 <button key={d} type="button" aria-pressed={(f.dias_preferidos || []).includes(i)} onClick={() => alternarDia(i)}>{d}</button>
               ))}
             </div>
+          </div>
+          <div className="form-group cb-horario">
+            <label className="form-label" htmlFor="cb-ad-hora">Horário preferido de postagem</label>
+            <input id="cb-ad-hora" className="form-input" type="time" value={hora(f.horario_preferido)} onChange={e => v('horario_preferido', e.target.value || null)} />
           </div>
           <details className="cb-details">
             <summary>Prazos próprios deste parceiro (em branco = padrão)</summary>
@@ -751,7 +776,7 @@ function PainelVideo({ inicial, cfg, equipe, adesoes, adesaoPorParceiro, videos,
       `Olá, ${nome}! Segue o roteiro do próximo vídeo do Collab BookTime.`,
       '',
       livros.length > 1 ? `Kit:\n${lista}` : `Livro: ${livros[0] ? `${livros[0].titulo} (ISBN ${isbnDe(livros[0])})` : ''}`,
-      `Postagem prevista: ${fmtLongo(f.data_postagem)}`,
+      `Postagem prevista: ${fmtLongo(f.data_postagem)}${adesao?.horario_preferido ? ` às ${hora(adesao.horario_preferido)}` : ''}`,
       prazoCru ? `Envio do vídeo gravado até: ${fmtLongo(prazoCru)}` : null,
       f.palavra ? `Palavra para o comentário: ${String(f.palavra).toUpperCase()}` : null,
       '',
@@ -818,6 +843,11 @@ function PainelVideo({ inicial, cfg, equipe, adesoes, adesaoPorParceiro, videos,
                 )}
               </div>
             </div>
+            {(adesao?.horario_preferido || adesao?.dias_preferidos?.length || adesao?.videos_por_semana) ? (
+              <p className="cb-dica">
+                Combinado com o parceiro: {[ritmoTexto(adesao), adesao?.dias_preferidos?.length ? adesao.dias_preferidos.map(d => SEMANA[d]).join(', ') : '', adesao?.horario_preferido ? `às ${hora(adesao.horario_preferido)}` : ''].filter(Boolean).join(' · ')}
+              </p>
+            ) : null}
             {risco && <p className="cb-txt-red">O vídeo cru passou do prazo. A data de postagem está em risco.</p>}
             <Prazos f={f} cfg={cfg} adesao={adesao} hoje={hoje} />
           </section>
