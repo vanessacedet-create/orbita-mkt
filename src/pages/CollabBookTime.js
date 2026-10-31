@@ -743,7 +743,6 @@ function PainelVideo({ inicial, cfg, equipe, adesoes, adesaoPorParceiro, videos,
 
   function adicionarLivro(l) {
     if (livros.some(x => x.id === l.id)) return
-    if (livros.length >= 4) return notify('Um kit pode ter no máximo 4 livros.', 'error')
     setLivros(lst => [...lst, l])
     setBuscaLivro('')
     setAchados([])
@@ -910,8 +909,6 @@ function PainelVideo({ inicial, cfg, equipe, adesoes, adesaoPorParceiro, videos,
                 )
               })}
             </ul>
-            {livros.length < 4 && (
-              <>
                 <input className="form-input" placeholder="Buscar livro por título, autor ou ISBN" value={buscaLivro} onChange={e => setBuscaLivro(e.target.value)} aria-label="Buscar livro" />
                 {achados.length > 0 && (
                   <ul className="cb-resultados">
@@ -924,8 +921,6 @@ function PainelVideo({ inicial, cfg, equipe, adesoes, adesaoPorParceiro, videos,
                     ))}
                   </ul>
                 )}
-              </>
-            )}
             {livros.length > 0 && f.parceiro_id && !recusa && (
               <button className="btn btn-ghost btn-sm" onClick={() => setRecusa({ livro_id: livros[0].id, motivo: 'livro', observacao: '' })}>Parceiro recusou um livro</button>
             )}
