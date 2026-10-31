@@ -486,6 +486,7 @@ function Quadro({ videos, pendencias, hoje, cfg, adesaoPorParceiro, nomeEquipe, 
 
 // ── Parceiros (adesão + resumo) ───────────────────────────────
 function Parceiros({ adesoes, videos, cfg, onAbrir, onNovo }) {
+  const [ordem, setOrdem] = useState({ col: 'nome', dir: 'asc' })
   const linhas = adesoes.map(a => {
     const vs = videos.filter(v => v.parceiro_id === a.parceiro_id && v.etapa !== 'cancelado')
     const postados = vs.filter(v => v.etapa === 'postado')
@@ -494,8 +495,30 @@ function Parceiros({ adesoes, videos, cfg, onAbrir, onNovo }) {
     const vendas = postados.reduce((s, v) => s + (Number(v.resultado_vendas_unid) || 0), 0)
     const entregas = vs.filter(v => !v.historico && v.dt_video_cru)
     const noPrazo = entregas.filter(v => { const d = vencimento(v, 'video_cru', cfg, a); return d && v.dt_video_cru <= d }).length
-    return { a, total: vs.length, postados: postados.length, views: media('resultado_visualizacoes'), pessoas: media('resultado_pessoas_palavra'), vendas, prazo: entregas.length ? Math.round((noPrazo / entregas.length) * 100) : null }
+    const qtd = Number(a.videos_por_semana) || 0
+    return {
+      a, nome: a.parceiro?.nome || '', status: STATUS_ADESAO[a.status] || '',
+      ritmo: qtd ? (qtd * 30) / DIAS_PERIODO[a.ritmo_periodo || 'semana'] : null, // vídeos por mês, para ordenar
+      total: vs.length, postados: postados.length, views: media('resultado_visualizacoes'), pessoas: media('resultado_pessoas_palavra'),
+      vendas, prazo: entregas.length ? Math.round((noPrazo / entregas.length) * 100) : null,
+    }
   })
+  const ordenadas = [...linhas].sort((x, y) => {
+    const a = x[ordem.col], b = y[ordem.col]
+    const vazioA = a === null || a === undefined || a === '', vazioB = b === null || b === undefined || b === ''
+    if (vazioA && vazioB) return x.nome.localeCompare(y.nome)
+    if (vazioA) return 1 // sem valor vai sempre para o fim
+    if (vazioB) return -1
+    const r = typeof a === 'string' ? a.localeCompare(b, 'pt-BR') : a - b
+    return (r || x.nome.localeCompare(y.nome)) * (ordem.dir === 'asc' ? 1 : -1) || 0
+  })
+  function ordenarPor(col) {
+    setOrdem(o => (o.col === col ? { col, dir: o.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: col === 'nome' || col === 'status' ? 'asc' : 'desc' }))
+  }
+  const COLS = [
+    ['nome', 'Parceiro'], ['status', 'Adesão'], ['ritmo', 'Ritmo'], ['total', 'Vídeos'], ['postados', 'Postados'],
+    ['views', 'Média de views'], ['pessoas', 'Média de pessoas'], ['vendas', 'Vendas (un.)'], ['prazo', 'Vídeo cru no prazo'],
+  ]
   return (
     <section>
       <div className="cb-parc-bar">
@@ -508,10 +531,21 @@ function Parceiros({ adesoes, videos, cfg, onAbrir, onNovo }) {
         <div className="cb-tabela-wrap">
           <table className="cb-tabela">
             <thead>
-              <tr><th>Parceiro</th><th>Adesão</th><th>Ritmo</th><th>Vídeos</th><th>Postados</th><th>Média de views</th><th>Média de pessoas</th><th>Vendas (un.)</th><th>Vídeo cru no prazo</th></tr>
+              <tr>
+                {COLS.map(([k, l]) => {
+                  const ativa = ordem.col === k
+                  return (
+                    <th key={k} aria-sort={ativa ? (ordem.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                      <button type="button" className={`cb-th-btn ${ativa ? 'cb-th-ativa' : ''}`} onClick={() => ordenarPor(k)} title="Clique para ordenar">
+                        {l}<span aria-hidden="true">{ativa ? (ordem.dir === 'asc' ? ' ▲' : ' ▼') : ' ↕'}</span>
+                      </button>
+                    </th>
+                  )
+                })}
+              </tr>
             </thead>
             <tbody>
-              {linhas.map(l => (
+              {ordenadas.map(l => (
                 <tr key={l.a.id} onClick={() => onAbrir(l.a)} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') onAbrir(l.a) }}>
                   <td className="td-strong">{l.a.parceiro?.nome}</td>
                   <td><span className={`badge ${l.a.status === 'aceitou' ? 'badge-green' : l.a.status === 'convidado' ? 'badge-indigo' : 'badge-gray'}`}>{STATUS_ADESAO[l.a.status]}</span></td>
